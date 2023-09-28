@@ -84,15 +84,7 @@ global int search_compute_HistN_balls(int nbody);
 //E
 
 
-//NOLSST:
-#ifdef ADDONS
-#include "protodefs_01.h"
-#endif
 
-//NOLSST:
-#ifdef ADDONS
-#include "protodefs_02.h"
-#endif
 
 //B Other utilities
 global int ThreadCount(void);
@@ -100,14 +92,6 @@ global int spherical_to_cartesians(real theta, real phi, vector xyz);
 global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, real *phiR);
 //E
 
-//NOLSST:
-#ifdef PATCHES
-#include "direct_simple.h"
-#endif
 
-//NOLSST:
-#ifdef PATCHES
-#include "protodefs_patch.h"
-#endif
 
 #endif // ! _protodefs_h

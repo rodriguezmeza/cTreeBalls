@@ -56,7 +56,7 @@ ADDONSON = 0
 PATCHESON = 0
 
 #
-BUCKETON = 0
+BUCKETON = 1
 
 #
 # Machine definitions. Edit this file according to your needs

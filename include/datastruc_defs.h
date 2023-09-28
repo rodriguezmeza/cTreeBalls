@@ -394,15 +394,6 @@ typedef struct {
 //Rotation angle in radians. To use in a sphere (3D case)
 #define ROTANGLE                0.01
 
-//NOLSST:
-#ifdef ADDONS
-#include "datastruc_defs_01.h"
-#endif
-
-//NOLSST:
-#ifdef PATCHES
-#include "datastruc_defs_patch.h"
-#endif
 
 #endif // ! _data_struc_defs_h
 

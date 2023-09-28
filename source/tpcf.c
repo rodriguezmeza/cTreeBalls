@@ -30,10 +30,6 @@ int MainLoop(void)
     bodyptr p,q;
     real kavg;
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_01.h"
-#endif
 
     gd.flagSmooth = FALSE;
     gd.flagSetNbNoSel = FALSE;
@@ -208,15 +204,7 @@ local int evalHist(void)
             searchcalc_normal_omp(bodytab, cmd.nbody, 1, cmd.nbody);
             break;
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_02.h"
-#endif
 
-//NOLSST:
-#ifdef PATCHES
-#include "tpcf_patch.h"
-#endif
 
     }
 
@@ -299,15 +287,7 @@ local int printEvalHist(void)
             printHistZeta();
 #endif
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_03.h"
-#endif
 
-//NOLSST:
-#ifdef PATCHES
-#include "tpcf_print_patch.h"
-#endif
 
             }
         }
@@ -625,10 +605,6 @@ local int printHistZeta(void)
     if (ThisTask==0) {
 #endif
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_04.h"
-#endif
 
     for (m = 1; m <= cmd.mchebyshev+1; m++) {
         sprintf(namebuf, "%s_%d%s", gd.fpfnamemhistZetaFileName, m, EXTFILES);

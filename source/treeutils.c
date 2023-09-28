@@ -1036,17 +1036,4 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, 
     return _SUCCESS_;
 }
 
-//NOLSST:
-#ifdef ADDONS
-#include "treeutils_01.h"
-#endif
 
-//NOLSST:
-#ifdef ADDONS
-#include "treeutils_02.h"
-#endif
-
-//NOLSST:
-#ifdef PATCHES
-#include "treeutils_patch.h"
-#endif

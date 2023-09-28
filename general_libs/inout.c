@@ -461,11 +461,6 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
 // PARA IMPLEMENTAR LECTURA GENERAL DE ARCHIVOS DE DATOS CON FORMATO DE COLUMNAS
 
 
-//NOLSST:
-#ifdef ADDONS
-#include "inout_02.h"
-#endif
-
 void error_open_file_kd(char *fname)
 {
 // Open error handler

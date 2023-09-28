@@ -359,10 +359,6 @@ local int startrun_Common(void)
         verb_log_print(cmd.verbose_log, gd.outlog,
                        "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd.nbody,1.0/3.0));
 
-//NOLSST:
-#ifdef ADDONS
-#include "startrun_00.h"
-#endif
 
 
 #ifdef SAVERESTORE
@@ -1001,11 +997,6 @@ local int infilefmt_string_to_int(string infmt_str,int *infmt_int)
     if (strcmp(infmt_str,"takahasi") == 0)                  *infmt_int = INTAKAHASI;
     if (strcmp(infmt_str,"columns-ascii-2d-to-3d") == 0)    *infmt_int = INCOLUMNS2DTO3D;
 
-//NOLSST:
-#ifdef ADDONS
-#include "startrun_01.h"
-#endif
-
     return _SUCCESS_;
 }
 
@@ -1088,15 +1079,6 @@ local void search_method_string_to_int(string method_str,int *method_int)
     if (strcmp(method_str,"tree-omp-sincos") == 0)          *method_int = TREEOMPMETHODSINCOS;
     if (strcmp(method_str,"balls-omp") == 0)               *method_int = BALLSOMPMETHOD;
 
-//NOLSST:
-#ifdef ADDONS
-#include "startrun_02.h"
-#endif
-
-//NOLSST:
-#ifdef PATCHES
-#include "startrun_patch.h"
-#endif
 
 }
 

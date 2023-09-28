@@ -352,10 +352,6 @@ typedef struct {
 
     real i_deltaR;
 
-//NOLSST:
-#ifdef ADDONS
-#include "globaldefs_00.h"
-#endif
 
     char fnameData_kd[128];
     char fnameOut_kd[128];
@@ -621,10 +617,6 @@ global real *inout_yval;
 global real *inout_zval;
 global real *inout_wval;
 
-//NOLSST:
-#ifdef ADDONS
-#include "globaldefs_01.h"
-#endif
 
 //NOLSST:
 // It is already in globaldef.h, need to fix this
@@ -661,10 +653,6 @@ global ErrorMsg errmsg;
 #endif
 //E
 
-//NOLSST:
-#ifdef ADDONS
-#include "globaldefs_02.h"
-#endif
 
 #include "protodefs.h"
 

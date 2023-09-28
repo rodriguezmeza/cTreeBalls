@@ -48,9 +48,6 @@ int main(int argc, string argv[])
     printf("\n -> Parameter file is %s\n", cmd.ParameterFile);
 #endif
 
-//NOLSST: Setting this line here makes mpirun -np 2 tpcf run in Cosma
-//#include "tpcf_01.h"
-
     StartRun(argv[0], HEAD1, HEAD2, HEAD3);
 	MainLoop();
 

@@ -12,7 +12,7 @@
 #define _cmdline_defs_h
 
 #define HEAD1	"LSST/CosmoININ"
-#define HEAD2	"tpcf Code for computing 3pcf, expected: O(N logN)"
+#define HEAD2	"cTreeBalls Code for computing 3pcf, expected: O(N logN)"
 #define HEAD3	"..."
 
 string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
@@ -82,7 +82,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 //E
 
     "options=",				            ";Various control options, i.e., check-bin-cell (to use c1Ball scheme),  compute-HistN, no-out-Hist, BH86, etc.", ":opt",
-    "Version=0.1",			            ";Mario A. Rodríguez-Meza et al. (2023)",
+    "Version=0.1",			            ";Mario A. Rodríguez-Meza (2023)",
     NULL,
 };
 

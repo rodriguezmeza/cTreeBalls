@@ -99,10 +99,6 @@ void inout_InputData(string, int, int, int *);
 
 
 
-//NOLSST:
-#ifdef ADDONS
-#include "inout_01.h"
-#endif
 
 void error_open_file_kd(char *fname);
 

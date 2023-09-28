@@ -24,10 +24,6 @@ local void outputdata_bin(void);
 //local void outputdata_bin_smooth(void);
 //local void outputdata_ascii_smooth(void);
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_io_00.h"
-#endif
 
 local void outfilefmt_string_to_int(string,int *);
 local int outfilefmt_int;
@@ -62,10 +58,6 @@ int inputdata(void)
             printf("\n\tInput in takahasi format...\n");
             inputdata_takahasi(); break;
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_io_01.h"
-#endif
 
         default:
             printf("\n\tInput: Unknown input format...");
@@ -76,10 +68,6 @@ int inputdata(void)
     }
 #endif
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_io_01c.h"
-#endif
 
 //    } // end of ifile
 
@@ -307,11 +295,6 @@ local void inputdata_bin(void)
     }
 }
 
-
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_io_02.h"
-#endif
 
 
 
@@ -899,10 +882,6 @@ int output(void)
 //        if (scanopt(cmd.options, "smooth"))
 //            outputdata_smooth();
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_io_01b.h"
-#endif
 
     }
     gd.cputotalinout += CPUTIME - cpustart;
@@ -1253,7 +1232,3 @@ int EndRun(void)
     return _SUCCESS_;
 }
 
-//NOLSST:
-#ifdef ADDONS
-#include "tpcf_io_03.h"
-#endif
