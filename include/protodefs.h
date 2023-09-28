@@ -1,0 +1,113 @@
+/*==============================================================================
+ HEADER: protodefs.h				[tpcf]
+ Written by: Mario A. Rodriguez-Meza
+ Starting date: april 2023
+ Purpose: Definitions of global prototypes
+ Language: C
+ Use: '#include "protodefs.h"
+ Major revisions:
+ ==============================================================================*/
+
+#ifndef _protodefs_h
+#define _protodefs_h
+
+int output(void);
+
+int MainLoop(void);
+int StartRun(string, string, string, string);
+int StartOutput(void);
+global void checkstop(void);
+int EndRun(void);
+global void savestate(string);
+global int restorestate(string);
+global int startrun_memoryAllocation(void);
+
+int testdata(void);
+
+int inputdata(void);
+
+// I/O directories:
+global void setFilesDirs_log(void);
+global void setFilesDirs(void);
+
+//B 3PCF section
+// Search methods:
+global int searchcalc_direct_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
+global int search_direct_3pcf_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
+
+
+//B Tree:
+global void maketree(bodyptr btab, int nbody);
+global void maketreenodes(nodeptr ntab, int nnode);
+
+global void searchcalc_normal_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
+global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
+
+//E
+
+//B Tree utilities
+global void doBoxWrapping(void);
+global bool reject_cell(nodeptr, nodeptr, real);
+global bool accept_body(bodyptr, nodeptr, real *, vector);
+global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist);
+
+#ifdef OPENMPCODE
+global int search_init_omp(gdhistptr_omp hist);
+global int search_init_omp_barnes(gdhistptr_omp_barnes hist);
+global int search_init_sincos_omp(gdhistptr_sincos_omp hist);
+global int search_free_omp(gdhistptr_omp hist);
+global int search_free_omp_barnes(gdhistptr_omp_barnes hist);
+global int search_free_sincos_omp(gdhistptr_sincos_omp hist);
+global int computeBodyProperties_omp(bodyptr p, int nbody, gdhistptr_omp hist);
+global int computeBodyProperties_omp_barnes(bodyptr p, int nbody, gdhistptr_omp_barnes hist);
+global int computeBodyProperties_sincos_omp(bodyptr p, int nbody, gdhistptr_sincos_omp hist);
+
+global int search_init_omp_3pcfbf(gdhistptr_omp_3pcfbf hist);
+global int search_free_omp_3pcfbf(gdhistptr_omp_3pcfbf hist);
+global int computeBodyProperties_omp_3pcfbf(bodyptr p, int nbody, gdhist_omp_3pcfbf hist);
+global int search_compute_HistN_3pcfbf(int nbody);
+global void searchcalc_normal_3pcf_direct_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
+#endif
+
+#ifdef BALLS
+global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
+global int search_init_balls_omp(gdhistptr_omp_balls hist);
+global int computeBodyProperties_balls_omp(bodyptr p, int nbody, gdhistptr_omp_balls hist);
+global int search_free_balls_omp(gdhistptr_omp_balls hist);
+global bool nodes_condition(nodeptr p, nodeptr q);
+global bool nodes_set_bin(nodeptr p, nodeptr q, int *n, real *dr1, vector dr);
+#endif
+
+global int search_init_gd_hist(void);
+global int search_compute_HistN(int nbody);
+global int search_compute_HistN_balls(int nbody);
+//E
+
+
+//NOLSST:
+#ifdef ADDONS
+#include "protodefs_01.h"
+#endif
+
+//NOLSST:
+#ifdef ADDONS
+#include "protodefs_02.h"
+#endif
+
+//B Other utilities
+global int ThreadCount(void);
+global int spherical_to_cartesians(real theta, real phi, vector xyz);
+global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, real *phiR);
+//E
+
+//NOLSST:
+#ifdef PATCHES
+#include "direct_simple.h"
+#endif
+
+//NOLSST:
+#ifdef PATCHES
+#include "protodefs_patch.h"
+#endif
+
+#endif // ! _protodefs_h

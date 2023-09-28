@@ -1,0 +1,67 @@
+# ----- MAKE FILE DEFINITIONS FOR tpcf CODE -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 27.04.2023
+#
+#
+# Comment lines below as it is convient to you.
+#
+# Select dimension of the run: 2, 3
+DEFDIMENSION = 3
+#
+# Default GSL public (not the internal sources version included).
+# If you want the internal gsl version set it to 1.
+GSLINTERNAL = 0
+#
+# Select periodic boundary conditions: 1 for periodic, 0 otherwise
+PERIODICON = 0
+#
+# For an OpenMP machine could be important to set (maximum number of threads to use):
+# export OMP_NUM_THREADS=8
+# Set this to 1 for OPENMP parallel version, or 0 to switch it off
+OPENMPMACHINE = 1
+#
+# For MPI parallel version set it to 1.
+MPIMACHINE = 0
+#
+
+# For histograms in logscale version set to 1. Else 0
+LOGHISTON = 1
+# And set the number of bins per decade:
+NLOGBINPD = 5
+#
+
+# To print some useful info set to 1. Else 0
+DEBUGON = 0
+#
+
+# To activate long integers set to 1. Else 0
+LONGINTON = 1
+#
+
+# To save state of the run comment set to 1. Else 0
+SAVERESTOREON = 0
+#
+
+# To print some useful info comment set to 1. Else 0
+BALLSON = 1
+#
+
+# To print some useful info comment set to 1. Else 0
+TPCFON = 1
+#
+
+#
+ADDONSON = 0
+
+#
+PATCHESON = 0
+
+#
+BUCKETON = 0
+
+#
+# Machine definitions. Edit this file according to your needs
+MACHINES_DIR = ./
+include $(MACHINES_DIR)Makefile_machine
+
+# Note:  Be careful in the options to set 1 or 0 without further space
+#        or a comment starting with #...

@@ -1,0 +1,8 @@
+
+rm -f tpc.log
+rm -f output.txt
+rm -f histN.txt
+rm -f parameters_null-tpcf-usedvalues
+rm -f parameters_null-nplot2d-usedvalues
+rm -f nplot2d.log
+
