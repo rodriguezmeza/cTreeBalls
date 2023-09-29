@@ -176,6 +176,7 @@ global void maketree(bodyptr btab, int nbody)
     verb_print(cmd.verbose, "\nSelected vs NotSelected and total: %ld %ld %ld\n\n",
                isel, inosel, isel + inosel);
 
+#ifdef BALLS
 //B BALLS :: SCANLEV
 // Check segmentation fault at scanLevel>=9!!
 // Suggest at cmdline (StartRun: CheckParameters) that scanLevel<9
@@ -222,6 +223,7 @@ global void maketree(bodyptr btab, int nbody)
     for (in=0; in<inodelev; in++) {
 
         pn = nodetable + in;
+        IdNode(pn) = in;
         Type(pn) = Type(nodetabscanlev[in]);
         Update(pn) = Update(nodetabscanlev[in]);
         Weight(pn) = Weight(nodetabscanlev[in]);
@@ -264,7 +266,9 @@ global void maketree(bodyptr btab, int nbody)
     maketreenodes(nodetable, gd.nnodescanlev);
 //E
 
-//E
+//E BALLS :: SCANLEV
+#endif // ! BALLS
+
 
     if (!gd.flagSmooth || !gd.flagSetNbNoSel) {
     if ( (scanopt(cmd.options, "smooth") && scanopt(cmd.options, "set-Nb-noSel")) ) {
@@ -773,6 +777,9 @@ local void walktree(nodeptr q, real qsize)
     }
 }
 
+
+#ifdef BALLS
+
 local void walktree_index_scan_lev(nodeptr q, int lev)
 {
     nodeptr p,g,h,l;
@@ -831,6 +838,7 @@ local void walktree_index_scan_lev(nodeptr q, int lev)
             }
     }
 }
+#endif // ! BALLS
 
 //B BALLS :: DIAGNOSTICS (DEBUG)
 #ifdef DEBUG

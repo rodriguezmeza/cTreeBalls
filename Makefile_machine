@@ -168,9 +168,11 @@ OPT2 += -DSAVERESTORE
 endif
 #
 
-#
+# BALLS ON and LOGHIST ON
 ifeq ($(BALLSON),1)
+ifeq ($(LOGHISTON),1)
 OPT2 += -DBALLS
+endif
 endif
 #
 
@@ -193,6 +195,12 @@ endif
 #
 ifeq ($(BUCKETON),1)
 OPT2 += -DBUCKET
+endif
+#
+
+#
+ifeq ($(TREENODEON),1)
+OPT2 += -DTREENODE
 endif
 #
 

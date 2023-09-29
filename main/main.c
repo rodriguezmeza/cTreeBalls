@@ -48,6 +48,7 @@ int main(int argc, string argv[])
     printf("\n -> Parameter file is %s\n", cmd.ParameterFile);
 #endif
 
+
     StartRun(argv[0], HEAD1, HEAD2, HEAD3);
 	MainLoop();
 

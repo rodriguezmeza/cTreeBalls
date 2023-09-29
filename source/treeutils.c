@@ -1037,3 +1037,4 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, 
 }
 
 
+

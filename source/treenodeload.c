@@ -67,7 +67,7 @@ global void maketreenodes(nodeptr ntab, int nnode)
             Type(p) = BODY;
     }
     cputree = CPUTIME - cpustart;
-    verb_print(cmd.verbose, "\nCPU tree node time : %lf\n", cputree);
+    verb_print(cmd.verbose, "\nCPU tree node time : %lf\n\n", cputree);
 }
 
 local void findRootCenter(nodeptr ntab, int nnode)
@@ -90,7 +90,7 @@ local void findRootCenter(nodeptr ntab, int nnode)
 
     DO_COORD(k) {
         Pos(rootnode)[k] = (xmax[k]+xmin[k])/2;
-        verb_print(cmd.verbose, "findRootCenter: Pos(rootnode) = %lf\n", Pos(rootnode)[k]);
+        verb_print(cmd.verbose, "\nfindRootCenter: Pos(rootnode) = %lf\n", Pos(rootnode)[k]);
     }
 
     for(k=0, len=xmax[0]-xmin[0]; k<NDIM; k++)

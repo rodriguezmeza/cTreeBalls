@@ -997,6 +997,7 @@ local int infilefmt_string_to_int(string infmt_str,int *infmt_int)
     if (strcmp(infmt_str,"takahasi") == 0)                  *infmt_int = INTAKAHASI;
     if (strcmp(infmt_str,"columns-ascii-2d-to-3d") == 0)    *infmt_int = INCOLUMNS2DTO3D;
 
+
     return _SUCCESS_;
 }
 
@@ -1078,6 +1079,7 @@ local void search_method_string_to_int(string method_str,int *method_int)
     if (strcmp(method_str,"tree-3pcf-direct-omp") == 0)     *method_int = TREE3PCFBFOMPMETHOD;
     if (strcmp(method_str,"tree-omp-sincos") == 0)          *method_int = TREEOMPMETHODSINCOS;
     if (strcmp(method_str,"balls-omp") == 0)               *method_int = BALLSOMPMETHOD;
+
 
 
 }

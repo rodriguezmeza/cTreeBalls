@@ -44,6 +44,7 @@ local void sumnode_body3(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhist
 local void sumnode_cell(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_omp);
 
 
+
 //B COMIENZA METODO NORMAL DE BUSQUEDA (OMP)
 // search=tree-omp
 global void searchcalc_normal_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax)
@@ -856,6 +857,7 @@ local void sumnode_nblist_omp(bodyptr p, INTEGER *nbbcalcthread, gdhistptr_omp_3
 //B COMIENZA METODO BALLS (OMP) DE BUSQUEDA
 
 local void walktree_balls_omp(nodeptr, nodeptr, gdhistptr_omp_balls, INTEGER *);
+local void walktree_balls_omp_nodes(nodeptr, nodeptr, gdhistptr_omp_balls, INTEGER *);
 local void sumnodes_bb_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist);
 local void sumnodes_bc_omp(nodeptr, nodeptr, gdhistptr_omp_balls);
 local void sumnodes_cc_omp(nodeptr, nodeptr, gdhistptr_omp_balls);
@@ -881,7 +883,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
     if (cmd.scanLevel<3)
         error("-- too small scanLevel: %d. Use a value > 2... stopping \n",cmd.scanLevel);
 
-#pragma omp parallel default(none)   shared(cmd,gd,btab,nbody,root,ipmin,ipmax,nodetabscanlev)
+#pragma omp parallel default(none)   shared(cmd,gd,btab,nbody,root,ipmin,ipmax,nodetabscanlev,rootnode)
   {
     gdhist_omp_balls hist;
     nodeptr p,q;
@@ -913,6 +915,10 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
             hist.drpq = rsqrt(hist.drpq2);
 #endif
 #endif
+
+#ifdef TREENODE
+            walktree_balls_omp_nodes(p, (nodeptr) rootnode, &hist, &nsmoothcountthread);
+#else
             if (scanopt(cmd.options, "compute-j-no-eq-i")) {
                 for (j=0; j< gd.nnodescanlev; j++) {
                     q = nodetabscanlev[j];
@@ -924,6 +930,8 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
                     walktree_balls_omp(p, q, &hist, &nsmoothcountthread);
                 }
             }
+#endif
+
             computeBodyProperties_balls_omp((bodyptr)p, nbody, &hist);
 
             if (i%cmd.stepState == 0) {
@@ -972,6 +980,160 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
 }
 
 local void walktree_balls_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, INTEGER *nsmoothcountthread)
+{
+    nodeptr h,l;
+    real qsize=1.0;     // Dummy
+    int n;
+    real dr1;
+    vector dr;
+
+    if (Type(p) == CELL && Type(q) == CELL) {
+        if (!reject_cell(p, q, qsize)) {
+
+#ifdef BUCKET
+            if (Nb(p)<=gd.nsmooth[0] && Nb(q)<=gd.nsmooth[0]) {
+                *nsmoothcountthread += 1;
+                
+                if (nodes_set_bin(p, q, &n, &dr1, dr)) {
+                    if (n==-1)
+                        error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
+                    sumnodes_cc_omp(p, q, hist);
+                } else {
+                    for (h = More(p); h != Next(p); h = Next(h))
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(h,l,hist, nsmoothcountthread);
+                }
+
+            } else {
+#endif
+//B As original::
+            if (!scanopt(cmd.options, "no-two-balls")) {
+                if (nodes_condition(p, q)) {
+                    if (nodes_set_bin(p, q, &n, &dr1, dr)) {
+                        if (n==-1)
+                            error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
+                        sumnodes_cc_omp(p, q, hist);
+                    } else {
+                        for (h = More(p); h != Next(p); h = Next(h))
+                            for (l = More(q); l != Next(q); l = Next(l))
+                                walktree_balls_omp(h,l,hist, nsmoothcountthread);
+                    }
+
+//                    }
+
+                } else {
+                    for (h = More(p); h != Next(p); h = Next(h))
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(h,l,hist, nsmoothcountthread);
+                }
+
+            } else {
+                for (h = More(p); h != Next(p); h = Next(h))
+                    for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(h,l,hist, nsmoothcountthread);
+            }
+//E
+
+#ifdef BUCKET
+            }
+#endif
+        }
+    } else {
+        if (Type(p) == BODY && Type(q) == CELL) {
+            if (!reject_cell(p, q, qsize)) {
+
+#ifdef BUCKET
+                if (Nb(q)<=gd.nsmooth[0]) {
+                    *nsmoothcountthread += 1;
+                    
+                    if (nodes_set_bin(p, q, &n, &dr1, dr)) {
+                        if (n==-1)
+                            error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
+                        sumnodes_bc_omp(p, q, hist);
+                    } else {
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(p,l,hist, nsmoothcountthread);
+                    }
+
+                } else {
+#endif
+                if (!scanopt(cmd.options, "no-one-balls")) {
+                    if (nodes_condition(p, q)) {
+                        if (nodes_set_bin(p, q, &n, &dr1, dr)) {
+                            if (n==-1)
+                                error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
+                            sumnodes_bc_omp(p, q, hist);
+                        } else {
+                            for (l = More(q); l != Next(q); l = Next(l))
+                                walktree_balls_omp(p,l,hist, nsmoothcountthread);
+                        }
+                    } else {
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(p,l,hist, nsmoothcountthread);
+                    }
+                } else {
+                    for (l = More(q); l != Next(q); l = Next(l))
+                        walktree_balls_omp(p,l,hist, nsmoothcountthread);
+                }
+
+#ifdef BUCKET
+                }
+#endif
+            }
+        }
+        if (Type(p) == BODY && Type(q) == BODY) {
+#ifdef DEBUG
+                HIT(p) = TRUE;
+                HIT(q) = TRUE;
+#endif
+            sumnodes_bb_omp(p, q, hist);
+        }
+        if (Type(p) == CELL && Type(q) == BODY) {
+            if (!reject_cell(q, p, qsize)) {
+
+#ifdef BUCKET
+                if (Nb(p)<=gd.nsmooth[0]) {
+                    *nsmoothcountthread += 1;
+
+                    if (nodes_set_bin(q, p, &n, &dr1, dr)) {
+                        if (n==-1)
+                            error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
+                        sumnodes_bc_omp(q, p, hist);
+                    } else {
+                        for (l = More(p); l != Next(p); l = Next(l))
+                            walktree_balls_omp(q,l,hist, nsmoothcountthread);
+                    }
+
+                } else {
+#endif
+                if (!scanopt(cmd.options, "no-one-balls")) {
+                    if (nodes_condition(q, p)) {
+                        if (nodes_set_bin(q, p, &n, &dr1, dr)) {
+                            if (n==-1)
+                                error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
+                            sumnodes_bc_omp(q, p, hist);
+                        } else {
+                            for (l = More(p); l != Next(p); l = Next(l))
+                                walktree_balls_omp(q,l,hist, nsmoothcountthread);
+                        }
+                    } else {
+                        for (l = More(p); l != Next(p); l = Next(l))
+                            walktree_balls_omp(q,l,hist, nsmoothcountthread);
+                    }
+                } else {
+                    for (l = More(p); l != Next(p); l = Next(l))
+                        walktree_balls_omp(q,l,hist, nsmoothcountthread);
+                }
+
+#ifdef BUCKET
+            }
+#endif
+            }
+        }
+    }
+}
+
+local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, INTEGER *nsmoothcountthread)
 {
     nodeptr h,l;
     real qsize=1.0;     // Dummy
@@ -1726,6 +1888,8 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
 }
 
 //E TERMINA METODO NORMAL DE BUSQUEDA (SINCOS-OMP)
+
+
 
 
 

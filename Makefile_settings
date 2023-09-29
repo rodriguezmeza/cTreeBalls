@@ -59,6 +59,9 @@ PATCHESON = 0
 BUCKETON = 1
 
 #
+TREENODEON = 0
+
+#
 # Machine definitions. Edit this file according to your needs
 MACHINES_DIR = ./
 include $(MACHINES_DIR)Makefile_machine

@@ -59,6 +59,7 @@ typedef struct _node {
 // BALLS
     int lev;
     int idxscanlev;
+    INTEGER Id;
 #ifdef DEBUG
     bool hit;
 #endif
@@ -79,6 +80,7 @@ typedef struct _node {
 // BODY3
 #define Nbb(x)    (((nodeptr) (x))->nbb)
 // BALLS
+#define IdNode(x)    (((nodeptr) (x))->Id)
 #define Level(x)    (((nodeptr) (x))->lev)
 #define IDXSCAN(x)    (((nodeptr) (x))->idxscanlev)
 #ifdef DEBUG
