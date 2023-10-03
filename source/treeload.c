@@ -1,5 +1,5 @@
 /* ==============================================================================
-!	MODULE: treeload.c			[tpcf]											!
+!	MODULE: treeload.c			[cTreeBalls]											!
 !	Written by: M.A. Rodriguez-Meza.											!
 !	Starting date:	april 2023                                                  !
 !	Purpose: 3-point correlation function computation       					!
@@ -38,9 +38,6 @@ local real deltaRadius;
 //E
 
 //B To see the bodies belonging to a cell:
-//local cellptr celltabSel;
-//local INTEGER icellSel;
-//local bodyptr bodytabSel;
 local void walktree(nodeptr q, real qsize);
 //E
 
@@ -79,8 +76,6 @@ global void maketree(bodyptr btab, int nbody)
 //#endif
 #endif
 
-//    verb_print_debug(1, "\nAqui voy (2)\n");
-
     newtree();
     root = makecell();
 //B Set (0,0,...) as the center of the box
@@ -108,8 +103,6 @@ global void maketree(bodyptr btab, int nbody)
         Selected(p) = FALSE;
 //E
 
-//    verb_print_debug(1, "\nAqui voy (3)\n");
-
     NTOT[0] = 0; NTOT[1] = 0; NTOT[2] = 0;
     ip = 0;
     hackCellProp(root, gd.rSize, 0);
@@ -118,7 +111,6 @@ global void maketree(bodyptr btab, int nbody)
     real rBin;
     verb_log_print(cmd.verbose_log,gd.outlog,"\nmaketree: radius histogram:\n");
     for (i = 0; i < NbMax; i++) {
-//        rBin = ((int)i)*gd.rSize/NbMax;
         rBin = ((int)i)*gd.rSize/deltaRadius;
         verb_log_print(cmd.verbose_log,gd.outlog,"%g %d\n", rBin, cellRadius[i]);
     }
@@ -167,7 +159,6 @@ global void maketree(bodyptr btab, int nbody)
     walktree((nodeptr) root, gd.rSize);
     int isel=0, inosel=0;
     DO_BODY(p,btab,btab+nbody) {
-//        verb_print(cmd.verbose, "%ld ", Selected(p));
         if (Selected(p))
             isel++;
         else
@@ -178,8 +169,6 @@ global void maketree(bodyptr btab, int nbody)
 
 #ifdef BALLS
 //B BALLS :: SCANLEV
-// Check segmentation fault at scanLevel>=9!!
-// Suggest at cmdline (StartRun: CheckParameters) that scanLevel<9
     if (cmd.scanLevel > gd.tdepth) {
         verb_print(cmd.verbose, "Warning! tree depth (%d) is less than scanLevel (%d)...\n",
                    gd.tdepth, cmd.scanLevel);
@@ -187,6 +176,14 @@ global void maketree(bodyptr btab, int nbody)
         cmd.scanLevel = MAX(gd.tdepth-2,3);
         verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
     }
+#ifdef LOGHIST
+    verb_print(cmd.verbose, "(Only in log-scale) deltaR is %g and root size at scanLevel is %g.\n",
+               gd.deltaR, gd.rSize/rpow(2.0,cmd.scanLevel));
+    i = 0;
+    while (gd.deltaR < gd.rSize/rpow(2.0,i)) i++;
+    verb_print(cmd.verbose, "\t\t\tSuggested scanLevel is %d, where root size is %g.\n\n",
+               i, gd.rSize/rpow(2.0,i));
+#endif
     inodelev = 0;
     ibodyleftout = 0;
 #if NDIM == 3
@@ -194,8 +191,7 @@ global void maketree(bodyptr btab, int nbody)
 #else
     gd.nnodescanlev = rpow(4, cmd.scanLevel);
 #endif
-// Use the node storage use for cells. Bodies are left out. 
-//    nodetabscanlev = (nodeptr *) allocate(gd.nnodescanlev * sizeof(nodeptr));
+// Use the node storage for cells. Bodies are left out.
     gd.nnodescanlev = gd.ncell;
     nodetabscanlev = (nodeptr *) allocate(gd.nnodescanlev * sizeof(nodeptr));
 //
@@ -211,30 +207,36 @@ global void maketree(bodyptr btab, int nbody)
     sprintf(gd.nodesfilePath,"%s/nodes%s.txt",gd.tmpDir,cmd.suffixOutFiles);
     if(!(gd.outnodelev=fopen(gd.nodesfilePath, "w")))
         error("\nstart_Common: error opening file '%s' \n",gd.nodesfilePath);
+    sprintf(gd.bodiesfilePath,"%s/bodies%s.txt",gd.tmpDir,cmd.suffixOutFiles);
+    if(!(gd.outbodylev=fopen(gd.bodiesfilePath, "w")))
+        error("\nstart_Common: error opening file '%s' \n",gd.nodesfilePath);
     int in;
     INTEGER nodescount=0;
     gd.nnodescanlev = inodelev;
 
-    nodetable = (nodeptr) allocate(gd.nnodescanlev * sizeof(node));
-    nodeptr pn;
+    nodetable = (bodyptr) allocate(gd.nnodescanlev * sizeof(body));
+    bodyptr pn;
 
     INTEGER nodescount_smooth=0;
 
     for (in=0; in<inodelev; in++) {
 
         pn = nodetable + in;
-        IdNode(pn) = in;
-        Type(pn) = Type(nodetabscanlev[in]);
-        Update(pn) = Update(nodetabscanlev[in]);
+        Id(pn) = in;
+        Type(pn) = BODY;
+        Update(pn) = TRUE;
         Weight(pn) = Weight(nodetabscanlev[in]);
         Kappa(pn) = Kappa(nodetabscanlev[in]);
         SETV(Pos(pn),Pos(nodetabscanlev[in]));
-        Next(pn) = Next(nodetabscanlev[in]);
-        More(pn) = More(nodetabscanlev[in]);
-        Nb(pn) = Nb(nodetabscanlev[in]);
-        Radius(pn) = Radius(nodetabscanlev[in]);
-        Size(pn) = Size(nodetabscanlev[in]);
 
+        out_int_mar(gd.outbodylev, Id(pn));
+        out_int_mar(gd.outbodylev, Type(pn));
+        out_vector_mar(gd.outbodylev, Pos(pn));
+        out_real_mar(gd.outbodylev, Kappa(pn));
+        out_real_mar(gd.outbodylev, Smooth(pn));
+        out_int_long(gd.outbodylev, Nbb(pn));
+
+        
         if (Type(nodetabscanlev[in]) == CELL) {
             out_int_mar(gd.outnodelev, IDXSCAN(nodetabscanlev[in]));
             out_int_mar(gd.outnodelev, Type(nodetabscanlev[in]));
@@ -261,7 +263,8 @@ global void maketree(bodyptr btab, int nbody)
     verb_print(cmd.verbose, "%ld cells were with at much %d particles in them.\n",
                nodescount_smooth,gd.nsmooth[0]);
     fclose(gd.outnodelev);
-    
+    fclose(gd.outbodylev);
+
 //B Creating tree for nodes
     maketreenodes(nodetable, gd.nnodescanlev);
 //E
@@ -288,10 +291,8 @@ global void maketree(bodyptr btab, int nbody)
         bodyptr q = bodytabSel;
         DO_BODY(p,bodytabsm,bodytabsm+gd.nbodysm) {
             ipcount++;
-//            q = ipcount + bodytabsm -1;
             Id(q) = ipcount;
 // BODY3
-//            Type(q) = BODY;
             Type(q) = BODY3;
             Nbb(q) = Nbb(p);
             Weight(q) = Weight(p);

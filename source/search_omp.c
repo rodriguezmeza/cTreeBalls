@@ -1,5 +1,5 @@
 /* ==============================================================================
-!	MODULE: search_omp.c		[tpcf]                                          !
+!	MODULE: search_omp.c		[cTreeBalls]                                    !
 !	Written by: M.A. Rodriguez-Meza.											!
 !    Starting date:    april 2023                                               !
 !    Purpose: 3-point correlation function computation                          !
@@ -21,11 +21,13 @@ NOTA: El orden de los terminos en la busqueda del árbol de cada particula
 	a mostrarse diferente en los resultados del momento angular de los dos casos.
 */
 
-//B Set of search omp parallel routines using brute force and tree methods:
+//B Set of search omp parallel routines using brute force and tree methods (and balls):
 //
-// search=tree-omp :: searchcalc_normal_omp(void)
-// search=direct-3pcf-omp :: search_direct_3pcf_omp(void)
+// search=tree-omp :: searchcalc_normal_omp(btab, nbody, ipmin, ipmax)
+// search=direct-3pcf-omp :: search_direct_3pcf_omp(btab, nbody, ipmin, ipmax)
 // search=tree-3pcf-direct-omp :: searchcalc_normal_3pcf_direct_omp(btab, nbody, ipmin, ipmax)
+// search=balls-omp :: searchcalc_balls_omp(btab, nbody, ipmin, ipmax)
+// search=tree-omp-sincos :: searchcalc_normal_omp_sincos(btab, nbody, ipmin, ipmax)
 //
 //E
 
@@ -103,6 +105,9 @@ global void searchcalc_normal_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGE
       for (n = 1; n <= cmd.sizeHistN; n++) {
           gd.histN[n] += hist.histNthread[n];
           gd.histNSub[n] += hist.histNSubthread[n];
+// 2pcf
+          gd.histNSubXi2pcf[n] += hist.histNSubXi2pcfthread[n];
+//
           gd.histXi2pcf[n] += hist.histXi2pcfthread[n];
       }
 
@@ -120,9 +125,10 @@ global void searchcalc_normal_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGE
     int nn;
     for (nn = 1; nn <= cmd.sizeHistN; nn++) {
         gd.histXi2pcf[nn] /= 2.0;
-        gd.histNSub[nn] = gd.histN[nn];
-        gd.histNSub[nn] /= 2.0;
-        gd.histXi2pcf[nn] /= MAX(gd.histNSub[nn],1.0);
+// 2pcf
+        gd.histNSubXi2pcf[nn] /= 2.0;
+        gd.histXi2pcf[nn] /= MAX(gd.histNSubXi2pcf[nn],1.0);
+//
     }
 
 //B Computation of histogram of all B-B encounters
@@ -210,11 +216,13 @@ local void sumnode(bodyptr p, cellptr start, cellptr finish,
                     n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
                 else
                     n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
-
                 if (n<=cmd.sizeHistN && n>=1) {
-                hist->histNthread[n] = hist->histNthread[n] + 1.;
-                hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
-                xi = Kappa(q);
+                    hist->histNthread[n] = hist->histNthread[n] + 1.;
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
+//
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
                     real s;
@@ -223,40 +231,43 @@ local void sumnode(bodyptr p, cellptr start, cellptr finish,
 #else
                     cosphi = -dr[1]/dr1;
 #endif
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd.verbose, gd.outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                                "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-              CHEBYSHEVOMP;
-//                NOCHEBYSHEVOMP;
+                    CHEBYSHEVOMP;
 #endif // ! TPCF
-                hist->histXi2pcfthreadsub[n] += xi;
-                *nbbcalcthread += 1;
+                    hist->histXi2pcfthreadsub[n] += xi;
+                    *nbbcalcthread += 1;
                 }
             }
 #else // LOGHIST
             if(dr1>cmd.rminHist) {
-            n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-            hist->histNthread[n] = hist->histNthread[n] + 1.;
-            hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
-            xi = Kappa(q);
+                n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
+                if (n<=cmd.sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] + 1.;
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
+//
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
-            real s;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = -s/(dr1*hist->drpq);
+                    real s;
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = -s/(dr1*hist->drpq);
 #else
-                cosphi = -dr[1]/dr1;
+                    cosphi = -dr[1]/dr1;
 #endif
-            if (rabs(cosphi)>1.0)
-                verb_log_print(cmd.verbose, gd.outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                            "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-            CHEBYSHEVOMP;
-//            NOCHEBYSHEVOMP;
+                    CHEBYSHEVOMP;
 #endif // ! TPCF
-            hist->histXi2pcfthreadsub[n] += xi;
-            *nbbcalcthread += 1;
+                    hist->histXi2pcfthreadsub[n] += xi;
+                    *nbbcalcthread += 1;
+                }
             }
 #endif // LOGHIST
 		}
@@ -287,6 +298,9 @@ local void sumnode_body3(bodyptr p, cellptr start, cellptr finish,
 
                 if (n<=cmd.sizeHistN && n>=1) {
                 hist->histNthread[n] = hist->histNthread[n] + Nbb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nbb(q);
+//
                 hist->histNSubthread[n] = hist->histNSubthread[n] + Nbb(q);
                 xi = Kappa(q);
 #ifdef TPCF
@@ -302,7 +316,6 @@ local void sumnode_body3(bodyptr p, cellptr start, cellptr finish,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
               CHEBYSHEVOMP;
-//                NOCHEBYSHEVOMP;
 #endif // ! TPCF
                 hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
                 *nbbcalcthread += 1;
@@ -310,27 +323,31 @@ local void sumnode_body3(bodyptr p, cellptr start, cellptr finish,
             }
 #else // LOGHIST
             if(dr1>cmd.rminHist) {
-            n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                hist->histNthread[n] = hist->histNthread[n] + Nbb(q);
-                hist->histNSubthread[n] = hist->histNSubthread[n] + Nbb(q);
-            xi = Kappa(q);
+                n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
+                if (n<=cmd.sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] + Nbb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nbb(q);
+//
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + Nbb(q);
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
-            real s;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = -s/(dr1*hist->drpq);
+                    real s;
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = -s/(dr1*hist->drpq);
 #else
-                cosphi = -dr[1]/dr1;
+                    cosphi = -dr[1]/dr1;
 #endif
-            if (rabs(cosphi)>1.0)
-                verb_log_print(cmd.verbose, gd.outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                            "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-            CHEBYSHEVOMP;
-//            NOCHEBYSHEVOMP;
+                    CHEBYSHEVOMP;
 #endif // ! TPCF
-            hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
-            *nbbcalcthread += 1;
+                    hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
+                    *nbbcalcthread += 1;
+                }
             }
 #endif // LOGHIST
         }
@@ -352,14 +369,21 @@ local void sumnode_cell(bodyptr p, cellptr start, cellptr finish,
     for (q = start; q < finish; q++) {
         if (accept_body(p, (nodeptr)q, &dr1, dr)) {
 #ifdef LOGHIST
-            if(dr1>0) {
+            if(dr1>cmd.rminHist) {
                 if (cmd.rminHist==0)
                     n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
                 else
                     n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
                 if (n<=cmd.sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] + Nb(q);
-                    hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.0;
+//                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nb(q);
+//
+// This line is the one is working now
+//                    hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
+// This line is experimental
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.0;
                     xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
@@ -374,37 +398,51 @@ local void sumnode_cell(bodyptr p, cellptr start, cellptr finish,
                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
                     CHEBYSHEVOMP;
-//                  NOCHEBYSHEVOMP;
 #endif // ! TPCF
-                    hist->histXi2pcfthreadsub[n] += xi*Nb(q);
+// This line is the one is working now
+//                    hist->histXi2pcfthreadsub[n] += xi*Nb(q);
+// This line is experimental
+                    hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;
                 }
             }
 #else // LOGHIST
+            if(dr1>cmd.rminHist) {
                 n = (int) ((dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-            hist->histNthread[n] = hist->histNthread[n] + Nb(q);
-            hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
-                xi = Kappa(q);
+                if (n<=cmd.sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] + Nb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.0;
+//            hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nb(q);
+//
+// This line is the one is working now
+//            hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
+// This line is experimental
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.0;
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
-                real s;
+                    real s;
                     DOTVP(s, dr, hist->dr0);
                     cosphi = -s/(dr1*hist->drpq);
 #else
                     cosphi = -dr[1]/dr1;
 #endif
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd.verbose, gd.outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                                "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-                CHEBYSHEVOMP;
-//            NOCHEBYSHEVOMP;
+                    CHEBYSHEVOMP;
 #endif // ! TPCF
-            hist->histXi2pcfthreadsub[n] += xi*Nb(q);
-            *nbccalcthread += 1;
-
-#endif // LOGHIST
+// This line is the one is working now
+//            hist->histXi2pcfthreadsub[n] += xi*Nb(q);
+// This line is experimental
+                    hist->histXi2pcfthreadsub[n] += xi;
+                    *nbccalcthread += 1;
+                }
             }
+#endif // LOGHIST
+        }
     }
 }
 
@@ -581,7 +619,7 @@ local int *activenb;
 local int nblist;
 
 
-//B COMIENZA METODO NORMAL DE BUSQUEDA
+//B COMIENZA METODO NORMAL (3pcf - brute force) DE BUSQUEDA
 // search=tree-3pcf-direct-omp
 global void searchcalc_normal_3pcf_direct_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax)
 {
@@ -796,11 +834,9 @@ local void sumnode_nblist_omp(bodyptr p, INTEGER *nbbcalcthread, gdhistptr_omp_3
 
 #ifdef TPCF
 #if NDIM == 3
-//            if (NDIM == 3) {
                     real s;
                     DOTVP(s, dr, hist->dr0);
                     cosphi = -s/(dr1*hist->drpq);
-//            } else
 #else
                     cosphi = -dr[1]/dr1;
 #endif
@@ -811,31 +847,24 @@ local void sumnode_nblist_omp(bodyptr p, INTEGER *nbbcalcthread, gdhistptr_omp_3
 */
 
 #ifdef TPCF
-//        for (j = 0; j < nblist; j++) {
         for (j = i+1; j < nblist; j++) {
-//            if (i != j) {
                 h = bodytab + activenb[j];
                 accept_body(p, (nodeptr)h, &dr1_h, dr_h);
             if(dr1_h>cmd.rminHist) {
-//                theta1 = angle_dxdy(dr[0], dr[1]);
                 theta2 = angle_dxdy(dr_h[0], dr_h[1]);
                 theta = rabs(theta2-theta1);
-//                n = (int) ((dr1-cmd.rminHist) * gd.i_deltaR) + 1;
                 m = (int) ((dr1_h-cmd.rminHist) * gd.i_deltaR) + 1;
                 l = (int) (theta / gd.deltaTheta) + 1;
                 if ( (n<=cmd.sizeHistN && n>=1)
                     && (m<=cmd.sizeHistN && m>=1) && (l<=cmd.sizeHistTheta && l>=1)) {
-//                    hist->histNNNthread[n] = hist->histNNNthread[n] + 1.;
                     hist->histNNNSubthread[n][m][l] = hist->histNNNSubthread[n][m][l] + 1.;
-//                    hist->histXi3pcfthread[n][m][l] += Kappa(h) * Kappa(q) * Kappa(p);
                     hist->histXi3pcfthread[n][m][l] += Kappa(h) * Kappa(q);
                     *nbbcalcthread += 1;
                 }
             }
-//            }
-        }
+        } // ! end loop j
 #endif
-    }
+    } // ! end loop i
 
 //
     i = nblist;
@@ -852,21 +881,30 @@ local void sumnode_nblist_omp(bodyptr p, INTEGER *nbbcalcthread, gdhistptr_omp_3
 
 }
 
+//E TERMINA METODO NORMAL (3pcf - brute force) DE BUSQUEDA
+
+
+
 #ifdef BALLS
 
 //B COMIENZA METODO BALLS (OMP) DE BUSQUEDA
 
 local void walktree_balls_omp(nodeptr, nodeptr, gdhistptr_omp_balls, INTEGER *);
 local void walktree_balls_omp_nodes(nodeptr, nodeptr, gdhistptr_omp_balls, INTEGER *);
+local void walktree_balls_omp_sub(nodeptr, nodeptr, gdhistptr_omp_balls, INTEGER *);
 local void sumnodes_bb_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist);
 local void sumnodes_bc_omp(nodeptr, nodeptr, gdhistptr_omp_balls);
 local void sumnodes_cc_omp(nodeptr, nodeptr, gdhistptr_omp_balls);
+
+local int imiss;
 
 // search=balls-omp
 global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax)
 {
     double cpustart;
     int nn;
+
+    imiss = 0;
 
     cpustart = CPUTIME;
     verb_print(cmd.verbose, "searchcalc_balls6: Running ... (balls-omp) \n");
@@ -940,6 +978,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
             }
         } // end loop i
 //E
+//      computeBodyProperties_balls_omp((bodyptr)p, nbody, &hist);
 
 #pragma omp critical
     {
@@ -974,6 +1013,8 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
         search_compute_HistN_balls(nbody);
 
     verb_print(cmd.verbose, "balls: nsmoothcount = %ld\n",gd.nsmoothcount);
+
+    verb_print(cmd.verbose, "balls: imiss = %d\n",imiss);
 
     gd.cpusearch = CPUTIME - cpustart;
     verb_print(cmd.verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);
@@ -1135,6 +1176,27 @@ local void walktree_balls_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, IN
 
 local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, INTEGER *nsmoothcountthread)
 {
+    nodeptr l, h;
+    real qsize; // dummy
+    if (Type(q) == CELL) {
+        if (!reject_cell(p, q, qsize)) {
+            for (l = More(q); l != Next(q); l = Next(l)) {
+                if (Type(l) == CELL) {
+                    walktree_balls_omp_nodes(p,l,hist,nsmoothcountthread);
+                } else {
+                    h = nodetabscanlev[Id(l)];
+                    walktree_balls_omp_sub(p,h,hist, nsmoothcountthread);
+                }
+            }
+        } else {
+            h = nodetabscanlev[Id(q)];
+            walktree_balls_omp_sub(p,h,hist, nsmoothcountthread);
+        }
+    }
+}
+
+local void walktree_balls_omp_sub(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, INTEGER *nsmoothcountthread)
+{
     nodeptr h,l;
     real qsize=1.0;     // Dummy
     int n;
@@ -1142,8 +1204,6 @@ local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hi
     vector dr;
 
     if (Type(p) == CELL && Type(q) == CELL) {
-        if (!reject_cell(p, q, qsize)) {
-
 #ifdef BUCKET
             if (Nb(p)<=gd.nsmooth[0] && Nb(q)<=gd.nsmooth[0]) {
                 *nsmoothcountthread += 1;
@@ -1172,9 +1232,6 @@ local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hi
                             for (l = More(q); l != Next(q); l = Next(l))
                                 walktree_balls_omp(h,l,hist, nsmoothcountthread);
                     }
-
-//                    }
-
                 } else {
                     for (h = More(p); h != Next(p); h = Next(h))
                         for (l = More(q); l != Next(q); l = Next(l))
@@ -1187,15 +1244,11 @@ local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hi
                             walktree_balls_omp(h,l,hist, nsmoothcountthread);
             }
 //E
-
 #ifdef BUCKET
             }
 #endif
-        }
     } else {
         if (Type(p) == BODY && Type(q) == CELL) {
-            if (!reject_cell(p, q, qsize)) {
-
 #ifdef BUCKET
                 if (Nb(q)<=gd.nsmooth[0]) {
                     *nsmoothcountthread += 1;
@@ -1233,7 +1286,6 @@ local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hi
 #ifdef BUCKET
                 }
 #endif
-            }
         }
         if (Type(p) == BODY && Type(q) == BODY) {
 #ifdef DEBUG
@@ -1243,8 +1295,6 @@ local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hi
             sumnodes_bb_omp(p, q, hist);
         }
         if (Type(p) == CELL && Type(q) == BODY) {
-            if (!reject_cell(q, p, qsize)) {
-
 #ifdef BUCKET
                 if (Nb(p)<=gd.nsmooth[0]) {
                     *nsmoothcountthread += 1;
@@ -1282,7 +1332,6 @@ local void walktree_balls_omp_nodes(nodeptr p, nodeptr q, gdhistptr_omp_balls hi
 #ifdef BUCKET
             }
 #endif
-            }
         }
     }
 }
@@ -1311,7 +1360,6 @@ local void sumnodes_bb_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist)
                 xj = Kappa(p);
                 xi = Kappa(q);
                 hist->histXi2pcfthreadsub[n] += xj*xi;
-
 #ifdef TPCF
 #if NDIM == 3
                 real s;
@@ -1351,11 +1399,12 @@ local void sumnodes_bc_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist)
                 n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
             if (n<=cmd.sizeHistN && n>=1) {
                 hist->histNthread[n] = hist->histNthread[n] + Nb(q);
-                hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nb(q);
-                hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
+                hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.0;
+//                hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
+                hist->histNSubthread[n] = hist->histNSubthread[n] + 1.0;
                 xj = Kappa(p);
                 xi = Kappa(q);
-                hist->histXi2pcfthreadsub[n] += xj*xi*Nb(q);
+                hist->histXi2pcfthreadsub[n] += xj*xi;
 #ifdef TPCF
 #if NDIM == 3
                 real s;
@@ -1395,11 +1444,12 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist)
                 n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
             if (n<=cmd.sizeHistN && n>=1) {
                 hist->histNthread[n] = hist->histNthread[n] + Nb(p)*Nb(q);
-                hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nb(p)*Nb(q);
-                hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(q);
+                hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.0;
+//                hist->histNSubthread[n] = hist->histNSubthread[n] + Nb(p)*Nb(q);
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.0;
                 xj = Kappa(p);
                 xi = Kappa(q);
-                hist->histXi2pcfthreadsub[n] += xj*Nb(p)*xi*Nb(q);
+                hist->histXi2pcfthreadsub[n] += xj*xi;
 #ifdef TPCF
 #if NDIM == 3
                 real s;
@@ -1414,8 +1464,8 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist)
                 CHEBYSHEVOMPBALLS;
                 gd.ncccalc += 1;
 #endif // ! TPCF
-            }
-        }
+            } else imiss += 1;
+        } else imiss += 1;
     }
 }
 
@@ -1458,13 +1508,17 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 #endif
     for (nn = 1; nn <= cmd.sizeHistN; nn++) {
         gd.histN[nn] = 0.0;
+// 2pcf
+        gd.histNSubXi2pcf[nn] = 0.0;
+//
         gd.histXi2pcf[nn] = 0.0;
 #ifdef TPCF
         for (mm = 1; mm <= cmd.mchebyshev+1; mm++)
             gd.histXi[mm][nn] = 0.0;
 #endif
     }
-    gd.nbbcalc = gd.nbccalc = 0;
+//    gd.nbbcalc = gd.nbccalc = 0;
+    gd.actmax = gd.nbbcalc = gd.nbccalc = gd.ncccalc = 0;
 //E
 
 #pragma omp parallel default(none)   shared(cmd,gd, btab, nbody, root, ipmin, ipmax)
@@ -1496,23 +1550,35 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 //E
          normal_walktree_sincos(p, ((nodeptr) root), gd.rSize, &nbbcalcthread, &nbccalcthread, &hist);
         computeBodyProperties_sincos_omp(p, nbody, &hist);
-    } // end do body p // end pragma omp DO_BODY p
+
+         INTEGER ip;
+         ip = p - btab + 1;
+         if (ip%cmd.stepState == 0) {
+             verb_log_print(cmd.verbose_log, gd.outlog, " - Completed pivot: %ld\n", ip);
+         }
+     } // end do body p // end pragma omp DO_BODY p
 
 #pragma omp critical
  {
     for (n = 1; n <= cmd.sizeHistN; n++) {
         gd.histN[n] += hist.histNthread[n];
         gd.histNSub[n] += hist.histNSubthread[n];
+// 2pcf
+        gd.histNSubXi2pcf[n] += hist.histNSubXi2pcfthread[n];
+//
         gd.histXi2pcf[n] += hist.histXi2pcfthread[n];
     }
 #ifdef TPCF
      for (m=1; m<=cmd.mchebyshev+1; m++) {
          ADDM_ext(gd.histZetaMcos[m],gd.histZetaMcos[m],hist.histZetaMthreadcos[m],cmd.sizeHistN);
-         ADDM_ext(gd.histZetaMsin[m],gd.histZetaM[m],hist.histZetaMthreadsin[m],cmd.sizeHistN);
-         ADDM_ext(gd.histZetaMsincos[m],gd.histZetaM[m],hist.histZetaMthreadsincos[m],cmd.sizeHistN);
+//         ADDM_ext(gd.histZetaMsin[m],gd.histZetaM[m],hist.histZetaMthreadsin[m],cmd.sizeHistN);
+         ADDM_ext(gd.histZetaMsin[m],gd.histZetaMsin[m],hist.histZetaMthreadsin[m],cmd.sizeHistN);
+//         ADDM_ext(gd.histZetaMsincos[m],gd.histZetaM[m],hist.histZetaMthreadsincos[m],cmd.sizeHistN);
+         ADDM_ext(gd.histZetaMsincos[m],gd.histZetaMsincos[m],hist.histZetaMthreadsincos[m],cmd.sizeHistN);
      }
 #endif
     gd.nbbcalc += nbbcalcthread;
+    gd.nbccalc += nbccalcthread;
  }
 
     search_free_sincos_omp(&hist);
@@ -1521,9 +1587,13 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 
     for (nn = 1; nn <= cmd.sizeHistN; nn++) {
         gd.histXi2pcf[nn] /= 2.0;
-        gd.histNSub[nn] = gd.histN[nn];
-        gd.histNSub[nn] /= 2.0;
-        gd.histXi2pcf[nn] /= MAX(gd.histNSub[nn],1.0);
+//        gd.histNSub[nn] = gd.histN[nn];
+//        gd.histNSub[nn] /= 2.0;
+//        gd.histXi2pcf[nn] /= MAX(gd.histNSub[nn],1.0);
+// 2pcf
+        gd.histNSubXi2pcf[nn] /= 2.0;
+        gd.histXi2pcf[nn] /= MAX(gd.histNSubXi2pcf[nn],1.0);
+//
     }
 
 //B Computation of histogram of all B-B encounters
@@ -1537,24 +1607,6 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 local void normal_walktree_sincos(bodyptr p, nodeptr q, real qsize,
                         INTEGER *nbbcalcthread, INTEGER *nbccalcthread, gdhistptr_sincos_omp hist)
 {
-/*
-    nodeptr l;
-
-    if (Update(p)) {
-        if ( ((nodeptr) p) != q ) {
-            if (Type(q) == CELL) {
-                if (!reject_cell((nodeptr)p, q, qsize)) {
-                    for (l = More(q); l != Next(q); l = Next(l)) {
-                        normal_walktree_sincos(p,l,qsize/2, nbbcalcthread, nbccalcthread, hist);
-                    }
-                }
-            } else {
-                sumnode_sincos(p, ((cellptr) q),( (cellptr) q+1), nbbcalcthread, nbccalcthread,hist);
-            }
-        }
-    }
-*/
-
     nodeptr l;
     real dr1;
     vector dr;
@@ -1631,9 +1683,11 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
                     n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
                 else
                     n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
-
                 if (n<=cmd.sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] + 1.;
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
+//
                     hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
                     xi = Kappa(q);
 #ifdef TPCF
@@ -1649,7 +1703,7 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
 #endif
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
-                                       "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                            "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
                     for (m=1; m<=cmd.mchebyshev+1; m++){
                         Cheb = rcos((real)(m-1) * racos(cosphi));
@@ -1667,35 +1721,40 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
 # else // ! LOGHIST
             if(dr1>cmd.rminHist) {
                 n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                hist->histNthread[n] = hist->histNthread[n] + 1.;
-                hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
-                xi = Kappa(q);
+                if (n<=cmd.sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] + 1.;
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
+//
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
-                real s, sy;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = -s/(dr1*hist->drpq);
-                sy = rsqrt( rsqr(dr1*hist->drpq) + rsqr(s) );
-                sinphi = sy/(dr1*hist->drpq);
+                    real s, sy;
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = -s/(dr1*hist->drpq);
+                    sy = rsqrt( rsqr(dr1*hist->drpq) + rsqr(s) );
+                    sinphi = sy/(dr1*hist->drpq);
 #else
-                cosphi = -dr[0]/dr1;
-                sinphi = -dr[1]/dr1;
+                    cosphi = -dr[0]/dr1;
+                    sinphi = -dr[1]/dr1;
 #endif
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd.verbose, gd.outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                            "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-                for (m=1; m<=cmd.mchebyshev+1; m++){
-                    Cheb = rcos((real)(m-1) * racos(cosphi));
-                    ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                    xicosmphi = xi * Cheb;
-                    xisinmphi = xi * ChebU;
-                    hist->histXithread[m][n] += xicosmphi;
-                    hist->histXithreadsin[m][n] += xisinmphi;
-                }
+                    for (m=1; m<=cmd.mchebyshev+1; m++){
+                        Cheb = rcos((real)(m-1) * racos(cosphi));
+                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
+                        xicosmphi = xi * Cheb;
+                        xisinmphi = xi * ChebU;
+                        hist->histXithread[m][n] += xicosmphi;
+                        hist->histXithreadsin[m][n] += xisinmphi;
+                    }
 #endif // ! TPCF
-                hist->histXi2pcfthreadsub[n] += xi;
-                *nbbcalcthread += 1;
+                    hist->histXi2pcfthreadsub[n] += xi;
+                    *nbbcalcthread += 1;
+                }
             }
 #endif // ! LOGHIST
         } // ! accept_body
@@ -1727,6 +1786,9 @@ local void sumnode_sincos_body3(bodyptr p, cellptr start, cellptr finish,
 
                 if (n<=cmd.sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] + Nbb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nbb(q);
+//
                     hist->histNSubthread[n] = hist->histNSubthread[n] + Nbb(q);
                     xi = Kappa(q);
 #ifdef TPCF
@@ -1760,35 +1822,40 @@ local void sumnode_sincos_body3(bodyptr p, cellptr start, cellptr finish,
 # else // ! LOGHIST
             if(dr1>cmd.rminHist) {
                 n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                hist->histNthread[n] = hist->histNthread[n] + Nbb(q);
-                hist->histNSubthread[n] = hist->histNSubthread[n] + Nbb(q);
-                xi = Kappa(q);
+                if (n<=cmd.sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] + Nbb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nbb(q);
+//
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + Nbb(q);
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
-                real s, sy;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = -s/(dr1*hist->drpq);
-                sy = rsqrt( rsqr(dr1*hist->drpq) + rsqr(s) );
-                sinphi = sy/(dr1*hist->drpq);
+                    real s, sy;
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = -s/(dr1*hist->drpq);
+                    sy = rsqrt( rsqr(dr1*hist->drpq) + rsqr(s) );
+                    sinphi = sy/(dr1*hist->drpq);
 #else
-                cosphi = -dr[0]/dr1;
-                sinphi = -dr[1]/dr1;
+                    cosphi = -dr[0]/dr1;
+                    sinphi = -dr[1]/dr1;
 #endif
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd.verbose, gd.outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                            "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-                for (m=1; m<=cmd.mchebyshev+1; m++){
-                    Cheb = rcos((real)(m-1) * racos(cosphi));
-                    ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                    xicosmphi = xi * Cheb;
-                    xisinmphi = xi * ChebU;
-                    hist->histXithread[m][n] += xicosmphi;
-                    hist->histXithreadsin[m][n] += xisinmphi;
-                }
+                    for (m=1; m<=cmd.mchebyshev+1; m++){
+                        Cheb = rcos((real)(m-1) * racos(cosphi));
+                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
+                        xicosmphi = xi * Cheb;
+                        xisinmphi = xi * ChebU;
+                        hist->histXithread[m][n] += xicosmphi;
+                        hist->histXithreadsin[m][n] += xisinmphi;
+                    }
 #endif // ! TPCF
-                hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
-                *nbbcalcthread += 1;
+                    hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
+                    *nbbcalcthread += 1;
+                }
             }
 #endif // ! LOGHIST
         } // ! accept_body
@@ -1816,10 +1883,16 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
                     n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
                 else
                     n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
-
                 if (n<=cmd.sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
-                    hist->histNSubthread[n] = hist->histNSubthread[n] +  Nb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.0;
+//                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + Nb(q);
+//
+// This line is the one is working now
+//                    hist->histNSubthread[n] = hist->histNSubthread[n] +  Nb(q);
+// This line is experimental
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.0;
                     xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
@@ -1845,42 +1918,58 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
                         hist->histXithreadsin[m][n] += xisinmphi;
                     }
 #endif // ! TPCF
-                    hist->histXi2pcfthreadsub[n] += xi* Nb(q);
-                    *nbbcalcthread += 1;
+// This line is the one is working now
+//                    hist->histXi2pcfthreadsub[n] += xi* Nb(q);
+// This line is experimental
+                    hist->histXi2pcfthreadsub[n] += xi;
+//                    *nbbcalcthread += 1;
+                    *nbccalcthread += 1;
                 }
             }
 # else // ! LOGHIST
             if(dr1>cmd.rminHist) {
                 n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
-                hist->histNSubthread[n] = hist->histNSubthread[n] +  Nb(q);
-                xi = Kappa(q);
+                if (n<=cmd.sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+// 2pcf
+                    hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.0;
+//
+// This line is the one is working now
+//                hist->histNSubthread[n] = hist->histNSubthread[n] +  Nb(q);
+// This line is experimental
+                    hist->histNSubthread[n] = hist->histNSubthread[n] + 1.0;
+                    xi = Kappa(q);
 #ifdef TPCF
 #if NDIM == 3
-                real s, sy;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = -s/(dr1*hist->drpq);
-                sy = rsqrt( rsqr(dr1*hist->drpq) + rsqr(s) );
-                sinphi = sy/(dr1*hist->drpq);
+                    real s, sy;
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = -s/(dr1*hist->drpq);
+                    sy = rsqrt( rsqr(dr1*hist->drpq) + rsqr(s) );
+                    sinphi = sy/(dr1*hist->drpq);
 #else
-                cosphi = -dr[0]/dr1;
-                sinphi = -dr[1]/dr1;
+                    cosphi = -dr[0]/dr1;
+                    sinphi = -dr[1]/dr1;
 #endif
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd.verbose, gd.outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd.verbose, gd.outlog,
+                            "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 
-                for (m=1; m<=cmd.mchebyshev+1; m++){
-                    Cheb = rcos((real)(m-1) * racos(cosphi));
-                    ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                    xicosmphi = xi * Cheb;
-                    xisinmphi = xi * ChebU;
-                    hist->histXithread[m][n] += xicosmphi;
-                    hist->histXithreadsin[m][n] += xisinmphi;
-                }
+                    for (m=1; m<=cmd.mchebyshev+1; m++){
+                        Cheb = rcos((real)(m-1) * racos(cosphi));
+                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
+                        xicosmphi = xi * Cheb;
+                        xisinmphi = xi * ChebU;
+                        hist->histXithread[m][n] += xicosmphi;
+                        hist->histXithreadsin[m][n] += xisinmphi;
+                    }
 #endif // ! TPCF
-                hist->histXi2pcfthreadsub[n] += xi* Nb(q);
-                *nbbcalcthread += 1;
+// This line is the one is working now
+//                hist->histXi2pcfthreadsub[n] += xi* Nb(q);
+// This line is experimental
+                    hist->histXi2pcfthreadsub[n] += xi;
+//                *nbbcalcthread += 1;
+                    *nbccalcthread += 1;
+                }
             }
 #endif // ! LOGHIST
         } // ! accept_body

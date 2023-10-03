@@ -38,7 +38,7 @@ global int search_direct_3pcf_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGE
 
 //B Tree:
 global void maketree(bodyptr btab, int nbody);
-global void maketreenodes(nodeptr ntab, int nnode);
+global void maketreenodes(bodyptr ntab, int nnode);
 
 global void searchcalc_normal_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
 global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
@@ -53,13 +53,10 @@ global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist);
 
 #ifdef OPENMPCODE
 global int search_init_omp(gdhistptr_omp hist);
-global int search_init_omp_barnes(gdhistptr_omp_barnes hist);
 global int search_init_sincos_omp(gdhistptr_sincos_omp hist);
 global int search_free_omp(gdhistptr_omp hist);
-global int search_free_omp_barnes(gdhistptr_omp_barnes hist);
 global int search_free_sincos_omp(gdhistptr_sincos_omp hist);
 global int computeBodyProperties_omp(bodyptr p, int nbody, gdhistptr_omp hist);
-global int computeBodyProperties_omp_barnes(bodyptr p, int nbody, gdhistptr_omp_barnes hist);
 global int computeBodyProperties_sincos_omp(bodyptr p, int nbody, gdhistptr_sincos_omp hist);
 
 global int search_init_omp_3pcfbf(gdhistptr_omp_3pcfbf hist);

@@ -14,14 +14,14 @@
 
 local void newtree(void);
 local cellptr makecell(void);
-local void expandbox(nodeptr, int);
-local void loadnode(nodeptr);
-local int subindex(nodeptr, cellptr);
+local void expandbox(bodyptr, int);
+local void loadnode(bodyptr);
+local int subindex(bodyptr, cellptr);
 local void hackCellProp(cellptr, real, int);
 local void setRadius(cellptr, vector, real);
 local void threadtree(nodeptr, nodeptr);
-local void findRootCenter(nodeptr, int);
-local void centerNodes(nodeptr, int);
+local void findRootCenter(bodyptr, int);
+local void centerNodes(bodyptr, int);
 
 #define MAXLEVEL  32  
 
@@ -33,19 +33,13 @@ local real rSize;
 local real cputree;
 local INTEGER bytes_tot_cells;
 
-global void maketreenodes(nodeptr ntab, int nnode)
+global void maketreenodes(bodyptr ntab, int nnode)
 {
     double cpustart;
-    nodeptr p;
+    bodyptr p;
     int i;
 
     cpustart = CPUTIME;
-    DO_BODY(p, ntab, ntab+nnode) {
-        if (Type(p) == CELL)
-            Type(p) = NODECELL;
-        else
-            Type(p) = NODEBODY;
-    }
     newtree();
     rootnode = makecell();
     findRootCenter(ntab, nnode);
@@ -60,20 +54,14 @@ global void maketreenodes(nodeptr ntab, int nnode)
         cellhist[i] = subnhist[i] = 0;
     hackCellProp(rootnode, rSize, 0);
     threadtree((nodeptr) rootnode, NULL);
-    DO_BODY(p, ntab, ntab+nnode) {
-        if (Type(p) == NODECELL)
-            Type(p) = CELL;
-        else
-            Type(p) = BODY;
-    }
     cputree = CPUTIME - cpustart;
     verb_print(cmd.verbose, "\nCPU tree node time : %lf\n\n", cputree);
 }
 
-local void findRootCenter(nodeptr ntab, int nnode)
+local void findRootCenter(bodyptr ntab, int nnode)
 {
     real len;
-    nodeptr p;
+    bodyptr p;
     int k;
     vector xmin, xmax;
 
@@ -90,7 +78,7 @@ local void findRootCenter(nodeptr ntab, int nnode)
 
     DO_COORD(k) {
         Pos(rootnode)[k] = (xmax[k]+xmin[k])/2;
-        verb_print(cmd.verbose, "\nfindRootCenter: Pos(rootnode) = %lf\n", Pos(rootnode)[k]);
+        verb_print(cmd.verbose, "findRootCenter: Pos(rootnode) = %lf\n", Pos(rootnode)[k]);
     }
 
     for(k=0, len=xmax[0]-xmin[0]; k<NDIM; k++)
@@ -100,9 +88,9 @@ local void findRootCenter(nodeptr ntab, int nnode)
     verb_print(cmd.verbose, "findRootCenter: len = %lf\n", len);
 }
 
-local void centerNodes(nodeptr ntab, int nnode)
+local void centerNodes(bodyptr ntab, int nnode)
 {
-    nodeptr p;
+    bodyptr p;
     int k;
 
     DO_BODY(p, ntab, ntab+nnode)
@@ -131,10 +119,10 @@ local cellptr makecell(void)
     return (c);
 }
 
-local void expandbox(nodeptr ntab, int nnode)
+local void expandbox(bodyptr ntab, int nnode)
 {
     real dmax, d;
-    nodeptr p;
+    bodyptr p;
     int k;
  
     rSize = 1.0;
@@ -151,7 +139,7 @@ local void expandbox(nodeptr ntab, int nnode)
     verb_print(cmd.verbose, "treenodeload expandbox: rSize = %lf\n", rSize);
 }
 
-local void loadnode(nodeptr p)
+local void loadnode(bodyptr p)
 {
     cellptr q, c;
     int qind, k;
@@ -162,7 +150,7 @@ local void loadnode(nodeptr p)
     qind = subindex(p, q);
     qsize = rSize;
     while (Subp(q)[qind] != NULL) {
-        if (Type(Subp(q)[qind]) == NODEBODY || Type(Subp(q)[qind]) == NODECELL) {
+        if (Type(Subp(q)[qind]) == BODY) {
             DOTPSUBV(dist2, distv, Pos(p), Pos(Subp(q)[qind]));
             if (dist2 == 0.0) {
                 verb_log_print(cmd.verbose_log,gd.outlog,
@@ -178,7 +166,7 @@ local void loadnode(nodeptr p)
                 Pos(c)[k] = Pos(q)[k] +
                     (Pos(p)[k] < Pos(q)[k] ? - qsize : qsize) / 4;
 
-            Subp(c)[subindex((nodeptr) Subp(q)[qind], c)] = Subp(q)[qind];
+            Subp(c)[subindex((bodyptr) Subp(q)[qind], c)] = Subp(q)[qind];
             Subp(q)[qind] = (nodeptr) c;
         }
         q = (cellptr) Subp(q)[qind];
@@ -188,7 +176,7 @@ local void loadnode(nodeptr p)
     Subp(q)[qind] = (nodeptr) p;
 }
 
-local int subindex(nodeptr p, cellptr q)
+local int subindex(bodyptr p, cellptr q)
 {
     int ind, k;
  

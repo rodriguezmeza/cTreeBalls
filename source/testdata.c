@@ -1,5 +1,5 @@
 /* ==============================================================================
-!	MODULE: testdata.c				[tpcf]										!
+!	MODULE: testdata.c				[cTreeBalls]					    		!
 !	Written by: M.A. Rodriguez-Meza 											!
 !	Date: april 2023				            								!
 !	Purpose: Setting some test models											!

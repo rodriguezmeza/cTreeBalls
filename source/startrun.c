@@ -1,5 +1,5 @@
 /*==============================================================================
- MODULE: startrun.c				[tpcf]
+ MODULE: startrun.c				[cTreeBalls]
  Written by: Mario A. Rodriguez-Meza
  Starting date: april 2023
  Purpose: routines to initialize the main code
@@ -116,7 +116,7 @@ local int startrun_parameterfile(void)
 
 
 #ifdef GETPARAM
-#define parameter_null	"parameters_null-tpcf"
+#define parameter_null	"parameters_null-cballs"
 
 //B Section of read parameters from the command line
 

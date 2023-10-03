@@ -1,5 +1,5 @@
 /*==============================================================================
- MODULE: tpcf.c				[tpcf]
+ MODULE: tpcf.c				[cTreeBalls]
  Written by: Mario A. Rodriguez-Meza
  Starting date:	april 2023
  Purpose:
@@ -641,7 +641,7 @@ local int printHistZeta(void)
     return _SUCCESS_;
 }
 
-
+// Correct this to have logscale
 local int printHistZeta_sincos(void)
 {
     real rBin;

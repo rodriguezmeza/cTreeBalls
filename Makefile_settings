@@ -49,14 +49,15 @@ BALLSON = 1
 TPCFON = 1
 #
 
-#
+# GSL is here:
+# This options needs PATCHESON = 1, set it below
 ADDONSON = 0
 
 #
 PATCHESON = 0
 
 #
-BUCKETON = 1
+BUCKETON = 0
 
 #
 TREENODEON = 0

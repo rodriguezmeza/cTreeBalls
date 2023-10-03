@@ -213,14 +213,6 @@ EXTERNAL =
 
 
 
-#
-ifeq ($(ADDONSON),1)
-# NOLSST
-# Machine definitions
-include $(MACHINES_DIR)/addons/Makefile_addons
-OPT2 += -DADDONS
-endif
-#
 
 #
 #B GENERALLIBS section

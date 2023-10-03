@@ -262,6 +262,7 @@ typedef struct {
 // BALLS
     INTEGER ncccalc;
     FILE *outnodelev;
+    FILE *outbodylev;
     INTEGER nsmoothcount;
 //
     INTEGER nbccalc;
@@ -378,6 +379,7 @@ typedef struct {
     
     char nodesfilePath[MAXLENGTHOFFILES];
     int nnodescanlev;
+    char bodiesfilePath[MAXLENGTHOFFILES];
 //#endif
     
     bool flagSmooth;
@@ -412,7 +414,7 @@ global real *histXi2pcf_omp;        // Auxiliary array.
 global cellptr root;
 // BALLS
 global cellptr rootnode;
-global nodeptr nodetable;
+global bodyptr nodetable;
 //E
 
 typedef struct {
@@ -476,6 +478,9 @@ typedef struct {
     real ***histZetaMthread;
     realptr histNthread;
     realptr histNSubthread;
+// 2pcf
+    realptr histNSubXi2pcfthread;
+//
     real **histXithread;
     real *histXi2pcfthread;
     real *histXi2pcfthreadsub;
@@ -490,30 +495,6 @@ typedef struct {
     int nblist;
 } gdhist_omp, *gdhistptr_omp;
 
-typedef struct {
-    real **xiOUTVP;
-    real **histZetaMtmp;
-    real *Chebs;
-    real ***histZetaMthread;
-    realptr histNthread;
-    realptr histNSubthread;
-    real **histXithread;
-    real *histXi2pcfthread;
-    real *histXi2pcfthreadsub;
-
-    vector q0;
-    real drpq2, drpq;
-    vector dr0;
-    INTEGER ipcount;
-
-    int actlen;
-    int *activenb;
-    int nblist;
-    
-    nodeptr *active;
-    cellptr interact;
-
-} gdhist_omp_barnes, *gdhistptr_omp_barnes;
 
 typedef struct {
     real **xiOUTVPcos;
@@ -528,6 +509,9 @@ typedef struct {
     real ***histZetaMthreadsincos;
     realptr histNthread;
     realptr histNSubthread;
+// 2pcf
+    realptr histNSubXi2pcfthread;
+//
     real **histXithread;
     real **histXithreadsin;
     real *histXi2pcfthread;

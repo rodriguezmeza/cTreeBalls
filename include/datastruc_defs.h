@@ -397,5 +397,6 @@ typedef struct {
 #define ROTANGLE                0.01
 
 
+
 #endif // ! _data_struc_defs_h
 
