@@ -232,6 +232,35 @@ typedef struct {
        hist->histXithread[m][n] += xicosmphi;               \
    }}
 
+#define CHEBYSHEVTUOMP                                      \
+{                                                           \
+    hist->ChebsT[1] = 1.0;                                        \
+    xicosmphi = xi * hist->ChebsT[1];                             \
+    hist->histXithreadcos[1][n] += xicosmphi;                        \
+    hist->ChebsT[2] = cosphi;                                     \
+    xicosmphi = xi * hist->ChebsT[2];                             \
+    hist->histXithreadcos[2][n] += xicosmphi;                        \
+    hist->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);              \
+    xicosmphi = xi * hist->ChebsT[3];                             \
+    hist->histXithreadcos[3][n] += xicosmphi;                        \
+    hist->ChebsU[1] = 0.0;                                        \
+    xisinmphi = xi * hist->ChebsU[1] * sinphi;                    \
+    hist->histXithreadsin[1][n] += xisinmphi;                        \
+    hist->ChebsU[2] = 1.0;                                        \
+    xisinmphi = xi * hist->ChebsU[2] * sinphi;                    \
+    hist->histXithreadsin[2][n] += xisinmphi;                        \
+    hist->ChebsU[3] = 2.0*cosphi;                                 \
+    xisinmphi = xi * hist->ChebsU[3] * sinphi;                    \
+    hist->histXithreadsin[3][n] += xisinmphi;                        \
+    for (m=4; m<=cmd.mchebyshev+1; m++){                    \
+        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
+        xicosmphi = xi * hist->ChebsT[m];                         \
+        hist->histXithreadcos[m][n] += xicosmphi;                    \
+        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
+        xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
+        hist->histXithreadsin[m][n] += xisinmphi;                    \
+    }}
+
 #define CHEBYSHEVOMPBALLS                                   \
   {hist->Chebs[1] = 1.0;                                    \
    xicosmphi = xi * hist->Chebs[1];                         \

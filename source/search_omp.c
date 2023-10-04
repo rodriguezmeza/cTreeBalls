@@ -921,7 +921,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
     if (cmd.scanLevel<3)
         error("-- too small scanLevel: %d. Use a value > 2... stopping \n",cmd.scanLevel);
 
-#pragma omp parallel default(none)   shared(cmd,gd,btab,nbody,root,ipmin,ipmax,nodetabscanlev,rootnode)
+#pragma omp parallel default(none)   shared(cmd,gd,btab,nbody,root,ipmin,ipmax,nodetabscanlev,rootnode,imiss)
   {
     gdhist_omp_balls hist;
     nodeptr p,q;
@@ -956,6 +956,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
 
 #ifdef TREENODE
             walktree_balls_omp_nodes(p, (nodeptr) rootnode, &hist, &nsmoothcountthread);
+//            walktree_balls_omp_nodes(p, (nodeptr) root, &hist, &nsmoothcountthread);
 #else
             if (scanopt(cmd.options, "compute-j-no-eq-i")) {
                 for (j=0; j< gd.nnodescanlev; j++) {
@@ -1053,7 +1054,19 @@ local void walktree_balls_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, IN
                     if (nodes_set_bin(p, q, &n, &dr1, dr)) {
                         if (n==-1)
                             error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
-                        sumnodes_cc_omp(p, q, hist);
+// This is the only line it was originally in this segment:
+//                        sumnodes_cc_omp(p, q, hist);
+// B
+                        if ( (gd.deltaRV[n] < dr1 - Radius(q) && dr1 + Radius(q) < gd.deltaRV[n+1])
+                            && (gd.deltaRV[n] < dr1 - Radius(p) && dr1 + Radius(p) < gd.deltaRV[n+1])) {
+                            sumnodes_cc_omp(p, q, hist);
+                        } else {
+                            for (h = More(p); h != Next(p); h = Next(h))
+                                for (l = More(q); l != Next(q); l = Next(l))
+                                    walktree_balls_omp(h,l,hist, nsmoothcountthread);
+                        }
+//E
+
                     } else {
                         for (h = More(p); h != Next(p); h = Next(h))
                             for (l = More(q); l != Next(q); l = Next(l))
@@ -1103,7 +1116,17 @@ local void walktree_balls_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, IN
                         if (nodes_set_bin(p, q, &n, &dr1, dr)) {
                             if (n==-1)
                                 error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
-                            sumnodes_bc_omp(p, q, hist);
+// This is the only line it was originally in this segment:
+//                            sumnodes_bc_omp(p, q, hist);
+//B
+                            if ( gd.deltaRV[n] < dr1 - Radius(q) && dr1 + Radius(q) < gd.deltaRV[n+1]) {
+                                sumnodes_bc_omp(p, q, hist);
+                            } else {
+                                for (l = More(q); l != Next(q); l = Next(l))
+                                    walktree_balls_omp(p,l,hist, nsmoothcountthread);
+                            }
+//
+
                         } else {
                             for (l = More(q); l != Next(q); l = Next(l))
                                 walktree_balls_omp(p,l,hist, nsmoothcountthread);
@@ -1152,7 +1175,17 @@ local void walktree_balls_omp(nodeptr p, nodeptr q, gdhistptr_omp_balls hist, IN
                         if (nodes_set_bin(q, p, &n, &dr1, dr)) {
                             if (n==-1)
                                 error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
-                            sumnodes_bc_omp(q, p, hist);
+// This is the only line it was originally in this segment:
+//                            sumnodes_bc_omp(q, p, hist);
+//B
+                            if ( gd.deltaRV[n] < dr1 - Radius(p) && dr1 + Radius(p) < gd.deltaRV[n+1]) {
+                                sumnodes_bc_omp(q, p, hist);
+                            } else {
+                                for (l = More(p); l != Next(p); l = Next(l))
+                                        walktree_balls_omp(q,l,hist, nsmoothcountthread);
+                            }
+//E
+
                         } else {
                             for (l = More(p); l != Next(p); l = Next(l))
                                 walktree_balls_omp(q,l,hist, nsmoothcountthread);
@@ -1517,7 +1550,6 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
             gd.histXi[mm][nn] = 0.0;
 #endif
     }
-//    gd.nbbcalc = gd.nbccalc = 0;
     gd.actmax = gd.nbbcalc = gd.nbccalc = gd.ncccalc = 0;
 //E
 
@@ -1539,7 +1571,7 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
             hist.histXi2pcfthreadsub[n] = 0.0;
         }
 #ifdef TPCF
-        CLRM_ext_ext(hist.histXithread, cmd.mchebyshev+1, cmd.sizeHistN);
+        CLRM_ext_ext(hist.histXithreadcos, cmd.mchebyshev+1, cmd.sizeHistN);
         CLRM_ext_ext(hist.histXithreadsin, cmd.mchebyshev+1, cmd.sizeHistN);
 #if NDIM == 3
              dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
@@ -1571,9 +1603,7 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 #ifdef TPCF
      for (m=1; m<=cmd.mchebyshev+1; m++) {
          ADDM_ext(gd.histZetaMcos[m],gd.histZetaMcos[m],hist.histZetaMthreadcos[m],cmd.sizeHistN);
-//         ADDM_ext(gd.histZetaMsin[m],gd.histZetaM[m],hist.histZetaMthreadsin[m],cmd.sizeHistN);
          ADDM_ext(gd.histZetaMsin[m],gd.histZetaMsin[m],hist.histZetaMthreadsin[m],cmd.sizeHistN);
-//         ADDM_ext(gd.histZetaMsincos[m],gd.histZetaM[m],hist.histZetaMthreadsincos[m],cmd.sizeHistN);
          ADDM_ext(gd.histZetaMsincos[m],gd.histZetaMsincos[m],hist.histZetaMthreadsincos[m],cmd.sizeHistN);
      }
 #endif
@@ -1587,9 +1617,6 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 
     for (nn = 1; nn <= cmd.sizeHistN; nn++) {
         gd.histXi2pcf[nn] /= 2.0;
-//        gd.histNSub[nn] = gd.histN[nn];
-//        gd.histNSub[nn] /= 2.0;
-//        gd.histXi2pcf[nn] /= MAX(gd.histNSub[nn],1.0);
 // 2pcf
         gd.histNSubXi2pcf[nn] /= 2.0;
         gd.histXi2pcf[nn] /= MAX(gd.histNSubXi2pcf[nn],1.0);
@@ -1704,15 +1731,7 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-                    for (m=1; m<=cmd.mchebyshev+1; m++){
-                        Cheb = rcos((real)(m-1) * racos(cosphi));
-                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                        xicosmphi = xi * Cheb;
-                        xisinmphi = xi * ChebU;
-                        hist->histXithread[m][n] += xicosmphi;
-                        hist->histXithreadsin[m][n] += xisinmphi;
-                    }
+                    CHEBYSHEVTUOMP;
 #endif // ! TPCF
                     hist->histXi2pcfthreadsub[n] += xi;
                     *nbbcalcthread += 1;
@@ -1742,15 +1761,7 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-                    for (m=1; m<=cmd.mchebyshev+1; m++){
-                        Cheb = rcos((real)(m-1) * racos(cosphi));
-                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                        xicosmphi = xi * Cheb;
-                        xisinmphi = xi * ChebU;
-                        hist->histXithread[m][n] += xicosmphi;
-                        hist->histXithreadsin[m][n] += xisinmphi;
-                    }
+                    CHEBYSHEVTUOMP;
 #endif // ! TPCF
                     hist->histXi2pcfthreadsub[n] += xi;
                     *nbbcalcthread += 1;
@@ -1805,15 +1816,7 @@ local void sumnode_sincos_body3(bodyptr p, cellptr start, cellptr finish,
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
                                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-                    for (m=1; m<=cmd.mchebyshev+1; m++){
-                        Cheb = rcos((real)(m-1) * racos(cosphi));
-                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                        xicosmphi = xi * Cheb;
-                        xisinmphi = xi * ChebU;
-                        hist->histXithread[m][n] += xicosmphi;
-                        hist->histXithreadsin[m][n] += xisinmphi;
-                    }
+                    CHEBYSHEVTUOMP;
 #endif // ! TPCF
                     hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
                     *nbbcalcthread += 1;
@@ -1843,15 +1846,7 @@ local void sumnode_sincos_body3(bodyptr p, cellptr start, cellptr finish,
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-                    for (m=1; m<=cmd.mchebyshev+1; m++){
-                        Cheb = rcos((real)(m-1) * racos(cosphi));
-                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                        xicosmphi = xi * Cheb;
-                        xisinmphi = xi * ChebU;
-                        hist->histXithread[m][n] += xicosmphi;
-                        hist->histXithreadsin[m][n] += xisinmphi;
-                    }
+                    CHEBYSHEVTUOMP;
 #endif // ! TPCF
                     hist->histXi2pcfthreadsub[n] += xi*Nbb(q);
                     *nbbcalcthread += 1;
@@ -1908,15 +1903,7 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
                                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-                    for (m=1; m<=cmd.mchebyshev+1; m++){
-                        Cheb = rcos((real)(m-1) * racos(cosphi));
-                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                        xicosmphi = xi * Cheb;
-                        xisinmphi = xi * ChebU;
-                        hist->histXithread[m][n] += xicosmphi;
-                        hist->histXithreadsin[m][n] += xisinmphi;
-                    }
+                    CHEBYSHEVTUOMP;
 #endif // ! TPCF
 // This line is the one is working now
 //                    hist->histXi2pcfthreadsub[n] += xi* Nb(q);
@@ -1953,15 +1940,7 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
                     if (rabs(cosphi)>1.0)
                         verb_log_print(cmd.verbose, gd.outlog,
                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-                    for (m=1; m<=cmd.mchebyshev+1; m++){
-                        Cheb = rcos((real)(m-1) * racos(cosphi));
-                        ChebU = sinphi * rsin((real)(m-2) * racos(cosphi))/rsin(racos(cosphi));
-                        xicosmphi = xi * Cheb;
-                        xisinmphi = xi * ChebU;
-                        hist->histXithread[m][n] += xicosmphi;
-                        hist->histXithreadsin[m][n] += xisinmphi;
-                    }
+                    CHEBYSHEVTUOMP;
 #endif // ! TPCF
 // This line is the one is working now
 //                hist->histXi2pcfthreadsub[n] += xi* Nb(q);

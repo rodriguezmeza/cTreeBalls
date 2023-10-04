@@ -503,7 +503,8 @@ typedef struct {
     real **histZetaMtmpcos;
     real **histZetaMtmpsin;
     real **histZetaMtmpsincos;
-    real *Chebs;
+    real *ChebsT;
+    real *ChebsU;
     real ***histZetaMthreadcos;
     real ***histZetaMthreadsin;
     real ***histZetaMthreadsincos;
@@ -512,7 +513,7 @@ typedef struct {
 // 2pcf
     realptr histNSubXi2pcfthread;
 //
-    real **histXithread;
+    real **histXithreadcos;
     real **histXithreadsin;
     real *histXi2pcfthread;
     real *histXi2pcfthreadsub;

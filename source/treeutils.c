@@ -62,7 +62,8 @@ global int search_init_sincos_omp(gdhistptr_sincos_omp hist)
     int m;
 
 #ifdef TPCF
-    hist->Chebs = dvector(1,cmd.mchebyshev+1);
+    hist->ChebsT = dvector(1,cmd.mchebyshev+1);
+    hist->ChebsU = dvector(1,cmd.mchebyshev+1);
 #endif
     hist->histNthread = dvector(1,cmd.sizeHistN);
     hist->histNSubthread = dvector(1,cmd.sizeHistN);
@@ -72,7 +73,7 @@ global int search_init_sincos_omp(gdhistptr_sincos_omp hist)
     hist->histXi2pcfthread = dvector(1,cmd.sizeHistN);
     hist->histXi2pcfthreadsub = dvector(1,cmd.sizeHistN);
 #ifdef TPCF
-    hist->histXithread = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
+    hist->histXithreadcos = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
     hist->histXithreadsin = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
 
     hist->histZetaMthreadcos = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
@@ -143,7 +144,7 @@ global int search_free_sincos_omp(gdhistptr_sincos_omp hist)
     free_dmatrix3D(hist->histZetaMthreadsin,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadcos,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     free_dmatrix(hist->histXithreadsin,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
-    free_dmatrix(hist->histXithread,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
+    free_dmatrix(hist->histXithreadcos,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
 #endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
@@ -153,7 +154,8 @@ global int search_free_sincos_omp(gdhistptr_sincos_omp hist)
     free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
     free_dvector(hist->histNthread,1,cmd.sizeHistN);
 #ifdef TPCF
-    free_dvector(hist->Chebs,1,cmd.mchebyshev+1);
+    free_dvector(hist->ChebsU,1,cmd.mchebyshev+1);
+    free_dvector(hist->ChebsT,1,cmd.mchebyshev+1);
 #endif
 
     return _SUCCESS_;
@@ -215,14 +217,14 @@ global int computeBodyProperties_sincos_omp(bodyptr p, int nbody,
 #ifdef TPCF
     for (m=1; m<=cmd.mchebyshev+1; m++)
         for (n=1; n<=cmd.sizeHistN; n++) {
-            hist->histXithread[m][n] /= MAX(hist->histNSubthread[n],1.0);
+            hist->histXithreadcos[m][n] /= MAX(hist->histNSubthread[n],1.0);
             hist->histXithreadsin[m][n] /= MAX(hist->histNSubthread[n],1.0);
         }
 
     for (m=1; m<=cmd.mchebyshev+1; m++){
-        OUTVP_ext(hist->xiOUTVPcos, hist->histXithread[m], hist->histXithread[m], cmd.sizeHistN);
+        OUTVP_ext(hist->xiOUTVPcos, hist->histXithreadcos[m], hist->histXithreadcos[m], cmd.sizeHistN);
         OUTVP_ext(hist->xiOUTVPsin, hist->histXithreadsin[m], hist->histXithreadsin[m],cmd.sizeHistN);
-        OUTVP_ext(hist->xiOUTVPsincos, hist->histXithreadsin[m], hist->histXithread[m],cmd.sizeHistN);
+        OUTVP_ext(hist->xiOUTVPsincos, hist->histXithreadsin[m], hist->histXithreadcos[m],cmd.sizeHistN);
         CLRM_ext(hist->histZetaMtmpcos,cmd.sizeHistN);
         CLRM_ext(hist->histZetaMtmpsin,cmd.sizeHistN);
         CLRM_ext(hist->histZetaMtmpsincos,cmd.sizeHistN);
