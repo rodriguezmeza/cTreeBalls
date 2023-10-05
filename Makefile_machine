@@ -169,8 +169,8 @@ endif
 #
 
 # BALLS ON and LOGHIST ON
-ifeq ($(BALLSON),1)
 ifeq ($(LOGHISTON),1)
+ifeq ($(BALLSON),1)
 OPT2 += -DBALLS
 endif
 endif
