@@ -9,7 +9,7 @@ DEFDIMENSION = 3
 #
 # Default GSL public (not the internal sources version included).
 # If you want the internal gsl version set it to 1.
-GSLINTERNAL = 0
+GSLINTERNAL = 1
 #
 # Select periodic boundary conditions: 1 for periodic, 0 otherwise
 PERIODICON = 0
