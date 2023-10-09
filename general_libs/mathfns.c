@@ -79,11 +79,15 @@ double xrandom(double xl, double xh)
 //    return ( xl + (xh - xl) * ((double) ran1(&idum)) );
 
 //    return ( xl + (xh - xl) * ((double) ran2(&idum)) );
+#ifndef NOGSL
 //B With GSL random uniform generator
 //    gsl_rng * r;
     double ran2 = gsl_rng_uniform (gd.r);
     return ( xl + (xh - xl) * ( ran2 ) );
 //E
+#else
+    return (xl + (xh - xl) * ((double) random()) / 2147483647.0);
+#endif
 
 //    return ( xl + (xh - xl) * ((double) ran3(&idum)) );
 //    return ( xl + (xh - xl) * ((double) ran4(&idum)) );

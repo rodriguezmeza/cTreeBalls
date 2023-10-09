@@ -73,6 +73,8 @@ global time_t relstart,relend,absstart,absend;
 */
 
 //B GSL section
+#ifndef NOGSL
+
 #include <stdio.h>
 #include <math.h>
 #ifdef GSLINTER
@@ -108,6 +110,8 @@ global time_t relstart,relend,absstart,absend;
 #include <gsl/gsl_fft_real.h>
 #include <gsl/gsl_fft_halfcomplex.h>
 #include <gsl/gsl_integration.h>
+#endif
+
 #endif
 //E
 
@@ -285,7 +289,9 @@ typedef struct {
 
     int infilefmt_int;
     
+#ifndef NOGSL
     gsl_rng * r;
+#endif
 
     vector Box;
     realptr histN;
@@ -302,7 +308,9 @@ typedef struct {
     real **histXi;
     real **histXicos;
     real **histXisin;
+#ifndef NOGSL
     gsl_matrix_complex *histXi_gsl;
+#endif
     real ***histZetaM;
     real ***histZetaMcos;
     real ***histZetaMsin;
@@ -417,12 +425,15 @@ global cellptr rootnode;
 global bodyptr nodetable;
 //E
 
+#ifndef NOGSL
 typedef struct {
     int m;
     gsl_matrix_complex *histZetaM;
 } mMatrix, *mMatrix_ptr;
 
 global mMatrix_ptr histZetaMatrix;
+#endif
+
 
 typedef struct {
     real **xiOUTVP;

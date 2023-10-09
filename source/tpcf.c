@@ -319,7 +319,7 @@ local int printHistN(void)
         if (cmd.rminHist==0) {
             rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n))*gd.deltaR;
+            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
         }
         rBin=rpow(10.0,rbinlog);
 #else
@@ -356,7 +356,7 @@ local int printHistCF(void)
         if (cmd.rminHist==0) {
             rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n))*gd.deltaR;
+            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
         }
         rBin=rpow(10.0,rbinlog);
 #else
@@ -390,7 +390,7 @@ local int printHistXi2pcf(void)
         if (cmd.rminHist==0) {
             rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n))*gd.deltaR;
+            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
         }
         rBin=rpow(10.0,rbinlog);
 #else
@@ -421,7 +421,7 @@ local int printHistXi3pcf(void)
 
     for (n=1; n<=cmd.sizeHistN; n++) {
 #ifdef LOGHIST
-        rbinlog = ((real)(n-0.5))*gd.deltaR;
+        rbinlog = ((real)(n)-0.5)*gd.deltaR;
         rBin=rpow(10,rbinlog);
 #else
         rBin = ((int)n-0.5)*gd.deltaR;
@@ -467,8 +467,8 @@ local int printHistZetaM(void)
                         rbinlog1 = ((real)(n1-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
                         rbinlog2 = ((real)(n2-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
                     } else {
-                        rbinlog1 = rlog10(cmd.rminHist) + ((real)(n1))*gd.deltaR;
-                        rbinlog2 = rlog10(cmd.rminHist) + ((real)(n2))*gd.deltaR;
+                        rbinlog1 = rlog10(cmd.rminHist) + ((real)(n1)-0.5)*gd.deltaR;
+                        rbinlog2 = rlog10(cmd.rminHist) + ((real)(n2)-0.5)*gd.deltaR;
                     }
                     rBin1=rpow(10.0,rbinlog1);
                     rBin2=rpow(10.0,rbinlog2);
@@ -617,7 +617,7 @@ local int printHistZeta(void)
             if (cmd.rminHist==0) {
                 rbinlog = ((real)(n1-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
             } else {
-                rbinlog = rlog10(cmd.rminHist) + ((real)(n1))*gd.deltaR;
+                rbinlog = rlog10(cmd.rminHist) + ((real)(n1)-0.5)*gd.deltaR;
             }
             rBin=rpow(10.0,rbinlog);
 #else

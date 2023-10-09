@@ -204,6 +204,12 @@ OPT2 += -DTREENODE
 endif
 #
 
+#
+ifeq ($(PTOPIVOTROTATIONON),1)
+OPT2 += -DPTOPIVOTROTATION
+endif
+#
+
 
 # your tool for creating static libraries:
 AR        = ar rv
@@ -213,16 +219,6 @@ EXTERNAL =
 
 
 
-# This options needs PATCHESON
-ifeq ($(ADDONSON),1)
-ifeq ($(PATCHESON),1)
-# NOLSST
-# Machine definitions
-include $(MACHINES_DIR)/addons/Makefile_addons
-OPT2 += -DADDONS
-endif
-endif
-#
 
 #
 #B GENERALLIBS section
@@ -261,6 +257,11 @@ endif
 # BEGIN GSL, FFTW, MPI DEFINITIONS (if needed)
 #
 
+#B GSL section
+GSLON = 1
+
+ifeq ($(GSLON),1)
+
 ifeq ($(GSLINTERNAL),0)
     GSL_INCL =  -I$(NAGBODYDIR)/gsl/include
     GSL_LIBS =  -L$(NAGBODYDIR)/gsl/lib -lgsl -lgslcblas
@@ -271,6 +272,12 @@ endif
 ifeq ($(GSLINTERNAL),1)
 include $(MACHINES_DIR)Makefile_gsl
 endif
+
+else
+    CCFLAG += -DNOGSL
+endif
+#E
+
 
 #
 # FFTW 2 flags

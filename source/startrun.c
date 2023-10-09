@@ -699,8 +699,8 @@ local void CheckParameters(void)
             error("CheckParameters: absurd value for ntosave\n");
     if (cmd.scanLevel < 0)
         error("CheckParameters: absurd value for scanLevel (%d)\n",cmd.scanLevel);
-    if (cmd.scanLevel > 12)
-        error("CheckParameters: too big value for scanLevel (%d)\n",cmd.scanLevel);
+//    if (cmd.scanLevel > 12)
+//        error("CheckParameters: too big value for scanLevel (%d)\n",cmd.scanLevel);
 #endif
     if (cmd.stepNodes < 1)
         error("CheckParameters: absurd value for stepNodes\n");
@@ -1003,12 +1003,14 @@ local int infilefmt_string_to_int(string infmt_str,int *infmt_int)
 
 local int random_init(int seed)
 {
+#ifndef NOGSL
     const gsl_rng_type * T;
     gsl_rng_env_setup();
     T = gsl_rng_default;
     gd.r = gsl_rng_alloc (T);
     gsl_rng_set(gd.r, seed);
     gd.bytes_tot += (1)*sizeof(gsl_rng_type);
+#endif
 
     return _SUCCESS_;
 }
@@ -1050,6 +1052,7 @@ global int startrun_memoryAllocation(void)
     gd.histZetaMsincos = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
 
+#ifndef NOGSL
     gd.histXi_gsl = gsl_matrix_complex_calloc(cmd.mchebyshev+1,cmd.sizeHistN);
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*2*sizeof(real);
 
@@ -1060,6 +1063,8 @@ global int startrun_memoryAllocation(void)
     }
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*2*sizeof(real);
 #endif
+
+#endif // ! TPCF
 
     gd.bytes_tot += bytes_tot_local;
     verb_print(cmd.verbose,

@@ -1,5 +1,5 @@
 /* ==============================================================================
-!	MODULE: treeload.c			[cTreeBalls]											!
+!	MODULE: treeload.c			[cTreeBalls]									!
 !	Written by: M.A. Rodriguez-Meza.											!
 !	Starting date:	april 2023                                                  !
 !	Purpose: 3-point correlation function computation       					!
@@ -87,8 +87,10 @@ global void maketree(bodyptr btab, int nbody)
 
     CLRV(Pos(root));
     expandbox(btab, nbody);
-	DO_BODY(p, btab, btab+nbody)
+    DO_BODY(p, btab, btab+nbody) {
+        Nbb(p) = 1;                 // Check consistency with smoothing... Correction
         loadbody(p);
+    }
     gd.tdepth = 0;
 
     for (i = 0; i < MAXLEVEL; i++)
@@ -192,7 +194,8 @@ global void maketree(bodyptr btab, int nbody)
     gd.nnodescanlev = rpow(4, cmd.scanLevel);
 #endif
 // Use the node storage for cells. Bodies are left out.
-    gd.nnodescanlev = gd.ncell;
+//    gd.nnodescanlev = gd.ncell;
+    gd.nnodescanlev = 2.0*gd.ncell;         // Correction
     nodetabscanlev = (nodeptr *) allocate(gd.nnodescanlev * sizeof(nodeptr));
 //
     gd.bytes_tot += gd.nnodescanlev*sizeof(nodeptr);
@@ -253,7 +256,7 @@ global void maketree(bodyptr btab, int nbody)
             out_real_mar(gd.outnodelev, Kappa(nodetabscanlev[in]));
             out_real_mar(gd.outnodelev, Smooth(nodetabscanlev[in]));
             out_int_long(gd.outnodelev, Nbb(nodetabscanlev[in]));
-            nodescount += Nb(nodetabscanlev[in]);
+            nodescount += Nbb(nodetabscanlev[in]);          // Correction
         }
     }
 
@@ -810,31 +813,32 @@ local void walktree_index_scan_lev(nodeptr q, int lev)
 // lev must be <= cmd.scanLevel
     if (lev == cmd.scanLevel-1) {
         if (Type(q)==CELL) {
-//            verb_print_debug(1, "\nAqui voy (2): %d %d %d\n", lev, inodelev, Type(q));
             for (l = More(q); l != Next(q); l = Next(l)) {
                 if (Type(l)==CELL) {
-//                verb_print_debug(1, "\nAqui voy (22): %d %d %d\n", lev, inodelev, Type(l));
-                nodetabscanlev[inodelev] = l;
-                inodelev++;
+                    nodetabscanlev[inodelev] = l;
+                    inodelev++;
                 } else {
+                    nodetabscanlev[inodelev] = l;   // Correction
+                    inodelev++;                     // Correction
                     ibodyleftout++;
                 }
             }
         } else {
             ibodyleftout++;
-//        verb_print_debug(1, "\nAqui voy (2): %d %d %d\n", lev, inodelev, Type(q));
-//            nodetabscanlev[inodelev] = q;
-//            inodelev++;
-//            verb_print_debug(1, "\nAqui voy (2): %d %d %d\n", lev, inodelev,
-//                             Type(nodetabscanlev[inodelev]));
         }
     } else {
-        if ( lev+1 != cmd.scanLevel )
+//        if ( lev+1 != cmd.scanLevel )
+        if ( lev+1 <= cmd.scanLevel )       // Correction
             if (Type(q)==CELL) {
-            for (l = More(q); l != Next(q); l = Next(l)) {
-                walktree_index_scan_lev(l, lev+1);
-            }
+                for (l = More(q); l != Next(q); l = Next(l)) {
+                    if (Type(l)==CELL)
+                        walktree_index_scan_lev(l, lev+1);
+                    else
+                        ibodyleftout++;
+                }
             } else {
+                nodetabscanlev[inodelev] = q;   // Correction
+                inodelev++;                     // Correction
                 ibodyleftout++;
             }
     }

@@ -5,6 +5,7 @@
 #include "stdinc.h"
 
 
+void RotationVecAWRtoVecB(real *, real *, real *, real);
 void Rotation3D(real *, real, real, real);
 void dRotation3D(real *, real, real, real, real *);
 void d1Rotation3D(real vec[], real alpha);

@@ -9,7 +9,7 @@ DEFDIMENSION = 3
 #
 # Default GSL public (not the internal sources version included).
 # If you want the internal gsl version set it to 1.
-GSLINTERNAL = 1
+GSLINTERNAL = 0
 #
 # Select periodic boundary conditions: 1 for periodic, 0 otherwise
 PERIODICON = 0
@@ -49,7 +49,7 @@ BALLSON = 1
 TPCFON = 1
 #
 
-# GSL is here:
+# GSL is here (not any more):
 # This options needs PATCHESON = 1, set it below
 ADDONSON = 0
 
@@ -61,6 +61,9 @@ BUCKETON = 0
 
 #
 TREENODEON = 0
+
+#
+PTOPIVOTROTATIONON = 0
 
 #
 # Machine definitions. Edit this file according to your needs
