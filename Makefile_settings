@@ -51,10 +51,10 @@ TPCFON = 1
 
 # GSL is here (not any more):
 # This options needs PATCHESON = 1, set it below
-ADDONSON = 0
+ADDONSON = 1
 
 #
-PATCHESON = 0
+PATCHESON = 1
 
 #
 BUCKETON = 0
@@ -64,6 +64,7 @@ TREENODEON = 0
 
 #
 PTOPIVOTROTATIONON = 0
+PTOPIVOTROTATIONON2 = 1
 
 #
 # Machine definitions. Edit this file according to your needs

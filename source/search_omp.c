@@ -236,7 +236,7 @@ local void sumnode(bodyptr p, cellptr start, cellptr finish,
 #if NDIM == 3
                     real s;
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -276,7 +276,7 @@ local void sumnode(bodyptr p, cellptr start, cellptr finish,
                     real s;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -343,7 +343,7 @@ local void sumnode_body3(bodyptr p, cellptr start, cellptr finish,
                     real s;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -386,7 +386,7 @@ local void sumnode_body3(bodyptr p, cellptr start, cellptr finish,
                     real s;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -455,7 +455,7 @@ local void sumnode_cell(bodyptr p, cellptr start, cellptr finish,
                     real s;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -505,7 +505,7 @@ local void sumnode_cell(bodyptr p, cellptr start, cellptr finish,
                     real s;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -2113,7 +2113,7 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
                     real s, sy;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -2162,7 +2162,7 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
                     real s, sy;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -2236,7 +2236,7 @@ local void sumnode_sincos_body3(bodyptr p, cellptr start, cellptr finish,
                     real s, sy;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -2285,7 +2285,7 @@ local void sumnode_sincos_body3(bodyptr p, cellptr start, cellptr finish,
                     real s, sy;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -2361,7 +2361,7 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
                     real s, sy;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
@@ -2417,7 +2417,7 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
                     real s, sy;
 
 //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
+#ifdef PTOPIVOTROTATION2
                     real rtheta;
                     vector dr0rot;
                     rtheta = xrandom(0.0, TWOPI);
