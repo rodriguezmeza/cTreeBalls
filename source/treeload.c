@@ -268,9 +268,7 @@ global void maketree(bodyptr btab, int nbody)
     fclose(gd.outnodelev);
     fclose(gd.outbodylev);
 
-//B Creating tree for nodes
-    maketreenodes(nodetable, gd.nnodescanlev);
-//E
+
 
 //E BALLS :: SCANLEV
 #endif // ! BALLS

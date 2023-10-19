@@ -1080,7 +1080,6 @@ local void search_method_string_to_int(string method_str,int *method_int)
     *method_int=-1;
     if (strnull(method_str))                                *method_int = SEARCHNULL;
     if (strcmp(method_str,"tree-omp") == 0)                 *method_int = TREEOMPMETHOD;
-    if (strcmp(method_str,"direct-3pcf-omp") == 0)          *method_int = DIRECT3PCFOMP;
     if (strcmp(method_str,"tree-3pcf-direct-omp") == 0)     *method_int = TREE3PCFBFOMPMETHOD;
     if (strcmp(method_str,"tree-omp-sincos") == 0)          *method_int = TREEOMPMETHODSINCOS;
     if (strcmp(method_str,"balls-omp") == 0)               *method_int = BALLSOMPMETHOD;

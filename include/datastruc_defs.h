@@ -232,6 +232,37 @@ typedef struct {
        hist->histXithread[m][n] += xicosmphi;               \
    }}
 
+#ifdef TREENODEALLBODIES
+#ifdef SINCOS
+#define CHEBYSHEVTUOMP                                      \
+{                                                           \
+    histccsincos->ChebsT[1] = 1.0;                                        \
+    xicosmphi = xi * histccsincos->ChebsT[1];                             \
+    histccsincos->histXithreadcos[1][n] += xicosmphi;                        \
+    histccsincos->ChebsT[2] = cosphi;                                     \
+    xicosmphi = xi * histccsincos->ChebsT[2];                             \
+    histccsincos->histXithreadcos[2][n] += xicosmphi;                        \
+    histccsincos->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);              \
+    xicosmphi = xi * histccsincos->ChebsT[3];                             \
+    histccsincos->histXithreadcos[3][n] += xicosmphi;                        \
+    histccsincos->ChebsU[1] = 0.0;                                        \
+    xisinmphi = xi * histccsincos->ChebsU[1] * sinphi;                    \
+    histccsincos->histXithreadsin[1][n] += xisinmphi;                        \
+    histccsincos->ChebsU[2] = 1.0;                                        \
+    xisinmphi = xi * histccsincos->ChebsU[2] * sinphi;                    \
+    histccsincos->histXithreadsin[2][n] += xisinmphi;                        \
+    histccsincos->ChebsU[3] = 2.0*cosphi;                                 \
+    xisinmphi = xi * histccsincos->ChebsU[3] * sinphi;                    \
+    histccsincos->histXithreadsin[3][n] += xisinmphi;                        \
+    for (m=4; m<=cmd.mchebyshev+1; m++){                    \
+        histccsincos->ChebsT[m] = 2.0*(cosphi)*histccsincos->ChebsT[m-1] - histccsincos->ChebsT[m-2]; \
+        xicosmphi = xi * histccsincos->ChebsT[m];                         \
+        histccsincos->histXithreadcos[m][n] += xicosmphi;                    \
+        histccsincos->ChebsU[m] = 2.0*(cosphi)*histccsincos->ChebsU[m-1] - histccsincos->ChebsU[m-2]; \
+        xisinmphi = xi * histccsincos->ChebsU[m] * sinphi;                \
+        histccsincos->histXithreadsin[m][n] += xisinmphi;                    \
+    }}
+#else
 #define CHEBYSHEVTUOMP                                      \
 {                                                           \
     hist->ChebsT[1] = 1.0;                                        \
@@ -260,6 +291,68 @@ typedef struct {
         xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
         hist->histXithreadsin[m][n] += xisinmphi;                    \
     }}
+#endif
+#else
+#define CHEBYSHEVTUOMP                                      \
+{                                                           \
+    hist->ChebsT[1] = 1.0;                                        \
+    xicosmphi = xi * hist->ChebsT[1];                             \
+    hist->histXithreadcos[1][n] += xj*xicosmphi;                        \
+    hist->ChebsT[2] = cosphi;                                     \
+    xicosmphi = xi * hist->ChebsT[2];                             \
+    hist->histXithreadcos[2][n] += xj*xicosmphi;                        \
+    hist->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);              \
+    xicosmphi = xi * hist->ChebsT[3];                             \
+    hist->histXithreadcos[3][n] += xj*xicosmphi;                        \
+    hist->ChebsU[1] = 0.0;                                        \
+    xisinmphi = xi * hist->ChebsU[1] * sinphi;                    \
+    hist->histXithreadsin[1][n] += xj*xisinmphi;                        \
+    hist->ChebsU[2] = 1.0;                                        \
+    xisinmphi = xi * hist->ChebsU[2] * sinphi;                    \
+    hist->histXithreadsin[2][n] += xj*xisinmphi;                        \
+    hist->ChebsU[3] = 2.0*cosphi;                                 \
+    xisinmphi = xi * hist->ChebsU[3] * sinphi;                    \
+    hist->histXithreadsin[3][n] += xj*xisinmphi;                        \
+    for (m=4; m<=cmd.mchebyshev+1; m++){                    \
+        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
+        xicosmphi = xi * hist->ChebsT[m];                         \
+        hist->histXithreadcos[m][n] += xj*xicosmphi;                    \
+        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
+        xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
+        hist->histXithreadsin[m][n] += xj*xisinmphi;                    \
+    }}
+#endif
+
+// Same as above but to use in search=tree-omp-sincos only
+#define CHEBYSHEVTUOMPSINCOS                                      \
+{                                                           \
+    hist->ChebsT[1] = 1.0;                                        \
+    xicosmphi = xi * hist->ChebsT[1];                             \
+    hist->histXithreadcos[1][n] += xicosmphi;                        \
+    hist->ChebsT[2] = cosphi;                                     \
+    xicosmphi = xi * hist->ChebsT[2];                             \
+    hist->histXithreadcos[2][n] += xicosmphi;                        \
+    hist->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);              \
+    xicosmphi = xi * hist->ChebsT[3];                             \
+    hist->histXithreadcos[3][n] += xicosmphi;                        \
+    hist->ChebsU[1] = 0.0;                                        \
+    xisinmphi = xi * hist->ChebsU[1] * sinphi;                    \
+    hist->histXithreadsin[1][n] += xisinmphi;                        \
+    hist->ChebsU[2] = 1.0;                                        \
+    xisinmphi = xi * hist->ChebsU[2] * sinphi;                    \
+    hist->histXithreadsin[2][n] += xisinmphi;                        \
+    hist->ChebsU[3] = 2.0*cosphi;                                 \
+    xisinmphi = xi * hist->ChebsU[3] * sinphi;                    \
+    hist->histXithreadsin[3][n] += xisinmphi;                        \
+    for (m=4; m<=cmd.mchebyshev+1; m++){                    \
+        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
+        xicosmphi = xi * hist->ChebsT[m];                         \
+        hist->histXithreadcos[m][n] += xicosmphi;                    \
+        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
+        xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
+        hist->histXithreadsin[m][n] += xisinmphi;                    \
+    }}
+
 
 #define CHEBYSHEVOMPBALLS                                   \
   {hist->Chebs[1] = 1.0;                                    \
@@ -277,6 +370,39 @@ typedef struct {
        hist->histXithread[m][n] += xj*xicosmphi;            \
    }}
 
+#ifdef TREENODEALLBODIES
+#define CHEBYSHEVOMPBALLSCC                                 \
+  {histcc->Chebs[1] = 1.0;                                    \
+   xicosmphi = xi * histcc->Chebs[1];                         \
+   histcc->histXithread[1][n] += xicosmphi;                \
+   histcc->Chebs[2] = cosphi;                                 \
+   xicosmphi = xi * histcc->Chebs[2];                         \
+   histcc->histXithread[2][n] += xicosmphi;                \
+   histcc->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
+   xicosmphi = xi * histcc->Chebs[3];                         \
+   histcc->histXithread[3][n] += xicosmphi;                \
+   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+       histcc->Chebs[m] = 2.0*(cosphi)*histcc->Chebs[m-1] - histcc->Chebs[m-2];  \
+       xicosmphi = xi * histcc->Chebs[m];                     \
+       histcc->histXithread[m][n] += xicosmphi;            \
+   }}
+#else
+#define CHEBYSHEVOMPBALLSCC                                 \
+  {histcc->Chebs[1] = 1.0;                                    \
+   xicosmphi = xi * histcc->Chebs[1];                         \
+   histcc->histXithread[1][n] += xj*xicosmphi;                \
+   histcc->Chebs[2] = cosphi;                                 \
+   xicosmphi = xi * histcc->Chebs[2];                         \
+   histcc->histXithread[2][n] += xj*xicosmphi;                \
+   histcc->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
+   xicosmphi = xi * histcc->Chebs[3];                         \
+   histcc->histXithread[3][n] += xj*xicosmphi;                \
+   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+       histcc->Chebs[m] = 2.0*(cosphi)*histcc->Chebs[m-1] - histcc->Chebs[m-2];  \
+       xicosmphi = xi * histcc->Chebs[m];                     \
+       histcc->histXithread[m][n] += xj*xicosmphi;            \
+   }}
+#endif
 
 #define CHEBYSHEVDIRECTOMP                                  \
   {hist.Chebs[1] = 1.0;                                     \
@@ -415,7 +541,6 @@ typedef struct {
 
 //B Search options:
 #define TREEOMPMETHOD           9
-#define DIRECT3PCFOMP           25
 #define TREE3PCFBFOMPMETHOD     45
 #define SEARCHNULL              0
 #define TREEOMPMETHODSINCOS     24

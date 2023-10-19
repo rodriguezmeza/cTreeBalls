@@ -461,7 +461,6 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
 // PARA IMPLEMENTAR LECTURA GENERAL DE ARCHIVOS DE DATOS CON FORMATO DE COLUMNAS
 
 
-
 void error_open_file_kd(char *fname)
 {
 // Open error handler

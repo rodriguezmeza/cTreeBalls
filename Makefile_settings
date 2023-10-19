@@ -41,9 +41,10 @@ LONGINTON = 1
 SAVERESTOREON = 0
 #
 
-# To print some useful info comment set to 1. Else 0
+# To use 2-balls method set to 1. Else 0
 BALLSON = 1
 #
+BUCKETON = 0
 
 # To print some useful info comment set to 1. Else 0
 TPCFON = 1
@@ -52,19 +53,53 @@ TPCFON = 1
 # GSL is here (not any more):
 # This options needs PATCHESON = 1, set it below
 ADDONSON = 0
-
 #
 PATCHESON = 0
 
-#
-BUCKETON = 0
-
-#
-TREENODEON = 0
+#B This is for BALLS method
+TREENODEON = 1
+# To check all body in bodytab
+TREENODEALLBODIESON = 1
+# To activate sincos base under balls5
+SINCOSON = 0
+#E
 
 #
 PTOPIVOTROTATIONON = 0
 PTOPIVOTROTATIONON2 = 0
+PTOPIVOTROTATIONON3 = 0
+PIVOTEXTERNALON = 0
+
+
+#
+#B Searching methods section: choose one uncommenting its line
+#SEARCHMETHOD = SINCOS
+
+ifeq ($(SEARCHMETHOD), SINCOS)
+# sincos base
+DEFDIMENSION = 3
+LOGHISTON = 1
+NLOGBINPD = 5
+BALLSON = 1
+BUCKETON = 0
+TPCFON = 1
+TREENODEON = 1
+TREENODEALLBODIESON = 1
+SINCOSON = 1
+ADDONSON = 0
+PATCHESON = 0
+
+SEARCHMETHODIS = sincos
+SEARCHMETHODISDEFINED = TRUE
+endif
+
+#ifndef SEARCHMETHODISDEFINED
+#  $(error ERROR: MODEL is not recognized)
+#endif
+
+#E Searching methods section
+#
+
 
 #
 # Machine definitions. Edit this file according to your needs
@@ -73,3 +108,4 @@ include $(MACHINES_DIR)Makefile_machine
 
 # Note:  Be careful in the options to set 1 or 0 without further space
 #        or a comment starting with #...
+

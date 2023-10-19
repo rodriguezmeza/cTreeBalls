@@ -145,9 +145,6 @@ local int evalHist(void)
     bodyptr p;
 
     switch(gd.searchMethod_int) {
-        case DIRECT3PCFOMP:             // search=direct-3pcf-omp
-            verb_print(cmd.verbose, "\n\tevalHist: direct method simple (3pcf-omp)\n\n");
-            search_direct_3pcf_omp(bodytab, cmd.nbody, 1, cmd.nbody); break;
         case TREEOMPMETHOD:         // search=tree-omp
             verb_print(cmd.verbose, "\n\tevalHist: with normal tree method (omp)\n\n");
             DO_BODY(p,bodytab,bodytab+cmd.nbody)
@@ -219,16 +216,6 @@ local int printEvalHist(void)
         double cpustart = CPUTIME;
         if (!scanopt(cmd.options, "no-out-Hist")) {
     switch(gd.searchMethod_int) {
-        case DIRECT3PCFOMP:
-            verb_print(cmd.verbose, "\n\tprintEvalHist: printing direct method simple\n\n");
-            if (scanopt(cmd.options, "compute-HistN")) printHistN();
-            printHistXi2pcf();
-            printHistXi3pcf();
-#ifdef TPCF
-            printHistZetaM();
-            printHistZeta();
-#endif
-            break;
         case TREEOMPMETHOD:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing normal tree method (omp)\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();

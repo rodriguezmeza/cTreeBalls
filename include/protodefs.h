@@ -33,7 +33,6 @@ global void setFilesDirs(void);
 //B 3PCF section
 // Search methods:
 global int searchcalc_direct_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
-global int search_direct_3pcf_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
 
 
 //B Tree:
@@ -48,6 +47,8 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody, INTEGER ipmin,
 //B Tree utilities
 global void doBoxWrapping(void);
 global bool reject_cell(nodeptr, nodeptr, real);
+global bool reject_bodycell(nodeptr, nodeptr);
+global bool reject_cellcell(nodeptr, nodeptr);
 global bool accept_body(bodyptr, nodeptr, real *, vector);
 global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist);
 
@@ -69,13 +70,19 @@ global void searchcalc_normal_3pcf_direct_omp(bodyptr btab, int nbody, INTEGER i
 #ifdef BALLS
 global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
 global int search_init_balls_omp(gdhistptr_omp_balls hist);
+global int search_init_balls_omp_cc(gdhistptr_omp_balls hist);
 global int computeBodyProperties_balls_omp(bodyptr p, int nbody, gdhistptr_omp_balls hist);
+global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_omp_balls hist);
+global int computeBodyProperties_balls_omp_cc_sincos(bodyptr p, int nbody, gdhistptr_sincos_omp hist);
 global int search_free_balls_omp(gdhistptr_omp_balls hist);
+global int search_free_balls_omp_sincos(gdhistptr_omp_balls hist);
+global int search_free_balls_omp_cc(gdhistptr_omp_balls hist);
 global bool nodes_condition(nodeptr p, nodeptr q);
 global bool nodes_set_bin(nodeptr p, nodeptr q, int *n, real *dr1, vector dr);
 #endif
 
 global int search_init_gd_hist(void);
+global int search_init_gd_hist_sincos(void);
 global int search_compute_HistN(int nbody);
 global int search_compute_HistN_balls(int nbody);
 //E

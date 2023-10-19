@@ -11,12 +11,24 @@ include $(MACHINES_DIR)Makefile_settings
 # Nothing to do below
 #
 
-EXEC = cballs
+EXECPREFIX = cballs
+ifndef SEARCHMETHODISDEFINED
+EXEC = $(EXECPREFIX)
+else
+EXEC = $(EXECPREFIX)_$(SEARCHMETHODIS)
+endif
+
+$(info )
+$(info =====================================================)
+$(info SEARCHMETHOD = [${SEARCHMETHOD}]  EXEC = [${EXEC}])
+$(info External options = [${OPT2}])
+$(info =====================================================)
+$(info )
 
 MAIN = main.o
 
 OBJS = main.o tpcf_io.o tpcf.o startrun.o testdata.o treeload.o \
-	treeutils.o search_omp.o treenodeload.o
+	treeutils.o search_omp.o
 
 all: $(EXEC) lib$(EXEC).a
 # With cpython:

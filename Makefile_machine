@@ -172,6 +172,9 @@ endif
 ifeq ($(LOGHISTON),1)
 ifeq ($(BALLSON),1)
 OPT2 += -DBALLS
+ifeq ($(SINCOSON),1)
+OPT2 += -DSINCOS
+endif
 endif
 endif
 #
@@ -201,6 +204,9 @@ endif
 #
 ifeq ($(TREENODEON),1)
 OPT2 += -DTREENODE
+ifeq ($(TREENODEALLBODIESON),1)
+OPT2 += -DTREENODEALLBODIES
+endif
 endif
 #
 
@@ -211,8 +217,15 @@ endif
 ifeq ($(PTOPIVOTROTATIONON2),1)
 OPT2 += -DPTOPIVOTROTATION2
 endif
+ifeq ($(PTOPIVOTROTATIONON3),1)
+OPT2 += -DPTOPIVOTROTATION3
+endif
 #
-
+ifneq ($(TREENODEALLBODIESON),1)
+ifeq ($(PIVOTEXTERNALON),1)
+OPT2 += -DPIVOTEXTERNAL
+endif
+endif
 
 # your tool for creating static libraries:
 AR        = ar rv
