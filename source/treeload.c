@@ -122,8 +122,6 @@ global void maketree(bodyptr btab, int nbody)
 //B To smooth bodies
     if (!gd.flagSmooth) {
     if (scanopt(cmd.options, "smooth")) {
-//        printf("NTOT = %ld \t%ld\n", NTOT[0]+NTOT[1]+NTOT[2],
-//               gd.nsmooth[0]*NTOT[0]+gd.nsmooth[1]*NTOT[1]+gd.nsmooth[2]*NTOT[2]);
         printf("NTOT = %ld \t%ld \t%ld\n",
                gd.nsmooth[0], NTOT[0], gd.nsmooth[0]*NTOT[0]);
         gd.nbodysm = NTOT[0]+NTOT[1]+NTOT[2];
@@ -194,7 +192,6 @@ global void maketree(bodyptr btab, int nbody)
     gd.nnodescanlev = rpow(4, cmd.scanLevel);
 #endif
 // Use the node storage for cells. Bodies are left out.
-//    gd.nnodescanlev = gd.ncell;
     gd.nnodescanlev = 2.0*gd.ncell;         // Correction
     nodetabscanlev = (nodeptr *) allocate(gd.nnodescanlev * sizeof(nodeptr));
 //
@@ -276,13 +273,9 @@ global void maketree(bodyptr btab, int nbody)
 
     if (!gd.flagSmooth || !gd.flagSetNbNoSel) {
     if ( (scanopt(cmd.options, "smooth") && scanopt(cmd.options, "set-Nb-noSel")) ) {
-//    if ( scanopt(cmd.options, "smooth") ) {
-//        printf("NTOT = %ld \t%ld\n\n", NTOT[0]+NTOT[1]+NTOT[2]+inosel,
-//               gd.nsmooth[0]*NTOT[0]+gd.nsmooth[1]*NTOT[1]+gd.nsmooth[2]*NTOT[2] + inosel);
         printf("NTOT = %ld \t%ld \t%ld\n\n",
                gd.nsmooth[0], NTOT[0]+NTOT[1]+NTOT[2]+inosel,
                gd.nsmooth[0]*NTOT[0] + inosel);
-//        gd.nbodysm = NTOT[0]+NTOT[1]+NTOT[2];
         bodytabSel = (bodyptr) allocate((NTOT[0]+NTOT[1]+NTOT[2]+inosel) * sizeof(body));
         gd.bytes_tot += (NTOT[0]+NTOT[1]+NTOT[2]+inosel)*sizeof(body);
         verb_print(cmd.verbose,
@@ -408,7 +401,6 @@ local cellptr makecell(void)
     Type(c) = CELL;
 //B To smooth bodies
     Nb(c) = 0;
-//    IdCell(c) += 1;
 //E
     Update(c) = FALSE;
     for (i = 0; i < NSUB; i++)                  
@@ -444,19 +436,12 @@ local void loadbody(bodyptr p)
     real qsize, dist2;
     vector distv;
 
-//    if (gd.flagSmooth)
-//    verb_print_debug(1, "\nAqui voy (4)\n");
-
-//    verb_print_debug(1, "\nloadbody:: Aqui voy (2)\n");
-//    MPI_Barrier(MPI_COMM_WORLD);
-
     q = root;
     qind = subindex(p, q);
     Nb(q) += 1;                 // Smooth
     qsize = gd.rSize;
     while (Subp(q)[qind] != NULL) {
 // BODY3
-//        if (Type(Subp(q)[qind]) == BODY) {
         if (Type(Subp(q)[qind]) == BODY || Type(Subp(q)[qind]) == BODY3) {
             DOTPSUBV(dist2, distv, Pos(p), Pos(Subp(q)[qind]));
             if (dist2 == 0.0) {
@@ -509,11 +494,7 @@ local void hackCellProp(cellptr p, real psize, int lev)
     vector cmpos, tmpv;
     int i, k;
     nodeptr q;
-//    int sumNb;
  
-//    if (gd.flagSmooth)
-//    verb_print_debug(1, "\nAqui voy (4)\n");
-
     gd.tdepth = MAX(gd.tdepth, lev);
     cellhist[lev]++;
 // BALLS
@@ -566,8 +547,6 @@ local void hackCellProp(cellptr p, real psize, int lev)
         NTOT[0]=NTOT[0]+1;
 //        Selected(p) = TRUE; // Propagate Selected value to the fathers...
     }
-//    if (Nb(p)==gd.nsmooth[1]) NTOT[1]++;
-//    if (Nb(p)==gd.nsmooth[2]) NTOT[2]++;
     if (Weight(p) > 0.0) {                 // We should use geometric center always
 //        DIVVS(cmpos, cmpos, Weight(p));   // Activate if you want to use com center
         SETV(cmpos, Pos(p));
@@ -601,7 +580,6 @@ local void hackCellProp(cellptr p, real psize, int lev)
 //    if (scanopt(cmd.options, "smooth") || scanopt(cmd.options, "set-Nb"))
     if (Nb(p)>0) {
         Kappa(p) /= Nb(p); // times nb(p)?
-//        printf("%d \t%le \t%ld\n", Type(p),Kappa(p),Nb(p));
     } else
         error("hackCellProp: Nb = 0: %ld\n", Nb(p));
 //E
@@ -701,46 +679,6 @@ local void threadtree(nodeptr p, nodeptr n)
 //E
 
             }
-/*
-            if (Nb(p)==gd.nsmooth[1]) {
-                ip++;
-                q = ip + bodytabsm -1;
-                Id(q) = ip;
-// BODY3
-                Type(q) = BODY;
-//            Type(q) = BODY3;
-//            Nbb(q) = Nb(p);
-                Weight(q) = Weight(p);
-                SETV(Pos(q), Pos(p));
-                Kappa(q) = Kappa(p);
-
-//B To see the bodies belonging to a cell:
-//                celltabSel[icellSel] = p;
-//                icellSel++;
-                Selected(p) = TRUE;
-                Selected(q) = TRUE;
-//E
-            }
-            if (Nb(p)==gd.nsmooth[2]) {
-                ip++;
-                q = ip + bodytabsm -1;
-                Id(q) = ip;
-// BODY3
-                Type(q) = BODY;
-//            Type(q) = BODY3;
-//            Nbb(q) = Nb(p);
-                Weight(q) = Weight(p);
-                SETV(Pos(q), Pos(p));
-                Kappa(q) = Kappa(p);
-
-//B To see the bodies belonging to a cell:
-//                celltabSel[icellSel] = p;
-//                icellSel++;
-                Selected(p) = TRUE;
-                Selected(q) = TRUE;
-//E
-            }
-*/
         }
     }
 //E

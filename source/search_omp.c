@@ -563,16 +563,6 @@ global void searchcalc_normal_3pcf_direct_omp(bodyptr btab, int nbody, INTEGER i
 //E
         nblist=0;
 
-/*
-#ifdef TPCF
-#if NDIM == 3
-// IS NEEDED THIS SEGMENT? CHECK!!!
-        dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
-        DOTPSUBV(hist.drpq2, hist.dr0, Pos(p), hist.q0);
-        hist.drpq = rsqrt(hist.drpq2);
-#endif
-#endif
-*/
         normal_walktree_nblist_omp(p, ((nodeptr) root), gd.rSize);
         int_piksrt(nblist, activenb);
         verb_log_print(cmd.verbose_log, gd.outlog, " - Summing nblist: %ld\n", nblist);
@@ -716,24 +706,6 @@ local void sumnode_nblist_omp(bodyptr p, INTEGER *nbbcalcthread, gdhistptr_omp_3
             }
         }
 
-/*
-
-// IS NEEDED THIS SEGMENT? CHECK!!!
-
-#ifdef TPCF
-#if NDIM == 3
-                    real s;
-                    DOTVP(s, dr, hist->dr0);
-                    cosphi = -s/(dr1*hist->drpq);
-#else
-                    cosphi = -dr[1]/dr1;
-#endif
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd.verbose, gd.outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-#endif
-*/
-
 #ifdef TPCF
         for (j = i+1; j < nblist; j++) {
                 h = bodytab + activenb[j];
@@ -858,17 +830,6 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
 #ifdef PIVOTEXTERNAL
 //B (1)
 //B Setting reference axis here instead in the loop i, does affect the 3pcf results for m=2 or higher
-/*
-#ifdef TPCF
-#if NDIM == 3
-    p = nodetabscanlev[0];
-    dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, histcc.q0);
-    DOTPSUBV(histcc.drpq2, histcc.dr0, Pos(p), histcc.q0);
-    histcc.drpq = rsqrt(histcc.drpq2);
-#endif
-#endif
-*/
-
 #ifdef TPCF
 #if NDIM == 3
 #ifdef TREENODEALLBODIES
