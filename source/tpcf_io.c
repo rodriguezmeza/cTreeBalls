@@ -1092,14 +1092,14 @@ global void setFilesDirs_log(void)
 #ifdef MPICODE
         if(ThisTask==0) {
 #endif
-    sprintf(gd.tmpDir,"tmp");
+    sprintf(gd.tmpDir,"%s/%s",cmd.rootDir,"tmp");
 
     double cpustart = CPUTIME;
     sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",gd.tmpDir,gd.tmpDir);
     system(buf);
     gd.cputotalinout += CPUTIME - cpustart;
 
-    sprintf(gd.logfilePath,"%s/tpcf%s.log",gd.tmpDir,cmd.suffixOutFiles);
+    sprintf(gd.logfilePath,"%s/cballs%s.log",gd.tmpDir,cmd.suffixOutFiles);
 #ifdef MPICODE
         }
 #endif
@@ -1127,6 +1127,7 @@ global void setFilesDirs(void)
     sprintf(gd.fpfnamehistNFileName,"%s/%s%s%s",cmd.rootDir,cmd.histNFileName,cmd.suffixOutFiles,EXTFILES);
 // Will be gd.histNFileName. Set it in gd structure
     sprintf(gd.fpfnamehistCFFileName,"%s/%s%s%s",cmd.rootDir,"histCF",cmd.suffixOutFiles,EXTFILES);
+    sprintf(gd.fpfnamehistrBinsFileName,"%s/%s%s%s",cmd.rootDir,"rbins",cmd.suffixOutFiles,EXTFILES);
     sprintf(gd.fpfnamehistXi2pcfFileName,"%s/%s%s%s",cmd.rootDir,cmd.histXi2pcfFileName,cmd.suffixOutFiles,EXTFILES);
     sprintf(gd.fpfnamehistZetaMFileName,"%s/%s%s",cmd.rootDir,cmd.histZetaMFileName,cmd.suffixOutFiles);
     sprintf(gd.fpfnamemhistZetaFileName,"%s/%s%s",cmd.rootDir,cmd.mhistZetaFileName,cmd.suffixOutFiles);

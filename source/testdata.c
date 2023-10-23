@@ -126,7 +126,7 @@ local void testdata_sc_random(void)
 
 		tweight += Weight(p);
     }
-
+    
     verb_log_print(cmd.verbose_log, gd.outlog, "\nCreated bodies = %d",cmd.nbody);
 }
 

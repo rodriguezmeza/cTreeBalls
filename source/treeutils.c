@@ -14,7 +14,78 @@
 
 
 #ifdef OPENMPCODE
-global int search_init_omp(gdhistptr_omp hist)
+
+//B BALLS4
+global int search_init_omp_barnes(gdhistptr_omp_barnes hist)
+{
+    int n;
+    int m;
+
+#  define FACTIVE  0.75
+//#  define FACTOR  1
+#  define FACTOR  316
+//#  define FACTOR  1024
+
+#ifdef TPCF
+    hist->Chebs = dvector(1,cmd.mchebyshev+1);
+    hist->xiOUTVP = dmatrix(1,cmd.sizeHistN,1,cmd.sizeHistN);
+    hist->histZetaMtmp = dmatrix(1,cmd.sizeHistN,1,cmd.sizeHistN);
+#endif
+    hist->histNthread = dvector(1,cmd.sizeHistN);
+    hist->histNSubthread = dvector(1,cmd.sizeHistN);
+// 2pcf
+    hist->histNSubXi2pcfthread = dvector(1,cmd.sizeHistN);
+//
+    hist->histXi2pcfthread = dvector(1,cmd.sizeHistN);
+    hist->histXi2pcfthreadsub = dvector(1,cmd.sizeHistN);
+#ifdef TPCF
+    hist->histXithread = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
+    hist->histZetaMthread = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+#endif
+
+    for (n = 1; n <= cmd.sizeHistN; n++) {
+        hist->histNthread[n] = 0.0;
+        hist->histNSubthread[n] = 0.0;
+// 2pcf
+        hist->histNSubXi2pcfthread[n] = 0.0;
+//
+        hist->histXi2pcfthread[n] = 0.0;
+        hist->histXi2pcfthreadsub[n] = 0.0;
+    }
+
+#ifdef TPCF
+    for (m = 1; m <= cmd.mchebyshev+1; m++) {
+        CLRM_ext(hist->histZetaMthread[m], cmd.sizeHistN);
+    }
+    CLRM_ext_ext(hist->histXithread, cmd.mchebyshev+1, cmd.sizeHistN);
+#endif
+
+    hist->actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
+    hist->actlen = hist->actlen * rpow(cmd.theta, -2.5);
+    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_barnes3: actlen=%d\n",hist->actlen);
+//    active = (nodeptr *) allocate(actlen * sizeof(nodeptr));
+    hist->active = (nodeptr *) allocate(hist->actlen * sizeof(nodeptr));
+    gd.bytes_tot += hist->actlen*sizeof(nodeptr);
+    verb_log_print(cmd.verbose_log, gd.outlog, "\nAllocated %g MByte for active list storage.\n",
+               hist->actlen*sizeof(nodeptr)/(1024.0*1024.0));
+//    interact = (cellptr) allocate(actlen * sizeof(cell));
+    hist->interact = (cellptr) allocate(hist->actlen * sizeof(cell));
+    gd.bytes_tot += hist->actlen*sizeof(cell);
+    verb_log_print(cmd.verbose_log, gd.outlog, "Allocated %g MByte for interact list storage.\n",
+               hist->actlen*sizeof(cell)/(1024.0*1024.0));
+
+//    hist.actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
+//    hist.actlen = hist.actlen * rpow(cmd.theta, -2.5);
+
+//     hist.interact = (cellptr) allocate(hist.actlen * sizeof(cell));
+
+#undef FACTOR
+#undef FACTIVE
+
+    return _SUCCESS_;
+}
+
+global int search_init_omp_barnes_cc(gdhistptr_omp_barnes hist)
 {
     int n;
     int m;
@@ -52,6 +123,213 @@ global int search_init_omp(gdhistptr_omp hist)
     }
     CLRM_ext_ext(hist->histXithread, cmd.mchebyshev+1, cmd.sizeHistN);
 #endif
+
+    return _SUCCESS_;
+}
+
+global int computeBodyProperties_omp_barnes(bodyptr p, int nbody, gdhistptr_omp_barnes hist)
+{
+    int n;
+    int m;
+    real xi, xi_2p;
+
+//    xi = Kappa(p)/nbody;
+// BODY3
+        if (Type(p) == BODY) {
+            xi = Kappa(p)/nbody;
+            xi_2p = Kappa(p);
+        } else if (Type(p) == BODY3) {
+            xi = Nbb(p)*Kappa(p)/nbody;
+            xi_2p = Nbb(p)*Kappa(p);
+        }
+//
+#ifdef TPCF
+    for (m=1; m<=cmd.mchebyshev+1; m++)
+        for (n=1; n<=cmd.sizeHistN; n++)
+            hist->histXithread[m][n] /= MAX(hist->histNSubthread[n],1.0);
+    for (m=1; m<=cmd.mchebyshev+1; m++){
+        OUTVP_ext(hist->xiOUTVP, hist->histXithread[m], hist->histXithread[m],cmd.sizeHistN);
+        CLRM_ext(hist->histZetaMtmp,cmd.sizeHistN);
+        MULMS_ext(hist->histZetaMtmp,hist->xiOUTVP,xi,cmd.sizeHistN);
+        ADDM_ext(hist->histZetaMthread[m],hist->histZetaMthread[m],hist->histZetaMtmp,cmd.sizeHistN);
+    }
+#endif
+    for (n=1; n<=cmd.sizeHistN; n++) {
+        hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
+    }
+
+    return _SUCCESS_;
+}
+
+global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_omp_barnes hist)
+{
+    int n;
+    int m;
+    real xi, xi_2p;
+
+// BODY3
+        if (Type(p) == BODY) {
+//            xi = Kappa(p)/nbody;
+            xi = 1.0/nbody;
+//            xi_2p = Nb(p)*Kappa(p);
+//            xi_2p = Nbb(p)*Kappa(p);
+//            xi_2p = Kappa(p);
+            xi_2p = 1.0;
+//            printf("%ld\n",Nbb(p));
+        } else if (Type(p) == BODY3) {
+            xi = Nbb(p)*Kappa(p)/nbody;
+            xi_2p = Nbb(p)*Kappa(p);
+        }
+//
+#ifdef TPCF
+    for (m=1; m<=cmd.mchebyshev+1; m++)
+        for (n=1; n<=cmd.sizeHistN; n++)
+            hist->histXithread[m][n] /= MAX(hist->histNSubthread[n],1.0);
+    for (m=1; m<=cmd.mchebyshev+1; m++){
+        OUTVP_ext(hist->xiOUTVP, hist->histXithread[m], hist->histXithread[m],cmd.sizeHistN);
+        CLRM_ext(hist->histZetaMtmp,cmd.sizeHistN);
+        MULMS_ext(hist->histZetaMtmp,hist->xiOUTVP,xi,cmd.sizeHistN);
+        ADDM_ext(hist->histZetaMthread[m],hist->histZetaMthread[m],hist->histZetaMtmp,cmd.sizeHistN);
+    }
+#endif
+    for (n=1; n<=cmd.sizeHistN; n++) {
+        hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
+    }
+
+    return _SUCCESS_;
+}
+
+
+global int search_free_omp_barnes(gdhistptr_omp_barnes hist)
+{
+    free(hist->interact);
+    free(hist->active);
+
+#ifdef TPCF
+    free_dmatrix3D(hist->histZetaMthread,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    free_dmatrix(hist->histXithread,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
+#endif
+    free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
+    free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
+// 2pcf
+    free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
+//
+    free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
+    free_dvector(hist->histNthread,1,cmd.sizeHistN);
+#ifdef TPCF
+    free_dmatrix(hist->histZetaMtmp,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    free_dmatrix(hist->xiOUTVP,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    free_dvector(hist->Chebs,1,cmd.mchebyshev+1);
+#endif
+
+    return _SUCCESS_;
+}
+
+global int search_free_omp_barnes_cc(gdhistptr_omp_barnes hist)
+{
+//    free(hist->interact);
+//    free(hist->active);
+
+#ifdef TPCF
+    free_dmatrix3D(hist->histZetaMthread,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    free_dmatrix(hist->histXithread,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
+#endif
+    free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
+    free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
+// 2pcf
+    free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
+//
+    free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
+    free_dvector(hist->histNthread,1,cmd.sizeHistN);
+#ifdef TPCF
+    free_dmatrix(hist->histZetaMtmp,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    free_dmatrix(hist->xiOUTVP,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    free_dvector(hist->Chebs,1,cmd.mchebyshev+1);
+#endif
+
+    return _SUCCESS_;
+}
+
+//E BALLS4
+
+
+global int search_init_omp(gdhistptr_omp hist)
+{
+    int n;
+    int m;
+
+//B BALLS4
+    
+    // PASAR ESTOS CAMBIOS A search_init_balls_omp
+/*
+#  define FACTIVE  0.75
+//#  define FACTOR  1
+#  define FACTOR  316
+//#  define FACTOR  1024
+//E
+*/
+
+#ifdef TPCF
+    hist->Chebs = dvector(1,cmd.mchebyshev+1);
+    hist->xiOUTVP = dmatrix(1,cmd.sizeHistN,1,cmd.sizeHistN);
+    hist->histZetaMtmp = dmatrix(1,cmd.sizeHistN,1,cmd.sizeHistN);
+#endif
+    hist->histNthread = dvector(1,cmd.sizeHistN);
+    hist->histNSubthread = dvector(1,cmd.sizeHistN);
+// 2pcf
+    hist->histNSubXi2pcfthread = dvector(1,cmd.sizeHistN);
+//
+    hist->histXi2pcfthread = dvector(1,cmd.sizeHistN);
+    hist->histXi2pcfthreadsub = dvector(1,cmd.sizeHistN);
+#ifdef TPCF
+    hist->histXithread = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
+    hist->histZetaMthread = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+#endif
+
+    for (n = 1; n <= cmd.sizeHistN; n++) {
+        hist->histNthread[n] = 0.0;
+        hist->histNSubthread[n] = 0.0;
+// 2pcf
+        hist->histNSubXi2pcfthread[n] = 0.0;
+//
+        hist->histXi2pcfthread[n] = 0.0;
+        hist->histXi2pcfthreadsub[n] = 0.0;
+    }
+
+#ifdef TPCF
+    for (m = 1; m <= cmd.mchebyshev+1; m++) {
+        CLRM_ext(hist->histZetaMthread[m], cmd.sizeHistN);
+    }
+    CLRM_ext_ext(hist->histXithread, cmd.mchebyshev+1, cmd.sizeHistN);
+#endif
+
+/*
+//B BALLS4
+    // PASAR ESTOS CAMBIOS A search_init_balls_omp
+
+    hist->actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
+    hist->actlen = hist->actlen * rpow(cmd.theta, -2.5);
+    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_barnes3: actlen=%d\n",hist->actlen);
+//    active = (nodeptr *) allocate(actlen * sizeof(nodeptr));
+    hist->active = (nodeptr *) allocate(hist->actlen * sizeof(nodeptr));
+    gd.bytes_tot += hist->actlen*sizeof(nodeptr);
+    verb_log_print(cmd.verbose_log, gd.outlog, "\nAllocated %g MByte for active list storage.\n",
+               hist->actlen*sizeof(nodeptr)/(1024.0*1024.0));
+//    interact = (cellptr) allocate(actlen * sizeof(cell));
+    hist->interact = (cellptr) allocate(hist->actlen * sizeof(cell));
+    gd.bytes_tot += hist->actlen*sizeof(cell);
+    verb_log_print(cmd.verbose_log, gd.outlog, "Allocated %g MByte for interact list storage.\n",
+               hist->actlen*sizeof(cell)/(1024.0*1024.0));
+
+//    hist.actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
+//    hist.actlen = hist.actlen * rpow(cmd.theta, -2.5);
+
+//     hist.interact = (cellptr) allocate(hist.actlen * sizeof(cell));
+
+#undef FACTOR
+#undef FACTIVE
+//E
+*/
 
     return _SUCCESS_;
 }
@@ -111,6 +389,11 @@ global int search_init_sincos_omp(gdhistptr_sincos_omp hist)
 
 global int search_free_omp(gdhistptr_omp hist)
 {
+//B BALLS4
+    // PASAR ESTOS CAMBIOS A search_init_balls_omp
+//    free(hist->interact);
+//    free(hist->active);
+//E
 #ifdef TPCF
     free_dmatrix3D(hist->histZetaMthread,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     free_dmatrix(hist->histXithread,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
@@ -806,42 +1089,75 @@ local int search_compute_Xi_balls(int nbody)
     Vol = 1.0;
     DO_COORD(k)
         Vol = Vol*gd.Box[k];
+
+#ifdef RAPHISTNVER
+// Check for log-scale value of deltaR
     if (NDIM == 3)
         normFac = Vol / (2.0 * PI * rpow(gd.deltaR, 3.0) * nbody * nbody);
     else if (NDIM == 2)
         normFac = Vol / (PI * rpow(gd.deltaR, 2.0) * nbody * nbody);
     else error("\n\nWrong NDIM!\n\n");
+#endif
 
 #ifdef TREENODE
     normFac *= 0.5;
-#else
-#ifdef TREENODEALLBODIES
-    normFac /= 2.0;
 #else
     if (scanopt(cmd.options, "compute-j-no-eq-i"))
         normFac /= 2.0;
     else
         normFac /= 1.0;
 #endif
-#endif
-//    normFac = nbody/Vol;
 
-#ifndef LOGHIST
-//#ifdef KDLIB
-//    gd.histN[1]-=nbody; //Substract diagonal    // Check for no KD routines like normal tree...
-//    gd.histXi2pcf[1] = 0.; // Only for kd...
-//#endif
-#endif
-
-// CORRECT FOR LOGHIST!!!!
-
+#ifdef RAPHISTNVER
+// Check for log-scale
     for (n = 1; n <= cmd.sizeHistN; n++)
         if (NDIM == 3)
-//            gd.histN[n] = gd.histN[n] * normFac / rsqr(n-0.5)  - 1.0; // zeta = rho/rho_avg - 1
-            gd.histCF[n] = gd.histN[n] * normFac / rsqr(n-0.5);
+        gd.histCF[n] = gd.histN[n] * normFac / rsqr(n-0.5); // add "- 1.0" to have zeta = rho/rho_avg - 1
         else if (NDIM == 2)
             gd.histCF[n] = gd.histN[n] * normFac / ((int)n-0.5);
         else error("\n\nWrong NDIM!\n\n");
+#endif
+
+#ifndef LOGHIST
+    gd.histN[1]-=nbody;
+#endif
+    real *edd;
+    real *corr;
+    real *ercorr;
+    edd = dvector(1,cmd.sizeHistN);
+    corr = dvector(1,cmd.sizeHistN);
+    ercorr = dvector(1,cmd.sizeHistN);
+    real rho_av=(real)nbody/Vol;
+
+    for (n = 1; n <= cmd.sizeHistN; n++)
+        edd[n] = 1./rsqrt(gd.histN[n]);
+
+    for (n = 1; n <= cmd.sizeHistN; n++) {
+        if(gd.histN[n]==0) {
+        corr[n]=0;
+        ercorr[n]=0;
+      }
+      else {
+        double r0,r1,vr,rho_r;
+#ifdef LOGHIST
+          if (cmd.rminHist==0) {
+              r0 = rpow(10.0, ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN) );
+              r1 = rpow(10.0, ((real)(n+1-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN) );
+          } else {
+              r0 = rpow(10.0, rlog10(cmd.rminHist) + ((real)(n))*gd.deltaR );
+              r1 = rpow(10.0, rlog10(cmd.rminHist) + ((real)(n+1))*gd.deltaR );
+          }
+#else
+          r0=(real)n*gd.deltaR;
+          r1=(real)(n+1)*gd.deltaR;
+#endif
+        vr=4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
+          rho_r=gd.histN[n]/((real)nbody*vr);
+          corr[n]=rho_r/rho_av-1;
+          ercorr[n]=(1+corr[n])*edd[n];
+          gd.histCF[n] = corr[n] + 1.0;
+      }
+    }
 
     return _SUCCESS_;
 }
@@ -878,14 +1194,14 @@ global int search_compute_HistN_balls(int nbody)
 #ifdef TREENODE
     normFac = 0.5;
 #else
-#ifdef TREENODEALLBODIES
-    normFac = 0.5;
-#else
+//#ifdef TREENODEALLBODIES
+//    normFac = 0.5;
+//#else
     if (scanopt(cmd.options, "compute-j-no-eq-i"))
         normFac = 0.5;
     else
         normFac = 1.0;
-#endif
+//#endif
 #endif
 
 #ifndef LOGHIST

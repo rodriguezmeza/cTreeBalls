@@ -29,7 +29,7 @@ local void centerBodies(bodyptr btab, int nbody);
 local int cellhist[MAXLEVEL];
 local int subnhist[MAXLEVEL];
 //B To smooth bodies
-local INTEGER NTOT[3];          // Two sets of cells to smooth
+local INTEGER NTOT[1];          // Two sets of cells to smooth
 local INTEGER ip;
 #define NbMax 33
 local int cellhistNb[NbMax];
@@ -105,7 +105,7 @@ global void maketree(bodyptr btab, int nbody)
         Selected(p) = FALSE;
 //E
 
-    NTOT[0] = 0; NTOT[1] = 0; NTOT[2] = 0;
+    NTOT[0] = 0;
     ip = 0;
     hackCellProp(root, gd.rSize, 0);
 
@@ -124,12 +124,12 @@ global void maketree(bodyptr btab, int nbody)
     if (scanopt(cmd.options, "smooth")) {
         printf("NTOT = %ld \t%ld \t%ld\n",
                gd.nsmooth[0], NTOT[0], gd.nsmooth[0]*NTOT[0]);
-        gd.nbodysm = NTOT[0]+NTOT[1]+NTOT[2];
-        bodytabsm = (bodyptr) allocate((NTOT[0]+NTOT[1]+NTOT[2]) * sizeof(body));
-        gd.bytes_tot += (NTOT[0]+NTOT[1]+NTOT[2])*sizeof(body);
+        gd.nbodysm = NTOT[0];
+        bodytabsm = (bodyptr) allocate((NTOT[0]) * sizeof(body));
+        gd.bytes_tot += (NTOT[0])*sizeof(body);
         verb_print(cmd.verbose,
                    "Allocated %g MByte for (smooth %ld) particle storage.\n",
-                   (NTOT[0]+NTOT[1]+NTOT[2])*sizeof(body)*INMB, (NTOT[0]+NTOT[1]+NTOT[2]));
+                   (NTOT[0])*sizeof(body)*INMB, (NTOT[0]));
     }
     }
 //E
@@ -168,6 +168,7 @@ global void maketree(bodyptr btab, int nbody)
                isel, inosel, isel + inosel);
 
 #ifdef BALLS
+#ifndef TREENODEALLBODIES
 //B BALLS :: SCANLEV
     if (cmd.scanLevel > gd.tdepth) {
         verb_print(cmd.verbose, "Warning! tree depth (%d) is less than scanLevel (%d)...\n",
@@ -192,6 +193,7 @@ global void maketree(bodyptr btab, int nbody)
     gd.nnodescanlev = rpow(4, cmd.scanLevel);
 #endif
 // Use the node storage for cells. Bodies are left out.
+//    gd.nnodescanlev = gd.ncell;
     gd.nnodescanlev = 2.0*gd.ncell;         // Correction
     nodetabscanlev = (nodeptr *) allocate(gd.nnodescanlev * sizeof(nodeptr));
 //
@@ -266,7 +268,7 @@ global void maketree(bodyptr btab, int nbody)
     fclose(gd.outbodylev);
 
 
-
+#endif // ! TREENODEALLBODIES
 //E BALLS :: SCANLEV
 #endif // ! BALLS
 
@@ -274,13 +276,13 @@ global void maketree(bodyptr btab, int nbody)
     if (!gd.flagSmooth || !gd.flagSetNbNoSel) {
     if ( (scanopt(cmd.options, "smooth") && scanopt(cmd.options, "set-Nb-noSel")) ) {
         printf("NTOT = %ld \t%ld \t%ld\n\n",
-               gd.nsmooth[0], NTOT[0]+NTOT[1]+NTOT[2]+inosel,
-               gd.nsmooth[0]*NTOT[0] + inosel);
-        bodytabSel = (bodyptr) allocate((NTOT[0]+NTOT[1]+NTOT[2]+inosel) * sizeof(body));
-        gd.bytes_tot += (NTOT[0]+NTOT[1]+NTOT[2]+inosel)*sizeof(body);
+               gd.nsmooth[0], NTOT[0]+inosel,
+               gd.nsmooth[0]*NTOT[0]+ inosel);
+        bodytabSel = (bodyptr) allocate((NTOT[0]+inosel) * sizeof(body));
+        gd.bytes_tot += (NTOT[0]+inosel)*sizeof(body);
         verb_print(cmd.verbose,
                    "Allocated %g MByte for (smooth) particle (%ld) storage.\n",
-                   (NTOT[0]+NTOT[1]+NTOT[2]+inosel)*sizeof(body)*INMB, (NTOT[0]+NTOT[1]+NTOT[2]+inosel));
+                   (NTOT[0]+inosel)*sizeof(body)*INMB, (NTOT[0]+inosel));
         int ipcount=0;
         bodyptr q = bodytabSel;
         DO_BODY(p,bodytabsm,bodytabsm+gd.nbodysm) {
@@ -327,11 +329,9 @@ global void maketree(bodyptr btab, int nbody)
     verb_print(cmd.verbose, "\nmaketree : root number of bodies = %ld\n", Nb(root));
     
 #ifdef DEBUG
-//#ifdef BALLS
 //B To debug cells:
     fclose(gd.outcells);
 //E
-//#endif
 #endif
 
 //B BALLS :: DIAGNOSTICS (DEBUG)
@@ -436,6 +436,10 @@ local void loadbody(bodyptr p)
     real qsize, dist2;
     vector distv;
 
+// Keep it in order to study MPI programming...
+//    verb_print_debug(1, "\nloadbody:: Aqui voy (2)\n");
+//    MPI_Barrier(MPI_COMM_WORLD);
+
     q = root;
     qind = subindex(p, q);
     Nb(q) += 1;                 // Smooth
@@ -454,19 +458,12 @@ local void loadbody(bodyptr p)
                 error("loadbody: two bodies have same position\n");
             }
             c = makecell();                     
-            Nb(c) += 1;         // Smooth
+            Nb(c) += 1;                     // Smooth
 			DO_COORD(k)
                 Pos(c)[k] = Pos(q)[k] +
                     (Pos(p)[k] < Pos(q)[k] ? - qsize : qsize) / 4;
-
-//#ifdef BALLS
-//B To debug cells:
-//            out_vector(gd.outcells, Pos(c));
-//E
-//#endif
-
             Subp(c)[subindex((bodyptr) Subp(q)[qind], c)] = Subp(q)[qind];
-            Nb(c) += 1;         // Smooth
+            Nb(c) += 1;                     // Smooth
             Subp(q)[qind] = (nodeptr) c;
         } else {
             Nb(Subp(q)[qind]) += 1;         // Smooth
@@ -497,57 +494,40 @@ local void hackCellProp(cellptr p, real psize, int lev)
  
     gd.tdepth = MAX(gd.tdepth, lev);
     cellhist[lev]++;
-// BALLS
-    Level(p) = lev;
-//
+    Level(p) = lev;                         // To set scanLevel
     Weight(p) = 0.0;
-//B To smooth bodies :: Always default: smooth and set-Nb
-//    if (scanopt(cmd.options, "smooth") || scanopt(cmd.options, "set-Nb")) {
-        Nb(p) = 0;
-        Kappa(p) = 0.0;
-//    }
-//E
+    Nb(p) = 0;
+    Kappa(p) = 0.0;
     CLRV(cmpos);
+
     for (i = 0; i < NSUB; i++) {
         if ((q = Subp(p)[i]) != NULL) {
             subnhist[lev]++;                    
             if (Type(q) == CELL)
                 hackCellProp((cellptr) q, psize/2, lev+1);
-
-//B To see the bodies belonging to a cell:
-            Selected(p) |= Selected(q);
-//
+            Selected(p) |= Selected(q);     // To see the bodies belonging to a cell
             Update(p) |= Update(q);
             Weight(p) += Weight(q);
-//B To smooth bodies :: Always default: smooth and set-Nb
-//  if ( (scanopt(cmd.options, "smooth") || scanopt(cmd.options, "set-Nb")) && Type(q) == CELL) {
-                if ( Type(q) == CELL) {
+            if ( Type(q) == CELL) {
                 Nb(p) += Nb(q);
-//                    Kappa(p) += Kappa(q);
-                    Kappa(p) += Weight(q)*Kappa(q);
-                } else {
-//  if ( (scanopt(cmd.options, "smooth") || scanopt(cmd.options, "set-Nb")) && Type(q) == BODY) {
-// BODY3
+                Kappa(p) += Weight(q)*Kappa(q);
+            } else {
                 if (Type(q) == BODY) {
-                Nb(p) += 1;
-//                Kappa(p) += Kappa(q);
-                    Kappa(p) += Weight(q)*Kappa(q);
-                } else if (Type(q) == BODY3) {
                     Nb(p) += 1;
-//                    Kappa(p) += Kappa(q);
+                    Kappa(p) += Weight(q)*Kappa(q);
+                } else if (Type(q) == BODY3) {  // To set smoothing body
+                    Nb(p) += 1;
                     Kappa(p) += Weight(q)*Kappa(q);
                 }
-                }
-//E
+            }
             MULVS(tmpv, Pos(q), Weight(q));
             ADDV(cmpos, cmpos, tmpv);           
         }
     }
     if (Nb(p)==gd.nsmooth[0]) {
         NTOT[0]=NTOT[0]+1;
-//        Selected(p) = TRUE; // Propagate Selected value to the fathers...
     }
-    if (Weight(p) > 0.0) {                 // We should use geometric center always
+    if (Weight(p) > 0.0) {                  // We should use geometric center always
 //        DIVVS(cmpos, cmpos, Weight(p));   // Activate if you want to use com center
         SETV(cmpos, Pos(p));
     } else {
@@ -567,26 +547,20 @@ local void hackCellProp(cellptr p, real psize, int lev)
                 verb_log_print(cmd.verbose_log,gd.outlog,
                                "hackCellProp: tree structure warning! psize/2 to small: %le \n",
                                psize/2);
-//                verb_print(cmd.verbose,
-//                           "hackCellProp: tree structure warning! psize/2 to small: %le \n",
-//                           psize/2);
             }
         }
 #undef EPSILON
 
     setRadius(p, cmpos, psize);
     SETV(Pos(p), cmpos);
-//B To smooth bodies :: Always default: smooth and set-Nb
-//    if (scanopt(cmd.options, "smooth") || scanopt(cmd.options, "set-Nb"))
     if (Nb(p)>0) {
-        Kappa(p) /= Nb(p); // times nb(p)?
+        Kappa(p) /= Nb(p);
     } else
         error("hackCellProp: Nb = 0: %ld\n", Nb(p));
-//E
 }
 
 // Parameter theta controls size of the cell.
-// theta from 0 to 1: 0 always open cells (BF); 1 default value.
+// theta from 0 to 1: 0 always open cells (BF, complexity N^2); 1 is the default value.
 local void setRadius(cellptr p, vector cmpos, real psize)
 {
     real bmax2, d;
@@ -607,11 +581,7 @@ local void setRadius(cellptr p, vector cmpos, real psize)
         Radius(p) = (psize/cmd.theta) * rsqrt((real)(NDIM))/2.0;
     }
 
-//#ifdef BALLS
-//B To debug cells:
     Size(p) = psize;
-//E
-//#endif
 
     int n;
     n = (int) (Radius(p) / deltaRadius);
@@ -628,7 +598,6 @@ local void threadtree(nodeptr p, nodeptr n)
     Next(p) = n;
     if (Type(p) == CELL) {
 
-//#ifdef BALLS
 #ifdef DEBUG
 //B To debug cells:
         icell++;
@@ -648,39 +617,29 @@ local void threadtree(nodeptr p, nodeptr n)
             inode++;
         }
 #endif
-//#endif
 
 //B To smooth bodies
         if (Nb(p)<NbMax)
             cellhistNb[Nb(p)]++;
         if (!gd.flagSmooth) {
-        if (scanopt(cmd.options, "smooth")) {
-//            if (Nb(p)<NbMax)
-//                cellhistNb[Nb(p)]++;
-            if (Nb(p)==gd.nsmooth[0]) {
-                ip++;
-                q = ip + bodytabsm -1;
-                Id(q) = ip;
-// BODY3
-//                Type(q) = BODY;
-            Type(q) = BODY3;
-                Nbb(q) = Nb(p);
-                Nbb(p) = Nb(p);
-//                verb_print_debug(1, "\nAqui voy (0):: %ld %d\n", Type(q), Nbb(q));
-                Weight(q) = Weight(p);
-                SETV(Pos(q), Pos(p));
-                Kappa(q) = Kappa(p);
-                
+            if (scanopt(cmd.options, "smooth")) {
+                if (Nb(p)==gd.nsmooth[0]) {
+                    ip++;
+                    q = ip + bodytabsm -1;
+                    Id(q) = ip;
+                    Type(q) = BODY3;        // To set smoothing body
+                    Nbb(q) = Nb(p);
+                    Nbb(p) = Nb(p);
+                    Weight(q) = Weight(p);
+                    SETV(Pos(q), Pos(p));
+                    Kappa(q) = Kappa(p);
 //B To see the bodies belonging to a cell:
-//                celltabSel[icellSel] = p;
-//                icellSel++;
-                Selected(p) = TRUE;
-                Selected(q) = TRUE;
+                    Selected(p) = TRUE;
+                    Selected(q) = TRUE;
 //E
-
+                }
             }
         }
-    }
 //E
         ndesc = 0;
         for (i = 0; i < NSUB; i++)
@@ -717,9 +676,7 @@ local void walktree(nodeptr q, real qsize)
     }
 }
 
-
 #ifdef BALLS
-
 local void walktree_index_scan_lev(nodeptr q, int lev)
 {
     nodeptr p,g,h,l;

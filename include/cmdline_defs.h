@@ -12,13 +12,21 @@
 #define _cmdline_defs_h
 
 #define HEAD1	"LSST/CosmoININ"
-#define HEAD2	"tpcf Code for computing 3pcf, expected: O(N logN)"
+#define HEAD2	"cballs Code for computing 3pcf, expected: O(N logN)"
 #define HEAD3	"..."
 
 string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 //
+#ifndef BALLSSINCOSEXEC
+#ifdef BALLSEXEC
+    "searchMethod=balls-omp",             ";Searching method to use", ":search",
+#else
     "searchMethod=tree-omp",             ";Searching method to use", ":search",
+#endif
+#else
+    "searchMethod=balls-omp",             ";Searching method to use", ":search",
+#endif
 #ifdef BALLS
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed (also use with options=BH86 or SW94 with search=balls4)",
     "scanLevel=6",                     ";Scan level to start the search (look at tdepth value, will be the maximum for this parameter)", ":scl",
@@ -68,7 +76,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 
 //B NOLSST:
     "seed=123",                         ";Random number seed to test run or useful to change a random region in Takahasi simulations",
-    "nsmooth=2",                        ";Number of bodies to smooth out (can choose two sets: 2,3, i.e.)", ":nsm",
+    "nsmooth=2",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
 #ifdef BALLS
     "ntosave=1000",                     ";Number of found bodies to save; use in combination with 'bodyfound', balls4' method", ":ntsav",
 #endif
@@ -81,8 +89,8 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 //    "mToPlot=1",                        ";m to plot histograms of histZetaM in some direcctions (only with search=direct-simple-exp)",
 //E
 
-    "options=",				            ";Various control options, i.e., check-bin-cell (to use c1Ball scheme),  compute-HistN, no-out-Hist, BH86, etc.", ":opt",
-    "Version=0.1",			            ";Mario A. Rodríguez-Meza et al. (2023)",
+    "options=",				            ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
+    "Version=0.1",			            ";Mario A. Rodríguez-Meza (2023)",
     NULL,
 };
 

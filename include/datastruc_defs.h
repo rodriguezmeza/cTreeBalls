@@ -199,7 +199,65 @@ typedef struct {
 //E ! Tree search
 
 
+//B BALLS4
+//B Useful macros for setting pivot
+// This macro definition gives compiling error
+/*
+#define SETPIVOT3D                                          \
+{                                                           \
+#ifdef TPCF                                                 \
+#if NDIM == 3                                               \
+#ifdef SINCOS                                               \
+            dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, histsincos.q0);   \
+            DOTPSUBV(histsincos.drpq2, histsincos.dr0, Pos(p), histsincos.q0);  \
+            histsincos.drpq = rsqrt(histsincos.drpq2);                          \
+#ifdef PTOPIVOTROTATION                                                         \
+            real rtheta;                                                        \
+            vector dr0rot;                                                      \
+            rtheta = xrandom(0.0, TWOPI);                                       \
+            RotationVecAWRtoVecB(dr0rot, histsincos.dr0, Pos(p), rtheta);       \
+            SETV(histsincos.dr0, dr0rot);                                       \
+#endif                                                                          \
+#else // ! SINCOS                                                               \
+            dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, histcc.q0);       \
+            DOTPSUBV(histcc.drpq2, histcc.dr0, Pos(p), histcc.q0);              \
+            histcc.drpq = rsqrt(histcc.drpq2);                                  \
+#ifdef PTOPIVOTROTATION                                                         \
+          real rtheta;                                                          \
+          vector dr0rot;                                                        \
+          rtheta = xrandom(0.0, TWOPI);                                         \
+          RotationVecAWRtoVecB(dr0rot, histcc.dr0, Pos(p), rtheta);             \
+          SETV(histcc.dr0, dr0rot);                                             \
+#endif                                                                          \
+#endif // // ! SINCOS                                                           \
+#endif // ! NDIM                                                                \
+#endif // ! TPCF                                                                \
+}
+*/
+//E Useful macros for setting pivot
+//E
+
 //B Macros useful to compute chebyshev polynomials
+
+// BALLS4
+#define CHEBYSHEVOMPCC                                      \
+  {hist->Chebs[1] = 1.0;                                    \
+   xicosmphi = xj * xi * hist->Chebs[1];                    \
+   hist->histXithread[1][n] += xicosmphi;                   \
+   hist->Chebs[2] = cosphi;                                 \
+   xicosmphi = xj * xi * hist->Chebs[2];                    \
+   hist->histXithread[2][n] += xicosmphi;                   \
+   hist->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
+   xicosmphi = xj * xi * hist->Chebs[3];                    \
+   hist->histXithread[3][n] += xicosmphi;                   \
+   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+       hist->Chebs[m] = 2.0*(cosphi)*hist->Chebs[m-1] - hist->Chebs[m-2];  \
+       xicosmphi = xj * xi * hist->Chebs[m];                \
+       hist->histXithread[m][n] += xicosmphi;               \
+   }}
+
+
+
 #define CHEBYSHEVMPIOMP                                     \
   {hist_omp.Chebs[1] = 1.0;                                 \
    xicosmphi = xi * hist_omp.Chebs[1];                      \

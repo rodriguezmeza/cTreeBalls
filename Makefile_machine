@@ -171,6 +171,7 @@ endif
 # BALLS ON and LOGHIST ON
 ifeq ($(LOGHISTON),1)
 ifeq ($(BALLSON),1)
+OPT2 += $(OPT2ADD)
 OPT2 += -DBALLS
 ifeq ($(SINCOSON),1)
 OPT2 += -DSINCOS
@@ -187,6 +188,7 @@ endif
 
 #
 ifeq ($(PATCHESON),1)
+PATCHESADDONSON = 0
 OPT2 += -DPATCHES
 PATCHES = patches
 #vpath %.c $(PATCHES)
@@ -206,6 +208,10 @@ ifeq ($(TREENODEON),1)
 OPT2 += -DTREENODE
 ifeq ($(TREENODEALLBODIESON),1)
 OPT2 += -DTREENODEALLBODIES
+else
+ifeq ($(TREENODEBALLS4ON),1)
+OPT2 += -DTREENODEBALLS4
+endif
 endif
 endif
 #

@@ -336,6 +336,7 @@ typedef struct {
     char fpfnameOutputFileName[MAXLENGTHOFFILES];
     char fpfnamehistNFileName[MAXLENGTHOFFILES];
     char fpfnamehistCFFileName[MAXLENGTHOFFILES];
+    char fpfnamehistrBinsFileName[MAXLENGTHOFFILES];
     char fpfnamehistXi2pcfFileName[MAXLENGTHOFFILES];
     char fpfnamehistZetaMFileName[MAXLENGTHOFFILES];
     char fpfnamemhistZetaFileName[MAXLENGTHOFFILES];
@@ -482,6 +483,7 @@ typedef struct {
 #endif
 
 #ifdef OPENMPCODE
+
 typedef struct {
     real **xiOUTVP;
     real **histZetaMtmp;
@@ -504,6 +506,40 @@ typedef struct {
     int actlen;
     int *activenb;
     int nblist;
+    
+    nodeptr *active;
+    cellptr interact;
+
+} gdhist_omp_barnes, *gdhistptr_omp_barnes;
+
+typedef struct {
+    real **xiOUTVP;
+    real **histZetaMtmp;
+    real *Chebs;
+    real ***histZetaMthread;
+    realptr histNthread;
+    realptr histNSubthread;
+// 2pcf
+    realptr histNSubXi2pcfthread;
+//
+    real **histXithread;
+    real *histXi2pcfthread;
+    real *histXi2pcfthreadsub;
+
+    vector q0;
+    real drpq2, drpq;
+    vector dr0;
+    INTEGER ipcount;
+
+    int actlen;
+    int *activenb;
+    int nblist;
+
+//B BALLS4
+    // PASAR ESTOS CAMBIOS A gdhist_omp_balls
+    nodeptr *active;
+    cellptr interact;
+//E
 } gdhist_omp, *gdhistptr_omp;
 
 

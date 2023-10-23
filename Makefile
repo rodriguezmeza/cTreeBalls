@@ -1,4 +1,4 @@
-# ----- MAKE FILE FOR tpcf CODE -----
+# ----- MAKE FILE FOR cballs CODE -----
 # Mario A. Rodriguez-Meza, Ciudad de Mexico, 27.04.2023
 #
 #

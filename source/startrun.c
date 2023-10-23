@@ -214,6 +214,7 @@ local int startrun_Common(void)
     if (strnull(cmd.restorefile)) {
 #endif
 
+        setFilesDirs();
             setFilesDirs_log();
         strcpy(gd.mode,"w");
 #ifdef MPICODE
@@ -279,7 +280,7 @@ local int startrun_Common(void)
                 "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
                 cmd.rangeN, gd.rSize);
 
-        setFilesDirs();
+//        setFilesDirs();
 
 //B Tree search:
         gd.Rcut = cmd.rangeN;                       // Maximum search radius
@@ -454,7 +455,8 @@ local int startrun_getParamsSpecial(void)
             error("\nstartrun_Common: nitems must be equal to number of files\n\n");
     }
 
-    scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, ndummy, 2, "nsmooth");
+//    scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, ndummy, 2, "nsmooth");
+    scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, 1, 1, "nsmooth");
 //#ifdef BALLS
     scaniOption(cmd.ncritical, gd.ncritical, &nitems, ndummy, 2, "ncritical");
 //#endif
@@ -533,7 +535,6 @@ local int scaniOption(string optionstr, int *option, int *noption,
 local void startrun_ParamStat(void)
 {
 // Every item in cmdline_defs.h must have an item here::
-    
 
 #ifdef MPICODE
     if (ThisTask==0) {                              // Input all parameters on proccess 0
@@ -906,7 +907,7 @@ local void PrintParameterFile(char *fname)
 #ifdef MPICODE
     if (ThisTask==0) {                              // Output only on proccess 0
 #endif
-    sprintf(buf,"%s%s",fname,"-usedvalues");
+    sprintf(buf,"%s/%s%s",cmd.rootDir,fname,"-usedvalues");
     if(!(fdout=fopen(buf,"w"))) {
         fprintf(stdout,"error opening file '%s' \n",buf);
         errorFlag=1;

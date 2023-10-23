@@ -12,6 +12,7 @@
 
 local int printHistN(void);
 local int printHistCF(void);
+local int printHistrBins(void);
 local int printHistXi2pcf(void);
 local int printHistXi3pcf(void);
 #ifdef TPCF
@@ -31,6 +32,7 @@ int MainLoop(void)
     real kavg;
 
 
+    
     gd.flagSmooth = FALSE;
     gd.flagSetNbNoSel = FALSE;
 
@@ -184,6 +186,25 @@ local int evalHist(void)
             searchcalc_normal_omp_sincos(bodytab, cmd.nbody, 1, cmd.nbody);
             break;
 
+#ifndef BALLSSINCOSEXEC
+#ifdef BALLSEXEC
+        case SEARCHNULL:
+            verb_print(cmd.verbose, "\n\tevalHist: null search method.\n");
+            verb_print(cmd.verbose, "\tevalHist: with normal tree method (omp)\n\n");
+            DO_BODY(p,bodytab,bodytab+cmd.nbody)
+                Update(p) = TRUE;
+            maketree(bodytab, cmd.nbody);
+            searchcalc_balls_omp(bodytab, cmd.nbody, 1, cmd.nbody);
+            break;
+        default:
+            verb_print(cmd.verbose, "\n\tevalHist: dafault search method.\n");
+            verb_print(cmd.verbose, "\tevalHist: with normal tree method (omp)\n\n");
+            DO_BODY(p,bodytab,bodytab+cmd.nbody)
+                Update(p) = TRUE;
+            maketree(bodytab, cmd.nbody);
+            searchcalc_balls_omp(bodytab, cmd.nbody, 1, cmd.nbody);
+            break;
+#else
         case SEARCHNULL:
             verb_print(cmd.verbose, "\n\tevalHist: null search method.\n");
             verb_print(cmd.verbose, "\tevalHist: with normal tree method (omp)\n\n");
@@ -200,6 +221,25 @@ local int evalHist(void)
             maketree(bodytab, cmd.nbody);
             searchcalc_normal_omp(bodytab, cmd.nbody, 1, cmd.nbody);
             break;
+#endif
+#else
+        case SEARCHNULL:
+            verb_print(cmd.verbose, "\n\tevalHist: null search method.\n");
+            verb_print(cmd.verbose, "\tevalHist: with normal tree method (omp)\n\n");
+            DO_BODY(p,bodytab,bodytab+cmd.nbody)
+                Update(p) = TRUE;
+            maketree(bodytab, cmd.nbody);
+            searchcalc_balls_omp(bodytab, cmd.nbody, 1, cmd.nbody);
+            break;
+        default:
+            verb_print(cmd.verbose, "\n\tevalHist: dafault search method.\n");
+            verb_print(cmd.verbose, "\tevalHist: with normal tree method (omp)\n\n");
+            DO_BODY(p,bodytab,bodytab+cmd.nbody)
+                Update(p) = TRUE;
+            maketree(bodytab, cmd.nbody);
+            searchcalc_balls_omp(bodytab, cmd.nbody, 1, cmd.nbody);
+            break;
+#endif
 
 
 
@@ -219,18 +259,22 @@ local int printEvalHist(void)
         case TREEOMPMETHOD:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing normal tree method (omp)\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
             printHistXi2pcf();
 #ifdef TPCF
             printHistZetaM();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
             printHistZeta();
 #endif
             break;
         case TREE3PCFBFOMPMETHOD:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing normal tree method (tree-3pcf-direct-omp)\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
             printHistXi2pcf();
         #ifdef TPCF
             printHistZetaM();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
             printHistZeta();
         #endif
             break;
@@ -239,10 +283,18 @@ local int printEvalHist(void)
         case BALLSOMPMETHOD:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing  balls tree-omp method\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
             printHistXi2pcf();
 #ifdef TPCF
+#ifdef SINCOS
+            printHistZetaM_sincos();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
+            printHistZeta_sincos();
+#else
             printHistZetaM();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
             printHistZeta();
+#endif
 #endif
             break;
 #endif
@@ -250,29 +302,63 @@ local int printEvalHist(void)
         case TREEOMPMETHODSINCOS:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing normal tree method (omp-sincos)\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
             printHistXi2pcf();
-        #ifdef TPCF
+#ifdef TPCF
             printHistZetaM_sincos();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
             printHistZeta_sincos();
-        #endif
+#endif
             break;
 
+#ifndef BALLSSINCOSEXEC
         case SEARCHNULL:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing null search method.\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
             printHistXi2pcf();
 #ifdef TPCF
             printHistZetaM();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
             printHistZeta();
 #endif
+            break;
         default:
             verb_print(cmd.verbose, "\n\tprintEvalHist: printing dafault search method.\n\n");
             if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
             printHistXi2pcf();
 #ifdef TPCF
             printHistZetaM();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
             printHistZeta();
 #endif
+            break;
+#else // ! BALLSSINCOSEXEC
+        case SEARCHNULL:
+            verb_print(cmd.verbose, "\n\tprintEvalHist: printing null search method.\n\n");
+            if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
+            printHistXi2pcf();
+#ifdef TPCF
+            printHistZetaM_sincos();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
+            printHistZeta_sincos();
+#endif
+            break;
+        default:
+            verb_print(cmd.verbose, "\n\tprintEvalHist: printing dafault search method.\n\n");
+            if (scanopt(cmd.options, "compute-HistN")) printHistN();
+            printHistrBins();
+            printHistXi2pcf();
+#ifdef TPCF
+            printHistZetaM_sincos();
+            if (scanopt(cmd.options, "out-m-HistZeta"))
+            printHistZeta_sincos();
+#endif
+            break;
+#endif // ! BALLSSINCOSEXEC
+
 
 
 
@@ -350,6 +436,40 @@ local int printHistCF(void)
         rBin = cmd.rminHist + ((real)n-0.5)*gd.deltaR;
 #endif
         fprintf(outstr,"%16.8e %16.8e\n",rBin,gd.histCF[n]);
+    }
+    fclose(outstr);
+#ifdef MPICODE
+    }
+#endif
+
+    return _SUCCESS_;
+}
+
+local int printHistrBins(void)
+{
+    real rBin, rbinlog;
+    int n;
+    stream outstr;
+
+#ifdef MPICODE
+    if (ThisTask==0) {
+#endif
+    outstr = stropen(gd.fpfnamehistrBinsFileName, "w!");
+
+    verb_print(cmd.verbose, "Printing : to a file %s ...\n",gd.fpfnamehistrBinsFileName);
+
+    for (n=1; n<=cmd.sizeHistN; n++) {
+#ifdef LOGHIST
+        if (cmd.rminHist==0) {
+            rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
+        } else {
+            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
+        }
+        rBin=rpow(10.0,rbinlog);
+#else
+        rBin = cmd.rminHist + ((real)n-0.5)*gd.deltaR;
+#endif
+        fprintf(outstr,"%16.8e\n",rBin);
     }
     fclose(outstr);
 #ifdef MPICODE
