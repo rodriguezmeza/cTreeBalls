@@ -32,7 +32,6 @@ int MainLoop(void)
     real kavg;
 
 
-    
     gd.flagSmooth = FALSE;
     gd.flagSetNbNoSel = FALSE;
 

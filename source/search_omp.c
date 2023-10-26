@@ -790,25 +790,28 @@ local void sumnodes_bb_omp(nodeptr p, nodeptr q,
 local void sumnodes_bc_omp(nodeptr p, nodeptr q,
                            gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp,
                            INTEGER *, INTEGER *, INTEGER *);
+local void sumnodes_cb_omp(nodeptr p, nodeptr q,
+                           gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp,
+                           INTEGER *, INTEGER *, INTEGER *);
 local void sumnodes_cc_omp(nodeptr p, nodeptr q,
                            gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp,
                            INTEGER *, INTEGER *, INTEGER *);
 
 //B BALLS4
-//B Bloque para barnes4
-local void walktree_barnes4_omp(nodeptr *, nodeptr *, cellptr, cellptr,
+//B Bloque para balls4
+local void walktree_balls4_omp(nodeptr *, nodeptr *, cellptr, cellptr,
                     nodeptr, real, vector, INTEGER *, INTEGER *,  INTEGER *,
                                 gdhistptr_omp_barnes, gdhistptr_omp_barnes, INTEGER *, INTEGER *);
 local void walksub4_omp(nodeptr *, nodeptr *, cellptr, cellptr,
                    nodeptr, real, vector, INTEGER *, INTEGER *, INTEGER *,
                         gdhistptr_omp_barnes, gdhistptr_omp_barnes, INTEGER *, INTEGER *);
-local void sum_barnes4_omp(cellptr, cellptr, bodyptr, INTEGER *, INTEGER *,  INTEGER *,
+local void sum_balls4_omp(cellptr, cellptr, bodyptr, INTEGER *, INTEGER *,  INTEGER *,
                      gdhistptr_omp_barnes);
-local void sumnode_barnes4_omp(cellptr, cellptr, bodyptr, INTEGER *, INTEGER *,  INTEGER *,
+local void sumnode_balls4_omp(cellptr, cellptr, bodyptr, INTEGER *, INTEGER *,  INTEGER *,
                          gdhistptr_omp_barnes);
-local void sumcell_barnes4_omp(cellptr, cellptr, bodyptr, INTEGER *, INTEGER *,  INTEGER *,
+local void sumcell_balls4_omp(cellptr, cellptr, bodyptr, INTEGER *, INTEGER *,  INTEGER *,
                          gdhistptr_omp_barnes);
-local void sumcellcell_barnes4_omp(cellptr, cellptr, nodeptr, INTEGER *, INTEGER *,  INTEGER *,
+local void sumcellcell_balls4_omp(cellptr, cellptr, nodeptr, INTEGER *, INTEGER *,  INTEGER *,
                              gdhistptr_omp_barnes);
 //E
 //E
@@ -900,7 +903,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
 //B BALLS4
 #ifdef TREENODEBALLS4
       INTEGER ibfcountthread = 0;
-      gdhist_omp histccbarnes;
+//      gdhist_omp histccbarnes;
       gdhist_omp_barnes histb;
       gdhist_omp_barnes histccb;
 
@@ -1061,14 +1064,17 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
 #else // ! TREENODEALLBODIES
 //B BALLS4
 #ifdef TREENODEBALLS4
+// Correct adding two-balls contribution. Look for "two-balls" or histccb to make correcting changes...
+// This method is faster one scanLevel is higher...
             histb.active[0] = (nodeptr) root;
-            walktree_barnes4_omp(histb.active, histb.active + 1,
+            walktree_balls4_omp(histb.active, histb.active + 1,
                                  histb.interact, histb.interact + histb.actlen,
                             (nodeptr) p, Size(p), Pos(p),
                                  &nbbcalcthread, &nbccalcthread, &ncccalcthread,
                                  &histb, &histccb, &ibfcountthread, &nsmoothcountthread);
-            if (scanopt(cmd.options, "two-balls"))
-                computeBodyProperties_omp_barnes_cc((bodyptr)q, cmd.nbody, &histccb);
+            if (scanopt(cmd.options, "two-balls")) {
+                computeBodyProperties_omp_barnes_cc((bodyptr)p, cmd.nbody, &histccb);
+            }
 #else
             walktree_balls_omp_nodes_root(p, (nodeptr) root, &hist, &histcc, &histsincos,
                                           &nsmoothcountthread,
@@ -1102,6 +1108,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
 //E
 #endif // ! PIVOTEXTERNAL
 
+#ifndef TREENODEBALLS4
 #ifdef TREENODEALLBODIES
             i = p - btab + 1;
             if (i%cmd.stepState == 0) {
@@ -1113,6 +1120,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
                 verb_log_print(cmd.verbose_log, gd.outlog,
                     " - Completed pivot node: %d\n", i);
             }
+#endif
 #endif
         } // end loop i
 
@@ -1199,7 +1207,7 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
       //B BALLS4
 #ifdef DEBUG
     gd.nbodybf = cmd.ntosave;
-    verb_print(cmd.verbose, "\nsearchcalc_barnes4_omp: Total bodies found: %ld %ld\n",ibfcount, gd.nbodybf);
+    verb_print(cmd.verbose, "\nsearchcalc_balls4_omp: Total bodies found: %ld %ld\n",ibfcount, gd.nbodybf);
 #endif
 
     for (nn = 1; nn <= cmd.sizeHistN; nn++) {
@@ -1219,6 +1227,11 @@ global void searchcalc_balls_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER
     verb_print(cmd.verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);
 }
 
+#define CELLCELL 1
+#define CELLBODY 2
+#define BODYCELL 3
+#define BODYBODY 4
+
 local void walktree_balls_omp(nodeptr p, nodeptr q,
                         gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp histccsincos,
                         INTEGER *nsmoothcountthread,
@@ -1231,7 +1244,8 @@ local void walktree_balls_omp(nodeptr p, nodeptr q,
     vector dr;
 
     *nsmoothcountthread += 1;
-
+    
+/*
     if (Type(p) == CELL && Type(q) == CELL) {
         if (!reject_cell(p, q, qsize)) {
 
@@ -1449,13 +1463,106 @@ local void walktree_balls_omp(nodeptr p, nodeptr q,
             }   // ! reject
         }   // Types CELLS & BODY
     } // ! CELL & CELL
+    
+*/
+
+    int SWITCHVALUE=0;
+    if (Type(p) == CELL && Type(q) == CELL) SWITCHVALUE = 1;
+    if (Type(p) == CELL && Type(q) == BODY) SWITCHVALUE = 2;
+    if (Type(p) == BODY && Type(q) == CELL) SWITCHVALUE = 3;
+    if (Type(p) == BODY && Type(q) == BODY) SWITCHVALUE = 4;
+
+    switch (SWITCHVALUE){
+        case CELLCELL:
+            if (!reject_cell(p, q, qsize)) {
+#ifdef BUCKET
+                if (Nb(p)<=gd.nsmooth[0] && Nb(q)<=gd.nsmooth[0]) {
+                    *nsmoothcountthread += 1;
+                    sumnodes_bb_omp(p, q, hist, histcc, histccsincos,
+                                    nbbcalcthread, nbccalcthread, ncccalcthread);
+                } else {
+#endif
+                if (!scanopt(cmd.options, "no-two-balls")) {
+                    if (nodes_condition(p, q))
+                        sumnodes_cc_omp(p, q, hist, histcc, histccsincos,
+                                            nbbcalcthread, nbccalcthread, ncccalcthread);
+                    else
+                        for (h = More(p); h != Next(p); h = Next(h))
+                            for (l = More(q); l != Next(q); l = Next(l))
+                                walktree_balls_omp(h,l,hist,histcc,histccsincos,nsmoothcountthread,
+                                                       nbbcalcthread, nbccalcthread, ncccalcthread);
+                } else { // ! no-two-balls
+                    for (h = More(p); h != Next(p); h = Next(h))
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(h,l,hist,histcc,histccsincos,nsmoothcountthread,
+                                                   nbbcalcthread, nbccalcthread, ncccalcthread);
+                }
+#ifdef BUCKET
+                }
+#endif
+            } // ! reject_cell
+            break;
+        case CELLBODY:
+            if (!reject_cell(q, p, qsize)) {
+#ifdef BUCKET
+                    if (Nb(p)<=gd.nsmooth[0]) {
+                        *nsmoothcountthread += 1;
+                        sumnodes_bb_omp(p, q, hist, histcc, histccsincos,
+                                        nbbcalcthread, nbccalcthread, ncccalcthread);
+                    } else {
+#endif
+                if (!scanopt(cmd.options, "no-one-ball")) {
+                    if (nodes_condition(q, p))
+                        sumnodes_cb_omp(p, q, hist, histcc, histccsincos,
+                                        nbbcalcthread, nbccalcthread, ncccalcthread);
+                    else  // ! nodes condition
+                        for (l = More(p); l != Next(p); l = Next(l))
+                                walktree_balls_omp(l,q,hist,histcc,histccsincos,nsmoothcountthread,
+                                                   nbbcalcthread, nbccalcthread, ncccalcthread);
+                } else
+                    for (l = More(p); l != Next(p); l = Next(l))
+                            walktree_balls_omp(l,q,hist,histcc,histccsincos,nsmoothcountthread,
+                                               nbbcalcthread, nbccalcthread, ncccalcthread);
+#ifdef BUCKET
+                    }
+#endif
+            } // ! reject_cell
+            break;
+        case BODYCELL:
+            if (!reject_cell(p, q, qsize)) {
+#ifdef BUCKET
+                if (Nb(q)<=gd.nsmooth[0]) {
+                    *nsmoothcountthread += 1;
+                    sumnodes_bb_omp(p, q, hist, histcc, histccsincos,
+                                    nbbcalcthread, nbccalcthread, ncccalcthread);
+                } else {
+#endif
+                if (!scanopt(cmd.options, "no-one-ball")) {
+                    if (nodes_condition(p, q))
+                        sumnodes_bc_omp(p, q, hist, histcc, histccsincos,
+                                        nbbcalcthread, nbccalcthread, ncccalcthread);
+                    else
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(p,l,hist,histcc,histccsincos,nsmoothcountthread,
+                                                   nbbcalcthread, nbccalcthread, ncccalcthread);
+                } else
+                    for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp(p,l,hist,histcc,histccsincos,nsmoothcountthread,
+                                               nbbcalcthread, nbccalcthread, ncccalcthread);
+#ifdef BUCKET
+                }
+#endif
+            } // ! reject_cell
+            break;
+        case BODYBODY: // Found BODYBODY
+#ifdef DEBUG
+            HIT(p) = TRUE;
+            HIT(q) = TRUE;
+#endif
+            sumnodes_bb_omp(p, q, hist, histcc, histccsincos, nbbcalcthread, nbccalcthread, ncccalcthread);
+            break;
+    }
 }
-
-
-#define CELLCELL 1
-#define CELLBODY 2
-#define BODYCELL 3
-#define BODYBODY 4
 
 local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
                 gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp histccsincos,
@@ -2001,6 +2108,142 @@ local void sumnodes_bc_omp(nodeptr p, nodeptr q,
     } // ! accept_body
 }
 
+local void sumnodes_cb_omp(nodeptr q, nodeptr p,
+                        gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp histccsincos,
+                        INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread)
+{
+    real dr1;
+    vector dr;
+    int n;
+    int m;
+    real xi, xj;
+    real cosphi;
+    real xicosmphi;
+#ifdef SINCOS
+    real Cheb,ChebU;
+    real sinphi;
+    real xisinmphi;
+#endif
+
+    if (accept_body((bodyptr)p, q, &dr1, dr)) {
+        if(dr1>cmd.rminHist) {
+            if (cmd.rminHist==0)
+                n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
+            else
+                n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
+            if (n<=cmd.sizeHistN && n>=1) {
+#ifdef TREENODE
+#ifdef TREENODEALLBODIES
+#ifdef BUCKET
+                if ( Nb(q)<=gd.nsmooth[0] )
+                    hist->histNthread[n] = hist->histNthread[n] + Nb(q);
+                else
+                    hist->histNthread[n] = hist->histNthread[n] + Nb(q);
+#else
+                hist->histNthread[n] = hist->histNthread[n] + Nb(q);
+#endif
+#else // ! TREENODEALLBODIES
+#ifdef BUCKET
+                if ( Nb(q)<=gd.nsmooth[0] )
+                    hist->histNthread[n] = hist->histNthread[n] + 1.0;
+                else
+                    hist->histNthread[n] = hist->histNthread[n] + 1.0;
+#else
+                hist->histNthread[n] = hist->histNthread[n] + Nb(q);
+#endif
+#endif // ! TREENODEALLBODIES
+#else // ! TREENODE
+                hist->histNthread[n] = hist->histNthread[n] + Nb(q);
+#endif // ! TREENODE
+                hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
+                xj = Kappa(q);
+                xi = Kappa(p);
+                hist->histXi2pcfthreadsub[n] += xj*xi;
+#ifndef PTOPIVOTROTATION3
+#ifdef TPCF
+#ifdef SINCOS
+                histccsincos->histNSubthread[n] = histccsincos->histNSubthread[n] + 1.;
+#if NDIM == 3
+                real s, sy;
+                vector pr0;
+//B Random rotation of dr0:
+#ifdef PTOPIVOTROTATION2
+                real rtheta;
+                vector dr0rot;
+                rtheta = xrandom(0.0, TWOPI);
+                RotationVecAWRtoVecB(dr0rot, histccsincos->dr0, Pos(q), rtheta);
+                DOTVP(s, dr, dr0rot);
+#else
+                DOTVP(s, dr, histccsincos->dr0);
+#endif
+                cosphi = s/(dr1*histccsincos->drpq);
+                CROSSVP(pr0,histccsincos->dr0,Pos(q));
+                DOTVP(sy, dr, pr0);
+                sinphi = rsqrt(1.0 - rsqr(cosphi));;
+                if (sy < 0) sinphi *= -1.0;
+#else // ! NDIM
+                cosphi = -dr[0]/dr1;
+                sinphi = -dr[1]/dr1;
+#endif // ! NDIM
+#else // ! SINCOS
+                histcc->histNSubthread[n] = histcc->histNSubthread[n] + 1.;
+#if NDIM == 3
+                real s;
+    //B Random rotation of dr0:
+#ifdef PTOPIVOTROTATION2
+                real rtheta;
+                vector dr0rot;
+                rtheta = xrandom(0.0, TWOPI);
+                RotationVecAWRtoVecB(dr0rot, histcc->dr0, Pos(q), rtheta);
+                DOTVP(s, dr, dr0rot);
+#else
+                DOTVP(s, dr, histcc->dr0);
+#endif
+                cosphi = s/(dr1*histcc->drpq);
+#else // ! NDIM
+                cosphi = -dr[1]/dr1;        // x,y
+#endif // ! NDIM
+#endif // ! SINCOS
+                if (rabs(cosphi)>1.0)
+                    verb_log_print(cmd.verbose, gd.outlog,
+                    "sumenodes_bb: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+    //B
+#ifdef TREENODEALLBODIES
+#ifdef SINCOS
+                CHEBYSHEVTUOMP
+#else
+                CHEBYSHEVOMPBALLSCC;
+#endif
+#else // ! TREENODEALLBODIES
+#ifdef SINCOS
+                CHEBYSHEVTUOMP
+#else
+                CHEBYSHEVOMPBALLSCC;
+#endif
+#endif // ! TREENODEALLBODIES
+//E
+#endif // ! TPCF
+
+#else // ! PTOPIVOTROTATION3
+#ifdef TPCF
+#if SINCOS
+                cosphi = -dr[0]/dr1;
+                sinphi = -dr[1]/dr1;
+#else
+                cosphi = -dr[1]/dr1;
+#endif
+                if (rabs(cosphi)>1.0)
+                    verb_log_print(cmd.verbose, gd.outlog,
+                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                CHEBYSHEVOMPBALLSCC;
+#endif // ! TPCF
+#endif // ! PTOPIVOTROTATION3
+                *nbccalcthread += 1;
+            }
+        }
+    } // ! accept_body
+}
+
 local void sumnodes_cc_omp(nodeptr p, nodeptr q,
             gdhistptr_omp_balls hist, gdhistptr_omp_balls histcc, gdhistptr_sincos_omp histccsincos,
             INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread)
@@ -2145,9 +2388,9 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q,
 }
 
 
-//B BALLS4 :: DE METODO BALLS4 DE BUSQUEDA
+//B BALLS4 :: METODO BALLS4 DE BUSQUEDA
 
- local void walktree_barnes4_omp(nodeptr *aptr, nodeptr *nptr, cellptr cptr, cellptr bptr,
+ local void walktree_balls4_omp(nodeptr *aptr, nodeptr *nptr, cellptr cptr, cellptr bptr,
              nodeptr p, real psize, vector pmid,
              INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread,
              gdhistptr_omp_barnes hist, gdhistptr_omp_barnes histcc,
@@ -2170,82 +2413,61 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q,
  #ifdef BUCKET
                  if ( !(Nb(*ap)<=gd.nsmooth[0]) ) {
  #endif
-                     if (!reject_cell(p, *ap, psize)) {
- //B Two-balls
- //                        if (nodes_condition(p, *ap) && (scanopt(cmd.options, "two-balls")) ) {
-                         if (nodes_condition(p, *ap)) {
-                             sumcellcell_barnes4_omp((cellptr)(*ap), (cellptr)*ap+1, p,
-                                 nbbcalcthread, nbccalcthread, ncccalcthread, histcc);
-                         } else {
- //E
-                             if (np - hist->active >= actsafe)
-                                 error("walktree: active list overflow\n");
- //B
-                             if (!scanopt(cmd.options, "no-one-ball")) {
-                                 accept_body( (bodyptr)p, *ap, &dr1, dr);
- #ifdef LOGHIST
-                                 if(dr1>cmd.rminHist) {
-                                     if (cmd.rminHist==0)
-                                         n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN))
-                                                   + cmd.sizeHistN);
-                                     else
-                                         n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR);
-                                     if (n<=cmd.sizeHistN-1 && n>=1) {
-                                         if ( gd.deltaRV[n] < dr1 - Radius(*ap)
-                                             && dr1 + Radius(*ap) < gd.deltaRV[n+1]) {
- //B
-                                             Weight(cptr) = Weight(*ap);
-                                             Kappa(cptr) = Kappa(*ap);
-                                             SETV(Pos(cptr), Pos(*ap));
-                                             Id(cptr) = Id(*ap);
-                                             Type(cptr) = Type(*ap);
-                                             Nb(cptr) = Nb(*ap);
-                                             cptr++;
- //E
-                                         } else {
-                                             for (q = More(*ap); q != Next(*ap); q = Next(q))
-                                                 *np++= q;
-                                         }
-                                     } else
-                                         for (q = More(*ap); q != Next(*ap); q = Next(q))
-                                             *np++= q;
-                                 }
- #else // ! LOGHIST
-                                 real rBin;
-                                 if(dr1>cmd.rminHist) {
-                                     n = (int) ((dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                                     rBin = cmd.rminHist + ((real)n)*gd.deltaR;
-                                     if ( rBin-gd.deltaR < dr1 - Radius(*ap)
-                                         && dr1 + Radius(*ap) < rBin ) {
- //B
-                                         --bptr;
-                                         Weight(bptr) = Weight(*ap);
-                                         Kappa(bptr) = Kappa(*ap);
-                                         SETV(Pos(bptr), Pos(*ap));
-                                         Id(bptr) = Id(*ap);
-                                         Type(bptr) = Type(*ap);
-                                         Nb(bptr) = 1;
- //E
-                                     } else {
-                                         for (q = More(*ap); q != Next(*ap); q = Next(q))
-                                             *np++= q;
-                                     }
-                                 }
- #endif // ! LOGHIST
-                             } else { // options : ! no-one-ball
- //E
-                                 for (q = More(*ap); q != Next(*ap); q = Next(q))
-                                     *np++= q;
-                             } // ! options : ! no-one-balls
-                         } // meet condition :: Two-balls
-                     } // ! reject_cell
+                 if (!reject_cell_balls(p, *ap, &dr1, dr)) {
+//B Two-balls
+                     if (nodes_condition(p, *ap) && (scanopt(cmd.options, "two-balls")) ) {
+                         sumcellcell_balls4_omp((cellptr)(*ap), (cellptr)*ap+1, p,
+                                nbbcalcthread, nbccalcthread, ncccalcthread, histcc);
+                     } else {
+//E
+                        if (nodes_condition(p, *ap)) {
+                        if (np - hist->active >= actsafe)
+                            error("walktree: active list overflow\n");
+                        if (!scanopt(cmd.options, "no-one-ball")) {
+                            if(dr1>cmd.rminHist) {
+                                if (cmd.rminHist==0)
+                                    n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN))
+                                            + cmd.sizeHistN);
+                                else
+                                    n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR);
+                                if (n<=cmd.sizeHistN-1 && n>=1) {
+// With this question results are in full agreement with tree-omp
+//                                    if ( gd.deltaRV[n] < dr1 - Radius(*ap)
+//                                            && dr1 + Radius(*ap) < gd.deltaRV[n+1]) {
+                                        Weight(cptr) = Weight(*ap);
+                                        Kappa(cptr) = Kappa(*ap);
+                                        SETV(Pos(cptr), Pos(*ap));
+                                        Id(cptr) = Id(*ap);
+                                        Type(cptr) = Type(*ap);
+                                        Nb(cptr) = Nb(*ap);
+                                        cptr++;
+// With this question results are in full agreement with tree-omp
+/*                                    } else {
+                                        for (q = More(*ap); q != Next(*ap); q = Next(q))
+                                            *np++= q;
+                                    } */
+                                } else
+                                    for (q = More(*ap); q != Next(*ap); q = Next(q))
+                                        *np++= q;
+                            }
+                        } else { // options : ! no-one-ball
+                            for (q = More(*ap); q != Next(*ap); q = Next(q))
+                                *np++= q;
+                        } // ! options : ! no-one-balls
+                     } else { // meet condition :: one-balls
+                         for (q = More(*ap); q != Next(*ap); q = Next(q))
+                             *np++= q;
+                     }
+//B Two-balls... closing question
+                    } // meet condition :: Two-balls
+                } // ! reject_cell
  #ifdef BUCKET
-                 } else {
+                } else {
  //B BUCKET :: smoothing body
-                     if (!reject_cell(p, *ap, psize)) {
-                         if (np - hist->active >= actsafe)
-                             error("walktree: active list overflow\n");
-                         *nsmoothcountthread += 1;
+                    if (!reject_cell(p, *ap, psize)) {
+                        if (np - hist->active >= actsafe)
+                            error("walktree: active list overflow\n");
+                        *nsmoothcountthread += 1;
  //B
                          --bptr;
                          Weight(bptr) = Weight(*ap);
@@ -2253,7 +2475,6 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q,
                          SETV(Pos(bptr), Pos(*ap));
                          Id(bptr) = Id(*ap);
                          Type(bptr) = Type(*ap);
- //                        Nb(bptr) = 1;
                          Nb(bptr) = Nb(*ap);
  //E
  //E BUCKET :: smoothing body
@@ -2282,7 +2503,7 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q,
              if (Type(p) != BODY)
                  error("walktree: recursion terminated with cell\n");
 
-             sum_barnes4_omp(cptr, bptr, (bodyptr) p,
+             sum_balls4_omp(cptr, bptr, (bodyptr) p,
                                  nbbcalcthread, nbccalcthread, ncccalcthread, hist);
              Update(p) = FALSE;
 
@@ -2314,20 +2535,20 @@ local void sumnodes_cc_omp(nodeptr p, nodeptr q,
          for (q = More(p); q != Next(p); q = Next(q)) {
              for (k = 0; k < NDIM; k++)
                  nmid[k] = pmid[k] + (Pos(q)[k] < pmid[k] ? - poff : poff);
-             walktree_barnes4_omp(nptr, np, cptr, bptr, q, psize / 2, nmid,
+             walktree_balls4_omp(nptr, np, cptr, bptr, q, psize / 2, nmid,
                      nbbcalcthread, nbccalcthread, ncccalcthread, hist, histcc,
                                   ibfcountthread, nsmoothcountthread);
          }
      } else {
          for (k = 0; k < NDIM; k++)
              nmid[k] = pmid[k] + (Pos(p)[k] < pmid[k] ? - poff : poff);
-         walktree_barnes4_omp(nptr, np, cptr, bptr, p, psize / 2, nmid,
+         walktree_balls4_omp(nptr, np, cptr, bptr, p, psize / 2, nmid,
                      nbbcalcthread, nbccalcthread, ncccalcthread, hist, histcc,
                               ibfcountthread, nsmoothcountthread);
      }
  }
 
-local void sum_barnes4_omp(cellptr cptr, cellptr bptr, bodyptr p0,
+local void sum_balls4_omp(cellptr cptr, cellptr bptr, bodyptr p0,
          INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread,
          gdhistptr_omp_barnes hist)
  {
@@ -2354,16 +2575,18 @@ local void sum_barnes4_omp(cellptr cptr, cellptr bptr, bodyptr p0,
  #endif
  #endif
  //E
-     sumcell_barnes4_omp(hist->interact, cptr, (bodyptr) p0,
+     if (!scanopt(cmd.options, "no-one-ball"))
+     sumcell_balls4_omp(hist->interact, cptr, (bodyptr) p0,
                          nbbcalcthread, nbccalcthread, ncccalcthread, &hist1);
-     sumnode_barnes4_omp(bptr, hist->interact + hist->actlen, (bodyptr) p0,
+     sumnode_balls4_omp(bptr, hist->interact + hist->actlen, (bodyptr) p0,
                          nbbcalcthread, nbccalcthread, ncccalcthread, &hist1);
 
  //B Section of type: computeBodyProperties_omp_barnes(p0, cmd.nbody, hist)
      real xi, xi_2p;
-     
- // If p0 is a cell, what will be the xi, xi_2p values? can p0 be a cell?
- // BODY3
+
+// If p0 is a cell, what will be the xi, xi_2p values? can p0 be a cell? It appears not a cell
+//    verb_print_debug(1, "\nAqui voy (0): %d\n",Type(p0));
+// BODY3
      if (Type(p0) == BODY) {
          xi = Kappa(p0)/cmd.nbody;
          xi_2p = Kappa(p0);
@@ -2407,7 +2630,7 @@ local void sum_barnes4_omp(cellptr cptr, cellptr bptr, bodyptr p0,
      search_free_omp_barnes_cc(&hist1);
  }
 
-local void sumnode_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
+local void sumnode_balls4_omp(cellptr start, cellptr finish, bodyptr p0,
          INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread,
                           gdhistptr_omp_barnes hist)
  {
@@ -2426,7 +2649,6 @@ local void sumnode_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
      for (p = start; p < finish; p++) {
          pb = ((nodeptr) p);
          if (accept_body(p0, pb, &dr1, dr)) {
- #ifdef LOGHIST
              if(dr1>cmd.rminHist) {
                  ibodycount++;
                  if (cmd.rminHist==0)
@@ -2437,23 +2659,19 @@ local void sumnode_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
  #ifdef BUCKET
                  if ( Nb(p)<=gd.nsmooth[0] )
                      hist->histNthread[n] = hist->histNthread[n] + Nb(p);
- //                    hist->histNthread[n] = hist->histNthread[n] + 1.;
- //                    hist->histNthread[n] = hist->histNthread[n] + gd.nsmooth[0];
                  else
                      hist->histNthread[n] = hist->histNthread[n] + 1.;
  #else
                      hist->histNthread[n] = hist->histNthread[n] + 1.;
  #endif
- // 2pcf
                      hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
- //
                      hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
                      xi = Kappa(pb);
  #ifdef TPCF
  #if NDIM == 3
                      real s;
                      DOTVP(s, dr, hist->dr0);
-                     cosphi = -s/(dr1*hist->drpq);
+                     cosphi = s/(dr1*hist->drpq);
  #else
                      cosphi = -dr[1]/dr1;
  #endif
@@ -2464,41 +2682,13 @@ local void sumnode_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
                      CHEBYSHEVOMP;
  #endif // ! TPCF
                      hist->histXi2pcfthreadsub[n] += xi;
-                 }
-             }
- #else // LOGHIST
-             if(dr1>cmd.rminHist) {
-                 ibodycount++;
-                 n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                 if (n<=cmd.sizeHistN && n>=1) {
-                     hist->histNthread[n] = hist->histNthread[n] + 1.;
- // 2pcf
-                     hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
- //
-                     hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
-                     xi = Kappa(pb);
- #ifdef TPCF
- #if NDIM == 3
-                     real s;
-                     DOTVP(s, dr, hist->dr0);
-                     cosphi = -s/(dr1*hist->drpq);
- #else
-                     cosphi = -dr[1]/dr1;
- #endif
-                     if (rabs(cosphi)>1.0)
-                         verb_log_print(cmd.verbose, gd.outlog,
-                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-                     CHEBYSHEVOMP;
- #endif
-                     hist->histXi2pcfthreadsub[n] += xi;
-                 }
-             }
- #endif // LOGHIST
-         }
-     }
+                 } // ! 1 < n < HistN
+             } // ! dr1 > rmin
+         } // ! accept_body
+     } // ! loop p
  }
 
-local void sumcell_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
+local void sumcell_balls4_omp(cellptr start, cellptr finish, bodyptr p0,
          INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread,
                           gdhistptr_omp_barnes hist)
  {
@@ -2517,7 +2707,6 @@ local void sumcell_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
      for (p = start; p < finish; p++) {
          pb = ((nodeptr) p);
          if (accept_body(p0, pb, &dr1, dr)) {
- #ifdef LOGHIST
              if(dr1>cmd.rminHist) {
                  ibodycount++;
                  if (cmd.rminHist==0)
@@ -2526,68 +2715,37 @@ local void sumcell_barnes4_omp(cellptr start, cellptr finish, bodyptr p0,
                      n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
                  if (n<=cmd.sizeHistN && n>=1) {
  #ifdef BUCKET
-                 if ( Nb(p)<=gd.nsmooth[0] )
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb);
-                 else
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb);
+                     if ( Nb(p)<=gd.nsmooth[0] )
+                         hist->histNthread[n] = hist->histNthread[n] + Nb(pb);
+                     else
+                         hist->histNthread[n] = hist->histNthread[n] + Nb(pb);
  #else
                      hist->histNthread[n] = hist->histNthread[n] + Nb(pb);
  #endif
- // 2pcf
-                 hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
- //
-                 hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
-                 xi = Kappa(pb);
- #ifdef TPCF
- #if NDIM == 3
-                     real s;
-                     DOTVP(s, dr, hist->dr0);
-                     cosphi = -s/(dr1*hist->drpq);
- #else
-                     cosphi = -dr[1]/dr1;
- #endif
-                 if (rabs(cosphi)>1.0)
-                     verb_log_print(cmd.verbose, gd.outlog,
-                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-
-               CHEBYSHEVOMP;
- #endif // ! TPCF
-                 hist->histXi2pcfthreadsub[n] += xi;
-                 }
-             }
- #else // LOGHIST
-             if(dr1>cmd.rminHist) {
-                 ibodycount++;
-                 n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                 if (n<=cmd.sizeHistN && n>=1) {
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb);
- // 2pcf
                      hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
- //
                      hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
                      xi = Kappa(pb);
  #ifdef TPCF
  #if NDIM == 3
                      real s;
                      DOTVP(s, dr, hist->dr0);
-                     cosphi = -s/(dr1*hist->drpq);
+                     cosphi = s/(dr1*hist->drpq);
  #else
                      cosphi = -dr[1]/dr1;
  #endif
                      if (rabs(cosphi)>1.0)
                          verb_log_print(cmd.verbose, gd.outlog,
-                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
                      CHEBYSHEVOMP;
- #endif
+ #endif // ! TPCF
                      hist->histXi2pcfthreadsub[n] += xi;
-                 }
-             }
- #endif // LOGHIST
-         }
-     }
+                 } // ! 1 < n < HistN
+             } // ! dr1 > rmin
+         } // ! accept_body
+     } // ! loop p
  }
 
-local void sumcellcell_barnes4_omp(cellptr start, cellptr finish, nodeptr p0,
+local void sumcellcell_balls4_omp(cellptr start, cellptr finish, nodeptr p0,
          INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread,
                               gdhistptr_omp_barnes hist)
  {
@@ -2607,7 +2765,6 @@ local void sumcellcell_barnes4_omp(cellptr start, cellptr finish, nodeptr p0,
      for (p = start; p < finish; p++) {
          pb = ((nodeptr) p);
          if (accept_body((bodyptr)p0, pb, &dr1, dr)) {
- #ifdef LOGHIST
              if(dr1>cmd.rminHist) {
                  ibodycount++;
                  if (cmd.rminHist==0)
@@ -2615,18 +2772,15 @@ local void sumcellcell_barnes4_omp(cellptr start, cellptr finish, nodeptr p0,
                  else
                      n = (int)(rlog10(dr1/cmd.rminHist) * gd.i_deltaR) + 1;
                  if (n<=cmd.sizeHistN && n>=1) {
- #ifdef BUCKET
-                 if ( Nb(p)<=gd.nsmooth[0] )
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
-                 else
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
- #else
- //                    hist->histNthread[n] = hist->histNthread[n] + Nb(p);
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
- #endif
- // 2pcf
+#ifdef BUCKET
+                     if ( Nb(p)<=gd.nsmooth[0] )
+                         hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
+                     else
+                         hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
+#else
+                    hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
+#endif
                      hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
- //
                      hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
                      xj = Kappa(p0);
                      xi = Kappa(pb);
@@ -2634,7 +2788,7 @@ local void sumcellcell_barnes4_omp(cellptr start, cellptr finish, nodeptr p0,
  #if NDIM == 3
                      real s;
                      DOTVP(s, dr, hist->dr0);
-                     cosphi = -s/(dr1*hist->drpq);
+                     cosphi = s/(dr1*hist->drpq);
  #else
                      cosphi = -dr[1]/dr1;
  #endif
@@ -2645,38 +2799,10 @@ local void sumcellcell_barnes4_omp(cellptr start, cellptr finish, nodeptr p0,
                      CHEBYSHEVOMPCC;
  #endif // ! TPCF
                      hist->histXi2pcfthreadsub[n] += xi*xj;
-                 }
-             }
- #else // LOGHIST
-             if(dr1>cmd.rminHist) {
-                 ibodycount++;
-                 n = (int) ( (dr1-cmd.rminHist) * gd.i_deltaR) + 1;
-                 if (n<=cmd.sizeHistN && n>=1) {
-                     hist->histNthread[n] = hist->histNthread[n] + Nb(pb)*Nb(p0);
- // 2pcf
-                     hist->histNSubXi2pcfthread[n] = hist->histNSubXi2pcfthread[n] + 1.;
- //
-                     hist->histNSubthread[n] = hist->histNSubthread[n] + 1.;
-                     xi = Kappa(pb);
- #ifdef TPCF
- #if NDIM == 3
-                     real s;
-                     DOTVP(s, dr, hist->dr0);
-                     cosphi = -s/(dr1*hist->drpq);
- #else
-                     cosphi = -dr[1]/dr1;
- #endif
-                     if (rabs(cosphi)>1.0)
-                         verb_log_print(cmd.verbose, gd.outlog,
-                             "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
-                     CHEBYSHEVOMP;
- #endif
-                     hist->histXi2pcfthreadsub[n] += xi;
-                 }
-             }
- #endif // LOGHIST
-         }
-     }
+                 } // ! 1 < n < HistN
+             } // ! dr1 > rmin
+         } // ! accept_body
+     } // ! loop p
 
      *ncccalcthread += 1;
  }

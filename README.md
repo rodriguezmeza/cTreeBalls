@@ -1,31 +1,27 @@
-TPCF: 3 Point Correlation Function computation  {#mainpage}
+cTreeBalls: 3 Point Correlation Function computation  {#mainpage}
 ===========================================================
 
-Authors: Mario A. Rodriguez-Meza, et al.
+Author: Mario A. Rodriguez-Meza
 
 with several major inputs from other people, especially xxx, etc.
 
 For download and information, see https://github.com/cosmoinin
 
 
-Compiling TPCF and getting started
+Compiling cballs and getting started
 -----------------------------------
 
 Download the code by cloning it from
-https://github.com/cosmoinin/tpcf. Go to the tpcf directory
+https://github.com/rodriguezmeza/cTreeBalls. Go to the tpcf directory
 (cd tpcf/ or src/) and compile (make clean;
-make tpcf). You can usually speed up compilation with the option -j:
-make -j tpcf. If the first compilation attempt fails, you may need to
-open the Makefile and Makefile_machine files and adapt the name of 
-the compiler (default: gcc),
+make all). If the first compilation attempt fails, you may need to
+open the Makefile_machine file and adapt the name of 
+the compiler (default: gcc), 
 of the optimization flag (default: -O4 -ffast-math) and of the OpenMP
 flag (default: -fopenmp; this flag is facultative, you are free to
 compile without OpenMP if you don't want parallel execution; note that
 you need the version 4.2 or higher of gcc to be able to compile with
--fopenmp). Many more details on the TPCF compilation are given on the
-wiki page
-
-https://github.com/cosmoinin/tpcf/wiki/Installation
+-fopenmp). 
 
 (in particular, for compiling on Mac >= 10.9 despite of the clang
 incompatibility with OpenMP).
@@ -33,7 +29,7 @@ incompatibility with OpenMP).
 To check that the code runs, type:
 
     cd tests
-    ../tpcf parameters.in
+    ../cballs parameters.in
 
 The parameters.in file is the reference input file, containing and
 explaining the use of all possible input parameters.
@@ -48,7 +44,7 @@ comments directly in the files.
 
 For the moment you may consult man page:
 
-    man doc/tpcf.m
+    man doc/cballs.m
 
 or open with a browser the html file: doc/tpcf.html
 

@@ -1,16 +1,16 @@
 't" t
-.TH tpcf 1 "April 2023" UNIX "LSST/CosmoININ PROJECT"
+.TH cballs 1 "April 2023" UNIX "LSST/CosmoININ PROJECT"
 .na
 .nh   
 
 .SH NAME
-tpcf - 3 Point Correlation Function computation code
+cballs - 3 Point Correlation Function computation code
 .SH SYNOPSIS
-\fBtpcf\fR [ \fIparameter_file_name\fR ] [ \fIoptions\fR ]
+\fBcballs\fR [ \fIparameter_file_name\fR ] [ \fIoptions\fR ]
 .sp
 
 .SH DESCRIPTION
-\fBtpcf\fR - computes the 3 point correlation function using brute force, complexity O(N^2).
+\fBcballs\fR - computes the 3 point correlation function using brute force, complexity O(N^2).
 
 .SH OPTIONS
 All the options have the structure
@@ -26,7 +26,7 @@ Options and their possible values are:
 By writting
 
 .sp
-tpcf -help
+cballs -help
 .sp
 
 you will get the list of all parameters and their default values. An option may have an alias which is a short name of the option. If an option has an alias in the list above it comes after its description surrounded by brackets tagged with 'a:'. For example,
@@ -40,13 +40,13 @@ here 'opt' is the short name of the option. In the description of the options be
 is the name file with the values of the input parameters. Overwrite parameters
 values below. You may input this filename by only writing:
 .sp
-tpcf paramfile=parameters_input_file_name
+cballs paramfile=parameters_input_file_name
 .sp
 Parameter input file may be created by hand with the editor of your choice. Comment lines start with an "%". Follow each name option with a blank space and the option value. The order of the option lines does not matter.  Also you may create an example input file by executing
 .sp
-tpcf
+cballs
 .sp
-This will run the \fBtpcf\fR code with default values and when it finish you will have in your running directory the file "parameters_null-tpcf-usedvalues". Now you may edit this file to adapt to your own plotting parameters. This file can be overwritten so it may be helpful to change this file name to whatever apropriate.
+This will run the \fBcballs\fR code with default values and when it finish you will have in your running directory the file "parameters_null-cballs-usedvalues". Now you may edit this file to adapt to your own plotting parameters. This file can be overwritten so it may be helpful to change this file name to whatever apropriate.
 
 .IP "\fBsearchMethod\fR" 12
 [a: search] is the searching method to use. Default is "tree". Other option is to use brute search method: "direct". When the code is compiled with option OPENMPMACHINE=1, then the best options is "treeomp". When using "direct" option, automatically is run the OpenMP version of it.
@@ -97,7 +97,7 @@ gives the frequency to save the whole state of the run that is save in a file gi
 [a: opt] you may give here various code behavior options.
 
 .SH EXAMPLES
-time ../tpcf nbody=100000 rangeN=500 sizeHistN=100 lbox=10000 verb=2 mToPlot=2
+time ../cballs nbody=100000 rangeN=500 sizeHistN=100 lbox=10000 verb=2 mToPlot=2
 
 .sp
 You will have computation written in a file named with option \fBoutfile\fR in a directory named Output. If this directory does not exist, it will be created.
@@ -123,34 +123,34 @@ nplot2d in=Output/mhistZeta.txt,Output/mhistZeta.txt,Output/mhistZeta.txt,Output
 Using brute force:
 
 .sp
-time tpcf o=output options=compute-HistN verb=2 sizeHistN=40 sizeHistTheta=40 rangeN=200 nbody=10000 mToPlot=2 lbox=2000 search=direct-simple-3pcf-omp
+time cballs o=output options=compute-HistN verb=2 sizeHistN=40 sizeHistTheta=40 rangeN=200 nbody=10000 mToPlot=2 lbox=2000 search=direct-simple-3pcf-omp
 
 .sp
 Reading a Takahasi simulation data file:
 
 .sp
-time tpcf infile=Takahasi/allskymap_nres12r000.zs9.mag.dat infmt=takahasi options=stop lbox=0.2 o=takas_zs9
+time cballs infile=Takahasi/allskymap_nres12r000.zs9.mag.dat infmt=takahasi options=stop lbox=0.2 o=takas_zs9
 
 .sp
-The with the output file we run tpcf:
+The with the output file we run cballs:
 
 .sp
-time tpcf in=Input/takas_zs9.txt options=compute-HistN verb=2 sizeHistN=40 rangeN=0.02 search=tree-omp
+time cballs in=Input/takas_zs9.txt options=compute-HistN verb=2 sizeHistN=40 rangeN=0.02 search=tree-omp
 
 .sp
 Other OMP routines:
 
 .sp
-time tpcf o=output options=compute-HistN verb=2 nbody=64000 search=tree-omp
+time cballs o=output options=compute-HistN verb=2 nbody=64000 search=tree-omp
 
 .sp
-time tpcf o=output options=compute-HistN verb=2 nbody=64000 search=tree-omp-sincos
+time cballs o=output options=compute-HistN verb=2 nbody=64000 search=tree-omp-sincos
 
 .sp
-time tpcf o=output options=compute-HistN verb=2 nbody=64000 search=direct-omp
+time cballs o=output options=compute-HistN verb=2 nbody=64000 search=direct-omp
 
 .sp
-time tpcf o=output options=compute-HistN verb=2 nbody=64000 search=direct-omp-sincos
+time cballs o=output options=compute-HistN verb=2 nbody=64000 search=direct-omp-sincos
 
 .sp
 Using python scripts you can generate several plots:
@@ -171,16 +171,16 @@ python3 plotting_zetaM.py
 To smooth a data points (reducing its number) do:
 
 .sp
-tpcf o=output ofmt=columns-ascii options=smooth verb=2 nbody=64000 nsmooth=4
+cballs o=output ofmt=columns-ascii options=smooth verb=2 nbody=64000 nsmooth=4
 
 .sp
 To convert a catalog from 2D to 3D assuming 2D column format where theta is the first column and phi the second column do:
 
 .sp
-tpcf in=Input/Taka_nres12r043.zs9_all.txt infmt=columns-ascii-2d-to-3d o=takas_AA_3D options=convert
+cballs in=Input/Taka_nres12r043.zs9_all.txt infmt=columns-ascii-2d-to-3d o=takas_AA_3D options=convert
 
 .SH SEE ALSO
-nplot2d(1) tpcf(1)
+nplot2d(1) cballs(1)
 
 .SH COPYRIGHT
 Copyright (C) 2023

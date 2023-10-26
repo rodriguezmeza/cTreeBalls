@@ -47,6 +47,7 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody, INTEGER ipmin,
 //B Tree utilities
 global void doBoxWrapping(void);
 global bool reject_cell(nodeptr, nodeptr, real);
+global bool reject_cell_balls(nodeptr, nodeptr, real *, vector);
 global bool reject_bodycell(nodeptr, nodeptr);
 global bool reject_cellcell(nodeptr, nodeptr);
 global bool accept_body(bodyptr, nodeptr, real *, vector);

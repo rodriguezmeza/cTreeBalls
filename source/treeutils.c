@@ -179,6 +179,10 @@ global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_o
         } else if (Type(p) == BODY3) {
             xi = Nbb(p)*Kappa(p)/nbody;
             xi_2p = Nbb(p)*Kappa(p);
+        } else {
+//            verb_print_debug(1, "\nAqui voy (0): %d\n",Type(p));
+            xi = 1.0/nbody;
+            xi_2p = 1.0;
         }
 //
 #ifdef TPCF
@@ -195,6 +199,7 @@ global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_o
     for (n=1; n<=cmd.sizeHistN; n++) {
         hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
     }
+//verb_print_debug(1, "\nAqui voy (1)\n");
 
     return _SUCCESS_;
 }
@@ -1235,6 +1240,24 @@ global bool reject_cell(nodeptr p, nodeptr q, real qsize)
     drpq = rsqrt(drpq2);
 
     if ( drpq >= gd.Rcut+Radius(q) )
+        return (TRUE);
+    else
+        return (FALSE);
+}
+
+global bool reject_cell_balls(nodeptr p, nodeptr q, real *drpq, vector dr)
+{
+    real drpq2;
+//    vector dr;
+
+    DOTPSUBV(drpq2, dr, Pos(p), Pos(q));
+#ifdef PERIODIC
+    VWrapAll(dr);
+    DOTVP(drpq2, dr, dr);
+#endif
+    *drpq = rsqrt(drpq2);
+
+    if ( *drpq >= gd.Rcut+Radius(q) )
         return (TRUE);
     else
         return (FALSE);
