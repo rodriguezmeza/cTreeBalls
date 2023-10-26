@@ -170,12 +170,18 @@ global void maketree(bodyptr btab, int nbody)
 #ifdef BALLS
 #ifndef TREENODEALLBODIES
 //B BALLS :: SCANLEV
+    if (scanopt(cmd.options, "set-default-param")) {
+        verb_print(cmd.verbose, "\tfixing scanLevel to tdepth-1...\n");
+        cmd.scanLevel = MAX(gd.tdepth-1,3);
+        verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
+    } else {
     if (cmd.scanLevel > gd.tdepth) {
         verb_print(cmd.verbose, "Warning! tree depth (%d) is less than scanLevel (%d)...\n",
                    gd.tdepth, cmd.scanLevel);
         verb_print(cmd.verbose, "\tfixing to tdepth-2...\n");
         cmd.scanLevel = MAX(gd.tdepth-2,3);
         verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
+    }
     }
 #ifdef LOGHIST
     verb_print(cmd.verbose, "(Only in log-scale) deltaR is %g and root size at scanLevel is %g.\n",
@@ -267,6 +273,10 @@ global void maketree(bodyptr btab, int nbody)
     fclose(gd.outnodelev);
     fclose(gd.outbodylev);
 
+//NOLSST:
+#ifdef ADDONS
+#include "treeload_01.h"
+#endif
 
 #endif // ! TREENODEALLBODIES
 //E BALLS :: SCANLEV

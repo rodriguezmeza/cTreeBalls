@@ -777,11 +777,22 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
     int m;
     real xi;
 
+//    printf("Type: %d\n",Type(p));
+
 #ifdef TREENODE
 // Must be changed when not using TREENODEALLBODIES option. Use first line
-//    xi = 1.0/nbody;
+#ifdef TREENODEALLBODIES
     xi = Kappa(p)/nbody;
 #else
+#ifdef TREENODEBALLS4
+    xi = Kappa(p)/nbody;
+#else
+    xi = 1.0/nbody;
+#endif // ! TREENODEBALLS4
+#endif // ! TREENODEALLBODIES
+
+#else // ! TREENODE
+/*
 #ifdef TREENODEALLBODIES
 // BODY3
     if (Type(p) == BODY) {
@@ -791,10 +802,10 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
 //            xi = Nbb(p)*Kappa(p)/nbody;
         xi = Kappa(p)/nbody;
     }
-#else
+#else */
     xi = 1.0/nbody;
-#endif
-#endif
+//#endif
+#endif // ! TREENODE
 
 //
 #ifdef TPCF
@@ -1444,5 +1455,17 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, 
     return _SUCCESS_;
 }
 
+//NOLSST:
+#ifdef ADDONS
+#include "treeutils_01.h"
+#endif
 
+//NOLSST:
+#ifdef ADDONS
+#include "treeutils_02.h"
+#endif
 
+//NOLSST:
+#ifdef PATCHES
+#include "treeutils_patch.h"
+#endif

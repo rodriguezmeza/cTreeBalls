@@ -43,6 +43,10 @@ local void sumnode(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_om
 local void sumnode_body3(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_omp);
 local void sumnode_cell(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_omp);
 
+//NOLSST:
+#ifdef ADDONS
+#include "search_omp_00a.h"
+#endif
 
 
 // search=tree-omp
@@ -1320,7 +1324,7 @@ local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
                 INTEGER *nsmoothcountthread,
                 INTEGER *nbbcalcthread, INTEGER *nbccalcthread, INTEGER *ncccalcthread)
 {
-    nodeptr l;
+    nodeptr h, l;
     real qsize; // dummy
     real dr1;
     vector dr;
@@ -1334,9 +1338,7 @@ local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
         
         switch (SWITCHVALUE){
             case CELLCELL:
-                printf("Found CELL & CELL\n");
                 if (!reject_cellcell(p, q)) {
-
 #ifdef BUCKET
                     if (Nb(p)<=gd.nsmooth[0] && Nb(q)<=gd.nsmooth[0]) {
                         *nsmoothcountthread += 1;
@@ -1344,36 +1346,37 @@ local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
                                         nbbcalcthread, nbccalcthread, ncccalcthread);
                     } else {
 #endif
-
-                    for (l = More(q); l != Next(q); l = Next(l)) {
-                        if (Type(l) == CELL) {
-                            if (!scanopt(cmd.options, "no-two-balls")) {
-                                if (nodes_condition(p, l)) {
-                                    walktree_balls_omp_sub_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
-                                                        nbbcalcthread, nbccalcthread, ncccalcthread);
-                                } else
-                                    walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
-                                                          nbbcalcthread, nbccalcthread, ncccalcthread);
-                            } else // Found CELL & CELL
+                    if (!scanopt(cmd.options, "no-two-balls")) {
+                    if (nodes_condition(p, q)) {
+                        sumnodes_cc_omp(p, q, hist, histcc, histccsincos,
+                                            nbbcalcthread, nbccalcthread, ncccalcthread);
+                    } else {
+//                        for (h = More(p); l != Next(p); h = Next(h)) {
+                        for (l = More(q); l != Next(q); l = Next(l)) {
+                            if (Type(l) == CELL) {
+                                    if (nodes_condition(p, l)) {
+                                        sumnodes_cc_omp(p, l, hist, histcc, histccsincos,
+                                                            nbbcalcthread, nbccalcthread, ncccalcthread);
+                                    } else
+                                        walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos,
+                                        nsmoothcountthread, nbbcalcthread, nbccalcthread, ncccalcthread);
+                            } else // Found CELL & BODY
                                 walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
-                                                      nbbcalcthread, nbccalcthread, ncccalcthread);
-                        } else { // Found CELL & BODY
-                            walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
                                                     nbbcalcthread, nbccalcthread, ncccalcthread);
                         }
+                    } // ! nodes_condition
+                    } else { // no-two-balls
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
+                                          nbbcalcthread, nbccalcthread, ncccalcthread);
                     }
-
 #ifdef BUCKET
                     }
 #endif
-
-
                 }
                 break;
             case CELLBODY:
-                printf("Found CELL & BODY\n");
                 if (!reject_bodycell(q, p)) {
-
 #ifdef BUCKET
                     if (Nb(p)<=gd.nsmooth[0]) {
                         *nsmoothcountthread += 1;
@@ -1381,34 +1384,36 @@ local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
                                         nbbcalcthread, nbccalcthread, ncccalcthread);
                     } else {
 #endif
-
-                    for (l = More(p); l != Next(p); l = Next(l)) {
-                        if (Type(l) == CELL) {
-                            if (!scanopt(cmd.options, "no-one-ball")) {
-                                if (nodes_condition(l, q)) {
-                                    walktree_balls_omp_sub_root(l,q,hist, histcc, histccsincos, nsmoothcountthread,
-                                                        nbbcalcthread, nbccalcthread, ncccalcthread);
-                                } else
-                                    walktree_balls_omp_nodes_root(l,q,hist, histcc, histccsincos, nsmoothcountthread,
-                                                          nbbcalcthread, nbccalcthread, ncccalcthread);
-                            } else // Found CELL & BODY
-                                walktree_balls_omp_nodes_root(l,q,hist, histcc, histccsincos, nsmoothcountthread,
-                                                      nbbcalcthread, nbccalcthread, ncccalcthread);
-                        } else { // Found BODYBODY
-#ifdef DEBUG
-                            HIT(p) = TRUE;
-                            HIT(l) = TRUE;
-#endif
-                            sumnodes_bb_omp(l, q, hist, histcc, histccsincos,
+                    if (!scanopt(cmd.options, "no-one-ball")) {
+                        if (nodes_condition(p, q)) {
+                            sumnodes_cb_omp(p, q, hist, histcc, histccsincos,
                                             nbbcalcthread, nbccalcthread, ncccalcthread);
+                        } else {
+                            for (l = More(p); l != Next(p); l = Next(l)) {
+                                if (Type(l) == CELL) {
+                                    if (nodes_condition(l, q)) {
+                                        sumnodes_cb_omp(l, q, hist, histcc, histccsincos,
+                                                            nbbcalcthread, nbccalcthread, ncccalcthread);
+                                    } else
+                                walktree_balls_omp_nodes_root(l,q,hist, histcc, histccsincos, nsmoothcountthread,
+                                                          nbbcalcthread, nbccalcthread, ncccalcthread);
+                                } else { // Found BODYBODY
+#ifdef DEBUG
+                                    HIT(p) = TRUE;
+                                    HIT(l) = TRUE;
+#endif
+                                    sumnodes_bb_omp(l, q, hist, histcc, histccsincos,
+                                            nbbcalcthread, nbccalcthread, ncccalcthread);
+                                }
+                            }
                         }
-                    }
-
+                    } else // no-one-ball
+                        for (l = More(p); l != Next(p); l = Next(l))
+                        walktree_balls_omp_nodes_root(l,q,hist, histcc, histccsincos, nsmoothcountthread,
+                                              nbbcalcthread, nbccalcthread, ncccalcthread);
 #ifdef BUCKET
                     }
 #endif
-
-
                 }
                 break;
             case BODYCELL:
@@ -1422,25 +1427,17 @@ local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
 #endif
                     if (!scanopt(cmd.options, "no-one-ball")) {
                         if (nodes_condition(p, q)) {
-                            if (nodes_set_bin(p, q, &n, &dr1, dr)) {
-                                if (n==-1)
-                                    error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
                                 sumnodes_bc_omp(p, q, hist, histcc, histccsincos,
                                                         nbbcalcthread, nbccalcthread, ncccalcthread);
-                            }
                         } else {
                             for (l = More(q); l != Next(q); l = Next(l)) {
                                 if (Type(l) == CELL) {
                                     if (nodes_condition(p, l)) {
-                                        if (nodes_set_bin(p, l, &n, &dr1, dr)) {
-                                            if (n==-1)
-                                                error("\nsumnodes_bc: error in setting the bin '%d' \n",n);
-                                            sumnodes_bc_omp(p, l, hist, histcc, histccsincos,
-                                                                    nbbcalcthread, nbccalcthread, ncccalcthread);
-                                        }
+                                        sumnodes_bc_omp(p, l, hist, histcc, histccsincos,
+                                                nbbcalcthread, nbccalcthread, ncccalcthread);
                                     } else
-                                    walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
-                                                              nbbcalcthread, nbccalcthread, ncccalcthread);
+                                        walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos,
+                                                nsmoothcountthread, nbbcalcthread, nbccalcthread, ncccalcthread);
                                 } else { // Found BODYBODY
 #ifdef DEBUG
                                     HIT(p) = TRUE;
@@ -1450,8 +1447,8 @@ local void walktree_balls_omp_nodes_root(nodeptr p, nodeptr q,
                                                 nbbcalcthread, nbccalcthread, ncccalcthread);
                                 }
                             }
-                        }
-                    } else {
+                        } // ! nodes_condition
+                    } else { // ! no-one-ball
                         for (l = More(q); l != Next(q); l = Next(l)) {
                             if (Type(l) == CELL) {
                                 walktree_balls_omp_nodes_root(p,l,hist, histcc, histccsincos, nsmoothcountthread,
@@ -3006,6 +3003,18 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
 
 
 
+//NOLSST:
+#ifdef ADDONS
+#include "search_omp_00b.h"
+#endif
 
+//NOLSST:
+#ifdef ADDONS
+#include "search_omp_01.h"
+#endif
 
+//NOLSST:
+#ifdef PATCHES
+#include "direct_simple.c"
+#endif
 
