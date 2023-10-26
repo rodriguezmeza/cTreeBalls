@@ -273,10 +273,6 @@ global void maketree(bodyptr btab, int nbody)
     fclose(gd.outnodelev);
     fclose(gd.outbodylev);
 
-//NOLSST:
-#ifdef ADDONS
-#include "treeload_01.h"
-#endif
 
 #endif // ! TREENODEALLBODIES
 //E BALLS :: SCANLEV

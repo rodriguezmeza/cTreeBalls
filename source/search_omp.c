@@ -43,10 +43,6 @@ local void sumnode(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_om
 local void sumnode_body3(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_omp);
 local void sumnode_cell(bodyptr, cellptr, cellptr, INTEGER *, INTEGER *, gdhistptr_omp);
 
-//NOLSST:
-#ifdef ADDONS
-#include "search_omp_00a.h"
-#endif
 
 
 // search=tree-omp
@@ -3003,18 +2999,6 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
 
 
 
-//NOLSST:
-#ifdef ADDONS
-#include "search_omp_00b.h"
-#endif
 
-//NOLSST:
-#ifdef ADDONS
-#include "search_omp_01.h"
-#endif
 
-//NOLSST:
-#ifdef PATCHES
-#include "direct_simple.c"
-#endif
 
