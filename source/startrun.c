@@ -688,12 +688,8 @@ local void CheckParameters(void)
 //
 //B NOLSST:
 //
-//B Only two sets for the moment:
-    if (gd.nsmooth[0] < 2)
+    if (gd.nsmooth[0] < 1)
         error("CheckParameters: absurd value for nsmooth\n");
-//    if (gd.nsmooth[1] < 2)
-//        error("CheckParameters: absurd value for nsmooth\n");
-//E
 #ifdef BALLS
     if (scanopt(cmd.options, "bodyfound"))
         if (cmd.ntosave < 1 || cmd.ntosave > cmd.nbody)
