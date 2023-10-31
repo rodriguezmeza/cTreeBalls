@@ -1,5 +1,5 @@
 /*==============================================================================
- HEADER: protodefs.h				[tpcf]
+ HEADER: protodefs.h				[cTreeBalls]
  Written by: Mario A. Rodriguez-Meza
  Starting date: april 2023
  Purpose: Definitions of global prototypes
@@ -67,13 +67,13 @@ global int computeBodyProperties_omp_3pcfbf(bodyptr p, int nbody, gdhist_omp_3pc
 global int search_compute_HistN_3pcfbf(int nbody);
 global void searchcalc_normal_3pcf_direct_omp(bodyptr btab, int nbody, INTEGER ipmin, INTEGER ipmax);
 //B BALLS4
-global int search_init_omp_barnes(gdhistptr_omp_barnes hist);
-global int search_init_omp_barnes_cc(gdhistptr_omp_barnes hist);
-global int search_free_omp_barnes(gdhistptr_omp_barnes hist);
-global int search_free_omp_barnes_cc(gdhistptr_omp_barnes hist);
+global int search_init_omp_balls6(gdhistptr_omp_balls6 hist);
+global int search_init_omp_balls6_cc(gdhistptr_omp_balls6 hist);
+global int search_free_omp_balls6(gdhistptr_omp_balls6 hist);
+global int search_free_omp_balls6_cc(gdhistptr_omp_balls6 hist);
 
-global int computeBodyProperties_omp_barnes(bodyptr p, int nbody, gdhistptr_omp_barnes hist);
-global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_omp_barnes hist);
+global int computeBodyProperties_omp_balls6(bodyptr p, int nbody, gdhistptr_omp_balls6 hist);
+global int computeBodyProperties_omp_balls6_cc(bodyptr p, int nbody, gdhistptr_omp_balls6 hist);
 //E BALLS4
 
 #endif

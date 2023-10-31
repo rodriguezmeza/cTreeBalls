@@ -24,7 +24,7 @@ local void threadtree(nodeptr, nodeptr);
 local void findRootCenter(bodyptr, int);
 local void centerBodies(bodyptr btab, int nbody);
 
-#define MAXLEVEL  32  
+#define MAXLEVEL  32
 
 local int cellhist[MAXLEVEL];
 local int subnhist[MAXLEVEL];
@@ -54,6 +54,11 @@ local void walktree_hit(nodeptr q, real qsize);
 #endif
 local INTEGER inodelev;
 local INTEGER ibodyleftout;
+// Root nodes:
+local void walktree_index_scan_lev_root(nodeptr q, int lev);
+local INTEGER inodelev_root;
+local INTEGER ibodyleftout_root;
+//local int scanLevel_root;
 //E
 //#endif
 
@@ -275,6 +280,39 @@ global void maketree(bodyptr btab, int nbody)
 
 
 #endif // ! TREENODEALLBODIES
+//B Root nodes:
+//    if (cmd.scanLevel != cmd.scanLevelRoot) {
+    inodelev_root = 0;
+    ibodyleftout_root = 0;
+//    scanLevel_root = 6;
+    #if NDIM == 3
+        gd.nnodescanlev_root = rpow(8, cmd.scanLevelRoot);
+    #else
+        gd.nnodescanlev_root = rpow(4, cmd.scanLevelRoot);
+    #endif
+        gd.nnodescanlev_root = 2.0*gd.ncell;         // Correction
+
+    nodetabscanlev_root = (nodeptr *) allocate(gd.nnodescanlev_root * sizeof(nodeptr));
+//
+    gd.bytes_tot += gd.nnodescanlev_root*sizeof(nodeptr);
+    verb_print(cmd.verbose,
+               "Allocated %g MByte for (%d) scan root nodetab storage.\n",
+               INMB*gd.nnodescanlev_root*sizeof(nodeptr),gd.nnodescanlev_root);
+    walktree_index_scan_lev_root((nodeptr)root, 0); // 0 <= lev <= cmd.scanLevelRoot
+verb_print(cmd.verbose, "Found %d root nodes to scan at level %d.\n",inodelev_root, cmd.scanLevelRoot);
+
+    verb_print(cmd.verbose, "%ld particles were left out.\n",ibodyleftout_root);
+    gd.nnodescanlev_root = inodelev_root;
+    
+    gd.Rcell[0] = gd.rSize;
+    for (i = 1; i < gd.tdepth; i++)
+        gd.Rcell[i] = gd.Rcell[i-1]/2;
+    verb_print(cmd.verbose, "Maximum and minimum cell size: %e %e\n",
+               gd.Rcell[0],gd.Rcell[gd.tdepth-1]);
+    verb_print(cmd.verbose, "Cell size at scanLevel: %e\n", gd.Rcell[gd.tdepth-1+cmd.scanLevelMin]);
+//    }
+//E Root nodes
+
 //E BALLS :: SCANLEV
 #endif // ! BALLS
 
@@ -739,6 +777,66 @@ local void walktree_index_scan_lev(nodeptr q, int lev)
                 nodetabscanlev[inodelev] = q;   // Correction
                 inodelev++;                     // Correction
                 ibodyleftout++;
+            }
+    }
+}
+
+local void walktree_index_scan_lev_root(nodeptr q, int lev)
+{
+    nodeptr p,g,h,l;
+    int i;
+
+    if (cmd.scanLevelRoot==2) {
+        p = (nodeptr)root;
+        for (g = More(p); g != Next(p); g = Next(g))
+            for (l = More(g); l != Next(g); l = Next(l)) {
+                    nodetabscanlev_root[inodelev_root] = l;
+                    inodelev_root++;
+            }
+        return;
+    }
+
+    if (cmd.scanLevelRoot==3) {
+        p = (nodeptr)root;
+        for (g = More(p); g != Next(p); g = Next(g))
+            for (h = More(g); h != Next(g); h = Next(h))
+                for (l = More(h); l != Next(h); l = Next(l)) {
+                        nodetabscanlev_root[inodelev_root] = l;
+                        inodelev_root++;
+                }
+        return;
+    }
+
+// lev must be <= cmd.scanLevelRoot
+    if (lev == cmd.scanLevelRoot-1) {
+        if (Type(q)==CELL) {
+            for (l = More(q); l != Next(q); l = Next(l)) {
+                if (Type(l)==CELL) {
+                    nodetabscanlev_root[inodelev_root] = l;
+                    inodelev_root++;
+                } else {
+                    nodetabscanlev_root[inodelev_root] = l;   // Correction
+                    inodelev_root++;                     // Correction
+                    ibodyleftout_root++;
+                }
+            }
+        } else {
+            ibodyleftout_root++;
+        }
+    } else {
+//        if ( lev+1 != cmd.scanLevelRoot )
+        if ( lev+1 <= cmd.scanLevelRoot )       // Correction
+            if (Type(q)==CELL) {
+                for (l = More(q); l != Next(q); l = Next(l)) {
+                    if (Type(l)==CELL)
+                        walktree_index_scan_lev_root(l, lev+1);
+                    else
+                        ibodyleftout_root++;
+                }
+            } else {
+                nodetabscanlev_root[inodelev_root] = q;   // Correction
+                inodelev_root++;                     // Correction
+                ibodyleftout_root++;
             }
     }
 }

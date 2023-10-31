@@ -183,6 +183,10 @@ local void ReadParametersCmdline(void)
 #ifdef BALLS
     cmd.ntosave = GetiParam("ntosave");
         cmd.scanLevel = GetiParam("scanLevel");
+// Root nodes:
+        cmd.scanLevelRoot = GetiParam("scanLevelRoot");
+        cmd.scanLevelMin = GetiParam("scanLevelMin");
+//
 #endif
     cmd.stepNodes = GetiParam("stepNodes");
     cmd.ncritical = GetParam("ncritical");
@@ -616,6 +620,12 @@ local void startrun_ParamStat(void)
         cmd.ntosave = GetiParam("ntosave");
     if (GetParamStat("scanLevel") & ARGPARAM)
             cmd.scanLevel = GetiParam("scanLevel");
+// Root nodes:
+        if (GetParamStat("scanLevelRoot") & ARGPARAM)
+                cmd.scanLevelRoot = GetiParam("scanLevelRoot");
+        if (GetParamStat("scanLevelMin") & ARGPARAM)
+                cmd.scanLevelMin = GetiParam("scanLevelMin");
+//
 #endif
     if (GetParamStat("stepNodes") & ARGPARAM)
         cmd.stepNodes = GetiParam("stepNodes");
@@ -698,6 +708,12 @@ local void CheckParameters(void)
         error("CheckParameters: absurd value for scanLevel (%d)\n",cmd.scanLevel);
 //    if (cmd.scanLevel > 12)
 //        error("CheckParameters: too big value for scanLevel (%d)\n",cmd.scanLevel);
+// Root nodes:
+    if (cmd.scanLevelRoot < 0)
+        error("CheckParameters: absurd value for scanLevelRoot (%d)\n",cmd.scanLevelRoot);
+    if (cmd.scanLevelMin > 0)
+        error("CheckParameters: absurd value for scanLevelMin (%d)\n",cmd.scanLevelMin);
+//
 #endif
     if (cmd.stepNodes < 1)
         error("CheckParameters: absurd value for stepNodes\n");
@@ -791,6 +807,10 @@ local void ReadParameterFile(char *fname)
 #ifdef BALLS
     IPName(cmd.ntosave,"ntosave");
     IPName(cmd.scanLevel,"scanLevel");
+// Root nodes:
+        IPName(cmd.scanLevelRoot,"scanLevelRoot");
+        IPName(cmd.scanLevelMin,"scanLevelMin");
+//
 #endif
     IPName(cmd.stepNodes,"stepNodes");
     SPName(cmd.ncritical,"ncritical",MAXLENGTHOFSTRSCMD);
@@ -950,6 +970,10 @@ local void PrintParameterFile(char *fname)
 #ifdef BALLS
         fprintf(fdout,FMTIL,"ntosave",cmd.ntosave);
         fprintf(fdout,FMTI,"scanLevel",cmd.scanLevel);
+// Root nodes:
+        fprintf(fdout,FMTI,"scanLevelRoot",cmd.scanLevelRoot);
+        fprintf(fdout,FMTI,"scanLevelMin",cmd.scanLevelMin);
+//
 #endif
         fprintf(fdout,FMTIL,"stepNodes",cmd.stepNodes);
         fprintf(fdout,FMTT,"ncritical",cmd.ncritical);

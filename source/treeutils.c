@@ -16,7 +16,7 @@
 #ifdef OPENMPCODE
 
 //B BALLS4
-global int search_init_omp_barnes(gdhistptr_omp_barnes hist)
+global int search_init_omp_balls6(gdhistptr_omp_balls6 hist)
 {
     int n;
     int m;
@@ -62,7 +62,7 @@ global int search_init_omp_barnes(gdhistptr_omp_barnes hist)
 
     hist->actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
     hist->actlen = hist->actlen * rpow(cmd.theta, -2.5);
-    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_barnes3: actlen=%d\n",hist->actlen);
+    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_balls6: actlen=%d\n",hist->actlen);
 //    active = (nodeptr *) allocate(actlen * sizeof(nodeptr));
     hist->active = (nodeptr *) allocate(hist->actlen * sizeof(nodeptr));
     gd.bytes_tot += hist->actlen*sizeof(nodeptr);
@@ -85,7 +85,7 @@ global int search_init_omp_barnes(gdhistptr_omp_barnes hist)
     return _SUCCESS_;
 }
 
-global int search_init_omp_barnes_cc(gdhistptr_omp_barnes hist)
+global int search_init_omp_balls6_cc(gdhistptr_omp_balls6 hist)
 {
     int n;
     int m;
@@ -127,7 +127,7 @@ global int search_init_omp_barnes_cc(gdhistptr_omp_barnes hist)
     return _SUCCESS_;
 }
 
-global int computeBodyProperties_omp_barnes(bodyptr p, int nbody, gdhistptr_omp_barnes hist)
+global int computeBodyProperties_omp_balls6(bodyptr p, int nbody, gdhistptr_omp_balls6 hist)
 {
     int n;
     int m;
@@ -161,7 +161,7 @@ global int computeBodyProperties_omp_barnes(bodyptr p, int nbody, gdhistptr_omp_
     return _SUCCESS_;
 }
 
-global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_omp_barnes hist)
+global int computeBodyProperties_omp_balls6_cc(bodyptr p, int nbody, gdhistptr_omp_balls6 hist)
 {
     int n;
     int m;
@@ -169,8 +169,8 @@ global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_o
 
 // BODY3
         if (Type(p) == BODY) {
-//            xi = Kappa(p)/nbody;
-            xi = 1.0/nbody;
+            xi = Kappa(p)/nbody;
+//            xi = 1.0/nbody;
 //            xi_2p = Nb(p)*Kappa(p);
 //            xi_2p = Nbb(p)*Kappa(p);
 //            xi_2p = Kappa(p);
@@ -181,7 +181,8 @@ global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_o
             xi_2p = Nbb(p)*Kappa(p);
         } else {
 //            verb_print_debug(1, "\nAqui voy (0): %d\n",Type(p));
-            xi = 1.0/nbody;
+//            xi = 1.0/nbody;
+            xi = Kappa(p)/nbody;
             xi_2p = 1.0;
         }
 //
@@ -189,11 +190,14 @@ global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_o
     for (m=1; m<=cmd.mchebyshev+1; m++)
         for (n=1; n<=cmd.sizeHistN; n++)
             hist->histXithread[m][n] /= MAX(hist->histNSubthread[n],1.0);
+    for (m=1; m<=cmd.mchebyshev+1; m++)
+//    printf("Xi: %e\n",hist->histXithread[m][10]);
     for (m=1; m<=cmd.mchebyshev+1; m++){
         OUTVP_ext(hist->xiOUTVP, hist->histXithread[m], hist->histXithread[m],cmd.sizeHistN);
         CLRM_ext(hist->histZetaMtmp,cmd.sizeHistN);
         MULMS_ext(hist->histZetaMtmp,hist->xiOUTVP,xi,cmd.sizeHistN);
         ADDM_ext(hist->histZetaMthread[m],hist->histZetaMthread[m],hist->histZetaMtmp,cmd.sizeHistN);
+//        printf("Z: %e\n",hist->histZetaMthread[m][10][10]);
     }
 #endif
     for (n=1; n<=cmd.sizeHistN; n++) {
@@ -205,7 +209,7 @@ global int computeBodyProperties_omp_barnes_cc(bodyptr p, int nbody, gdhistptr_o
 }
 
 
-global int search_free_omp_barnes(gdhistptr_omp_barnes hist)
+global int search_free_omp_balls6(gdhistptr_omp_balls6 hist)
 {
     free(hist->interact);
     free(hist->active);
@@ -230,7 +234,7 @@ global int search_free_omp_barnes(gdhistptr_omp_barnes hist)
     return _SUCCESS_;
 }
 
-global int search_free_omp_barnes_cc(gdhistptr_omp_barnes hist)
+global int search_free_omp_balls6_cc(gdhistptr_omp_balls6 hist)
 {
 //    free(hist->interact);
 //    free(hist->active);
@@ -314,7 +318,7 @@ global int search_init_omp(gdhistptr_omp hist)
 
     hist->actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
     hist->actlen = hist->actlen * rpow(cmd.theta, -2.5);
-    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_barnes3: actlen=%d\n",hist->actlen);
+    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_balls6: actlen=%d\n",hist->actlen);
 //    active = (nodeptr *) allocate(actlen * sizeof(nodeptr));
     hist->active = (nodeptr *) allocate(hist->actlen * sizeof(nodeptr));
     gd.bytes_tot += hist->actlen*sizeof(nodeptr);
@@ -777,7 +781,6 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
     int m;
     real xi;
 
-//    printf("Type: %d\n",Type(p));
 
 #ifdef TREENODE
 // Must be changed when not using TREENODEALLBODIES option. Use first line
@@ -787,7 +790,20 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
 #ifdef TREENODEBALLS4
     xi = Kappa(p)/nbody;
 #else
-    xi = 1.0/nbody;
+//    xi = 1.0/nbody;
+    if (Kappa(p) == 0) {
+        verb_log_print(cmd.verbose, gd.outlog,
+        "Warning!... Kappa: %e\n",Kappa(p));
+    xi = 0.0;
+    } else {
+        if (Type(p) == CELL) {
+        xi = (1.0/nbody)*Nb(p)/Kappa(p);
+//            printf("Type: %d %e %e %d\n",Type(p), Kappa(p), xi, Nb(p));
+        } else {
+            xi = (1.0/nbody)/Kappa(p);
+//    printf("Type: %d %e %e %d\n",Type(p), Kappa(p), xi, Nbb(p));
+        }
+    }
 #endif // ! TREENODEBALLS4
 #endif // ! TREENODEALLBODIES
 
@@ -818,6 +834,7 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
         MULMS_ext(hist->histZetaMtmp,hist->xiOUTVP,xi,cmd.sizeHistN);
         ADDM_ext(hist->histZetaMthread[m],hist->histZetaMthread[m],hist->histZetaMtmp,cmd.sizeHistN);
     }
+//    printf("Type: %d %e %e %e\n",Type(p), Kappa(p), xi, hist->histZetaMthread[2][2][2]);
 #endif
 
     return _SUCCESS_;

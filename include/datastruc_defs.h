@@ -1,5 +1,5 @@
 /*==============================================================================
- HEADER: data_struc_defs.h		[tpcf]
+ HEADER: data_struc_defs.h		[cTreeBalls]
  Written by: Mario A. Rodriguez-Meza
  Starting date: april 2023
  Purpose: Definition of N-Body data structure
@@ -239,8 +239,24 @@ typedef struct {
 
 //B Macros useful to compute chebyshev polynomials
 
-// BALLS4
+//B BALLS4
 #define CHEBYSHEVOMPCC                                      \
+  {hist->Chebs[1] = 1.0;                                    \
+   xicosmphi = xi * hist->Chebs[1];                    \
+   hist->histXithread[1][n] += xicosmphi;                   \
+   hist->Chebs[2] = cosphi;                                 \
+   xicosmphi = xi * hist->Chebs[2];                    \
+   hist->histXithread[2][n] += xicosmphi;                   \
+   hist->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
+   xicosmphi = xi * hist->Chebs[3];                    \
+   hist->histXithread[3][n] += xicosmphi;                   \
+   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+       hist->Chebs[m] = 2.0*(cosphi)*hist->Chebs[m-1] - hist->Chebs[m-2];  \
+       xicosmphi = xi * hist->Chebs[m];                \
+       hist->histXithread[m][n] += xicosmphi;               \
+   }}
+
+#define CHEBYSHEVOMPCCBACKUPDELETE                                      \
   {hist->Chebs[1] = 1.0;                                    \
    xicosmphi = xj * xi * hist->Chebs[1];                    \
    hist->histXithread[1][n] += xicosmphi;                   \
@@ -256,6 +272,7 @@ typedef struct {
        hist->histXithread[m][n] += xicosmphi;               \
    }}
 
+//E
 
 
 #define CHEBYSHEVMPIOMP                                     \

@@ -1,5 +1,5 @@
 /*==============================================================================
- HEADER: globaldefs.h		[tpcf]
+ HEADER: globaldefs.h		[cTreeBalls]
  Written by: Mario A. Rodriguez-Meza
  Starting date: april 2023
  Purpose: Definitions of global variables and parameters
@@ -225,6 +225,10 @@ typedef struct {
 #ifdef BALLS
     INTEGER ntosave;
     int scanLevel;
+// Root nodes:
+    int scanLevelRoot;
+    int scanLevelMin;
+//
 #endif
     INTEGER stepNodes;
     string ncritical;
@@ -388,6 +392,12 @@ typedef struct {
     
     char nodesfilePath[MAXLENGTHOFFILES];
     int nnodescanlev;
+// Root nodes:
+    int nnodescanlev_root;
+#define MAXLEVEL  32
+    real Rcell[MAXLEVEL];
+#undef MAXLEVEL
+//
     char bodiesfilePath[MAXLENGTHOFFILES];
 //#endif
     
@@ -414,6 +424,8 @@ global nodeptr *nodetab;
 
 // BALLS
 global nodeptr *nodetabscanlev;
+// Root nodes:
+global nodeptr *nodetabscanlev_root;
 //
 
 global real *histXi2pcf_omp;        // Auxiliary array.
@@ -510,7 +522,7 @@ typedef struct {
     nodeptr *active;
     cellptr interact;
 
-} gdhist_omp_barnes, *gdhistptr_omp_barnes;
+} gdhist_omp_balls6, *gdhistptr_omp_balls6;
 
 typedef struct {
     real **xiOUTVP;

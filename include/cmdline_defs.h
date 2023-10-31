@@ -1,5 +1,5 @@
 /* ==============================================================================
-!   HEADER: cmdline_defs.h		[tpcf]                                          !
+!   HEADER: cmdline_defs.h		[cTreeBalls]                                    !
 !   Written by: Mario A. Rodriguez-Meza                                         !
 !   Starting date: april 2023                                                   !
 !   Purpose: Definitions for importing arguments from the command line          !
@@ -30,6 +30,9 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 #ifdef BALLS
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed (also use with options=BH86 or SW94 with search=balls4)",
     "scanLevel=6",                     ";Scan level to start the search (look at tdepth value, will be the maximum for this parameter)", ":scl",
+// Root nodes:
+    "scanLevelRoot=3",                 ";Scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter)", ":sclroot",
+    "scanLevelMin=-1",                 ";Scan level of size cells to stop the search. Negative values (look at tdepth value, will be tdepth-1+scanLevelMin)", ":sclmin",
 #else
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
 #endif
@@ -72,7 +75,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "verbose=1",                        ";Option to activate the amount of information sent to standard output", ":verb",
     "verbose_log=1",                    ";Option to activate the amount of information sent to log file", ":verblog",
 
-    "numberThreads=8",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
+    "numberThreads=4",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
 
 //B NOLSST:
     "seed=123",                         ";Random number seed to test run or useful to change a random region in Takahasi simulations",

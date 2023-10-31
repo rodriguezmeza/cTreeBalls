@@ -200,6 +200,9 @@ endif
 #
 ifeq ($(BUCKETON),1)
 OPT2 += -DBUCKET
+ifeq ($(BUCKETSIZEON),1)
+OPT2 += -DBUCKETSIZE
+endif
 endif
 #
 

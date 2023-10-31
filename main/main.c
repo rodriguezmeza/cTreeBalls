@@ -1,5 +1,5 @@
 /*==============================================================================
- NAME: main.c				[tpcf]
+ NAME: main.c				[cTreeBalls]
  Written by: M.A. Rodriguez-Meza and Alejandro Aviles
  Starting date: april 2023
  Purpose: Main routine
