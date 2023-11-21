@@ -7,6 +7,7 @@
 !   Use: '#include "...."                                                       !
 !   Major revisions:                                                            !
  ==============================================================================*/
+//        1          2          3          4          5          6          7
 
 #ifndef _cmdline_defs_h
 #define _cmdline_defs_h
@@ -32,7 +33,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "scanLevel=6",                     ";Scan level to start the search (look at tdepth value, will be the maximum for this parameter)", ":scl",
 // Root nodes:
     "scanLevelRoot=3",                 ";Scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter)", ":sclroot",
-    "scanLevelMin=-1",                 ";Scan level of size cells to stop the search. Negative values (look at tdepth value, will be tdepth-1+scanLevelMin)", ":sclmin",
+    "scanLevelMin=-0",                 ";Scan level of size cells to stop the search. Integer negative values (look at tdepth value, will be tdepth-1+scanLevelMin+1)", ":sclmin",
 #else
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
 #endif

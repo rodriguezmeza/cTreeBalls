@@ -7,6 +7,7 @@
 !	Use:				    								                    !
 !	Major revisions:															!
 !==============================================================================*/
+//        1          2          3          4          5          6          7
 
 // Work to do in order to use with boxes not centered at (0,0,...)
 
@@ -46,9 +47,7 @@ global int search_init_omp_balls6(gdhistptr_omp_balls6 hist)
     for (n = 1; n <= cmd.sizeHistN; n++) {
         hist->histNthread[n] = 0.0;
         hist->histNSubthread[n] = 0.0;
-// 2pcf
         hist->histNSubXi2pcfthread[n] = 0.0;
-//
         hist->histXi2pcfthread[n] = 0.0;
         hist->histXi2pcfthreadsub[n] = 0.0;
     }
@@ -63,21 +62,14 @@ global int search_init_omp_balls6(gdhistptr_omp_balls6 hist)
     hist->actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
     hist->actlen = hist->actlen * rpow(cmd.theta, -2.5);
     verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_balls6: actlen=%d\n",hist->actlen);
-//    active = (nodeptr *) allocate(actlen * sizeof(nodeptr));
     hist->active = (nodeptr *) allocate(hist->actlen * sizeof(nodeptr));
     gd.bytes_tot += hist->actlen*sizeof(nodeptr);
     verb_log_print(cmd.verbose_log, gd.outlog, "\nAllocated %g MByte for active list storage.\n",
                hist->actlen*sizeof(nodeptr)/(1024.0*1024.0));
-//    interact = (cellptr) allocate(actlen * sizeof(cell));
     hist->interact = (cellptr) allocate(hist->actlen * sizeof(cell));
     gd.bytes_tot += hist->actlen*sizeof(cell);
     verb_log_print(cmd.verbose_log, gd.outlog, "Allocated %g MByte for interact list storage.\n",
                hist->actlen*sizeof(cell)/(1024.0*1024.0));
-
-//    hist.actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
-//    hist.actlen = hist.actlen * rpow(cmd.theta, -2.5);
-
-//     hist.interact = (cellptr) allocate(hist.actlen * sizeof(cell));
 
 #undef FACTOR
 #undef FACTIVE
@@ -133,8 +125,7 @@ global int computeBodyProperties_omp_balls6(bodyptr p, int nbody, gdhistptr_omp_
     int m;
     real xi, xi_2p;
 
-//    xi = Kappa(p)/nbody;
-// BODY3
+//B BODY3
         if (Type(p) == BODY) {
             xi = Kappa(p)/nbody;
             xi_2p = Kappa(p);
@@ -142,7 +133,7 @@ global int computeBodyProperties_omp_balls6(bodyptr p, int nbody, gdhistptr_omp_
             xi = Nbb(p)*Kappa(p)/nbody;
             xi_2p = Nbb(p)*Kappa(p);
         }
-//
+//E
 #ifdef TPCF
     for (m=1; m<=cmd.mchebyshev+1; m++)
         for (n=1; n<=cmd.sizeHistN; n++)
@@ -170,18 +161,11 @@ global int computeBodyProperties_omp_balls6_cc(bodyptr p, int nbody, gdhistptr_o
 // BODY3
         if (Type(p) == BODY) {
             xi = Kappa(p)/nbody;
-//            xi = 1.0/nbody;
-//            xi_2p = Nb(p)*Kappa(p);
-//            xi_2p = Nbb(p)*Kappa(p);
-//            xi_2p = Kappa(p);
             xi_2p = 1.0;
-//            printf("%ld\n",Nbb(p));
         } else if (Type(p) == BODY3) {
             xi = Nbb(p)*Kappa(p)/nbody;
             xi_2p = Nbb(p)*Kappa(p);
         } else {
-//            verb_print_debug(1, "\nAqui voy (0): %d\n",Type(p));
-//            xi = 1.0/nbody;
             xi = Kappa(p)/nbody;
             xi_2p = 1.0;
         }
@@ -191,19 +175,16 @@ global int computeBodyProperties_omp_balls6_cc(bodyptr p, int nbody, gdhistptr_o
         for (n=1; n<=cmd.sizeHistN; n++)
             hist->histXithread[m][n] /= MAX(hist->histNSubthread[n],1.0);
     for (m=1; m<=cmd.mchebyshev+1; m++)
-//    printf("Xi: %e\n",hist->histXithread[m][10]);
     for (m=1; m<=cmd.mchebyshev+1; m++){
         OUTVP_ext(hist->xiOUTVP, hist->histXithread[m], hist->histXithread[m],cmd.sizeHistN);
         CLRM_ext(hist->histZetaMtmp,cmd.sizeHistN);
         MULMS_ext(hist->histZetaMtmp,hist->xiOUTVP,xi,cmd.sizeHistN);
         ADDM_ext(hist->histZetaMthread[m],hist->histZetaMthread[m],hist->histZetaMtmp,cmd.sizeHistN);
-//        printf("Z: %e\n",hist->histZetaMthread[m][10][10]);
     }
 #endif
     for (n=1; n<=cmd.sizeHistN; n++) {
         hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
     }
-//verb_print_debug(1, "\nAqui voy (1)\n");
 
     return _SUCCESS_;
 }
@@ -236,18 +217,13 @@ global int search_free_omp_balls6(gdhistptr_omp_balls6 hist)
 
 global int search_free_omp_balls6_cc(gdhistptr_omp_balls6 hist)
 {
-//    free(hist->interact);
-//    free(hist->active);
-
 #ifdef TPCF
     free_dmatrix3D(hist->histZetaMthread,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     free_dmatrix(hist->histXithread,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
 #endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
-// 2pcf
     free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
-//
     free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
     free_dvector(hist->histNthread,1,cmd.sizeHistN);
 #ifdef TPCF
@@ -267,17 +243,6 @@ global int search_init_omp(gdhistptr_omp hist)
     int n;
     int m;
 
-//B BALLS4
-    
-    // PASAR ESTOS CAMBIOS A search_init_balls_omp
-/*
-#  define FACTIVE  0.75
-//#  define FACTOR  1
-#  define FACTOR  316
-//#  define FACTOR  1024
-//E
-*/
-
 #ifdef TPCF
     hist->Chebs = dvector(1,cmd.mchebyshev+1);
     hist->xiOUTVP = dmatrix(1,cmd.sizeHistN,1,cmd.sizeHistN);
@@ -285,9 +250,7 @@ global int search_init_omp(gdhistptr_omp hist)
 #endif
     hist->histNthread = dvector(1,cmd.sizeHistN);
     hist->histNSubthread = dvector(1,cmd.sizeHistN);
-// 2pcf
     hist->histNSubXi2pcfthread = dvector(1,cmd.sizeHistN);
-//
     hist->histXi2pcfthread = dvector(1,cmd.sizeHistN);
     hist->histXi2pcfthreadsub = dvector(1,cmd.sizeHistN);
 #ifdef TPCF
@@ -298,9 +261,7 @@ global int search_init_omp(gdhistptr_omp hist)
     for (n = 1; n <= cmd.sizeHistN; n++) {
         hist->histNthread[n] = 0.0;
         hist->histNSubthread[n] = 0.0;
-// 2pcf
         hist->histNSubXi2pcfthread[n] = 0.0;
-//
         hist->histXi2pcfthread[n] = 0.0;
         hist->histXi2pcfthreadsub[n] = 0.0;
     }
@@ -311,34 +272,6 @@ global int search_init_omp(gdhistptr_omp hist)
     }
     CLRM_ext_ext(hist->histXithread, cmd.mchebyshev+1, cmd.sizeHistN);
 #endif
-
-/*
-//B BALLS4
-    // PASAR ESTOS CAMBIOS A search_init_balls_omp
-
-    hist->actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
-    hist->actlen = hist->actlen * rpow(cmd.theta, -2.5);
-    verb_log_print(cmd.verbose_log, gd.outlog, "searchcalc_balls6: actlen=%d\n",hist->actlen);
-//    active = (nodeptr *) allocate(actlen * sizeof(nodeptr));
-    hist->active = (nodeptr *) allocate(hist->actlen * sizeof(nodeptr));
-    gd.bytes_tot += hist->actlen*sizeof(nodeptr);
-    verb_log_print(cmd.verbose_log, gd.outlog, "\nAllocated %g MByte for active list storage.\n",
-               hist->actlen*sizeof(nodeptr)/(1024.0*1024.0));
-//    interact = (cellptr) allocate(actlen * sizeof(cell));
-    hist->interact = (cellptr) allocate(hist->actlen * sizeof(cell));
-    gd.bytes_tot += hist->actlen*sizeof(cell);
-    verb_log_print(cmd.verbose_log, gd.outlog, "Allocated %g MByte for interact list storage.\n",
-               hist->actlen*sizeof(cell)/(1024.0*1024.0));
-
-//    hist.actlen = FACTIVE * 216 * FACTOR * gd.tdepth;
-//    hist.actlen = hist.actlen * rpow(cmd.theta, -2.5);
-
-//     hist.interact = (cellptr) allocate(hist.actlen * sizeof(cell));
-
-#undef FACTOR
-#undef FACTIVE
-//E
-*/
 
     return _SUCCESS_;
 }
@@ -378,9 +311,7 @@ global int search_init_sincos_omp(gdhistptr_sincos_omp hist)
    for (n = 1; n <= cmd.sizeHistN; n++) {
        hist->histNthread[n] = 0.0;
        hist->histNSubthread[n] = 0.0;
-// 2pcf
        hist->histNSubXi2pcfthread[n] = 0.0;
-//
        hist->histXi2pcfthread[n] = 0.0;
        hist->histXi2pcfthreadsub[n] = 0.0;
    }
@@ -398,20 +329,13 @@ global int search_init_sincos_omp(gdhistptr_sincos_omp hist)
 
 global int search_free_omp(gdhistptr_omp hist)
 {
-//B BALLS4
-    // PASAR ESTOS CAMBIOS A search_init_balls_omp
-//    free(hist->interact);
-//    free(hist->active);
-//E
 #ifdef TPCF
     free_dmatrix3D(hist->histZetaMthread,1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     free_dmatrix(hist->histXithread,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
 #endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
-// 2pcf
     free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
-//
     free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
     free_dvector(hist->histNthread,1,cmd.sizeHistN);
 #ifdef TPCF
@@ -440,9 +364,7 @@ global int search_free_sincos_omp(gdhistptr_sincos_omp hist)
 #endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
-// 2pcf
     free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
-//
     free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
     free_dvector(hist->histNthread,1,cmd.sizeHistN);
 #ifdef TPCF
@@ -736,9 +658,7 @@ global int search_init_balls_omp_cc(gdhistptr_omp_balls hist)
     for (n = 1; n <= cmd.sizeHistN; n++) {
         hist->histNthread[n] = 0.0;
         hist->histNSubthread[n] = 0.0;
-// 2pcf
         hist->histNSubXi2pcfthread[n] = 0.0;
-//
         hist->histXi2pcfthread[n] = 0.0;
         hist->histXi2pcfthreadsub[n] = 0.0;
     }
@@ -758,16 +678,7 @@ global int computeBodyProperties_balls_omp(bodyptr p, int nbody, gdhistptr_omp_b
     int n;
     real xi_p;
 
-#ifdef TREENODE
     xi_p = 1.0;
-#else
-#ifdef TREENODEALLBODIES
-//    xi_p = Kappa(p);
-    xi_p = 1.0;
-#else
-    xi_p = 1.0;
-#endif
-#endif
 
     for (n=1; n<=cmd.sizeHistN; n++)
         hist->histXi2pcfthread[n] += xi_p*hist->histXi2pcfthreadsub[n];
@@ -781,48 +692,23 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
     int m;
     real xi;
 
+    xi = 1.0/((real)nbody);
 
-#ifdef TREENODE
-// Must be changed when not using TREENODEALLBODIES option. Use first line
 #ifdef TREENODEALLBODIES
-    xi = Kappa(p)/nbody;
+    xi *= Kappa(p);
 #else
 #ifdef TREENODEBALLS4
-    xi = Kappa(p)/nbody;
+    xi *= Kappa(p);
 #else
-//    xi = 1.0/nbody;
     if (Kappa(p) == 0) {
         verb_log_print(cmd.verbose, gd.outlog,
         "Warning!... Kappa: %e\n",Kappa(p));
     xi = 0.0;
     } else {
-        if (Type(p) == CELL) {
-        xi = (1.0/nbody)*Nb(p)/Kappa(p);
-//            printf("Type: %d %e %e %d\n",Type(p), Kappa(p), xi, Nb(p));
-        } else {
-            xi = (1.0/nbody)/Kappa(p);
-//    printf("Type: %d %e %e %d\n",Type(p), Kappa(p), xi, Nbb(p));
-        }
+        xi *= ((real)Nb(p))*Kappa(p);
     }
 #endif // ! TREENODEBALLS4
 #endif // ! TREENODEALLBODIES
-
-#else // ! TREENODE
-/*
-#ifdef TREENODEALLBODIES
-// BODY3
-    if (Type(p) == BODY) {
-        xi = Kappa(p)/nbody;
-    } else if (Type(p) == BODY3) {
-// Use this condition in sumnode routine
-//            xi = Nbb(p)*Kappa(p)/nbody;
-        xi = Kappa(p)/nbody;
-    }
-#else */
-    xi = 1.0/nbody;
-//#endif
-#endif // ! TREENODE
-
 //
 #ifdef TPCF
     for (m=1; m<=cmd.mchebyshev+1; m++)
@@ -834,7 +720,6 @@ global int computeBodyProperties_balls_omp_cc(bodyptr p, int nbody, gdhistptr_om
         MULMS_ext(hist->histZetaMtmp,hist->xiOUTVP,xi,cmd.sizeHistN);
         ADDM_ext(hist->histZetaMthread[m],hist->histZetaMthread[m],hist->histZetaMtmp,cmd.sizeHistN);
     }
-//    printf("Type: %d %e %e %e\n",Type(p), Kappa(p), xi, hist->histZetaMthread[2][2][2]);
 #endif
 
     return _SUCCESS_;
@@ -847,19 +732,25 @@ global int computeBodyProperties_balls_omp_cc_sincos(bodyptr p, int nbody, gdhis
     real xi;
 
 #ifdef TREENODEALLBODIES
-// BODY3
-    if (Type(p) == BODY) {
-        xi = Kappa(p)/nbody;
-    } else if (Type(p) == BODY3) {
-// Use this condition in sumnode routine
-        xi = Nbb(p)*Kappa(p)/nbody;
-//        xi = Kappa(p)/nbody;
-    }
+    xi = Kappa(p)/nbody;
 #else
-    xi = 1.0/nbody;
-#endif
+#ifdef TREENODEBALLS4
+    xi = Kappa(p)/nbody;
+#else
+    if (Kappa(p) == 0) {
+        verb_log_print(cmd.verbose, gd.outlog,
+        "Warning!... Kappa: %e\n",Kappa(p));
+    xi = 0.0;
+    } else {
+        if (Type(p) == CELL) {
+        xi = (1.0/nbody)*Nb(p)/Kappa(p);
+        } else {
+            xi = (1.0/nbody)/Kappa(p);
+        }
+    }
+#endif // ! TREENODEBALLS4
+#endif // ! TREENODEALLBODIES
 
-//
 #ifdef TPCF
     for (m=1; m<=cmd.mchebyshev+1; m++)
         for (n=1; n<=cmd.sizeHistN; n++) {
@@ -896,9 +787,7 @@ global int search_free_balls_omp(gdhistptr_omp_balls hist)
 #endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
-// 2pcf
     free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
-//
     free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
     free_dvector(hist->histNthread,1,cmd.sizeHistN);
 #ifdef TPCF
@@ -918,9 +807,7 @@ global int search_free_balls_omp_cc(gdhistptr_omp_balls hist)
 #endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd.sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd.sizeHistN);
-// 2pcf
     free_dvector(hist->histNSubXi2pcfthread,1,cmd.sizeHistN);
-//
     free_dvector(hist->histNSubthread,1,cmd.sizeHistN);
     free_dvector(hist->histNthread,1,cmd.sizeHistN);
 #ifdef TPCF
@@ -932,7 +819,53 @@ global int search_free_balls_omp_cc(gdhistptr_omp_balls hist)
     return _SUCCESS_;
 }
 
-global bool nodes_condition(nodeptr p, nodeptr q)
+global bool nodes_condition(nodeptr p, nodeptr q, real *dr1, vector dr)
+{
+    real drpq, drpq2;
+
+    DOTPSUBV(drpq2, dr, Pos(p), Pos(q));
+#ifdef PERIODIC
+    VWrapAll(dr);
+    DOTVP(drpq2, dr, dr);
+#endif
+    drpq = rsqrt(drpq2);
+    *dr1 = drpq;
+
+    int n;
+
+    if ( drpq == 0.0)
+        return (FALSE);
+    else
+        if ( (Radius(p)+Radius(q))/drpq < gd.deltaR) {
+            if (scanopt(cmd.options, "behavior-tree-omp")) {
+//B To behaves as tree-omp
+            if ( *dr1<gd.Rcut ) {
+                if(*dr1>cmd.rminHist) {
+                    if (cmd.rminHist==0)
+                        n = (int)(NLOGBINPD*(rlog10(*dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
+                    else
+                        n = (int)(rlog10(*dr1/cmd.rminHist) * gd.i_deltaR) + 1;
+                    if (n<=cmd.sizeHistN-1 && n>=1) {
+                        if ( gd.deltaRV[n] < *dr1 - Radius(q) && *dr1 + Radius(q) < gd.deltaRV[n+1]) {
+                            return (TRUE);
+                        } else {
+                            return (FALSE);
+                        }
+                    } else
+                        return (FALSE);
+                } else
+                    return (FALSE);
+            } else
+                return (FALSE);
+//E
+            } else {
+                return (TRUE);
+            }
+        } else
+            return (FALSE);
+}
+
+global bool nodes_condition5(nodeptr p, nodeptr q)
 {
     real drpq, drpq2;
     vector dr;
@@ -957,13 +890,33 @@ global bool nodes_set_bin(nodeptr p, nodeptr q, int *n, real *dr1, vector dr)
 {
     *n=-1;
 
+    if ( *dr1<gd.Rcut ) {
+        if(*dr1>cmd.rminHist) {
+            if (cmd.rminHist==0)
+                *n = (int)(NLOGBINPD*(rlog10(*dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
+            else
+                *n = (int)(rlog10(*dr1/cmd.rminHist) * gd.i_deltaR) + 1;
+            if (*n<=cmd.sizeHistN && *n>=1)
+                    return (TRUE);
+            else
+                return (FALSE);
+        } else
+            return (FALSE);
+    } else
+        return (FALSE);
+}
+
+global bool nodes_set_bin5(nodeptr p, nodeptr q, int *n, real *dr1, vector dr)
+{
+    *n=-1;
+
     if (accept_body((bodyptr)p, q, dr1, dr)) {
         if(*dr1>cmd.rminHist) {
             if (cmd.rminHist==0)
-                *n = (int)(NLOGBINPD*(rlog10(*dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN);
+                *n = (int)(NLOGBINPD*(rlog10(*dr1) - rlog10(cmd.rangeN)) + cmd.sizeHistN) + 1;
             else
-                *n = (int)(rlog10(*dr1/cmd.rminHist) * gd.i_deltaR);
-            if (*n<=cmd.sizeHistN-1 && *n>=1) {
+                *n = (int)(rlog10(*dr1/cmd.rminHist) * gd.i_deltaR) + 1;
+            if (*n<=cmd.sizeHistN && *n>=1) {
                     return (TRUE);
             } else
                 return (FALSE);
@@ -1010,9 +963,7 @@ global int search_init_gd_hist(void)
 #endif
     for (n = 1; n <= cmd.sizeHistN; n++) {
         gd.histN[n] = 0.0;
-// 2pcf
         gd.histNSubXi2pcf[n] = 0.0;
-//
         gd.histXi2pcf[n] = 0.0;
 #ifdef TPCF
         for (m = 1; m <= cmd.mchebyshev+1; m++)
@@ -1038,9 +989,7 @@ global int search_init_gd_hist_sincos(void)
 #endif
     for (n = 1; n <= cmd.sizeHistN; n++) {
         gd.histN[n] = 0.0;
-// 2pcf
         gd.histNSubXi2pcf[n] = 0.0;
-//
         gd.histXi2pcf[n] = 0.0;
 #ifdef TPCF
         for (m = 1; m <= cmd.mchebyshev+1; m++)
@@ -1132,14 +1081,17 @@ local int search_compute_Xi_balls(int nbody)
     else error("\n\nWrong NDIM!\n\n");
 #endif
 
-#ifdef TREENODE
-    normFac *= 0.5;
-#else
-    if (scanopt(cmd.options, "compute-j-no-eq-i"))
-        normFac /= 2.0;
-    else
-        normFac /= 1.0;
-#endif
+//#ifdef TREENODE
+//    normFac *= 0.5;
+//#else
+//    if (scanopt(cmd.options, "compute-j-no-eq-i"))
+//        normFac /= 2.0;
+//    else
+//        normFac /= 1.0;
+//#endif
+
+    if (gd.nnodescanlev == gd.nnodescanlev_root)
+        normFac *= 0.5;
 
 #ifdef RAPHISTNVER
 // Check for log-scale
@@ -1224,17 +1176,13 @@ global int search_compute_HistN_balls(int nbody)
     int n;
     real normFac;
 
-#ifdef TREENODE
+#ifdef TREENODEBALLS4
     normFac = 0.5;
 #else
-//#ifdef TREENODEALLBODIES
-//    normFac = 0.5;
-//#else
-    if (scanopt(cmd.options, "compute-j-no-eq-i"))
+    normFac = 0.5;
+    if (gd.nnodescanlev == gd.nnodescanlev_root)
         normFac = 0.5;
-    else
-        normFac = 1.0;
-//#endif
+//        normFac = 1.0;              // Check
 #endif
 
 #ifndef LOGHIST
@@ -1364,7 +1312,7 @@ global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist)
 // Use in the terminal:
 // export OMP_NUM_THREADS=8
 // to set the maximum number of threads that can be used in a run
-global int ThreadCount(void) {
+global int ThreadCount(INTEGER nbody) {
     int nthreads=0;
 #pragma omp parallel
     {
@@ -1372,8 +1320,13 @@ global int ThreadCount(void) {
         nthreads++;
     }
     verb_print(cmd.verbose, "\nUsing %d threads \n",nthreads);
-    if (gd.searchMethod_int == BALLSOMPMETHOD)
+    if (gd.searchMethod_int == BALLSOMPMETHOD) {
+#ifdef TREENODEALLBODIES
+        verb_print(cmd.verbose, "scanning %g bodies per thread\n",(real)nbody/(real)nthreads);
+#else
         verb_print(cmd.verbose, "scanning %g nodes per thread\n",(real)gd.nnodescanlev/(real)nthreads);
+#endif
+    }
 
     return _SUCCESS_;
 }

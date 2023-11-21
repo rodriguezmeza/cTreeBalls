@@ -42,6 +42,9 @@ OPT2 =
 #
 # your C compiler: Comment/uncomment as convenient
 #
+# For MPI parallel version set it to 1.
+#MPIMACHINE = 1
+#
 ifeq ($(MPIMACHINE),1)
 CC = mpicc
 MPICODE = -DMPICODE
@@ -119,6 +122,13 @@ MLIBS = -lm
 
 CCFLAG += $(OPT2)
 
+# your tool for creating static libraries:
+AR        = ar rv
+
+# automatically add external programs if needed. First, initialize to blank.
+EXTERNAL =
+
+
 #
 ifeq ($(DEFDIMENSION),2)
     DIMCODE = -DTWODIMCODE
@@ -149,25 +159,16 @@ endif
 #
 
 #
-ifeq ($(DEBUGON),1)
-DEBUG = -Wall -DDEBUG
-OPT2 += $(DEBUG)
-endif
-#
-
-#
 ifeq ($(LONGINTON),1)
 LONG = -DLONGINT
 OPT2 += $(LONG)
 endif
 #
 
-#
-ifeq ($(SAVERESTOREON),1)
-OPT2 += -DSAVERESTORE
-endif
-#
-
+#B This is for BALLS method
+# To use 2-balls method set to 1. Else 0
+# Always:
+BALLSON = 1
 # BALLS ON and LOGHIST ON
 ifeq ($(LOGHISTON),1)
 ifeq ($(BALLSON),1)
@@ -187,6 +188,34 @@ endif
 #
 
 #
+ifeq ($(BUCKETON),1)
+OPT2 += -DBUCKET
+#ifeq ($(BUCKETSIZEON),1)
+#OPT2 += -DBUCKETSIZE
+#endif
+endif
+#
+
+#
+#ifeq ($(TREENODEON),1)
+#OPT2 += -DTREENODE
+ifeq ($(TREENODEALLBODIESON),1)
+OPT2 += -DTREENODEALLBODIES
+else
+ifeq ($(TREENODEBALLS4ON),1)
+OPT2 += -DTREENODEBALLS4
+endif
+endif
+#endif
+#
+
+#
+ifeq ($(PTOPIVOTROTATIONON),1)
+OPT2 += -DPTOPIVOTROTATION
+endif
+
+
+#
 ifeq ($(PATCHESON),1)
 PATCHESADDONSON = 0
 OPT2 += -DPATCHES
@@ -196,54 +225,6 @@ INCLUDES += -I../$(PATCHES)
 HEADERFILES = $(wildcard ../$(PATCHES)/*.h)
 endif
 #
-
-#
-ifeq ($(BUCKETON),1)
-OPT2 += -DBUCKET
-ifeq ($(BUCKETSIZEON),1)
-OPT2 += -DBUCKETSIZE
-endif
-endif
-#
-
-#
-ifeq ($(TREENODEON),1)
-OPT2 += -DTREENODE
-ifeq ($(TREENODEALLBODIESON),1)
-OPT2 += -DTREENODEALLBODIES
-else
-ifeq ($(TREENODEBALLS4ON),1)
-OPT2 += -DTREENODEBALLS4
-endif
-endif
-endif
-#
-
-#
-ifeq ($(PTOPIVOTROTATIONON),1)
-OPT2 += -DPTOPIVOTROTATION
-endif
-ifeq ($(PTOPIVOTROTATIONON2),1)
-OPT2 += -DPTOPIVOTROTATION2
-endif
-ifeq ($(PTOPIVOTROTATIONON3),1)
-OPT2 += -DPTOPIVOTROTATION3
-endif
-#
-ifneq ($(TREENODEALLBODIESON),1)
-ifeq ($(PIVOTEXTERNALON),1)
-OPT2 += -DPIVOTEXTERNAL
-endif
-endif
-
-# your tool for creating static libraries:
-AR        = ar rv
-
-# automatically add external programs if needed. First, initialize to blank.
-EXTERNAL =
-
-
-
 
 #
 #B GENERALLIBS section

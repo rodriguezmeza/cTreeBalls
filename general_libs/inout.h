@@ -100,6 +100,7 @@ void inout_InputData(string, int, int, int *);
 
 
 
+
 void error_open_file_kd(char *fname);
 
 #endif	// ! _inout_h

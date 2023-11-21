@@ -6,7 +6,7 @@
  Language: C
  Use: '#include "...."
  ==============================================================================*/
-
+//        1          2          3          4          5          6          7
  
 #ifndef _data_struc_defs_h
 #define _data_struc_defs_h
@@ -64,6 +64,10 @@ typedef struct _node {
     bool hit;
 #endif
 //
+//B Balls-correction. 2023-11-10
+    INTEGER nb;
+    real radius;
+//E
 
 } node, *nodeptr;
 
@@ -90,6 +94,11 @@ typedef struct _node {
 
 //B To see the bodies belonging to a cell:
 #define Selected(x)    (((nodeptr) (x))->selected)
+//E
+
+//B Balls-correction. 2023-11-10
+#define Nb(x) (((nodeptr) (x))->nb)
+#define Radius(x) (((nodeptr) (x))->radius)
 //E
 
 #define BODY 00
@@ -129,8 +138,11 @@ typedef struct {
 // The meaning of the structure and its components can be changed
 typedef struct {
     node cellnode;
-    INTEGER nb;
-    real radius;
+//B Balls-correction. 2023-11-10
+//    INTEGER nb;
+//E
+//B Balls-correction. 2023-11-10
+//    real radius;
 //B To debug cells:
     real size;
 //
@@ -144,12 +156,14 @@ typedef struct {
 //E
 } cell, *cellptr;
  
-#define Radius(x) (((cellptr) (x))->radius)
+//B Balls-correction. 2023-11-10
+//#define Radius(x) (((cellptr) (x))->radius)
 //B To debug cells:
 #define Size(x) (((cellptr) (x))->size)
 //E
-#define Nb(x) (((cellptr) (x))->nb)
-
+//B Balls-correction. 2023-11-10
+//#define Nb(x) (((cellptr) (x))->nb)
+//E
 #define More(x)   (((cellptr) (x))->more)
 #define Subp(x)   (((cellptr) (x))->subp)
 #define IdCell(x)   (((cellptr) (x))->Id)
@@ -241,7 +255,8 @@ typedef struct {
 
 //B BALLS4
 #define CHEBYSHEVOMPCC                                      \
-  {hist->Chebs[1] = 1.0;                                    \
+{real xicosmphi; int m;                                               \
+      hist->Chebs[1] = 1.0;                                    \
    xicosmphi = xi * hist->Chebs[1];                    \
    hist->histXithread[1][n] += xicosmphi;                   \
    hist->Chebs[2] = cosphi;                                 \
@@ -292,7 +307,8 @@ typedef struct {
    }}
 
 #define CHEBYSHEVOMP                                        \
-  {hist->Chebs[1] = 1.0;                                    \
+{real xicosmphi; int m;                                     \
+      hist->Chebs[1] = 1.0;                                 \
    xicosmphi = xi * hist->Chebs[1];                         \
    hist->histXithread[1][n] += xicosmphi;                   \
    hist->Chebs[2] = cosphi;                                 \
@@ -368,6 +384,8 @@ typedef struct {
     }}
 #endif
 #else
+
+/*
 #define CHEBYSHEVTUOMP                                      \
 {                                                           \
     hist->ChebsT[1] = 1.0;                                        \
@@ -396,11 +414,43 @@ typedef struct {
         xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
         hist->histXithreadsin[m][n] += xj*xisinmphi;                    \
     }}
+*/
+
+#define CHEBYSHEVTUOMP                                      \
+{ real xicosmphi; int m;                                              \
+    histccsincos->ChebsT[1] = 1.0;                                        \
+    xicosmphi = xi * histccsincos->ChebsT[1];                             \
+    histccsincos->histXithreadcos[1][n] += xj*xicosmphi;                        \
+    histccsincos->ChebsT[2] = cosphi;                                     \
+    xicosmphi = xi * histccsincos->ChebsT[2];                             \
+    histccsincos->histXithreadcos[2][n] += xj*xicosmphi;                        \
+    histccsincos->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);              \
+    xicosmphi = xi * histccsincos->ChebsT[3];                             \
+    histccsincos->histXithreadcos[3][n] += xj*xicosmphi;                        \
+    histccsincos->ChebsU[1] = 0.0;                                        \
+    xisinmphi = xi * histccsincos->ChebsU[1] * sinphi;                    \
+    histccsincos->histXithreadsin[1][n] += xj*xisinmphi;                        \
+    histccsincos->ChebsU[2] = 1.0;                                        \
+    xisinmphi = xi * histccsincos->ChebsU[2] * sinphi;                    \
+    histccsincos->histXithreadsin[2][n] += xj*xisinmphi;                        \
+    histccsincos->ChebsU[3] = 2.0*cosphi;                                 \
+    xisinmphi = xi * histccsincos->ChebsU[3] * sinphi;                    \
+    histccsincos->histXithreadsin[3][n] += xj*xisinmphi;                        \
+    for (m=4; m<=cmd.mchebyshev+1; m++){                    \
+        histccsincos->ChebsT[m] = 2.0*(cosphi)*histccsincos->ChebsT[m-1] - histccsincos->ChebsT[m-2]; \
+        xicosmphi = xi * histccsincos->ChebsT[m];                         \
+        histccsincos->histXithreadcos[m][n] += xj*xicosmphi;                    \
+        histccsincos->ChebsU[m] = 2.0*(cosphi)*histccsincos->ChebsU[m-1] - histccsincos->ChebsU[m-2]; \
+        xisinmphi = xi * histccsincos->ChebsU[m] * sinphi;                \
+        histccsincos->histXithreadsin[m][n] += xj*xisinmphi;                    \
+    }}
+
+
 #endif
 
 // Same as above but to use in search=tree-omp-sincos only
 #define CHEBYSHEVTUOMPSINCOS                                      \
-{                                                           \
+{real xicosmphi,xisinmphi; int m;                                        \
     hist->ChebsT[1] = 1.0;                                        \
     xicosmphi = xi * hist->ChebsT[1];                             \
     hist->histXithreadcos[1][n] += xicosmphi;                        \
@@ -445,9 +495,13 @@ typedef struct {
        hist->histXithread[m][n] += xj*xicosmphi;            \
    }}
 
+//B Faster if commented declarations
+// (comment and uncomment also lines in:
+// sumnodes_bb_omp, sumnodes_bc_omp, sumnodes_cb_omp and sumnodes_cc_omp
 #ifdef TREENODEALLBODIES
 #define CHEBYSHEVOMPBALLSCC                                 \
-  {histcc->Chebs[1] = 1.0;                                    \
+{real xicosmphi; int m; \
+      histcc->Chebs[1] = 1.0;                                    \
    xicosmphi = xi * histcc->Chebs[1];                         \
    histcc->histXithread[1][n] += xicosmphi;                \
    histcc->Chebs[2] = cosphi;                                 \
@@ -462,8 +516,12 @@ typedef struct {
        histcc->histXithread[m][n] += xicosmphi;            \
    }}
 #else
-#define CHEBYSHEVOMPBALLSCC                                 \
-  {histcc->Chebs[1] = 1.0;                                    \
+//B Faster if commented declarations:
+
+/*
+#define CHEBYSHEVOMPBALLSCC                                   \
+{real xicosmphi; int m;                                       \
+      histcc->Chebs[1] = 1.0;                                 \
    xicosmphi = xi * histcc->Chebs[1];                         \
    histcc->histXithread[1][n] += xj*xicosmphi;                \
    histcc->Chebs[2] = cosphi;                                 \
@@ -477,6 +535,26 @@ typedef struct {
        xicosmphi = xi * histcc->Chebs[m];                     \
        histcc->histXithread[m][n] += xj*xicosmphi;            \
    }}
+*/
+
+#define CHEBYSHEVOMPBALLSCC                                   \
+{real xicosmphi; int m;                                       \
+      histcc->Chebs[1] = 1.0;                                 \
+   xicosmphi = xi * histcc->Chebs[1];                         \
+   histcc->histXithread[1][n] += xicosmphi;                \
+   histcc->Chebs[2] = cosphi;                                 \
+   xicosmphi = xi * histcc->Chebs[2];                         \
+   histcc->histXithread[2][n] += xicosmphi;                \
+   histcc->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
+   xicosmphi = xi * histcc->Chebs[3];                         \
+   histcc->histXithread[3][n] += xicosmphi;                \
+   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+       histcc->Chebs[m] = 2.0*(cosphi)*histcc->Chebs[m-1] - histcc->Chebs[m-2];  \
+       xicosmphi = xi * histcc->Chebs[m];                     \
+       histcc->histXithread[m][n] += xicosmphi;            \
+   }}
+
+
 #endif
 
 #define CHEBYSHEVDIRECTOMP                                  \

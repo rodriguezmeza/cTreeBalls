@@ -7,7 +7,7 @@
  Use:
  Major revisions:
  ==============================================================================*/
-
+//        1          2          3          4          5          6          7
 
 #include "globaldefs.h"
 
@@ -128,7 +128,7 @@ local void inputdata_ascii(void)
 
     fclose(instr);
 
-    real kavg;
+    real kavg=0.0;
     DO_BODY(p, bodytab, bodytab+cmd.nbody) {
         Type(p) = BODY;
         Weight(p) = weight;
@@ -294,7 +294,6 @@ local void inputdata_bin(void)
         Id(p) = p-bodytab+1;
     }
 }
-
 
 
 
@@ -1147,7 +1146,8 @@ int EndRun(void)
 
 // Here freeing memory lines should go
 
-    int m;
+// Activate as it activated lines below...
+//    int m;
 
 //
 // Freeing allocated must consider the allocated memory by others, Task != 0. See StartRun.
@@ -1224,7 +1224,7 @@ int EndRun(void)
     if (cmd.verbose > 0) {
         printf("\nFinal CPU time : %lf %s\n", CPUTIME - gd.cpuinit,PRNUNITOFTIMEUSED);// in minutes
 //        printf("Final real time: %lf", (rcpu_time()-gd.cpurealinit));    // in minutes
-        printf("Final real time: %lf", (rcpu_time()-gd.cpurealinit));    // in minutes
+        printf("Final real time: %ld", (rcpu_time()-gd.cpurealinit));    // in minutes
         printf(" %s\n\n", PRNUNITOFTIMEUSED);                               // Only work this way
     }
 #ifdef MPICODE

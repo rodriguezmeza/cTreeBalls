@@ -1,18 +1,43 @@
 # ----- MAKE FILE DEFINITIONS FOR cballs CODE -----
 # Mario A. Rodriguez-Meza, Ciudad de Mexico, 27.04.2023
 #
+#
 # Select one set of settings...
-#
 
-SEARCHMETHOD = DEFAULTSET
+#SEARCHMETHOD = DEFAULTSET
 #SEARCHMETHOD = 2PCF
-#SEARCHMETHOD = BALLSLOGSINCOS
-#SEARCHMETHOD = BALLSLOG
-#SEARCHMETHOD = SINCOS
+#SEARCHMETHOD = BALLSSINCOS
+#SEARCHMETHOD = BALLS
 
 #
-# Comment lines below as it is convient to you.
 #
+# Change environment variables below as it is convient to you.
+# Must be commented all lines above
+#
+# For histograms in logscale version set to 1. Else 0
+LOGHISTON = 1
+# And set the number of bins per decade:
+NLOGBINPD = 5
+#
+# To compute 3pcf in harmonic base set to 1. Else 0
+TPCFON = 0
+#
+BUCKETON = 1
+#
+# To activate sincos base under balls (set TPCFON to 1)
+SINCOSON = 0
+#
+# To check all body in bodytab
+TREENODEALLBODIESON = 0
+#
+# This is for BALLS4 method. Use it instead of TREENODEALLBODIESON
+TREENODEBALLS4ON = 0
+#
+PTOPIVOTROTATIONON = 0
+#
+
+#B Following options are almost not to be changed...
+
 # Select dimension of the run: 2, 3
 DEFDIMENSION = 3
 #
@@ -28,164 +53,61 @@ PERIODICON = 0
 # Set this to 1 for OPENMP parallel version, or 0 to switch it off
 OPENMPMACHINE = 1
 #
-# For MPI parallel version set it to 1.
-MPIMACHINE = 0
-#
-
-# For histograms in logscale version set to 1. Else 0
-LOGHISTON = 1
-# And set the number of bins per decade:
-NLOGBINPD = 5
-#
-
-# To print some useful info set to 1. Else 0
-DEBUGON = 0
-#
-
 # To activate long integers set to 1. Else 0
 LONGINTON = 1
 #
-
-# To save state of the run comment set to 1. Else 0
-SAVERESTOREON = 0
-#
-
-# To use 2-balls method set to 1. Else 0
-BALLSON = 1
-#
-BUCKETON = 1
-BUCKETSIZEON = 1
-
-# To print some useful info comment set to 1. Else 0
-TPCFON = 1
-#
-
-# GSL is here (not any more):
-# This options needs PATCHESON = 1, set it below
 ADDONSON = 0
 #
 PATCHESON = 0
+#
 
-#B This is for BALLS method
-TREENODEON = 1
-# To check all body in bodytab
-TREENODEALLBODIESON = 0
-# To activate sincos base under balls5
-SINCOSON = 0
 #E
-#B This is for BALLS4 method. Use it instead of TREENODEALLBODIESON
-TREENODEBALLS4ON = 0
-
-#
-PTOPIVOTROTATIONON = 0
-PTOPIVOTROTATIONON2 = 0
-#
-PTOPIVOTROTATIONON3 = 0
-PIVOTEXTERNALON = 0
 
 
 #
-#B Searching methods section: choose one uncommenting its line
+#B Searching methods section: choose one uncommenting above (top of file) its line
 
 OPT2ADD =
 
-ifeq ($(SEARCHMETHOD), SINCOS)
-# sincos base
-DEFDIMENSION = 3
-LOGHISTON = 1
-NLOGBINPD = 5
-BALLSON = 1
-BUCKETON = 0
-TPCFON = 1
-TREENODEON = 1
-TREENODEALLBODIESON = 1
-SINCOSON = 1
-ADDONSON = 0
-PATCHESON = 0
-SEARCHMETHODIS = sincos
-SEARCHMETHODISDEFINED = TRUE
-endif
-
-ifeq ($(SEARCHMETHOD), BALLSLOG)
+ifeq ($(SEARCHMETHOD), BALLS)
 # cos base
-#B Default settings:
-DEFDIMENSION = 3
-GSLINTERNAL = 0
-PERIODICON = 0
-OPENMPMACHINE = 1
-MPIMACHINE = 0
-DEBUGON = 0
-LONGINTON = 1
-SAVERESTOREON = 0
-#E
 LOGHISTON = 1
 NLOGBINPD = 5
-BALLSON = 1
 BUCKETON = 1
 TPCFON = 1
-TREENODEON = 1
-TREENODEALLBODIESON = 1
+TREENODEALLBODIESON = 0
 TREENODEBALLS4ON = 0
 SINCOSON = 0
 ADDONSON = 0
 PATCHESON = 0
 OPT2ADD += -DBALLSEXEC
-SEARCHMETHODIS = balls
+SEARCHMETHODIS = 2balls
 SEARCHMETHODISDEFINED = TRUE
 endif
 
-ifeq ($(SEARCHMETHOD), BALLSLOGSINCOS)
+ifeq ($(SEARCHMETHOD), BALLSSINCOS)
 # sincos base
-#B Default settings:
-DEFDIMENSION = 3
-GSLINTERNAL = 0
-PERIODICON = 0
-OPENMPMACHINE = 1
-MPIMACHINE = 0
-DEBUGON = 0
-LONGINTON = 1
-SAVERESTOREON = 0
-#E
 LOGHISTON = 1
 NLOGBINPD = 5
-BALLSON = 1
 BUCKETON = 1
 TPCFON = 1
-TREENODEON = 1
 TREENODEALLBODIESON = 1
 TREENODEBALLS4ON = 0
 SINCOSON = 1
-ADDONSON = 0
-PATCHESON = 0
 OPT2ADD += -DBALLSSINCOSEXEC
-SEARCHMETHODIS = ballsc
+SEARCHMETHODIS = sincos
 SEARCHMETHODISDEFINED = TRUE
 endif
 
 ifeq ($(SEARCHMETHOD), 2PCF)
 # sincos base
-#B Default settings:
-DEFDIMENSION = 3
-GSLINTERNAL = 0
-PERIODICON = 0
-OPENMPMACHINE = 1
-MPIMACHINE = 0
-DEBUGON = 0
-LONGINTON = 1
-SAVERESTOREON = 0
-#E
 LOGHISTON = 1
 NLOGBINPD = 5
-BALLSON = 1
 BUCKETON = 1
-BUCKETSIZEON = 1
 TPCFON = 0
-TREENODEON = 1
 TREENODEALLBODIESON = 0
 TREENODEBALLS4ON = 0
 SINCOSON = 0
-ADDONSON = 0
-PATCHESON = 0
 OPT2ADD += -DTWOPCFEXEC
 SEARCHMETHODIS = 2pcf
 SEARCHMETHODISDEFINED = TRUE
@@ -193,29 +115,14 @@ endif
 
 ifeq ($(SEARCHMETHOD), DEFAULTSET)
 DEFAULTSETON = 1
-# sincos base
-#B Default settings:
-DEFDIMENSION = 3
-GSLINTERNAL = 0
-PERIODICON = 0
-OPENMPMACHINE = 1
-MPIMACHINE = 0
-DEBUGON = 0
-LONGINTON = 1
-SAVERESTOREON = 0
-#E
+# cos base
 LOGHISTON = 1
 NLOGBINPD = 5
-BALLSON = 1
 BUCKETON = 1
-BUCKETSIZEON = 1
 TPCFON = 1
-TREENODEON = 1
-TREENODEALLBODIESON = 0
+TREENODEALLBODIESON = 1
 TREENODEBALLS4ON = 0
 SINCOSON = 0
-ADDONSON = 0
-PATCHESON = 0
 OPT2ADD +=
 SEARCHMETHODIS =
 SEARCHMETHODISDEFINED = TRUE

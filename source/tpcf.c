@@ -7,6 +7,7 @@
  Use:
  Major revisions:
  ==============================================================================*/
+//        1          2          3          4          5          6          7
 
 #include "globaldefs.h"
 
@@ -110,6 +111,13 @@ int MainLoop(void)
                    cmd.nbody, kavg/((real)cmd.nbody) );
         gd.flagSmooth = TRUE;
         gd.flagSetNbNoSel = TRUE;
+    }
+
+    if ( scanopt(cmd.options, "make-tree") ) {
+    verb_print(cmd.verbose, "\n\tMainLoop: make-tree: try making tree...\n\n");
+        DO_BODY(p,bodytab,bodytab+cmd.nbody)
+            Update(p) = TRUE;
+        maketree(bodytab, cmd.nbody);
     }
 
     if (scanopt(cmd.options, "stop")) {

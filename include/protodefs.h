@@ -7,6 +7,7 @@
  Use: '#include "protodefs.h"
  Major revisions:
  ==============================================================================*/
+//        1          2          3          4          5          6          7
 
 #ifndef _protodefs_h
 #define _protodefs_h
@@ -88,8 +89,10 @@ global int computeBodyProperties_balls_omp_cc_sincos(bodyptr p, int nbody, gdhis
 global int search_free_balls_omp(gdhistptr_omp_balls hist);
 global int search_free_balls_omp_sincos(gdhistptr_omp_balls hist);
 global int search_free_balls_omp_cc(gdhistptr_omp_balls hist);
-global bool nodes_condition(nodeptr p, nodeptr q);
+global bool nodes_condition(nodeptr p, nodeptr q, real *dr1, vector dr);
+global bool nodes_condition5(nodeptr p, nodeptr q);
 global bool nodes_set_bin(nodeptr p, nodeptr q, int *n, real *dr1, vector dr);
+global bool nodes_set_bin5(nodeptr p, nodeptr q, int *n, real *dr1, vector dr);
 #endif
 
 global int search_init_gd_hist(void);
@@ -102,9 +105,9 @@ global int search_compute_HistN_balls(int nbody);
 
 
 //B Other utilities
-global int ThreadCount(void);
-global int spherical_to_cartesians(real theta, real phi, vector xyz);
-global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, real *phiR);
+global int ThreadCount(INTEGER);
+global int spherical_to_cartesians(real, real, vector);
+global int spherical_periodic_condition(real *, real *, real *, real *);
 //E
 
 

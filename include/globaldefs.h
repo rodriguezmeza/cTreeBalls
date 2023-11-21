@@ -7,6 +7,7 @@
  Use: '#include "global_defs.h"
  Major revisions:
  ==============================================================================*/
+//        1          2          3          4          5          6          7
 
 #ifndef _globaldefs_h
 #define _globaldefs_h
@@ -403,7 +404,9 @@ typedef struct {
     
     bool flagSmooth;
     bool flagSetNbNoSel;
-
+//B BUCKET
+    real rminCell;
+//E
 } global_data, *global_data_ptr;
 
 global global_data gd;
@@ -660,6 +663,8 @@ global real *inout_xval;
 global real *inout_yval;
 global real *inout_zval;
 global real *inout_wval;
+
+
 
 
 //NOLSST:
