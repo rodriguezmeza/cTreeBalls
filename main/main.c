@@ -1,20 +1,22 @@
 /*==============================================================================
- NAME: main.c				[tpcf]
- Written by: M.A. Rodriguez-Meza and Alejandro Aviles
+ NAME: main.c				[cTreeBalls]
+ Written by: M.A. Rodriguez-Meza
  Starting date: april 2023
  Purpose: Main routine
  Language: C
  Major revision:
  ================================================================================
- 
+ //        1          2          3          4          5          6          7
+
  Use: tpcf -help
  Input: 	Command line parameters, Parameters file
  Output: ...
  Units:
  History:
- Comments and notes:
+ Comments and notes: (palimsesto)... coding based on reference below.
  References:    Barnes' Treecode, NEMO project, Gadget, COLA, CLASS,
                 NR, GSL, Rapaport's book
+ github: https://github.com/rodriguezmeza/cTreeBalls.git
  ==============================================================================*/
 
 #define global
