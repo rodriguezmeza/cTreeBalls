@@ -217,13 +217,21 @@ local int evalHist(void)
     bodyptr p;
     int ifile;
 
+//    verb_print_debug(1, "\nAqui voy (0)\n");
+
     switch(gd.searchMethod_int) {
         case TREEOMPMETHOD:                         // search=tree-omp
             verb_print(cmd.verbose,
                        "\n\tevalHist: with normal tree method (omp)\n\n");
+
+//            verb_print_debug(1, "\nAqui voy (1)\n");
+
             DO_BODY(p,bodytable[0],bodytable[0]+gd.nbodyTable[0])
                 Update(p) = TRUE;
             maketree(bodytable[0], gd.nbodyTable[0], 0);
+
+//            verb_print_debug(1, "\nAqui voy (2)\n");
+
             searchcalc_normal_omp(bodytable[0], gd.nbodyTable[0],
                                   1, gd.nbodyTable[0]);
             break;

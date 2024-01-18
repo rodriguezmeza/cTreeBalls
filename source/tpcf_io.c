@@ -692,13 +692,21 @@ local int Takahasi_region_selection_3d(int nside, int npix,
     if (!scanopt(cmd.options, "all"))
         cmd.nbody = iselect;
 
+//B 2024.01.18
+    int ifile=0;
+    gd.nbodyTable[ifile] = cmd.nbody;
     bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
+    bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
+//E
     real kavg = 0;
     INTEGER ij=0;
     for(i=0;i<npix;i++){
         q = bodytabtmp+i;
         if(Update(q)) {
-            p = bodytab+ij;
+//B 2024.01.18
+//            p = bodytab+ij;
+            p = bodytable[ifile]+ij;
+//E
             Pos(p)[0] = Pos(q)[0];
             Pos(p)[1] = Pos(q)[1];
             Pos(p)[2] = Pos(q)[2];

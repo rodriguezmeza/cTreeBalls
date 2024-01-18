@@ -107,10 +107,18 @@ local void testdata_sc_random(void)
     Compute_nbody();
     Compute_Box_Units();
 
+//B 2024.01.18
+    int ifile=0;
+    gd.nbodyTable[ifile] = cmd.nbody;
     bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
+    bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
+//E
 
     tweight=0.0;
-	DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+//B 2024.01.18
+//	DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
+//E
 		Id(p) = p-bodytab+1;
         Type(p) = BODY;
         Weight(p) = weight;
