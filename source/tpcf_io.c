@@ -11,12 +11,14 @@
 
 #include "globaldefs.h"
 
-local void inputdata_ascii(void);
+//B 2023.11.29
+local void inputdata_ascii(string filename, int);
 #if NDIM == 3
-local void inputdata_ascii_2d_to_3d(void);
+local void inputdata_ascii_2d_to_3d(string filename, int);
 #endif
-local void inputdata_bin(void);
-local int inputdata_takahasi(void);
+local void inputdata_bin(string filename, int);
+local int inputdata_takahasi(string filename, int);
+//E
 local void outputdata(void);
 local void outputdata_ascii(void);
 local void outputdata_bin(void);
@@ -24,11 +26,16 @@ local void outputdata_bin(void);
 //local void outputdata_bin_smooth(void);
 //local void outputdata_ascii_smooth(void);
 
+//ADDONS:
+#ifdef ADDONS
+#include "tpcf_io_00.h"
+#endif
 
 local void outfilefmt_string_to_int(string,int *);
 local int outfilefmt_int;
 
-int inputdata(void)
+//B 2023.11.29
+int inputdata(string filename, int ifile)
 {
     double cpustart = CPUTIME;
 
@@ -42,32 +49,40 @@ int inputdata(void)
     switch(gd.infilefmt_int) {
         case INCOLUMNS:
             printf("\n\tInput in columns (ascii) format...\n");
-            inputdata_ascii(); break;
+            inputdata_ascii(filename, ifile); break;
 #if NDIM == 3
         case INCOLUMNS2DTO3D:
             printf("\n\tInput in columns (ascii-2d-to-3d) format...\n");
-            inputdata_ascii_2d_to_3d(); break;
+            inputdata_ascii_2d_to_3d(filename, ifile); break;
 #endif
         case INNULL:
             printf("\n\t(Null) Input in columns (ascii) format...\n");
-            inputdata_ascii(); break;
+            inputdata_ascii(filename, ifile); break;
         case INCOLUMNSBIN:
             printf("\n\tInput in binary format...\n");
-            inputdata_bin(); break;
+            inputdata_bin(filename, ifile); break;
         case INTAKAHASI:
             printf("\n\tInput in takahasi format...\n");
-            inputdata_takahasi(); break;
+            inputdata_takahasi(filename, ifile); break;
 
+//ADDONS:
+#ifdef ADDONS
+#include "tpcf_io_01.h"
+#endif
 
         default:
             printf("\n\tInput: Unknown input format...");
             printf("\n\tInput in default columns (ascii) format...\n");
-            inputdata_ascii(); break;
+            inputdata_ascii(filename, ifile); break;
     }
 #ifdef MPICODE
     }
 #endif
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "tpcf_io_01c.h"
+#endif
 
 //    } // end of ifile
 
@@ -77,7 +92,8 @@ int inputdata(void)
     return _SUCCESS_;
 }
 
-local void inputdata_ascii(void)
+//B 2023.11.29
+local void inputdata_ascii(string filename, int ifile)
 {
     stream instr;
     int ndim;
@@ -88,7 +104,7 @@ local void inputdata_ascii(void)
     gd.model_comment = "Column form input file";
 
 //    instr = stropen(cmd.infile, "r");
-    instr = stropen(gd.infilenames[0], "r");
+    instr = stropen(filename, "r");
 
     fgets(firstline,200,instr);
     fscanf(instr,"%1s",gato);
@@ -98,6 +114,8 @@ local void inputdata_ascii(void)
     in_int(instr, &ndim);
     if (ndim != NDIM)
         error("inputdata: ndim = %d; expected %d\n", ndim, NDIM);
+
+    gd.nbodyTable[ifile] = cmd.nbody;
 
 // Check the center of the box!!!
 #if NDIM == 3
@@ -118,8 +136,10 @@ local void inputdata_ascii(void)
 
     verb_print(cmd.verbose, "\tInput: nbody and ndim: %d %d...\n", cmd.nbody, ndim);
     bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
+    bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
 
-    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+//    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         in_vector(instr, Pos(p));
         in_real(instr, &Kappa(p));
         if (scanopt(cmd.options, "kappa-constant"))
@@ -129,7 +149,8 @@ local void inputdata_ascii(void)
     fclose(instr);
 
     real kavg=0.0;
-    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+//    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         Type(p) = BODY;
         Weight(p) = weight;
         Id(p) = p-bodytab+1;
@@ -145,8 +166,10 @@ local void inputdata_ascii(void)
     vector distv;
 //    INTEGER ip, iq;
     bool flag=0;
-    DO_BODY(p, bodytab, bodytab+cmd.nbody-1)
-        DO_BODY(q, p+1, bodytab+cmd.nbody)
+//    DO_BODY(p, bodytab, bodytab+cmd.nbody-1)
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody-1)
+//        DO_BODY(q, p+1, bodytab+cmd.nbody)
+        DO_BODY(q, p+1, bodytable[ifile]+cmd.nbody)
             if (p != q) {
             DOTPSUBV(dist2, distv, Pos(p), Pos(q));
                 if (dist2 == 0.0) {
@@ -156,10 +179,25 @@ local void inputdata_ascii(void)
     if (flag) error("inputdata_ascii: at least two bodies have same position\n");
     }
 //E
+//B 2023.11.29
+    bodytab = bodytable[ifile];
+//    bodytable[ifile] = bodytab;
+/*
+    bodyptr q;
+    q = bodytable[ifile];
+    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+        SETV(Pos(q), Pos(p));
+        Kappa(q) = Kappa(p);
+        Type(q) = Type(p);
+        Weight(q) = Weight(p);
+        Id(q) = Id(p);
+    }
+*/
 }
 
 #if NDIM == 3
-local void inputdata_ascii_2d_to_3d(void)
+//B 2023.11.29
+local void inputdata_ascii_2d_to_3d(string filename, int ifile)
 {
     stream instr;
     int ndim;
@@ -169,7 +207,7 @@ local void inputdata_ascii_2d_to_3d(void)
 
     gd.model_comment = "Column form input file (2d-to-3d)";
 
-    instr = stropen(cmd.infile, "r");
+    instr = stropen(filename, "r");
     fgets(firstline,200,instr);
     fscanf(instr,"%1s",gato);
     in_int_long(instr, &cmd.nbody);
@@ -225,17 +263,24 @@ local void inputdata_ascii_2d_to_3d(void)
                phi_min, phi_max);
 //E
 
+//B 2023.11.29
     real ra, dec;       // phi, theta from pix2ang :: column 2, column 1, respectively
-    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
-        ra = Pos(p)[0];
-        dec = Pos(p)[1];
-//        Pos(p)[2] = rsin(dec)*rcos(ra);
-//        Pos(p)[0] = rsin(dec)*rsin(ra);
-//        Pos(p)[1] = rcos(dec);
-//
-        Pos(p)[0] = rsin(dec)*rcos(ra);
-        Pos(p)[1] = rsin(dec)*rsin(ra);
-        Pos(p)[2] = rcos(dec);
+    if (scanopt(cmd.options, "arfken")) {
+        DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+            ra = Pos(p)[0];
+            dec = Pos(p)[1];
+            Pos(p)[0] = rsin(dec)*rcos(ra);
+            Pos(p)[1] = rsin(dec)*rsin(ra);
+            Pos(p)[2] = rcos(dec);
+        }
+    } else {
+        DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+            ra = Pos(p)[0];
+            dec = Pos(p)[1];
+            Pos(p)[0] = rcos(dec)*rcos(ra);
+            Pos(p)[1] = rcos(dec)*rsin(ra);
+            Pos(p)[2] = rsin(dec);
+        }
     }
 
     DO_BODY(p, bodytab, bodytab+cmd.nbody) {
@@ -244,9 +289,10 @@ local void inputdata_ascii_2d_to_3d(void)
         Id(p) = p-bodytab+1;
     }
 }
-#endif
+#endif // ! NDIM == 3
 
-local void inputdata_bin(void)
+//B 2023.11.29
+local void inputdata_bin(string filename, int ifile)
 {
     stream instr;
     int ndim;
@@ -255,7 +301,7 @@ local void inputdata_bin(void)
 
     gd.model_comment = "Binary input file";
 
-    instr = stropen(cmd.infile, "r");
+    instr = stropen(filename, "r");
     in_int_bin_long(instr, &cmd.nbody);
     verb_print(cmd.verbose, "\tInput: nbody %d\n", cmd.nbody);
     if (cmd.nbody < 1)
@@ -296,6 +342,10 @@ local void inputdata_bin(void)
 }
 
 
+//ADDONS:
+#ifdef ADDONS
+#include "tpcf_io_02.h"
+#endif
 
 
 //B BEGIN:: Reading Takahasi simulations
@@ -323,7 +373,8 @@ local int Takahasi_region_selection_2d(int nside, int npix,
                                        real *xmin, real *xmax, real *ymin, real *ymax);
 #endif
 
-local int inputdata_takahasi(void)
+//B 2023.11.29
+local int inputdata_takahasi(string filename, int ifile)
 {
     FILE *fp;
     long i,j,npix,dummy;
@@ -335,7 +386,7 @@ local int inputdata_takahasi(void)
     gd.model_comment = "Takahasi input file";
 
 //E Begin reading Takahasi file
-    fp = stropen(cmd.infile, "rb");
+    fp = stropen(filename, "rb");
 
     fread(&negi, sizeof(int), 1, fp);
     fread(&nside, sizeof(int), 1, fp);
@@ -882,6 +933,10 @@ int output(void)
 //        if (scanopt(cmd.options, "smooth"))
 //            outputdata_smooth();
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "tpcf_io_01b.h"
+#endif
 
     }
     gd.cputotalinout += CPUTIME - cpustart;
@@ -1116,8 +1171,8 @@ global void setFilesDirs(void)
     sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",gd.outputDir,gd.outputDir);
 //    fprintf(gd.outlog,"\nsystem: %s\n",buf);
 #ifdef DEBUG
-    if (cmd.verbose_log>=3)
-    verb_log_print(cmd.verbose_log,gd.outlog,"\nsystem: %s\n",buf);
+    if (cmd.verbose>=3)
+    verb_print(cmd.verbose_log,"\nsystem: %s\n",buf);
 #endif
     system(buf);
     gd.cputotalinout += CPUTIME - cpustart;
@@ -1192,14 +1247,14 @@ int EndRun(void)
         if(ThisTask==0) {
 #endif
     if (cmd.verbose >= 2) {
-        printf("\nrSize \t\t= %lf\n", gd.rSize);
+        printf("\nrSize \t\t= %lf\n", gd.rSizeTable[0]);
         printf("nbbcalc \t= %ld\n", gd.nbbcalc);
         printf("nbccalc \t= %ld\n", gd.nbccalc);
 // BALLS
         printf("ncccalc \t= %ld\n", gd.ncccalc);
 //
-        printf("tdepth \t\t= %d\n", gd.tdepth);
-        printf("ncell \t\t= %ld\n", gd.ncell);
+        printf("tdepth \t\t= %d\n", gd.tdepthTable[0]);
+        printf("ncell\t\t= %ld\n", gd.ncellTable[0]);
         printf("cpusearch \t= %lf (be aware of the number of threads)\n", gd.cpusearch*cmd.numthreads);     // in minutes
         printf("cputotalinout \t= %lf\n", gd.cputotalinout);
     }
@@ -1234,3 +1289,7 @@ int EndRun(void)
     return _SUCCESS_;
 }
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "tpcf_io_03.h"
+#endif

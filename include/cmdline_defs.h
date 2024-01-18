@@ -38,8 +38,11 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
 #endif
 //
-    "infile=",                          ";File name with points to analyse", ":in",
-    "infileformat=columns-ascii",       ";Data input file format (columns-ascii or binary)", ":infmt",
+    "infile=",                          ";File names with points to analyse", ":in",
+    "infileformat=columns-ascii",       ";Data input files format (columns-ascii or binary)", ":infmt",
+//B 2023.11.29
+    "iCatalogs=1",               ";index of point catalogs to analyse", ":icats",
+//E
 //B Parameters to set a region in the sky, for example for Takahasi data set.
     "thetaL=1.279928",                      ";Angle theta left side of the region",
     "thetaR=1.861664",                      ";Angle theta right side of the region",
@@ -93,7 +96,10 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 //    "mToPlot=1",                        ";m to plot histograms of histZetaM in some direcctions (only with search=direct-simple-exp)",
 //E
 
-    "options=",				            ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
+//B 2023.11.29
+    "script=",                          ";Scripts in shell or python that can be run in pre-processing or post-processing.",
+//E
+    "options=",                            ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
     "Version=0.1",			            ";Mario A. Rodríguez-Meza (2023)",
     NULL,
 };

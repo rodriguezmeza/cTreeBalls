@@ -116,6 +116,26 @@
 
 #endif
 
+//B 2023.11.29
+//B
+#define CROSSVP_1D(s,v,u)                                                  \
+{                                                                       \
+    (s) = 0.0;                                                            \
+}
+
+#define CROSSVP_2D(s,v,u)                                                  \
+{                                                                        \
+    (s) = (v)[0]*(u)[1] - (v)[1]*(u)[0];                                \
+}
+
+#define CROSSVP_3D(v,u,w)                                                  \
+{                                                                       \
+    (v)[0] = (u)[1]*(w)[2] - (u)[2]*(w)[1];                             \
+    (v)[1] = (u)[2]*(w)[0] - (u)[0]*(w)[2];                             \
+    (v)[2] = (u)[0]*(w)[1] - (u)[1]*(w)[0];                             \
+}
+//E
+//E
 
 #if defined(ONEDIM)
 

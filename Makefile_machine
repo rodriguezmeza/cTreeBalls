@@ -130,6 +130,9 @@ EXTERNAL =
 
 
 #
+# 2023.11.29
+OPT2 += -DNDIMMAKE
+#
 ifeq ($(DEFDIMENSION),2)
     DIMCODE = -DTWODIMCODE
     OPT2 += $(DIMCODE)
@@ -188,12 +191,12 @@ endif
 #
 
 #
-ifeq ($(BUCKETON),1)
-OPT2 += -DBUCKET
-#ifeq ($(BUCKETSIZEON),1)
-#OPT2 += -DBUCKETSIZE
+#ifeq ($(BUCKETON),1)
+#OPT2 += -DBUCKET
+##ifeq ($(BUCKETSIZEON),1)
+##OPT2 += -DBUCKETSIZE
+##endif
 #endif
-endif
 #
 
 #
@@ -219,12 +222,49 @@ endif
 ifeq ($(PATCHESON),1)
 PATCHESADDONSON = 0
 OPT2 += -DPATCHES
-PATCHES = patches
+#PATCHES = patches
+PATCHES = addons/patches
 #vpath %.c $(PATCHES)
 INCLUDES += -I../$(PATCHES)
 HEADERFILES = $(wildcard ../$(PATCHES)/*.h)
 endif
 #
+
+#B ADDONS
+# To print some useful info set to 1. Else 0
+DEBUGON = 0
+#
+ifeq ($(DEBUGON),1)
+DEBUG = -Wall -DDEBUG
+OPT2 += $(DEBUG)
+endif
+#
+# This options needs PATCHESON
+ifeq ($(ADDONSON),1)
+ifeq ($(PATCHESON),1)
+# Machine definitions
+include $(MACHINES_DIR)/addons/Makefile_addons
+#
+#PATCHES = patches
+##vpath %.c $(PATCHES)
+#INCLUDES += -I../$(PATCHES)
+#HEADERFILES = $(wildcard ../$(PATCHES)/*.h)
+#
+OPT2 += -DADDONS
+else
+PATCHESADDONSON = 1
+# Machine definitions
+include $(MACHINES_DIR)/addons/Makefile_addons
+#
+#PATCHES = patches
+##vpath %.c $(PATCHES)
+#INCLUDES += -I../$(PATCHES)
+#HEADERFILES = $(wildcard ../$(PATCHES)/*.h)
+#
+OPT2 += -DADDONS
+endif
+endif
+#E ADDONS
 
 #
 #B GENERALLIBS section

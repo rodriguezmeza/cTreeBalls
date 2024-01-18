@@ -173,6 +173,7 @@ typedef struct {
     string statefile;
     INTEGER stepState;
     string restorefile;
+    string script;
     string options;
     string version;
     short verbose;
@@ -180,7 +181,7 @@ typedef struct {
 	string paramfile;
 
 #ifndef GETPARAM
-    char ParameterFile[MAXLENGTHOFFILES]; // May be you should incrase this number
+    char ParameterFile[MAXLENGTHOFFILES]; // May be we should incrase this number
 #endif
 
     string searchMethod;
@@ -205,6 +206,9 @@ typedef struct {
 
     string infile;
     string infilefmt;
+//B 2023.11.29
+    string iCatalogs;
+//E
     string rootDir;
     string outfile;
     string outfilefmt;
@@ -228,7 +232,8 @@ typedef struct {
     int scanLevel;
 // Root nodes:
     int scanLevelRoot;
-    int scanLevelMin;
+//    int scanLevelMin;
+    string scanLevelMin;
 //
 #endif
     INTEGER stepNodes;
@@ -256,13 +261,19 @@ typedef struct {
 
     FILE *outlog;
 //B To debug cells:
-    FILE *outcells;
+//    FILE *outcells;
 //E
 	FILE *outstr_sols;
 
 	char mode[2];
 
     int searchmethod_int;
+
+//B 2023.11.29
+//B Settings of the code
+    short dimension;                            // Set dimension of the run
+    bool tpcfon;                               // Set 3pcf computation on
+//E
 
 //B Tree
     INTEGER ncell;
@@ -277,6 +288,16 @@ typedef struct {
     INTEGER nbccalc;
     INTEGER nbbcalc;
     real rSize;             // Maximum r of the box
+
+//B 2023.11.29
+    real rSizeTable[MAXITEMS];             // Maximum r of the box
+    INTEGER ncellTable[MAXITEMS];
+    INTEGER nbodyTable[MAXITEMS];
+    int tdepthTable[MAXITEMS];
+    INTEGER nnodescanlevTable[MAXITEMS];
+    INTEGER nnodescanlev_rootTable[MAXITEMS];
+//E
+
     cellptr root;
 //E
 
@@ -324,8 +345,12 @@ typedef struct {
     int searchMethod_int;
 
     real deltaR;
+    real deltaRmin;
+    real deltaRmax;
 #ifdef LOGHIST
     real *deltaRV;
+// 2024.12.04
+    real *ddeltaRV;
 #endif
 
     real rrRange;
@@ -367,6 +392,10 @@ typedef struct {
 
     real i_deltaR;
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "globaldefs_00.h"
+#endif
 
     char fnameData_kd[128];
     char fnameOut_kd[128];
@@ -379,18 +408,23 @@ typedef struct {
     float l_box_kd;
     float l_box_half_kd;
 
+//B 2023.11.29
     int ninfiles;
     char *infilenames[MAXITEMS];
     char *infilefmtname[MAXITEMS];
+    int iCatalogs[MAXITEMS];
+//E
     int nsmooth[MAXITEMS];
     //B To debug cells:
-    char cellsfilePath[MAXLENGTHOFFILES];
+//    char cellsfilePath[MAXLENGTHOFFILES];
     INTEGER nnode;
     INTEGER rnnode;
     //E
 //#ifdef BALLS
+//    real scanLevelMin[MAXITEMS];
+    int scanLevelMin[MAXITEMS];
     int ncritical[MAXITEMS];
-    
+
     char nodesfilePath[MAXLENGTHOFFILES];
     int nnodescanlev;
 // Root nodes:
@@ -401,16 +435,24 @@ typedef struct {
 //
     char bodiesfilePath[MAXLENGTHOFFILES];
 //#endif
-    
+
+    bool flagSmoothCellMin;
     bool flagSmooth;
     bool flagSetNbNoSel;
 //B BUCKET
-    real rminCell;
+    real rminCell[2];
 //E
 } global_data, *global_data_ptr;
 
 global global_data gd;
 global cmdline_data cmd;
+
+//B 2023.11.29
+global bodyptr bodytable[MAXITEMS];
+global nodeptr *nodetablescanlev[MAXITEMS];
+global nodeptr *nodetablescanlev_root[MAXITEMS];
+global cellptr roottable[MAXITEMS];
+//E
 
 global bodyptr bodytab;
 global bodyptr bodytabbf;
@@ -431,14 +473,15 @@ global nodeptr *nodetabscanlev;
 global nodeptr *nodetabscanlev_root;
 //
 
-global real *histXi2pcf_omp;        // Auxiliary array.
-                                    // Used in OMP segments
+global real *histXi2pcf_omp;                        // Auxiliary array.
+                                                    //  Used in OMP segments
 
 //B Tree
 global cellptr root;
 // BALLS
-global cellptr rootnode;
-global bodyptr nodetable;
+global cellptr rootnode;                            // To make treenodes
+global bodyptr nodetable;                           // To smooth minimum size cells
+global bodyptr nodetable_root;
 //E
 
 #ifndef NOGSL
@@ -526,6 +569,42 @@ typedef struct {
     cellptr interact;
 
 } gdhist_omp_balls6, *gdhistptr_omp_balls6;
+
+typedef struct {
+    real **xiOUTVPcos;
+    real **xiOUTVPsin;
+    real **xiOUTVPsincos;
+    real **histZetaMtmpcos;
+    real **histZetaMtmpsin;
+    real **histZetaMtmpsincos;
+    real *ChebsT;
+    real *ChebsU;
+    real ***histZetaMthreadcos;
+    real ***histZetaMthreadsin;
+    real ***histZetaMthreadsincos;
+    realptr histNthread;
+    realptr histNSubthread;
+// 2pcf
+    realptr histNSubXi2pcfthread;
+//
+    real **histXithreadcos;
+    real **histXithreadsin;
+    real *histXi2pcfthread;
+    real *histXi2pcfthreadsub;
+
+    vector q0;
+    real drpq2, drpq;
+    vector dr0;
+    INTEGER ipcount;
+
+    int actlen;
+    int *activenb;
+    int nblist;
+    
+    nodeptr *active;
+    cellptr interact;
+
+} gdhist_sincos_omp_balls6, *gdhistptr_sincos_omp_balls6;
 
 typedef struct {
     real **xiOUTVP;
@@ -664,8 +743,17 @@ global real *inout_yval;
 global real *inout_zval;
 global real *inout_wval;
 
+//ADDONS:
+#ifdef ADDONS
+//#include "tpcf_io_gadget_00.h"
+#include "tpcf_io_00.h"
+#endif
 
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "globaldefs_01.h"
+#endif
 
 //NOLSST:
 // It is already in globaldef.h, need to fix this
@@ -702,6 +790,10 @@ global ErrorMsg errmsg;
 #endif
 //E
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "globaldefs_02.h"
+#endif
 
 #include "protodefs.h"
 

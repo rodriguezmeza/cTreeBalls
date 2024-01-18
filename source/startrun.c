@@ -28,12 +28,13 @@ local void startrun_ParamStat(void);
 local void CheckParameters(void);
 local int random_init(int seed);
 local void search_method_string_to_int(string method_str,int *method_int);
-local int expandbox(bodyptr btab, int nbody);
+local int expandbox(bodyptr btab, int nbody, int);
 
 local int infilefmt_string_to_int(string infmt_str,int *infmt_int);
 
 local int startrun_getParamsSpecial(void);
 local int scaniOption(string, int *, int *, int, int, string);
+local int scanrOption(string, double *, int *, int, int, string);
 
 #ifdef OPENMPCODE
 int set_number_threads(void);
@@ -78,7 +79,8 @@ int StartRun(string head0, string head1, string head2, string head3)
 
     gd.bytes_tot += sizeof(global_data);
     gd.bytes_tot += sizeof(cmdline_data);
-    verb_print(cmd.verbose, "\nStartRun: Total allocated %g MByte storage so far.",
+    verb_print(cmd.verbose,
+               "\nStartRun: Total allocated %g MByte storage so far.",
                gd.bytes_tot*INMB);
 
 #ifdef OPENMPCODE
@@ -86,8 +88,8 @@ int StartRun(string head0, string head1, string head2, string head3)
 #endif
 
     gd.cputotalinout += CPUTIME - cpustart;
-//    verb_print(cmd.verbose, "\nStartRun: elapsed time: %g sec.\n\n",CPUTIME - cpustart);
-    verb_print(cmd.verbose, "\nStartRun: elapsed time: %g\n\n",CPUTIME - cpustart);
+    verb_print(cmd.verbose, "\nStartRun: elapsed time: %g\n\n",
+               CPUTIME - cpustart);
 
     return _SUCCESS_;
 }
@@ -119,7 +121,7 @@ local int startrun_parameterfile(void)
 #ifdef GETPARAM
 #define parameter_null	"parameters_null-cballs"
 
-//B Section of read parameters from the command line
+//B Section for reading parameters from the command line
 
 local int startrun_cmdline(void)
 {
@@ -135,7 +137,8 @@ local void ReadParametersCmdline(void)
 // Every item in cmdline_defs.h must have an item here::
 
 #ifdef MPICODE
-    if (ThisTask==0) {                              // Input all parameters on proccess 0
+    if (ThisTask==0) {                              // Input all parameters on
+                                                    //  proccess 0
 #endif
     cmd.searchMethod = GetParam("searchMethod");
     cmd.theta = GetdParam("theta");
@@ -154,6 +157,7 @@ local void ReadParametersCmdline(void)
     cmd.sizeHistTheta = GetiParam("sizeHistTheta");
     cmd.infile = GetParam("infile");
     cmd.infilefmt = GetParam("infileformat");
+    cmd.iCatalogs = GetParam("iCatalogs");
     cmd.rootDir = GetParam("rootDir");
     cmd.outfile = GetParam("outfile");
     cmd.outfilefmt = GetParam("outfileformat");
@@ -174,6 +178,7 @@ local void ReadParametersCmdline(void)
 
     cmd.numthreads = GetiParam("numberThreads");
 
+    cmd.script = GetParam("script");
     cmd.options = GetParam("options");
 
 //
@@ -186,16 +191,14 @@ local void ReadParametersCmdline(void)
         cmd.scanLevel = GetiParam("scanLevel");
 // Root nodes:
         cmd.scanLevelRoot = GetiParam("scanLevelRoot");
-        cmd.scanLevelMin = GetiParam("scanLevelMin");
+        cmd.scanLevelMin = GetParam("scanLevelMin");
 //
 #endif
     cmd.stepNodes = GetiParam("stepNodes");
     cmd.ncritical = GetParam("ncritical");
-//#endif
     cmd.testmodel = GetParam("testmodel");
     cmd.nbody = GetiParam("nbody");
     cmd.lengthBox = GetdParam("lengthBox");
-//    cmd.mToPlot = GetiParam("mToPlot");
 //
 //E
 //
@@ -215,25 +218,56 @@ local void ReadParametersCmdline(void)
 
 local int startrun_Common(void)
 {
+    int ifile;
+
 #ifdef SAVERESTORE
     if (strnull(cmd.restorefile)) {
 #endif
 
         setFilesDirs();
-            setFilesDirs_log();
+        setFilesDirs_log();
         strcpy(gd.mode,"w");
 #ifdef MPICODE
         if(ThisTask==0) {
 #endif
             if(!(gd.outlog=fopen(gd.logfilePath, gd.mode)))
-                error("\nstart_Common: error opening file '%s' \n",gd.logfilePath);
+                error("\nstart_Common: error opening file '%s' \n",
+                      gd.logfilePath);
 #ifdef MPICODE
         }
 #endif
 
-
         startrun_getParamsSpecial();
-        
+
+//B Settings of the code
+        if (scanopt(cmd.options, "2D"))             // Set dimension of the run
+            gd.dimension = 2;
+        else
+            gd.dimension = 3;
+
+        if (NDIM == 3) {
+            if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           "\nDIMENSION=%d & THREEDIM\n",
+                           gd.dimension);
+            if (gd.dimension != 3)
+                verb_print(cmd.verbose,
+                           "\nWarning! dimension not equal to THREEDIM\n");
+        } else {
+            if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           "\nDIMENSION=%d & TWODIM\n",
+                           gd.dimension);
+            if (gd.dimension != 2)
+                verb_print(cmd.verbose,
+                           "\nWarning! dimension not equal to TWODIM\n");
+        }
+
+        gd.tpcfon == FALSE;
+        if (!scanopt(cmd.options,"no-3pcf-on"))     // Set 3pcf computation on
+            gd.tpcfon == TRUE;
+
+//E
 
 #ifdef CLASSLIB
         class_call(random_init(cmd.seed), errmsg, errmsg);
@@ -248,18 +282,49 @@ local int startrun_Common(void)
         startrun_memoryAllocation();
 #endif
 
-        if (! strnull(cmd.infile)) {
-#ifdef CLASSLIB
-            class_call(infilefmt_string_to_int(cmd.infilefmt, &gd.infilefmt_int),
-                   errmsg, errmsg);
-            class_call(inputdata(), errmsg, errmsg);
-#else
-            infilefmt_string_to_int(cmd.infilefmt, &gd.infilefmt_int);
-            inputdata();
-#endif
-        } else {
-            testdata();
+//B
+//B Pre-processing necessary for reading data files:
+        double cpustart;
+        char buf[200];
+        if (scanopt(cmd.options, "pre-processing")) {
+            cpustart = CPUTIME;
+            sprintf(buf,"%s",cmd.script);
+            verb_print(cmd.verbose,
+                       "\npre-processing: executing %s...",cmd.script);
+            system(buf);
+            verb_print(cmd.verbose, " done.\n");
+            gd.cputotalinout += CPUTIME - cpustart;
+            verb_print(cmd.verbose, "cpu time expended in this script %g\n\n",
+                       CPUTIME - cpustart);
+            if (scanopt(cmd.options, "stop")) {
+                verb_print(cmd.verbose, "\n\tMainLoop: stopping...\n\n");
+                exit(1);
+            }
         }
+//E
+
+//B In this section update computation of rSize and center-of-mass if necessary
+//      so we have a common root size and c-of-m
+        for (ifile=0; ifile<gd.ninfiles; ifile++) {
+            if (!strnull(cmd.infile)) {
+#ifdef CLASSLIB
+                class_call(infilefmt_string_to_int(gd.infilefmtname[ifile],
+                                                   &gd.infilefmt_int),
+                   errmsg, errmsg);
+                class_call(inputdata(gd.infilenames[ifile],ifile),
+                           errmsg, errmsg);
+#else
+                infilefmt_string_to_int(gd.infilefmtname[ifile],
+                                        &gd.infilefmt_int);
+                inputdata(gd.infilenames[ifile],ifile);
+#endif
+            } else {
+                testdata();
+            }
+        }
+//E
+//E
+
 
 #ifdef MPICODE
         MPI_Barrier(MPI_COMM_WORLD);
@@ -278,62 +343,69 @@ local int startrun_Common(void)
                    cmd.nbody*sizeof(body)*INMB);
 
         search_method_string_to_int(cmd.searchMethod, &gd.searchMethod_int);
-        gd.rSize = 1.0;
-        expandbox(bodytab, cmd.nbody);
-        if (cmd.rangeN > gd.rSize)
+        for (ifile=0; ifile<gd.ninfiles; ifile++) {
+            gd.rSizeTable[ifile] = 1.0;
+            expandbox(bodytable[ifile], gd.nbodyTable[ifile], ifile);
+        if (cmd.rangeN > gd.rSizeTable[ifile])
             verb_print(cmd.verbose,
-                "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
-                cmd.rangeN, gd.rSize);
-
-//        setFilesDirs();
+        "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
+                cmd.rangeN, gd.rSizeTable[ifile]);
+        }
 
 //B Tree search:
         gd.Rcut = cmd.rangeN;                       // Maximum search radius
         gd.RcutSq = gd.Rcut*gd.Rcut;
-//B This is how to use logscale bins
-//        rlog = rlog10(cmd.rmin) + gd.deltaR*((real)(i));
-//        rv = rpow(10.0,rlog);
 //E
-#ifdef LOGHIST      // This segment is ignored:
-//        if (cmd.logHist) {
-/*
-        gd.deltaRV = dvector(1,cmd.sizeHistN);
-        verb_log_print(cmd.verbose_log, gd.outlog, "deltaRV:\n");
-        int n;
-        for (n=1; n<=cmd.sizeHistN; n++) {
-//            gd.deltaRV[n] = cmd.rangeN*rpow(10.0, ((real)(n-cmd.sizeHistN))/NLOGBINPD)
-//                            *(rpow(10.0,1.0/NLOGBINPD) - 1.0);
-            gd.deltaRV[n] = cmd.rangeN*rpow( 10.0, ( (real)(n-cmd.sizeHistN) )/NLOGBINPD );
-            verb_log_print(cmd.verbose_log, gd.outlog, " %d %lg\n",n,gd.deltaRV[n]);
-        }
-*/
+#ifdef LOGHIST
         real rBin, rbinlog;
         if (cmd.rminHist==0) {
-//                gd.deltaR = rlog10(cmd.rangeN)/cmd.sizeHistN;
             gd.deltaRV = dvector(1,cmd.sizeHistN);
             verb_log_print(cmd.verbose_log, gd.outlog, "\ndeltaRV:\n");
             int n;
             for (n=1; n<=cmd.sizeHistN; n++) {
-                gd.deltaRV[n] = cmd.rangeN*rpow( 10.0, ( (real)(n-cmd.sizeHistN) )/NLOGBINPD );
-                verb_log_print(cmd.verbose_log, gd.outlog, " %d %lg\n",n,gd.deltaRV[n]);
+                gd.deltaRV[n] =
+                cmd.rangeN*rpow( 10.0, ( (real)(n-cmd.sizeHistN) )/NLOGBINPD );
+                verb_log_print(cmd.verbose_log, gd.outlog,
+                               " %d %lg\n",n,gd.deltaRV[n]);
             }
         } else {
             gd.deltaR = rlog10(cmd.rangeN/cmd.rminHist)/cmd.sizeHistN;
             gd.deltaRV = dvector(1,cmd.sizeHistN);
-            verb_log_print(cmd.verbose_log, gd.outlog, "deltaRV (deltaR=%lf logscale):\n", gd.deltaR);
+            gd.ddeltaRV = dvector(1,cmd.sizeHistN-1);
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           "deltaRV (deltaR=%lf logscale):\n", gd.deltaR);
             int n;
-            for (n=1; n<=cmd.sizeHistN; n++) {
+            rbinlog = rlog10(cmd.rminHist) + ((real)(1))*gd.deltaR;
+            rBin=rpow(10.0,rbinlog);
+            gd.deltaRV[1] = rBin;
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           " %d %lg\n",n,gd.deltaRV[1]);
+            gd.deltaRmin=rBin;
+            gd.deltaRmax=rBin;
+            for (n=2; n<=cmd.sizeHistN; n++) {
                 rbinlog = rlog10(cmd.rminHist) + ((real)(n))*gd.deltaR;
                 rBin=rpow(10.0,rbinlog);
                 gd.deltaRV[n] = rBin;
-                verb_log_print(cmd.verbose_log, gd.outlog, " %d %lg\n",n,gd.deltaRV[n]);
+                verb_log_print(cmd.verbose_log, gd.outlog,
+                               " %d %lg %lg\n",
+                               n,gd.deltaRV[n],gd.deltaRV[n]-gd.deltaRV[n-1]);
+//B Not working MIN and MAX macros... Test these macros
+                gd.ddeltaRV[n-1] = gd.deltaRV[n]-gd.deltaRV[n-1];
+                if (gd.deltaRmax < gd.deltaRV[n]-gd.deltaRV[n-1])
+                    gd.deltaRmax = gd.deltaRV[n]-gd.deltaRV[n-1];
+                if (gd.deltaRmin > gd.deltaRV[n]-gd.deltaRV[n-1])
+                    gd.deltaRmin = gd.deltaRV[n]-gd.deltaRV[n-1];
+//E
             }
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           "deltaRV min and max: %lg %lg\n",
+                           gd.deltaRmin, gd.deltaRmax);
         }
-//        } else
 #else // ! LOGHIST
-            gd.deltaR = (cmd.rangeN-cmd.rminHist)/cmd.sizeHistN;
-        verb_log_print(cmd.verbose_log, gd.outlog, "deltaR=%lf normal scale):\n",gd.deltaR);
-#endif
+        gd.deltaR = (cmd.rangeN-cmd.rminHist)/cmd.sizeHistN;
+        verb_log_print(cmd.verbose_log, gd.outlog,
+                       "deltaR=%lf normal scale):\n",gd.deltaR);
+#endif // ! LOGHIST
 
 //
 //B For 3pcf brute force:
@@ -350,7 +422,7 @@ local int startrun_Common(void)
         DO_COORD(k)
             Vol = Vol*gd.Box[k];
         
-        gd.i_deltaR = 1.0/gd.deltaR;     // This is gd.i_r_max change...
+        gd.i_deltaR = 1.0/gd.deltaR;                // This is gd.i_r_max change...
 
         verb_log_print(cmd.verbose_log, gd.outlog,
                        "\nRcut, deltaR: %g %g\n",gd.Rcut,gd.deltaR);
@@ -365,10 +437,14 @@ local int startrun_Common(void)
         verb_log_print(cmd.verbose_log, gd.outlog,
                        "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd.nbody,1.0/3.0));
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "startrun_00.h"
+#endif
 
 
 #ifdef SAVERESTORE
-    }    else {                              // if !strnull(cmd.restorefile)
+    }    else {                                     // if !strnull(cmd.restorefile)
 
 // We must check the order of memory allocation and dealocation
 //NOLSST
@@ -412,12 +488,13 @@ local int startrun_getParamsSpecial(void)
     char *pch;
     int nitems, ndummy=1;
     char inputnametmp[MAXLENGTHOFSTRSCMD];
+    int i;
 
     if (strnull(cmd.infile)) {
         if (cmd.verbose_log>=3)
        verb_log_print(cmd.verbose_log, gd.outlog,
-                       "\nstartrun_getParamsSpecial: no inputfile was given making data ...\n");
-        gd.ninfiles=1;                            // To test data...
+                       "\nstartrun_getParamsSpecial: no inputfile was given, making data ...\n");
+        gd.ninfiles=1;                              // To test data...
     } else {
         strcpy(inputnametmp,cmd.infile);
         if (cmd.verbose_log>=3)
@@ -463,7 +540,48 @@ local int startrun_getParamsSpecial(void)
 //    scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, ndummy, 2, "nsmooth");
     scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, 1, 1, "nsmooth");
 //#ifdef BALLS
+//    scanrOption(cmd.scanLevelMin, gd.scanLevelMin, &nitems, ndummy,
+//                2, "scanLevelMin");
+    scaniOption(cmd.scanLevelMin, gd.scanLevelMin, &nitems, ndummy,
+                2, "scanLevelMin");
+//    printf("\nnitems= %d\n",nitems);
+    if (nitems==1)
+        gd.scanLevelMin[1]=gd.scanLevelMin[0]-1;
+//    gd.scanLevelMin[1]=0.25;
+    if (strnull(cmd.scanLevelMin)) {
+        gd.scanLevelMin[0]=0;
+        if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",
+                           gd.scanLevelMin[0]);
+//        gd.scanLevelMin[1]=1;
+        gd.scanLevelMin[1]=gd.scanLevelMin[0]-1;
+        if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",
+                           gd.scanLevelMin[1]);
+    }
     scaniOption(cmd.ncritical, gd.ncritical, &nitems, ndummy, 2, "ncritical");
+    scaniOption(cmd.iCatalogs, gd.iCatalogs, &nitems, gd.ninfiles, 0, "iCatalogs");
+    if (gd.ninfiles==1) {
+        (gd.iCatalogs[0]) = 0;
+        if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                        "option: iCatalogs final values: %d\n",
+                        gd.iCatalogs[0]);
+        (gd.iCatalogs[1]) = 0;
+        if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                        "option: iCatalogs final values: %d\n",
+                        gd.iCatalogs[1]);
+    } else {
+        for (i=0; i<gd.ninfiles; i++) {
+            (gd.iCatalogs[i])--;
+            if (cmd.verbose_log>=3)
+                verb_log_print(cmd.verbose_log, gd.outlog,
+                        "option: iCatalogs final values: %d\n",
+                        gd.iCatalogs[i]);
+        }
+    }
+    
 //#endif
 
     return _SUCCESS_;
@@ -502,7 +620,7 @@ local int scaniOption(string optionstr, int *option, int *noption,
 
         if (flag == 0)
             if (*noption != nfiles)
-                error("\nscanOption: noption = %d must be equal to number of files\n\n",*noption);
+                error("\nscanOption: noption = %d must be equal to number of infiles\n\n",*noption);
         if (*noption > MAXITEMS)
             error("\nscanOption: noption = %d must be less than the maximum num. of lines\n\n",*noption);
 
@@ -535,6 +653,76 @@ local int scaniOption(string optionstr, int *option, int *noption,
     return _SUCCESS_;
 }
 
+local int scanrOption(string optionstr, double *option, int *noption,
+    int nfiles, int flag, string message)
+{
+    char *pch;
+    char *poptionstr[30],  optiontmp[100];
+    int i;
+//
+// Decide what is better: DEBUG or if (cmd.verbose_log>=3)
+//
+#ifdef DEBUG
+    if (cmd.verbose_log>=3)
+    verb_log_print(cmd.verbose_log, gd.outlog, "\nProcessing '%s' option:\n", message);
+#endif
+
+    if (!strnull(optionstr)) {
+        strcpy(optiontmp,optionstr);
+        if (cmd.verbose_log>=3)
+        verb_log_print(cmd.verbose_log, gd.outlog, "\nSplitting string \"%s\" in tokens:\n",optiontmp);
+        *noption=0;
+        pch = strtok(optiontmp," ,");
+        while (pch != NULL) {
+            poptionstr[*noption] = (string) malloc(10);
+            strcpy(poptionstr[*noption],pch);
+            ++(*noption);
+            if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog, "%s\n",poptionstr[*noption-1]);
+            pch = strtok (NULL, " ,");
+        }
+        if (cmd.verbose_log>=3)
+        verb_log_print(cmd.verbose_log, gd.outlog, "num. of tokens in option %s =%d\n", optionstr,*noption);
+
+        if (flag == 0)
+            if (*noption != nfiles)
+                error("\nscanOption: noption = %d must be equal to number of files\n\n",*noption);
+        if (*noption > MAXITEMS)
+            error("\nscanOption: noption = %d must be less than the maximum num. of lines\n\n",*noption);
+
+        for (i=0; i<*noption; i++) {
+            option[i]=atof(poptionstr[i]);
+            if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog, "option: %g\n",option[i]);
+        }
+
+        if (cmd.verbose_log>=3)
+        verb_log_print(cmd.verbose_log, gd.outlog, "\nnoptions, nfiles: %d %d\n",*noption,nfiles);
+        if (flag == 1) {
+            if (*noption > nfiles)
+                error("\nscanOption: noption = %d must be less or equal to number of files\n\n",*noption);
+            else {
+                for (i=*noption; i<nfiles; i++) {
+                    option[i]=option[i-1]+1;
+                    if (cmd.verbose_log>=3)
+                    verb_log_print(cmd.verbose_log, gd.outlog, "option: %g\n",option[i]);
+                }
+            }
+        }
+    } else {
+        for (i=0; i<nfiles; i++) {
+//B Be aware of this values
+            option[i]=0;
+//E
+            if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",option[i]);
+        }
+    }
+
+    return _SUCCESS_;
+}
+
+
 #ifdef GETPARAM
 //B Section of parameter stat
 local void startrun_ParamStat(void)
@@ -542,7 +730,8 @@ local void startrun_ParamStat(void)
 // Every item in cmdline_defs.h must have an item here::
 
 #ifdef MPICODE
-    if (ThisTask==0) {                              // Input all parameters on proccess 0
+    if (ThisTask==0) {                                  // Input all parameters on
+                                                        //  proccess 0
 #endif
     if (GetParamStat("searchMethod") & ARGPARAM)
         cmd.searchMethod = GetParam("searchMethod");
@@ -553,6 +742,8 @@ local void startrun_ParamStat(void)
         cmd.infile = GetParam("infile");
     if (GetParamStat("infilefmt") & ARGPARAM)
         cmd.infilefmt = GetParam("infileformat");
+    if (GetParamStat("iCatalogs") & ARGPARAM)
+        cmd.iCatalogs = GetParam("iCatalogs");
     if (GetParamStat("rootDir") & ARGPARAM)
         cmd.rootDir = GetParam("rootDir");
     if (GetParamStat("outfile") & ARGPARAM)
@@ -605,6 +796,8 @@ local void startrun_ParamStat(void)
     if (GetParamStat("numberThreads") & ARGPARAM)
         cmd.numthreads = GetiParam("numberThreads");
 
+    if (GetParamStat("script") & ARGPARAM)
+        cmd.script = GetParam("script");
     if (GetParamStat("options") & ARGPARAM)
         cmd.options = GetParam("options");
 
@@ -624,8 +817,10 @@ local void startrun_ParamStat(void)
 // Root nodes:
         if (GetParamStat("scanLevelRoot") & ARGPARAM)
                 cmd.scanLevelRoot = GetiParam("scanLevelRoot");
+//        if (GetParamStat("scanLevelMin") & ARGPARAM)
+//                cmd.scanLevelMin = GetiParam("scanLevelMin");
         if (GetParamStat("scanLevelMin") & ARGPARAM)
-                cmd.scanLevelMin = GetiParam("scanLevelMin");
+                cmd.scanLevelMin = GetParam("scanLevelMin");
 //
 #endif
     if (GetParamStat("stepNodes") & ARGPARAM)
@@ -712,8 +907,12 @@ local void CheckParameters(void)
 // Root nodes:
     if (cmd.scanLevelRoot < 0)
         error("CheckParameters: absurd value for scanLevelRoot (%d)\n",cmd.scanLevelRoot);
-    if (cmd.scanLevelMin > 0)
-        error("CheckParameters: absurd value for scanLevelMin (%d)\n",cmd.scanLevelMin);
+//    if (cmd.scanLevelMin > 0)
+    if ((int)gd.scanLevelMin[0] > 0)
+        error("CheckParameters: absurd value for scanLevelMin[0] (%s)\n",cmd.scanLevelMin);
+//    if (gd.scanLevelMin[1] < 0 || gd.scanLevelMin[1] > 1)
+    if (gd.scanLevelMin[1] > 0)
+        error("CheckParameters: absurd value for scanLevelMin[1] (%s)\n",cmd.scanLevelMin);
 //
 #endif
     if (cmd.stepNodes < 1)
@@ -761,7 +960,8 @@ local void ReadParameterFile(char *fname)
   int  errorFlag=0;
 
 #ifdef MPICODE
-    if (ThisTask==0) {                              // Input all parameters on proccess 0
+    if (ThisTask==0) {                                  // Input all parameters on
+                                                        //  proccess 0
 #endif
   nt=0;
 
@@ -769,6 +969,7 @@ local void ReadParameterFile(char *fname)
     RPName(cmd.theta,"theta");
     SPName(cmd.infile,"infile",MAXLENGTHOFSTRSCMD);
     SPName(cmd.infilefmt,"infileformat",MAXLENGTHOFSTRSCMD);
+    SPName(cmd.iCatalogs,"iCatalogs",MAXLENGTHOFSTRSCMD);
     SPName(cmd.rootDir,"rootDir",MAXLENGTHOFSTRSCMD);
     SPName(cmd.outfile,"outfile",MAXLENGTHOFSTRSCMD);
     SPName(cmd.outfilefmt,"outfileformat",MAXLENGTHOFSTRSCMD);
@@ -798,19 +999,21 @@ local void ReadParameterFile(char *fname)
     IPName(cmd.verbose,"verbose");
     IPName(cmd.verbose_log,"verbose_log");
     IPName(cmd.numthreads,"numberThreads");
-	SPName(cmd.options,"options",MAXLENGTHOFSTRSCMD);
+        SPName(cmd.script,"script",MAXLENGTHOFSTRSCMD);
+        SPName(cmd.options,"options",MAXLENGTHOFSTRSCMD);
 
 //
 //B NOLSST:
 //
-    IPName(cmd.seed,"seed");                        // to always have defaults
+    IPName(cmd.seed,"seed");                            // to always have defaults
     SPName(cmd.nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
 #ifdef BALLS
     IPName(cmd.ntosave,"ntosave");
     IPName(cmd.scanLevel,"scanLevel");
 // Root nodes:
         IPName(cmd.scanLevelRoot,"scanLevelRoot");
-        IPName(cmd.scanLevelMin,"scanLevelMin");
+//        IPName(cmd.scanLevelMin,"scanLevelMin");
+        SPName(cmd.scanLevelMin,"scanLevelMin",MAXLENGTHOFSTRSCMD);
 //
 #endif
     IPName(cmd.stepNodes,"stepNodes");
@@ -922,7 +1125,8 @@ local void PrintParameterFile(char *fname)
     int  errorFlag=0;
 
 #ifdef MPICODE
-    if (ThisTask==0) {                              // Output only on proccess 0
+    if (ThisTask==0) {                                  // Output only on proccess
+                                                        //  0
 #endif
     sprintf(buf,"%s/%s%s",cmd.rootDir,fname,"-usedvalues");
     if(!(fdout=fopen(buf,"w"))) {
@@ -933,6 +1137,7 @@ local void PrintParameterFile(char *fname)
         fprintf(fdout,FMTR,"theta",cmd.theta);
         fprintf(fdout,FMTT,"infile",cmd.infile);
         fprintf(fdout,FMTT,"infileformat",cmd.infilefmt);
+        fprintf(fdout,FMTT,"iCatalogs",cmd.iCatalogs);
         fprintf(fdout,FMTT,"rootDir",cmd.rootDir);
         fprintf(fdout,FMTT,"outfile",cmd.outfile);
         fprintf(fdout,FMTT,"outfileformat",cmd.outfilefmt);
@@ -962,6 +1167,7 @@ local void PrintParameterFile(char *fname)
         fprintf(fdout,FMTI,"verbose",cmd.verbose);
         fprintf(fdout,FMTI,"verbose_log",cmd.verbose_log);
         fprintf(fdout,FMTI,"numberThreads",cmd.numthreads);
+        fprintf(fdout,FMTT,"script",cmd.script);
         fprintf(fdout,FMTT,"options",cmd.options);
 //
 //B NOLSST:
@@ -973,7 +1179,8 @@ local void PrintParameterFile(char *fname)
         fprintf(fdout,FMTI,"scanLevel",cmd.scanLevel);
 // Root nodes:
         fprintf(fdout,FMTI,"scanLevelRoot",cmd.scanLevelRoot);
-        fprintf(fdout,FMTI,"scanLevelMin",cmd.scanLevelMin);
+//        fprintf(fdout,FMTI,"scanLevelMin",cmd.scanLevelMin);
+        fprintf(fdout,FMTT,"scanLevelMin",cmd.scanLevelMin);
 //
 #endif
         fprintf(fdout,FMTIL,"stepNodes",cmd.stepNodes);
@@ -1013,12 +1220,17 @@ local void PrintParameterFile(char *fname)
 local int infilefmt_string_to_int(string infmt_str,int *infmt_int)
 {
     *infmt_int=-1;
-    if (strcmp(infmt_str,"columns-ascii") == 0)             *infmt_int = INCOLUMNS;
-    if (strnull(infmt_str))                                 *infmt_int = INNULL;
-    if (strcmp(infmt_str,"binary") == 0)                    *infmt_int = INCOLUMNSBIN;
-    if (strcmp(infmt_str,"takahasi") == 0)                  *infmt_int = INTAKAHASI;
-    if (strcmp(infmt_str,"columns-ascii-2d-to-3d") == 0)    *infmt_int = INCOLUMNS2DTO3D;
+    if (strcmp(infmt_str,"columns-ascii") == 0)         *infmt_int = INCOLUMNS;
+    if (strnull(infmt_str))                             *infmt_int = INNULL;
+    if (strcmp(infmt_str,"binary") == 0)                *infmt_int = INCOLUMNSBIN;
+    if (strcmp(infmt_str,"takahasi") == 0)              *infmt_int = INTAKAHASI;
+    if (strcmp(infmt_str,"columns-ascii-2d-to-3d") == 0)
+                                                    *infmt_int = INCOLUMNS2DTO3D;
 
+//ADDONS:
+#ifdef ADDONS
+#include "startrun_01.h"
+#endif
 
     return _SUCCESS_;
 }
@@ -1052,12 +1264,15 @@ global int startrun_memoryAllocation(void)
     bytes_tot_local += cmd.sizeHistN*sizeof(real);
     gd.histNNN = dvector(1,cmd.sizeHistN);
     bytes_tot_local += cmd.sizeHistN*sizeof(real);
-    gd.histNNNSub = dmatrix3D(1,cmd.sizeHistN,1,cmd.sizeHistN,1,cmd.sizeHistTheta);
-    bytes_tot_local += (cmd.sizeHistN*cmd.sizeHistN*cmd.sizeHistTheta)*sizeof(real);
+    gd.histNNNSub = dmatrix3D(1,cmd.sizeHistN,1,cmd.sizeHistN,
+                              1,cmd.sizeHistTheta);
+    bytes_tot_local +=
+                (cmd.sizeHistN*cmd.sizeHistN*cmd.sizeHistTheta)*sizeof(real);
     gd.histXi2pcf = dvector(1,cmd.sizeHistN);
     bytes_tot_local += cmd.sizeHistN*sizeof(real);
     gd.histXi3pcf = dmatrix3D(1,cmd.sizeHistN,1,cmd.sizeHistN,1,cmd.sizeHistTheta);
-    bytes_tot_local += (cmd.sizeHistN*cmd.sizeHistN*cmd.sizeHistTheta)*sizeof(real);
+    bytes_tot_local +=
+                (cmd.sizeHistN*cmd.sizeHistN*cmd.sizeHistTheta)*sizeof(real);
 #ifdef TPCF
     gd.histXi = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*sizeof(real);
@@ -1067,12 +1282,17 @@ global int startrun_memoryAllocation(void)
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*sizeof(real);
     gd.histZetaM = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
-    gd.histZetaMcos = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    gd.histZetaMcos =
+            dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    bytes_tot_local +=
+            (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
+    gd.histZetaMsin =
+            dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
-    gd.histZetaMsin = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
-    bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
-    gd.histZetaMsincos = dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
-    bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
+    gd.histZetaMsincos =
+            dmatrix3D(1,cmd.mchebyshev+1,1,cmd.sizeHistN,1,cmd.sizeHistN);
+    bytes_tot_local +=
+            (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*sizeof(real);
 
 #ifndef NOGSL
     gd.histXi_gsl = gsl_matrix_complex_calloc(cmd.mchebyshev+1,cmd.sizeHistN);
@@ -1081,7 +1301,8 @@ global int startrun_memoryAllocation(void)
     histZetaMatrix = (mMatrix_ptr) allocate((cmd.mchebyshev+1) * sizeof(mMatrix));
     int m;
     for (m=0; m<=cmd.mchebyshev; m++){
-        histZetaMatrix[m].histZetaM = gsl_matrix_complex_calloc(cmd.sizeHistN,cmd.sizeHistN);
+        histZetaMatrix[m].histZetaM =
+            gsl_matrix_complex_calloc(cmd.sizeHistN,cmd.sizeHistN);
     }
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*cmd.sizeHistN*2*sizeof(real);
 #endif
@@ -1090,8 +1311,8 @@ global int startrun_memoryAllocation(void)
 
     gd.bytes_tot += bytes_tot_local;
     verb_print(cmd.verbose,
-               "\n\nstartrun_memoryAllocation: Allocated %g MByte for histograms storage.\n",
-               bytes_tot_local*INMB);
+    "\n\nstartrun_memoryAllocation: Allocated %g MByte for histograms storage.\n",
+    bytes_tot_local*INMB);
 
     return _SUCCESS_;
 }
@@ -1100,17 +1321,30 @@ local void search_method_string_to_int(string method_str,int *method_int)
 {
 // Every search method must have an item here::
     *method_int=-1;
-    if (strnull(method_str))                                *method_int = SEARCHNULL;
-    if (strcmp(method_str,"tree-omp") == 0)                 *method_int = TREEOMPMETHOD;
-    if (strcmp(method_str,"tree-3pcf-direct-omp") == 0)     *method_int = TREE3PCFBFOMPMETHOD;
-    if (strcmp(method_str,"tree-omp-sincos") == 0)          *method_int = TREEOMPMETHODSINCOS;
-    if (strcmp(method_str,"balls-omp") == 0)               *method_int = BALLSOMPMETHOD;
+    if (strnull(method_str))
+                *method_int = SEARCHNULL;
+    if (strcmp(method_str,"tree-omp") == 0)
+                *method_int = TREEOMPMETHOD;
+    if (strcmp(method_str,"tree-3pcf-direct-omp") == 0)
+                *method_int = TREE3PCFBFOMPMETHOD;
+    if (strcmp(method_str,"tree-omp-sincos") == 0)
+                *method_int = TREEOMPMETHODSINCOS;
+    if (strcmp(method_str,"balls-omp") == 0)
+                *method_int = BALLSOMPMETHOD;
 
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "startrun_02.h"
+#endif
 
+//ADDONS:
+#ifdef PATCHES
+#include "startrun_patch.h"
+#endif
 
 }
 
-local int expandbox(bodyptr btab, int nbody)
+local int expandbox(bodyptr btab, int nbody, int ifile)
 {
     real dmax, d;
     bodyptr p;
@@ -1129,12 +1363,12 @@ local int expandbox(bodyptr btab, int nbody)
             if (d > dmax)
                 dmax = d;
         }
-    while (gd.rSize < 2 * dmax)
-      gd.rSize = 2 * gd.rSize;
+    while (gd.rSizeTable[ifile] < 2 * dmax)
+      gd.rSizeTable[ifile] = 2 * gd.rSizeTable[ifile];
 
 #ifdef DEBUG
     if (cmd.verbose_log>=3)
-    verb_log_print(cmd.verbose_log, gd.outlog,"\nexpandbox: rSize = %g\n", gd.rSize);
+    verb_log_print(cmd.verbose_log, gd.outlog,"\nexpandbox: rSize = %g\n", gd.rSizeTable[ifile]);
 #endif
 
     return _SUCCESS_;

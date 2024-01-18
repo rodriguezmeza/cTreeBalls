@@ -13,63 +13,64 @@
 
 #include "globaldefs.h"
 
-local void newtree(void);
-local cellptr makecell(void);
-local void expandbox(bodyptr, int);
-local void loadbody(bodyptr);
+local void newtree(int);
+local cellptr makecell(int);
+local void expandbox(bodyptr, int, int);
+local void loadbody(bodyptr, int);
 local int subindex(bodyptr, cellptr);
-local void hackCellProp(cellptr, real, int);
-local void setRadius(cellptr, vector, real);
+local void hackCellProp(cellptr, real, int, int);
+local void setRadius(cellptr, vector, real, int);
 local void threadtree(nodeptr, nodeptr);
 
-local void findRootCenter(bodyptr, int);
-local void centerBodies(bodyptr btab, int nbody);
+local void findRootCenter(bodyptr, int, int);
+local void centerBodies(bodyptr, int, int);
 
 #define MAXLEVEL  32
 
 local int cellhist[MAXLEVEL];
 local int subnhist[MAXLEVEL];
 //B Smooth(ing) section
-//B To smooth bodies
-local INTEGER NTOT[1];                      // Two sets of cells to smooth
-local INTEGER ip;
+local INTEGER NTOT[1];                              // Two sets of cells to smooth
+local INTEGER ip;                                   //  bodies
 #define NbMax 33
 local int cellhistNb[NbMax];
 local int cellRadius[NbMax];
 local real deltaRadius;
 //E
-//E
 
-//B To see the bodies belonging to a cell:
-local void walktree(nodeptr q, real qsize);
-//E
+local void walktree_selected(nodeptr, real);        // To see the bodies belonging
+                                                    //  to a cell
 
-
-//#ifdef BALLS
-//B To debug cells:
-local INTEGER icell;
+local INTEGER icell;                                // To debug cells
 local INTEGER inode;
+#ifdef DEBUG
+local void walktree_hit(nodeptr, real);
+#endif
+
 local INTEGER Nc1;
 local INTEGER Nc2;
-local void walktree_index_scan_lev(nodeptr q, int lev);
-#ifdef DEBUG
-local void walktree_hit(nodeptr q, real qsize);
-#endif
+local int scanLevel(int);
+local void walktree_index_scan_lev(nodeptr, int, int, int);
+
 local INTEGER inodelev;
 local INTEGER ibodyleftout;
-// Root nodes:
-local void walktree_index_scan_lev_root(nodeptr q, int lev);
+
+//B Root nodes:
+local void walktree_index_scan_lev_root(nodeptr, int, int);
 local INTEGER inodelev_root;
 local INTEGER ibodyleftout_root;
-//local int scanLevel_root;
 //E
 
-//B Balls-correction. 2023-11-10
-local int save_nodes(void);
-//E
-//#endif
+local INTEGER isel, inosel;
+local int smoothBodies(bodyptr, INTEGER);
 
-global void maketree(bodyptr btab, int nbody)
+local int save_nodes(int ifile);
+local int save_nodes_root(int ifile);
+
+local char cellsfilePath[MAXLENGTHOFFILES];
+local FILE *outcells;
+
+global void maketree(bodyptr btab, int nbody, int ifile)
 {
     double cpustart;
     bodyptr p;
@@ -78,68 +79,65 @@ global void maketree(bodyptr btab, int nbody)
     cpustart = CPUTIME;
     gd.bytes_tot_cells = 0;
 
-//#ifdef BALLS
 #ifdef DEBUG
 //B To debug cells:
-    sprintf(gd.cellsfilePath,"%s/cells%s.txt",gd.tmpDir,cmd.suffixOutFiles);
-    if(!(gd.outcells=fopen(gd.cellsfilePath, "w")))
-        error("\nstart_Common: error opening file '%s' \n",gd.cellsfilePath);
+// These gd.cellsfilePath and gd.outcells will be local, remove from gd struct
+//    sprintf(gd.cellsfilePath,"%s/cells%s.txt",gd.tmpDir,cmd.suffixOutFiles);
+//    if(!(gd.outcells=fopen(gd.cellsfilePath, "w")))
+//        error("\nstart_Common: error opening file '%s' \n",gd.cellsfilePath);
+    sprintf(cellsfilePath,"%s/cells%s.txt",gd.tmpDir,cmd.suffixOutFiles);
+    if(!(outcells=fopen(cellsfilePath, "w")))
+        error("\nstart_Common: error opening file '%s' \n",cellsfilePath);
 //E
-//#endif
 #endif
 
-    newtree();
-    root = makecell();
+    newtree(ifile);
+    roottable[ifile] = makecell(ifile);
 //B Set (0,0,...) as the center of the box
 // By now it is only working with boxes centered at (0,0,...)
-    findRootCenter(btab, nbody);
-    centerBodies(btab, nbody);
-    findRootCenter(btab, nbody);
+    findRootCenter(btab, nbody, ifile);
+    centerBodies(btab, nbody, ifile);
+    findRootCenter(btab, nbody, ifile);
 //E
 
-    CLRV(Pos(root));
-    expandbox(btab, nbody);
+    CLRV(Pos(roottable[ifile]));
+    expandbox(btab, nbody, ifile);
+
     DO_BODY(p, btab, btab+nbody) {
-        Nbb(p) = 1;                         // Check consistency with smoothing... Correction
-        loadbody(p);
-//B Balls-correction. 2023-11-10
+        Nbb(p) = 1;                                 // Check consistency with
+                                                    //  smoothing... Correction
+        loadbody(p, ifile);                         // Set body in a cell
         Nb(p) = 1;
         Radius(p) = 0.0;
-//E
     }
-    gd.tdepth = 0;
+    gd.tdepthTable[ifile] = 0;
 
     for (i = 0; i < MAXLEVEL; i++)
         cellhist[i] = subnhist[i] = 0;
     for (i = 0; i < NbMax; i++)
         cellhistNb[i] = cellRadius[i] = 0;
-    deltaRadius = gd.rSize/NbMax;
-    verb_log_print(cmd.verbose_log,gd.outlog,"\ndeltaRadius = %g\n",deltaRadius);
+    deltaRadius = gd.rSizeTable[ifile]/NbMax;
+    verb_log_print(cmd.verbose_log,gd.outlog,
+                   "\ndeltaRadius = %g\n",deltaRadius);
 
-//B To see the bodies belonging to a cell:
-    DO_BODY(p,btab,btab+nbody)
-        Selected(p) = FALSE;
-//E
+    DO_BODY(p,btab,btab+nbody)                      // See bodies belonging to a
+        Selected(p) = FALSE;                        //  cell
 
-//B Smooth(ing) section
-    NTOT[0] = 0;
-//E
-    ip = 0;
-    hackCellProp(root, gd.rSize, 0);
+    NTOT[0] = 0;                                    // Smooth(ing) section
+    hackCellProp(roottable[ifile], gd.rSizeTable[ifile], 0, ifile);
 
 //B To bin cell's radius... Check!!! (bins logscale)
     real rBin;
     verb_log_print(cmd.verbose_log,gd.outlog,"\nmaketree: radius histogram:\n");
     for (i = 0; i < NbMax; i++) {
-        rBin = ((int)i)*gd.rSize/deltaRadius;
+        rBin = ((int)i)*gd.rSizeTable[ifile]/deltaRadius;
         verb_log_print(cmd.verbose_log,gd.outlog,"%g %d\n", rBin, cellRadius[i]);
     }
     verb_log_print(cmd.verbose_log,gd.outlog,"\n");
 //E
 
 //B Smooth(ing) section
-//B To smooth bodies
-    if (!gd.flagSmooth)
+    if (!gd.flagSmooth)                             // Flag to smooth bodies
         if (scanopt(cmd.options, "smooth")) {
             printf("NTOT = %ld \t%ld \t%ld\n",
                gd.nsmooth[0], NTOT[0], gd.nsmooth[0]*NTOT[0]);
@@ -151,228 +149,73 @@ global void maketree(bodyptr btab, int nbody)
                 (NTOT[0])*sizeof(body)*INMB, (NTOT[0]));
         }
 //E
-//E
 
-//#ifdef BALLS
 //B To debug cells:
     icell = 0;
     inode = 0;
-    gd.nnode = gd.ncell/cmd.stepNodes;
+    gd.nnode = gd.ncellTable[ifile]/cmd.stepNodes;
     nodetab = (nodeptr *) allocate(gd.nnode * sizeof(nodeptr));
     gd.bytes_tot += gd.nnode*sizeof(nodeptr);
     verb_print(cmd.verbose,
-               "\nAllocated %g MByte for (%d cells) nodetab storage.\n",
-               gd.nnode*sizeof(nodeptr)*INMB,gd.nnode);
+        "\nAllocated %g MByte for (%d cells) nodetab storage.\n",
+        gd.nnode*sizeof(nodeptr)*INMB,gd.nnode);
+//E
+
     Nc1 = gd.ncritical[0];
     Nc2 = gd.ncritical[1];
-//E
-//#endif
 
-    threadtree((nodeptr) root, NULL);
-    verb_print(cmd.verbose, "threadtree: number ip of selected cells = %ld\n",ip);
-//#ifdef BALLS
-    verb_print(cmd.verbose, "%d real node (range of nodes to search: >nc1 && <nc2)\n",inode);
+    ip = 0;
+    threadtree((nodeptr) roottable[ifile], NULL);
+    verb_print(cmd.verbose,
+        "threadtree: number ip of selected cells = %ld\n",ip);
+    verb_print(cmd.verbose,
+        "%d real node (range of nodes to search: >nc1 && <nc2)\n",inode);
     gd.rnnode = inode;
-//#endif
 
-//B Smooth(ing) section
-//B To see the bodies belonging to a cell:
-    walktree((nodeptr) root, gd.rSize);
-    int isel=0, inosel=0;
-    DO_BODY(p,btab,btab+nbody) {
-        if (Selected(p))
+    walktree_selected((nodeptr) roottable[ifile],   // Smooth(ing) section
+                      gd.rSizeTable[ifile]);
+    isel=0, inosel=0;
+    DO_BODY(p,btab,btab+nbody) {                    // See bodies belonging
+        if (Selected(p))                            //  to a cell
             isel++;
         else
             inosel++;
     }
     verb_print(cmd.verbose,
-               "\nSelected vs NotSelected and total: %ld %ld %ld\n\n",
-               isel, inosel, isel + inosel);
-//E
+        "\nSelected vs NotSelected and total: %ld %ld %ld\n\n",
+        isel, inosel, isel + inosel);
 
-#ifdef BALLS
-#ifndef TREENODEALLBODIES
-//B BALLS :: SCANLEV
-    if (scanopt(cmd.options, "set-default-param")) {
-        verb_print(cmd.verbose, "\tfixing scanLevel to tdepth-1...\n");
-        cmd.scanLevel = MAX(gd.tdepth-1,3);
-        verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
-    } else {
-    if (cmd.scanLevel > gd.tdepth) {
-        verb_print(cmd.verbose,
-                   "Warning! tree depth (%d) is less than scanLevel (%d)...\n",
-                   gd.tdepth, cmd.scanLevel);
-        verb_print(cmd.verbose, "\tfixing to tdepth-1...\n");
-        cmd.scanLevel = MAX(gd.tdepth-1,3);
-        verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
-    }
-    }
-#ifdef LOGHIST
     verb_print(cmd.verbose,
-               "(Only in log-scale) deltaR is %g and root size at scanLevel is %g.\n",
-               gd.deltaR, gd.rSize/rpow(2.0,cmd.scanLevel));
-    i = 0;
-    while (gd.deltaR < gd.rSize/rpow(2.0,i)) i++;
-    verb_print(cmd.verbose,
-               "\t\t\tSuggested scanLevel is %d, where root size is %g.\n\n",
-               i, gd.rSize/rpow(2.0,i));
-#endif
-    inodelev = 0;
-    ibodyleftout = 0;
-    if (cmd.scanLevel==0) {
-        gd.nnodescanlev = 0;
-        gd.bytes_tot += gd.nnodescanlev*sizeof(nodeptr);
-        verb_print(cmd.verbose,
-                   "Allocated %g MByte for (%d) scan nodetab storage.\n",
-                   INMB*gd.nnodescanlev*sizeof(nodeptr),gd.nnodescanlev);
-        gd.nnodescanlev = 1;
-    } else {
-/*
-#if NDIM == 3
-    gd.nnodescanlev = rpow(8, cmd.scanLevel);
-#else
-    gd.nnodescanlev = rpow(4, cmd.scanLevel);
-#endif
-*/
-// Use the node storage for cells. Bodies are left out.
-//    gd.nnodescanlev = gd.ncell;
-    gd.nnodescanlev = 2.0*gd.ncell;
-    nodetabscanlev = (nodeptr *) allocate(gd.nnodescanlev * sizeof(nodeptr));
-//
-    gd.bytes_tot += gd.nnodescanlev*sizeof(nodeptr);
-//    verb_print(cmd.verbose,
-//               "Allocated %g MByte for (%d) scan nodetab storage.\n",
-//               gd.bytes_tot*INMB,gd.nnodescanlev);
-        verb_print(cmd.verbose,
-               "Allocated %g MByte for (%d) scan nodetab storage.\n",
-               INMB*gd.nnodescanlev*sizeof(nodeptr),gd.nnodescanlev);
+        "tdepth = %d\n\n",gd.tdepthTable[ifile]);
 
-//    if (!cmd.scanLevel==0)                  // 0 <= lev <= cmd.scanLevel
-        walktree_index_scan_lev((nodeptr)root, 0);
-    verb_print(cmd.verbose,
-               "Found %d nodes to scan at level %d.\n",
-               inodelev, cmd.scanLevel);
-    gd.nnodescanlev = inodelev;
-    nodetable = (bodyptr) allocate(gd.nnodescanlev * sizeof(body));
-    save_nodes();
-    }
+    scanLevel(ifile);                               // Scan pivot and root trees
+    smoothBodies(btab, nbody);                      // Smooth cells
 
-#endif // ! TREENODEALLBODIES
-
-//B Root nodes to scan:
-    inodelev_root = 0;
-    ibodyleftout_root = 0;
-    if (cmd.scanLevelRoot==0) {
-        gd.nnodescanlev_root = 0;
-        gd.bytes_tot += gd.nnodescanlev_root*sizeof(nodeptr);
-        verb_print(cmd.verbose,
-                   "Allocated %g MByte for (%d) scan root nodetab storage.\n",
-                   INMB*gd.nnodescanlev_root*sizeof(nodeptr),gd.nnodescanlev_root);
-    } else {
-        gd.nnodescanlev_root = 2.0*gd.ncell;
-        nodetabscanlev_root = (nodeptr *) allocate(gd.nnodescanlev_root * sizeof(nodeptr));
-        gd.bytes_tot += gd.nnodescanlev_root*sizeof(nodeptr);
-        verb_print(cmd.verbose,
-               "Allocated %g MByte for (%d) scan root nodetab storage.\n",
-               INMB*gd.nnodescanlev_root*sizeof(nodeptr),gd.nnodescanlev_root);
-        walktree_index_scan_lev_root((nodeptr)root, 0); // 0 <= lev <= cmd.scanLevelRoot
-        verb_print(cmd.verbose,
-           "Found %d root nodes to scan at level %d.\n",
-            inodelev_root, cmd.scanLevelRoot);
-        verb_print(cmd.verbose, "%ld particles were left out at root level.\n",ibodyleftout_root);
-        gd.nnodescanlev_root = inodelev_root;
-    }
-    
-#ifdef BUCKET
-    gd.Rcell[0] = gd.rSize;
-    for (i = 1; i < gd.tdepth; i++)
-        gd.Rcell[i] = gd.Rcell[i-1]/2;
-    verb_print(cmd.verbose, "Maximum and minimum cell size: %e %e\n",
-               gd.Rcell[0],gd.Rcell[gd.tdepth-1]);
-    if (cmd.scanLevelMin == 0)
-        gd.rminCell = 0.;
-    else
-        gd.rminCell = gd.Rcell[gd.tdepth-1+cmd.scanLevelMin+1];
-    verb_print(cmd.verbose, "Cell size at scanLevelMin (%d): %e\n",
-               cmd.scanLevelMin, gd.rminCell);
-#endif
-//E Root nodes
-
-//E BALLS :: SCANLEV
-#endif // ! BALLS
-
-
-//B Smooth(ing) section
-
-    if (!gd.flagSmooth || !gd.flagSetNbNoSel) {
-    if ( (scanopt(cmd.options, "smooth") && scanopt(cmd.options, "set-Nb-noSel")) ) {
-        printf("NTOT = %ld \t%ld \t%ld\n\n",
-               gd.nsmooth[0], NTOT[0]+inosel,
-               gd.nsmooth[0]*NTOT[0]+ inosel);
-        bodytabSel = (bodyptr) allocate((NTOT[0]+inosel) * sizeof(body));
-        gd.bytes_tot += (NTOT[0]+inosel)*sizeof(body);
-        verb_print(cmd.verbose,
-                   "Allocated %g MByte for (smooth) particle (%ld) storage.\n",
-                   (NTOT[0]+inosel)*sizeof(body)*INMB, (NTOT[0]+inosel));
-        int ipcount=0;
-        bodyptr q = bodytabSel;
-        DO_BODY(p,bodytabsm,bodytabsm+gd.nbodysm) {
-            ipcount++;
-            Id(q) = ipcount;
-// BODY3
-            Type(q) = BODY3;
-            Nbb(q) = Nbb(p);
-            Weight(q) = Weight(p);
-            SETV(Pos(q), Pos(p));
-            Kappa(q) = Kappa(p);
-            q++;
-        }
-        verb_print(cmd.verbose,"Added %ld smoothed cells...\n",ipcount);
-        DO_BODY(p,btab,btab+nbody) {
-            if (!Selected(p)) {
-            ipcount++;
-            Id(q) = ipcount;
-            Type(q) = BODY;
-// BODY3
-            Nbb(q) = 1;
-            Weight(q) = Weight(p);
-            SETV(Pos(q), Pos(p));
-            Kappa(q) = Kappa(p);
-            q++;
-            }
-        }
-        verb_print(cmd.verbose,"Added %ld total bodies...\n",ipcount);
-        gd.nbodySel = ipcount;
-    }
-    }
-//E
-
-//B To smooth bodies
-    verb_log_print(cmd.verbose_log,gd.outlog,"\nmaketree: Nb histogram:\n");
+//B Histogram useful to smooth cells
+    verb_log_print(cmd.verbose_log,gd.outlog,
+        "\nmaketree: Nb histogram:\n");
     for (i = 0; i < NbMax; i++)
-        verb_log_print(cmd.verbose_log,gd.outlog,"%d %ld\n", i, cellhistNb[i]);
+        verb_log_print(cmd.verbose_log,gd.outlog,
+            "%d %ld\n", i, cellhistNb[i]);
     verb_log_print(cmd.verbose_log,gd.outlog,"\n");
 //E
     gd.bytes_tot += gd.bytes_tot_cells;
     verb_print(cmd.verbose,
-               "Allocated %g MByte for (%d) cells storage.\n",
-                       gd.bytes_tot_cells*INMB, gd.ncell);
-    verb_print(cmd.verbose, "\nmaketree : root number of bodies = %ld\n", Nb(root));
-    
+        "Allocated %g MByte for (%d) cells storage.\n",
+        gd.bytes_tot_cells*INMB, gd.ncellTable[ifile]);
+    verb_print(cmd.verbose,
+        "\nmaketree : root number of bodies = %ld\n",
+        Nb(roottable[ifile]));
+
 #ifdef DEBUG
-//B To debug cells:
-    fclose(gd.outcells);
-//E
+    fclose(outcells);                            // Close file to debug cells
 #endif
-
-//E Smooth(ing) section
-
 
 //B BALLS :: DIAGNOSTICS (DEBUG)
 #ifdef DEBUG
     DO_BODY(p,btab,btab+nbody)
         HIT(p) = FALSE;
-//    walktree_hit((nodeptr) root, Size(root));
+    walktree_hit((nodeptr) roottable[ifile], Size(roottable[ifile]));
 #endif
 //E
 
@@ -380,7 +223,247 @@ global void maketree(bodyptr btab, int nbody)
     verb_print(cmd.verbose, "\nCPU tree time : %lf\n", gd.cputree);
 }
 
-local void findRootCenter(bodyptr btab, int nbody)
+
+//B Smooth(ing) section
+local int smoothBodies(bodyptr btab, INTEGER nbody)
+{
+    bodyptr p, q;
+    int i;
+
+    if (!gd.flagSmooth || !gd.flagSetNbNoSel) {
+        if ( (scanopt(cmd.options, "smooth")
+              && scanopt(cmd.options, "set-Nb-noSel")) ) {
+            printf("NTOT = %ld \t%ld \t%ld\n\n",
+                   gd.nsmooth[0], NTOT[0]+inosel,
+                   gd.nsmooth[0]*NTOT[0]+inosel);
+            bodytabSel = (bodyptr) allocate((NTOT[0]+inosel) * sizeof(body));
+            gd.bytes_tot += (NTOT[0]+inosel)*sizeof(body);
+            verb_print(cmd.verbose,
+                       "Allocated %g MByte for (smooth) particle (%ld) storage.\n",
+                       (NTOT[0]+inosel)*sizeof(body)*INMB, (NTOT[0]+inosel));
+            int ipcount=0;
+            bodyptr q = bodytabSel;
+            DO_BODY(p,bodytabsm,bodytabsm+gd.nbodysm) {
+                ipcount++;
+                Id(q) = ipcount;
+// BODY3
+                Type(q) = BODY3;
+                Nbb(q) = Nbb(p);
+                Weight(q) = Weight(p);
+                SETV(Pos(q), Pos(p));
+                Kappa(q) = Kappa(p);
+                q++;
+            }
+            verb_print(cmd.verbose,"Added %ld smoothed cells...\n",ipcount);
+            DO_BODY(p,btab,btab+nbody) {
+                if (!Selected(p)) {
+                    ipcount++;
+                    Id(q) = ipcount;
+                    Type(q) = BODY;
+// BODY3
+                    Nbb(q) = 1;
+                    Weight(q) = Weight(p);
+                    SETV(Pos(q), Pos(p));
+                    Kappa(q) = Kappa(p);
+                    q++;
+                }
+            }
+            verb_print(cmd.verbose,"Added %ld total bodies...\n",ipcount);
+            gd.nbodySel = ipcount;
+        }
+    }
+
+    return _SUCCESS_;
+}
+//E
+
+//B BALLS :: SCANLEV
+local int scanLevel(int ifile)
+{
+#ifdef BALLS
+    int i;
+    
+    if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") ) {
+        cmd.scanLevel = gd.tdepthTable[ifile] + 1 + gd.scanLevelMin[0];
+        verb_print(cmd.verbose,
+            "\tsmoothCellMin: fixing scanLevel to: %d\n",
+            cmd.scanLevel);
+    } else {
+        if (scanopt(cmd.options, "set-default-param")) {
+            verb_print(cmd.verbose, "\tfixing scanLevel to tdepth-1...\n");
+            cmd.scanLevel = MAX(gd.tdepthTable[ifile]-1,3);
+            verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
+        } else {
+            if (cmd.scanLevel > gd.tdepthTable[ifile]) {
+                verb_print(cmd.verbose,
+                   "Warning! tree depth (%d) is less than scanLevel (%d)...\n",
+                   gd.tdepthTable[ifile], cmd.scanLevel);
+                verb_print(cmd.verbose, "\tfixing to tdepth-1...\n");
+                cmd.scanLevel = MAX(gd.tdepthTable[ifile]-1,3);
+                verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
+            }
+        }
+    }
+
+#ifdef LOGHIST
+    verb_print(cmd.verbose,
+        "(Only in log-scale) deltaR is %g and root size at scanLevel is %g.\n",
+        gd.deltaR, gd.rSizeTable[ifile]/rpow(2.0,cmd.scanLevel));
+    i = 0;
+    while (gd.deltaR < gd.rSizeTable[ifile]/rpow(2.0,i)) i++;
+    verb_print(cmd.verbose,
+        "\t\t\tSuggested scanLevel is %d, where root size is %g.\n\n",
+        i, gd.rSizeTable[ifile]/rpow(2.0,i));
+#endif
+    inodelev = 0;
+    ibodyleftout = 0;
+    if (cmd.scanLevel==0) {
+        gd.nnodescanlevTable[ifile] = 0;
+        gd.bytes_tot += gd.nnodescanlevTable[ifile]*sizeof(nodeptr);
+        verb_print(cmd.verbose,
+            "Allocated %g MByte for (%d) scan nodetab storage.\n",
+            INMB*gd.nnodescanlevTable[ifile]*sizeof(nodeptr),
+            gd.nnodescanlevTable[ifile]);
+        gd.nnodescanlev = 1;
+    } else {
+        gd.nnodescanlevTable[ifile] =
+                    gd.ncellTable[ifile]+gd.nbodyTable[ifile];
+        nodetablescanlev[ifile] =
+            (nodeptr *) allocate(gd.nnodescanlevTable[ifile] * sizeof(nodeptr));
+//
+        gd.bytes_tot += gd.nnodescanlevTable[ifile]*sizeof(nodeptr);
+        verb_print(cmd.verbose,
+            "Allocated %g MByte for (%d) scan nodetab storage.\n",
+            INMB*gd.nnodescanlevTable[ifile]*sizeof(nodeptr),
+            gd.nnodescanlevTable[ifile]);
+
+        if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") ) {
+            walktree_index_scan_lev((nodeptr)roottable[ifile], 0,
+                                    ifile, cmd.scanLevel);
+        } else {
+// Check this line. May be it is correct:
+//            cmd.scanLevel = MAX(gd.tdepthTable[ifile],3);
+//            verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
+            if (cmd.scanLevel > gd.tdepthTable[ifile]) {
+                verb_print(cmd.verbose,
+                   "Warning! tree depth (%d) is less than scanLevel (%d)...\n",
+                   gd.tdepthTable[ifile], cmd.scanLevel);
+                verb_print(cmd.verbose, "\tfixing to tdepth-1...\n");
+                cmd.scanLevel = MAX(gd.tdepthTable[ifile]-1,3);
+                verb_print(cmd.verbose, "\tfinal value is %d.\n", cmd.scanLevel);
+            }
+            walktree_index_scan_lev((nodeptr)roottable[ifile], 0,
+                                    ifile, cmd.scanLevel);
+        }
+
+        verb_print(cmd.verbose,
+               "Found %d nodes to scan at level %d.\n",
+               inodelev, cmd.scanLevel);
+// Freeing some segment of memory will be necessary
+        gd.nnodescanlevTable[ifile] = inodelev;
+        save_nodes(ifile);
+    } // ! scanLevel==0
+
+//ADDONS:
+#ifdef ADDONSDEVELOP
+#include "treeload_01.h"
+#endif
+
+//B Root nodes to scan:
+    inodelev_root = 0;
+    ibodyleftout_root = 0;
+
+    if (cmd.scanLevelRoot==0) {
+        gd.nnodescanlev_rootTable[ifile] = 0;
+        gd.bytes_tot += gd.nnodescanlev_rootTable[ifile]*sizeof(nodeptr);
+        verb_print(cmd.verbose,
+                   "Allocated %g MByte for (%d) scan root nodetab storage.\n",
+                   INMB*gd.nnodescanlev_rootTable[ifile]*sizeof(nodeptr),gd.nnodescanlev_rootTable[ifile]);
+    } else {
+        gd.nnodescanlev_rootTable[ifile] =
+                    gd.ncellTable[ifile]+gd.nbodyTable[ifile];
+        nodetablescanlev_root[ifile] =
+            (nodeptr *) allocate(gd.nnodescanlev_rootTable[ifile]
+            * sizeof(nodeptr));
+        gd.bytes_tot += gd.nnodescanlev_rootTable[ifile]*sizeof(nodeptr);
+        verb_print(cmd.verbose,
+            "Allocated %g MByte for (%d) scan root nodetab storage (%ld cells).\n",
+            INMB*gd.nnodescanlev_rootTable[ifile]*sizeof(nodeptr),
+            gd.nnodescanlev_rootTable[ifile],gd.ncellTable[ifile]);
+        walktree_index_scan_lev_root((nodeptr)roottable[ifile], 0, ifile);
+        verb_print(cmd.verbose,
+           "Found %d root nodes to scan at level %d.\n",
+            inodelev_root, cmd.scanLevelRoot);
+        verb_print(cmd.verbose,
+                   "%ld particles were left out at root level.\n",
+                   ibodyleftout_root);
+        gd.nnodescanlev_rootTable[ifile] = inodelev_root;
+        if (cmd.verbose==3)
+            save_nodes_root(ifile);
+    }
+
+    gd.Rcell[0] = gd.rSizeTable[ifile];
+    for (i = 1; i < gd.tdepthTable[ifile]; i++)
+        gd.Rcell[i] = gd.Rcell[i-1]/2;
+
+    verb_print(cmd.verbose, "\nMaximum and minimum cell size: %e %e\n",
+               gd.Rcell[0],gd.Rcell[gd.tdepthTable[ifile]-1]);
+    
+    if (gd.flagSmoothCellMin) {
+        gd.scanLevelMin[0] = gd.scanLevelMin[1];
+        verb_print(cmd.verbose,
+                   "\tsmoothCellMin: fixing scanLevelMin[0] to: %d\n",
+                   gd.scanLevelMin[0]);
+        if (gd.scanLevelMin[0] == 0)
+            gd.rminCell[0] = 0.;
+        else
+            gd.rminCell[0] =
+                gd.Rcell[gd.tdepthTable[ifile]-1+gd.scanLevelMin[0]+1];
+    } else {
+        if (gd.scanLevelMin[0] == 0)
+            gd.rminCell[0] = 0.;
+        else
+            gd.rminCell[0] =
+                gd.Rcell[gd.tdepthTable[ifile]-1+gd.scanLevelMin[0]+1];
+    }
+
+    verb_print(cmd.verbose,
+               "Cell size at scanLevelMin (%d) and scale factor: %e %e\n",
+               gd.scanLevelMin[0], gd.rminCell[0], gd.rminCell[1]);
+    if (gd.rminCell[0] > gd.deltaRmax)
+        verb_print(cmd.verbose,
+        "Warning! Cell size at scanLevelMin is greatear than deltaRmax: %e %e\n",
+        gd.rminCell[0], gd.deltaRmax);
+    if (gd.rminCell[0] > gd.deltaRmin)
+        verb_print(cmd.verbose,
+        "Warning! Cell size at scanLevelMin is greatear than deltaRmin: %e %e\n",
+        gd.rminCell[0], gd.deltaRmin);
+    for (i=1; i<=cmd.sizeHistN-1; i++)
+        if (gd.rminCell[0] < gd.ddeltaRV[i])
+            break;
+    verb_print(cmd.verbose,
+               "rminCell, ddeltaRV and deltaRV (at n = %d): %g %g %g\n\n",
+               i+1, gd.rminCell[0], gd.ddeltaRV[i], gd.deltaRV[i+1]);
+
+    if (gd.scanLevelMin[0] == 0) {
+        gd.rminCell[1] = cmd.rangeN;
+        verb_print(cmd.verbose, "\tfixing rminCell[1] to: %g\n", gd.rminCell[1]);
+    } else {
+        gd.rminCell[1] = gd.deltaRV[i+1];
+        verb_print(cmd.verbose, "\tfixing rminCell[1] to: %g\n", gd.rminCell[1]);
+        if (gd.rminCell[1]>cmd.rangeN)
+            verb_print(cmd.verbose,
+                   "Warning! rminCell[1] is greatear than rangeN\n");
+    }
+//E Root nodes
+
+#endif // ! BALLS
+
+    return _SUCCESS_;
+}
+//E BALLS :: SCANLEV
+
+local void findRootCenter(bodyptr btab, int nbody, int ifile)
 {
     real len;
     bodyptr p;
@@ -399,8 +482,9 @@ local void findRootCenter(bodyptr btab, int nbody)
         }
 
     DO_COORD(k) {
-        Pos(root)[k] = (xmax[k]+xmin[k])/2;
-        verb_print(cmd.verbose, "findRootCenter: Pos(root) = %lf\n", Pos(root)[k]);
+        Pos(roottable[ifile])[k] = (xmax[k]+xmin[k])/2;
+        verb_print(cmd.verbose,
+                   "findRootCenter: Pos(root) = %lf\n", Pos(roottable[ifile])[k]);
     }
 
     for(k=0, len=xmax[0]-xmin[0]; k<NDIM; k++)
@@ -410,60 +494,58 @@ local void findRootCenter(bodyptr btab, int nbody)
     verb_print(cmd.verbose, "findRootCenter: len = %lf\n", len);
 }
 
-local void centerBodies(bodyptr btab, int nbody)
+local void centerBodies(bodyptr btab, int nbody, int ifile)
 {
     bodyptr p;
     int k;
 
     DO_BODY(p, btab, btab+nbody)
         DO_COORD(k)
-            Pos(p)[k] = Pos(p)[k] - Pos(root)[k];
+            Pos(p)[k] = Pos(p)[k] - Pos(roottable[ifile])[k];
 }
 
-local void newtree(void)
+local void newtree(int ifile)
 {
-    root = NULL;
-    gd.ncell = 0;
+    roottable[ifile] = NULL;
+    gd.ncellTable[ifile] = 0;
 }
 
-local cellptr makecell(void)
+local cellptr makecell(int ifile)
 {
     cellptr c;
     int i;
  
     c = (cellptr) allocate(sizeof(cell));
     Type(c) = CELL;
-//B To smooth bodies
-    Nb(c) = 0;
-//E
+    Nb(c) = 0;                                      // To smooth cells
     Update(c) = FALSE;
     for (i = 0; i < NSUB; i++)                  
         Subp(c)[i] = NULL;
-    gd.ncell++;
+    (gd.ncellTable[ifile])++;
     gd.bytes_tot_cells += sizeof(cell);
     return (c);
 }
 
-local void expandbox(bodyptr btab, int nbody)
+local void expandbox(bodyptr btab, int nbody, int ifile)
 {
     real dmax, d;
     bodyptr p;
     int k;
- 
-    dmax = 0.0;                                 
+
+    dmax = 0.0;
 	DO_BODY(p, btab, btab+nbody)
 		DO_COORD(k) {
-            d = rabs(Pos(p)[k] - Pos(root)[k]);
+            d = rabs(Pos(p)[k] - Pos(roottable[ifile])[k]);
             if (d > dmax)
                 dmax = d;                       
         }
-    while (gd.rSize < 2 * dmax)
-        gd.rSize = 2 * gd.rSize;
+    while (gd.rSizeTable[ifile] < 2 * dmax)
+        gd.rSizeTable[ifile] = 2 * gd.rSizeTable[ifile];
 
-    verb_print(cmd.verbose, "treeload expandbox: rSize = %lf\n", gd.rSize);
+    verb_print(cmd.verbose, "treeload expandbox: rSize = %lf\n", gd.rSizeTable[ifile]);
 }
 
-local void loadbody(bodyptr p)
+local void loadbody(bodyptr p, int ifile)
 {
     cellptr q, c;
     int qind, k;
@@ -474,10 +556,10 @@ local void loadbody(bodyptr p)
 //    verb_print_debug(1, "\nloadbody:: Aqui voy (2)\n");
 //    MPI_Barrier(MPI_COMM_WORLD);
 
-    q = root;
+    q = roottable[ifile];
     qind = subindex(p, q);
-    Nb(q) += 1;                 // Smooth
-    qsize = gd.rSize;
+    Nb(q) += 1;                                     // Smooth
+    qsize = gd.rSizeTable[ifile];
     while (Subp(q)[qind] != NULL) {
 // BODY3
         if (Type(Subp(q)[qind]) == BODY || Type(Subp(q)[qind]) == BODY3) {
@@ -491,16 +573,16 @@ local void loadbody(bodyptr p)
                                Pos(p)[k],Pos(Subp(q)[qind])[k]);
                 error("loadbody: two bodies have same position\n");
             }
-            c = makecell();                     
-            Nb(c) += 1;                     // Smooth
+            c = makecell(ifile);
+            Nb(c) += 1;                             // Smooth
 			DO_COORD(k)
                 Pos(c)[k] = Pos(q)[k] +
                     (Pos(p)[k] < Pos(q)[k] ? - qsize : qsize) / 4;
             Subp(c)[subindex((bodyptr) Subp(q)[qind], c)] = Subp(q)[qind];
-            Nb(c) += 1;                     // Smooth
+            Nb(c) += 1;                             // Smooth
             Subp(q)[qind] = (nodeptr) c;
         } else {
-            Nb(Subp(q)[qind]) += 1;         // Smooth
+            Nb(Subp(q)[qind]) += 1;                 // Smooth
         }
         q = (cellptr) Subp(q)[qind];
         qind = subindex(p, q);
@@ -520,15 +602,15 @@ local int subindex(bodyptr p, cellptr q)
     return (ind);
 }
 
-local void hackCellProp(cellptr p, real psize, int lev)
+local void hackCellProp(cellptr p, real psize, int lev, int ifile)
 {
     vector cmpos, tmpv;
     int i, k;
     nodeptr q;
  
-    gd.tdepth = MAX(gd.tdepth, lev);
+    gd.tdepthTable[ifile] = MAX(gd.tdepthTable[ifile], lev);
     cellhist[lev]++;
-    Level(p) = lev;                         // To set scanLevel
+    Level(p) = lev;                                 // To set scanLevel
     Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
@@ -538,8 +620,9 @@ local void hackCellProp(cellptr p, real psize, int lev)
         if ((q = Subp(p)[i]) != NULL) {
             subnhist[lev]++;                    
             if (Type(q) == CELL)
-                hackCellProp((cellptr) q, psize/2, lev+1);
-            Selected(p) |= Selected(q);     // To see the bodies belonging to a cell
+                hackCellProp((cellptr) q, psize/2, lev+1, ifile);
+            Selected(p) |= Selected(q);             // To see the bodies belonging
+                                                    //  to a cell
             Update(p) |= Update(q);
             Weight(p) += Weight(q);
             if ( Type(q) == CELL) {
@@ -549,7 +632,7 @@ local void hackCellProp(cellptr p, real psize, int lev)
                 if (Type(q) == BODY) {
                     Nb(p) += 1;
                     Kappa(p) += Weight(q)*Kappa(q);
-                } else if (Type(q) == BODY3) {  // To set smoothing body
+                } else if (Type(q) == BODY3) {      // To set smoothing body
                     Nb(p) += 1;
                     Kappa(p) += Weight(q)*Kappa(q);
                 }
@@ -559,10 +642,10 @@ local void hackCellProp(cellptr p, real psize, int lev)
         }
     }
 //B Smooth(ing) section
-    if (Nb(p)==gd.nsmooth[0]) {                 // Correct to <=
+    if (Nb(p)==gd.nsmooth[0]) {                     // Correct to <=
         NTOT[0]=NTOT[0]+1;
     }
-//B Balls-correction. 2023-11-10
+//E
     if (scanopt(cmd.options, "center-of-mass")) {
         if (Weight(p) > 0.0) {
             DIVVS(cmpos, cmpos, Weight(p));
@@ -571,7 +654,6 @@ local void hackCellProp(cellptr p, real psize, int lev)
         }
     } else
         SETV(cmpos, Pos(p));
-//E
 
 #define EPSILON 1.0E-16
 // Here there appears an error for big numbers of points such 201 millions...
@@ -584,12 +666,13 @@ local void hackCellProp(cellptr p, real psize, int lev)
             else {
                 if (cmd.verbose_log>=3)
                 verb_log_print(cmd.verbose_log,gd.outlog,
-                    "hackCellProp: tree structure warning! psize/2 to small: %le \n", psize/2);
+                "hackCellProp: tree structure warning! psize/2 to small: %le \n",
+                psize/2);
             }
         }
 #undef EPSILON
 
-    setRadius(p, cmpos, psize);
+    setRadius(p, cmpos, psize, ifile);
     SETV(Pos(p), cmpos);
     if (Nb(p)>0) {
         Kappa(p) /= Nb(p);
@@ -598,14 +681,16 @@ local void hackCellProp(cellptr p, real psize, int lev)
 }
 
 // Parameter theta controls size of the cell.
-// theta from 0 to 1: 0 always open cells (BF, complexity N^2); 1 is the default value.
-local void setRadius(cellptr p, vector cmpos, real psize)
+// theta from 0 to 5:
+//  0 always open cells (complexity N^2);
+//  1 is the default value.
+local void setRadius(cellptr p, vector cmpos, real psize, int ifile)
 {
     real bmax2, d;
     int k;
 
     if (cmd.theta == 0.0)
-        Radius(p) = 2 * gd.rSize;
+        Radius(p) = 2 * gd.rSizeTable[ifile];
     else if (gd.sw94) {
         bmax2 = 0.0;
 		DO_COORD(k) {
@@ -640,11 +725,12 @@ local void threadtree(nodeptr p, nodeptr n)
 //B To debug cells:
         icell++;
         if (icell%cmd.stepNodes == 0 && Nb(p)>= Nc1 && Nb(p)<=Nc2) {
-            out_vector_mar(gd.outcells, Pos(p));
-            out_real_mar(gd.outcells, Kappa(p));
-            out_real_mar(gd.outcells, Size(p));
-            out_int_long(gd.outcells, Nb(p));
-            nodetab[inode] = p;
+            out_vector_mar(outcells, Pos(p));
+            out_real_mar(outcells, Kappa(p));
+            out_real_mar(outcells, Size(p));
+            out_int_long(outcells, Nb(p));
+// What is l about?
+//            l[inode] = p;
             inode++;
         }
 //E
@@ -657,7 +743,6 @@ local void threadtree(nodeptr p, nodeptr n)
 #endif
 
 //B Smooth(ing) section
-//B To smooth bodies
         if (Nb(p)<NbMax)
             cellhistNb[Nb(p)]++;
         if (!gd.flagSmooth) {
@@ -666,20 +751,17 @@ local void threadtree(nodeptr p, nodeptr n)
                     ip++;
                     q = ip + bodytabsm -1;
                     Id(q) = ip;
-                    Type(q) = BODY3;        // To set smoothing body
+                    Type(q) = BODY3;                // To set smoothing body
                     Nbb(q) = Nb(p);
                     Nbb(p) = Nb(p);
                     Weight(q) = Weight(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);
-//B To see the bodies belonging to a cell:
-                    Selected(p) = TRUE;
-                    Selected(q) = TRUE;
-//E
+                    Selected(p) = TRUE;             // To see the bodies belonging
+                    Selected(q) = TRUE;             //  to a cell
                 }
             }
         }
-//E
 //E
         ndesc = 0;
         for (i = 0; i < NSUB; i++)
@@ -692,7 +774,7 @@ local void threadtree(nodeptr p, nodeptr n)
     }
 }
 
-local void walktree(nodeptr q, real qsize)
+local void walktree_selected(nodeptr q, real qsize)
 {
     nodeptr l;
 
@@ -700,7 +782,7 @@ local void walktree(nodeptr q, real qsize)
         if (Type(q) == CELL) {
             for (l = More(q); l != Next(q); l = Next(l)) {
                 Selected(l) = TRUE;
-                walktree(l,qsize/2);
+                walktree_selected(l,qsize/2);
             }
         } else {
             Selected(q) = TRUE;
@@ -708,7 +790,7 @@ local void walktree(nodeptr q, real qsize)
     } else {
         if (Type(q) == CELL) {
             for (l = More(q); l != Next(q); l = Next(l)) {
-                walktree(l,qsize/2);
+                walktree_selected(l,qsize/2);
             }
         } else {
             Selected(q) = FALSE;
@@ -720,42 +802,41 @@ local void walktree(nodeptr q, real qsize)
 //
 // Unify: walktree_index_scan_lev and walktree_index_scan_lev_root
 //
-local void walktree_index_scan_lev(nodeptr q, int lev)
+local void walktree_index_scan_lev(nodeptr q, int lev, int ifile, int scanLevel)
 {
     nodeptr p,g,h,l;
     int i;
 
-    if (cmd.scanLevel==2) {
-        p = (nodeptr)root;
+    if (scanLevel==2) {
+        p = (nodeptr)roottable[ifile];
         for (g = More(p); g != Next(p); g = Next(g))
             for (l = More(g); l != Next(g); l = Next(l)) {
-                    nodetabscanlev[inodelev] = l;
+                    nodetablescanlev[ifile][inodelev] = l;
                     inodelev++;
             }
         return;
     }
 
-    if (cmd.scanLevel==3) {
-        p = (nodeptr)root;
+    if (scanLevel==3) {
+        p = (nodeptr)roottable[ifile];
         for (g = More(p); g != Next(p); g = Next(g))
             for (h = More(g); h != Next(g); h = Next(h))
                 for (l = More(h); l != Next(h); l = Next(l)) {
-                        nodetabscanlev[inodelev] = l;
+                        nodetablescanlev[ifile][inodelev] = l;
                         inodelev++;
                 }
         return;
     }
 
-// lev must be <= cmd.scanLevel
-    if (lev == cmd.scanLevel-1) {
+    if (lev == scanLevel-1) {
         if (Type(q)==CELL) {
             for (l = More(q); l != Next(q); l = Next(l)) {
                 if (Type(l)==CELL) {
-                    nodetabscanlev[inodelev] = l;
+                    nodetablescanlev[ifile][inodelev] = l;
                     inodelev++;
                 } else {
-                    nodetabscanlev[inodelev] = l;   // Correction
-                    inodelev++;                     // Correction
+                    nodetablescanlev[ifile][inodelev] = l;
+                    inodelev++;
                     ibodyleftout++;
                 }
             }
@@ -763,59 +844,57 @@ local void walktree_index_scan_lev(nodeptr q, int lev)
             ibodyleftout++;
         }
     } else {
-//        if ( lev+1 != cmd.scanLevel )
-        if ( lev+1 <= cmd.scanLevel )       // Correction
+        if ( lev+1 <= scanLevel )
             if (Type(q)==CELL) {
                 for (l = More(q); l != Next(q); l = Next(l)) {
                     if (Type(l)==CELL)
-                        walktree_index_scan_lev(l, lev+1);
+                        walktree_index_scan_lev(l, lev+1, ifile, scanLevel);
                     else
                         ibodyleftout++;
                 }
             } else {
-                nodetabscanlev[inodelev] = q;   // Correction
-                inodelev++;                     // Correction
+                nodetablescanlev[ifile][inodelev] = q;
+                inodelev++;
                 ibodyleftout++;
             }
     }
 }
 
-local void walktree_index_scan_lev_root(nodeptr q, int lev)
+local void walktree_index_scan_lev_root(nodeptr q, int lev, int ifile)
 {
     nodeptr p,g,h,l;
     int i;
 
     if (cmd.scanLevelRoot==2) {
-        p = (nodeptr)root;
+        p = (nodeptr)roottable[ifile];
         for (g = More(p); g != Next(p); g = Next(g))
             for (l = More(g); l != Next(g); l = Next(l)) {
-                    nodetabscanlev_root[inodelev_root] = l;
+                nodetablescanlev_root[ifile][inodelev_root] = l;
                     inodelev_root++;
             }
         return;
     }
 
     if (cmd.scanLevelRoot==3) {
-        p = (nodeptr)root;
+        p = (nodeptr)roottable[ifile];
         for (g = More(p); g != Next(p); g = Next(g))
             for (h = More(g); h != Next(g); h = Next(h))
                 for (l = More(h); l != Next(h); l = Next(l)) {
-                        nodetabscanlev_root[inodelev_root] = l;
+                    nodetablescanlev_root[ifile][inodelev_root] = l;
                         inodelev_root++;
                 }
         return;
     }
 
-// lev must be <= cmd.scanLevelRoot
     if (lev == cmd.scanLevelRoot-1) {
         if (Type(q)==CELL) {
             for (l = More(q); l != Next(q); l = Next(l)) {
                 if (Type(l)==CELL) {
-                    nodetabscanlev_root[inodelev_root] = l;
+                    nodetablescanlev_root[ifile][inodelev_root] = l;
                     inodelev_root++;
                 } else {
-                    nodetabscanlev_root[inodelev_root] = l;   // Correction
-                    inodelev_root++;                     // Correction
+                    nodetablescanlev_root[ifile][inodelev_root] = l;
+                    inodelev_root++;
                     ibodyleftout_root++;
                 }
             }
@@ -823,17 +902,17 @@ local void walktree_index_scan_lev_root(nodeptr q, int lev)
             ibodyleftout_root++;
         }
     } else {
-        if ( lev+1 <= cmd.scanLevelRoot )       // Correction
+        if ( lev+1 <= cmd.scanLevelRoot )
             if (Type(q)==CELL) {
                 for (l = More(q); l != Next(q); l = Next(l)) {
                     if (Type(l)==CELL)
-                        walktree_index_scan_lev_root(l, lev+1);
+                        walktree_index_scan_lev_root(l, lev+1, ifile);
                     else
                         ibodyleftout_root++;
                 }
             } else {
-                nodetabscanlev_root[inodelev_root] = q;   // Correction
-                inodelev_root++;                     // Correction
+                nodetablescanlev_root[ifile][inodelev_root] = q;
+                inodelev_root++;
                 ibodyleftout_root++;
             }
     }
@@ -858,12 +937,129 @@ local void walktree_hit(nodeptr q, real qsize)
 #endif
 //E
 
-local int save_nodes(void)
+local int save_nodes(int ifile)
 {
     sprintf(gd.nodesfilePath,"%s/nodes%s.txt",gd.tmpDir,cmd.suffixOutFiles);
     if(!(gd.outnodelev=fopen(gd.nodesfilePath, "w")))
         error("\nstart_Common: error opening file '%s' \n",gd.nodesfilePath);
-    sprintf(gd.bodiesfilePath,"%s/bodies%s.txt",gd.tmpDir,cmd.suffixOutFiles);
+//B
+    if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") ) {
+        if (cmd.verbose==3) {
+            sprintf(gd.bodiesfilePath,"%s/bodies%s.txt",
+                    gd.tmpDir,cmd.suffixOutFiles);
+            if(!(gd.outbodylev=fopen(gd.bodiesfilePath, "w")))
+                error("\nstart_Common: error opening file '%s' \n",
+                      gd.nodesfilePath);
+        }
+    }
+    int in;
+//E
+    INTEGER nodescount=0;
+    bodyptr pn;
+    INTEGER nodescount_smooth=0;
+    INTEGER sumbodies=0, sumcells=0;
+    INTEGER nodescount_thread=0, nodescount_thread_total=0;
+
+    if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") )
+        nodetable = (bodyptr) allocate(gd.nnodescanlevTable[ifile] * sizeof(body));
+
+    for (in=0; in<inodelev; in++) {
+//B
+        if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") ) {
+            pn = nodetable + in;
+            Id(pn) = in;
+            Type(pn) = BODY;
+            Update(pn) = TRUE;
+            Weight(pn) = Weight(nodetablescanlev[ifile][in]);
+            Kappa(pn) = Kappa(nodetablescanlev[ifile][in]);
+            SETV(Pos(pn),Pos(nodetablescanlev[ifile][in]));
+            Nb(pn) = Nb(nodetablescanlev[ifile][in]);
+            Size(pn) = 0.;
+            Radius(pn) = 0.;
+            if (cmd.verbose==3) {
+                out_int_mar(gd.outbodylev, Id(pn));
+                out_int_mar(gd.outbodylev, Type(pn));
+                out_vector_mar(gd.outbodylev, Pos(pn));
+                out_real_mar(gd.outbodylev, Kappa(pn));
+                out_real_mar(gd.outbodylev, Radius(pn));
+                out_real_mar(gd.outbodylev, Weight(pn));
+                out_int_long(gd.outbodylev, Nb(pn));
+            }
+        }
+//E
+        if (Type(nodetablescanlev[ifile][in]) == CELL) {
+            out_int_mar(gd.outnodelev, IDXSCAN(nodetablescanlev[ifile][in]));
+            out_int_mar(gd.outnodelev, Type(nodetablescanlev[ifile][in]));
+            out_vector_mar(gd.outnodelev, Pos(nodetablescanlev[ifile][in]));
+            out_real_mar(gd.outnodelev, Kappa(nodetablescanlev[ifile][in]));
+            out_real_mar(gd.outnodelev, Size(nodetablescanlev[ifile][in]));
+            out_real_mar(gd.outnodelev, Weight(nodetablescanlev[ifile][in]));
+            out_int_long(gd.outnodelev, Nb(nodetablescanlev[ifile][in]));
+            nodescount += Nb(nodetablescanlev[ifile][in]);
+//B Smooth(ing) section
+            if (Nb(nodetablescanlev[ifile][in]) <= gd.nsmooth[0]) nodescount_smooth++;
+//E
+            sumbodies += Nb(nodetablescanlev[ifile][in]);
+            sumcells += 1;
+            nodescount_thread += Nb(nodetablescanlev[ifile][in]);
+        } else {
+            out_int_mar(gd.outnodelev, IDXSCAN(nodetablescanlev[ifile][in]));
+            out_int_mar(gd.outnodelev, Type(nodetablescanlev[ifile][in]));
+            out_vector_mar(gd.outnodelev, Pos(nodetablescanlev[ifile][in]));
+            out_real_mar(gd.outnodelev, Kappa(nodetablescanlev[ifile][in]));
+            out_real_mar(gd.outnodelev, Radius(nodetablescanlev[ifile][in]));
+            out_real_mar(gd.outnodelev, Weight(nodetablescanlev[ifile][in]));
+            out_int_long(gd.outnodelev, Nb(nodetablescanlev[ifile][in]));
+            sumbodies += Nb(nodetablescanlev[ifile][in]);
+            nodescount_thread += Nb(nodetablescanlev[ifile][in]);
+        }
+
+        if (cmd.verbose_log>=3)
+        if (in%cmd.numthreads == 0) {
+            verb_log_print(cmd.verbose_log, gd.outlog, " -(%ld) Chunk: %ld\n", in, nodescount_thread);
+            nodescount_thread_total += nodescount_thread;
+            nodescount_thread = 0;
+        }
+    } // ! loop in
+
+    if (cmd.verbose_log>=3)
+    verb_log_print(cmd.verbose_log, gd.outlog, " -Total Chunk: %ld\n", nodescount_thread_total);
+
+    verb_print(cmd.verbose,
+        "Found %ld particles in %ld nodes... vs number of total cells %ld\n",
+        nodescount, gd.nnodescanlevTable[ifile], gd.ncellTable[ifile]);
+    verb_print(cmd.verbose,
+        "...%ld cells at scan level...\n",
+        sumcells);
+    verb_print(cmd.verbose,
+        "...and %ld bodies. Bodies in upper levels: %ld\n",
+        sumbodies, cmd.nbody-sumbodies);
+    verb_print(cmd.verbose,
+        "%ld particles were left out of cells at scan level.\n",
+        ibodyleftout);
+//B Smooth(ing) section
+    verb_print(cmd.verbose,
+        "%ld cells were with at much %d particles in them.\n",
+        nodescount_smooth,gd.nsmooth[0]);
+//E
+    verb_print(cmd.verbose,
+        "Checking sums (bodyleftout+nodescount): %ld.\n",
+        ibodyleftout+nodescount);
+    fclose(gd.outnodelev);
+//B
+    if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") )
+        if (cmd.verbose==3)
+            fclose(gd.outbodylev);
+//E
+    return _SUCCESS_;
+}
+
+local int save_nodes_root(int ifile)
+{
+    sprintf(gd.nodesfilePath,"%s/nodes_root%s.txt",gd.tmpDir,cmd.suffixOutFiles);
+    if(!(gd.outnodelev=fopen(gd.nodesfilePath, "w")))
+        error("\nstart_Common: error opening file '%s' \n",gd.nodesfilePath);
+    sprintf(gd.bodiesfilePath,"%s/bodies_root%s.txt",gd.tmpDir,cmd.suffixOutFiles);
     if(!(gd.outbodylev=fopen(gd.bodiesfilePath, "w")))
         error("\nstart_Common: error opening file '%s' \n",gd.nodesfilePath);
     int in;
@@ -871,16 +1067,19 @@ local int save_nodes(void)
     bodyptr pn;
     INTEGER nodescount_smooth=0;
     INTEGER sumbodies=0, sumcells=0;
+    INTEGER nodescount_thread=0, nodescount_thread_total=0;
 
-    for (in=0; in<inodelev; in++) {
+    nodetable_root =
+        (bodyptr) allocate(gd.nnodescanlev_rootTable[ifile] * sizeof(body));
 
-        pn = nodetable + in;
+    for (in=0; in<inodelev_root; in++) {
+        pn = nodetable_root + in;
         Id(pn) = in;
         Type(pn) = BODY;
         Update(pn) = TRUE;
-        Weight(pn) = Weight(nodetabscanlev[in]);
-        Kappa(pn) = Kappa(nodetabscanlev[in]);
-        SETV(Pos(pn),Pos(nodetabscanlev[in]));
+        Weight(pn) = Weight(nodetablescanlev_root[ifile][in]);
+        Kappa(pn) = Kappa(nodetablescanlev_root[ifile][in]);
+        SETV(Pos(pn),Pos(nodetablescanlev_root[ifile][in]));
 
         out_int_mar(gd.outbodylev, Id(pn));
         out_int_mar(gd.outbodylev, Type(pn));
@@ -889,38 +1088,48 @@ local int save_nodes(void)
         out_real_mar(gd.outbodylev, Radius(pn));
         out_real_mar(gd.outbodylev, Weight(pn));
         out_int_long(gd.outbodylev, Nb(pn));
-//E
-        
-        if (Type(nodetabscanlev[in]) == CELL) {
-            out_int_mar(gd.outnodelev, IDXSCAN(nodetabscanlev[in]));
-            out_int_mar(gd.outnodelev, Type(nodetabscanlev[in]));
-            out_vector_mar(gd.outnodelev, Pos(nodetabscanlev[in]));
-            out_real_mar(gd.outnodelev, Kappa(nodetabscanlev[in]));
-            out_real_mar(gd.outnodelev, Size(nodetabscanlev[in]));
-            out_real_mar(gd.outnodelev, Weight(nodetabscanlev[in]));
-            out_int_long(gd.outnodelev, Nb(nodetabscanlev[in]));
-            nodescount += Nb(nodetabscanlev[in]);
+
+        if (Type(nodetablescanlev_root[ifile][in]) == CELL) {
+            out_int_mar(gd.outnodelev, IDXSCAN(nodetablescanlev_root[ifile][in]));
+            out_int_mar(gd.outnodelev, Type(nodetablescanlev_root[ifile][in]));
+            out_vector_mar(gd.outnodelev, Pos(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd.outnodelev, Kappa(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd.outnodelev, Size(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd.outnodelev, Weight(nodetablescanlev_root[ifile][in]));
+            out_int_long(gd.outnodelev, Nb(nodetablescanlev_root[ifile][in]));
+            nodescount += Nb(nodetablescanlev_root[ifile][in]);
 //B Smooth(ing) section
-            if (Nb(nodetabscanlev[in]) <= gd.nsmooth[0]) nodescount_smooth++;
+            if (Nb(nodetablescanlev_root[ifile][in]) <= gd.nsmooth[0]) nodescount_smooth++;
 //E
-            sumbodies += Nb(nodetabscanlev[in]);
+            sumbodies += Nb(nodetablescanlev_root[ifile][in]);
             sumcells += 1;
+            nodescount_thread += Nb(nodetablescanlev_root[ifile][in]);
         } else {
-            out_int_mar(gd.outnodelev, IDXSCAN(nodetabscanlev[in]));
-            out_int_mar(gd.outnodelev, Type(nodetabscanlev[in]));
-            out_vector_mar(gd.outnodelev, Pos(nodetabscanlev[in]));
-            out_real_mar(gd.outnodelev, Kappa(nodetabscanlev[in]));
-            out_real_mar(gd.outnodelev, Radius(nodetabscanlev[in]));
-            out_real_mar(gd.outnodelev, Weight(nodetabscanlev[in]));
-            out_int_long(gd.outnodelev, Nb(nodetabscanlev[in]));
-//            nodescount += Nb(nodetabscanlev[in]);          // Correction
-            sumbodies += Nb(nodetabscanlev[in]);
+            out_int_mar(gd.outnodelev, IDXSCAN(nodetablescanlev_root[ifile][in]));
+            out_int_mar(gd.outnodelev, Type(nodetablescanlev_root[ifile][in]));
+            out_vector_mar(gd.outnodelev, Pos(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd.outnodelev, Kappa(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd.outnodelev, Radius(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd.outnodelev, Weight(nodetablescanlev_root[ifile][in]));
+            out_int_long(gd.outnodelev, Nb(nodetablescanlev_root[ifile][in]));
+            sumbodies += Nb(nodetablescanlev_root[ifile][in]);
+            nodescount_thread += Nb(nodetablescanlev_root[ifile][in]);
         }
-    }
+
+        if (cmd.verbose_log>=3)
+        if (in%cmd.numthreads == 0) {
+            verb_log_print(cmd.verbose_log, gd.outlog, " -(%ld) Chunk: %ld\n", in, nodescount_thread);
+            nodescount_thread_total += nodescount_thread;
+            nodescount_thread = 0;
+        }
+    } // ! loop in
+
+    if (cmd.verbose_log==3)
+    verb_log_print(cmd.verbose_log, gd.outlog, " -Total Chunk: %ld\n", nodescount_thread_total);
 
     verb_print(cmd.verbose,
         "Found %ld particles in %ld nodes... vs number of total cells %ld\n",
-        nodescount, gd.nnodescanlev, gd.ncell);
+        nodescount, gd.nnodescanlevTable[ifile], gd.ncellTable[ifile]);
     verb_print(cmd.verbose,
         "...%ld cells at scan level...\n",
         sumcells);
@@ -936,7 +1145,9 @@ local int save_nodes(void)
                ibodyleftout+nodescount);
     fclose(gd.outnodelev);
     fclose(gd.outbodylev);
+    free(nodetable_root);
 
     return _SUCCESS_;
 }
+
 //E

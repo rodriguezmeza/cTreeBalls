@@ -5,15 +5,15 @@
  Purpose: Main routine
  Language: C
  Major revision:
- ================================================================================
- //        1          2          3          4          5          6          7
+ ===============================================================================
+ //       1          2          3          4          5          6          7
 
- Use: tpcf -help
- Input: 	Command line parameters, Parameters file
- Output: ...
+ Use: cballs -help
+ Input: 	Command line parameters, Parameters file, data catalogs
+ Output: several histograms containg 2pcf, 3pcf,...
  Units:
  History:
- Comments and notes: (palimsesto)... coding based on reference below.
+ Comments and notes: (palimsesto)... coding based on references below.
  References:    Barnes' Treecode, NEMO project, Gadget, COLA, CLASS,
                 NR, GSL, Rapaport's book
  github: https://github.com/rodriguezmeza/cTreeBalls.git
@@ -50,6 +50,8 @@ int main(int argc, string argv[])
     printf("\n -> Parameter file is %s\n", cmd.ParameterFile);
 #endif
 
+//ADDONS: Setting this line here makes mpirun -np 2 tpcf run in Cosma
+//#include "tpcf_01.h"
 
     StartRun(argv[0], HEAD1, HEAD2, HEAD3);
 	MainLoop();

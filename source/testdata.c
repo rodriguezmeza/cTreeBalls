@@ -18,7 +18,7 @@ local void Compute_Box_Units(void);
 //local void Compute_Parameters(void);
 //void Compute_Parameters(void);
 
-local vector N;                             // Needed in testdata_sc
+local vector N;                                     // Needed in testdata_sc
 local real weight;
 
 #define SIMPLECUBICRANDOM   0
@@ -33,7 +33,8 @@ int testdata(void)
     int model_int;
     model_string_to_int(cmd.testmodel, &model_int);
 #ifdef MPICODE
-    if (ThisTask==0) {                      // Only task 0 can get points catalog
+    if (ThisTask==0) {                              // Only task 0 can get points
+                                                    //  catalog
 #endif
     switch (model_int){
         case SIMPLECUBIC:
@@ -114,11 +115,12 @@ local void testdata_sc_random(void)
         Type(p) = BODY;
         Weight(p) = weight;
         DO_COORD(k) {
-            Pos(p)[k]    = xrandom(0.0, gd.Box[k]);    // Box lower edge is (0,0,0)
+            Pos(p)[k]    = xrandom(0.0, gd.Box[k]); // Box lower edge is (0,0,0)
 //            Pos(p)[k]    = xrandom(-0.5*gd.Box[k], 0.5*gd.Box[k]);    // Box center is (0,0,0)
         }
 		DO_COORD(k)
-            Ekin = grandom(0.0,1.0);            // Dummy line to reproduce results
+            Ekin = grandom(0.0,1.0);                // Dummy line to reproduce
+                                                    //  results
         if (scanopt(cmd.options, "kappa-constant"))
             Kappa(p) = 2.0;
         else

@@ -20,15 +20,13 @@ LOGHISTON = 1
 NLOGBINPD = 5
 #
 # To compute 3pcf in harmonic base set to 1. Else 0
-TPCFON = 0
-#
-BUCKETON = 1
+TPCFON = 1
 #
 # To activate sincos base under balls (set TPCFON to 1)
-SINCOSON = 0
+SINCOSON = 1
 #
 # To check all body in bodytab
-TREENODEALLBODIESON = 0
+TREENODEALLBODIESON = 1
 #
 # This is for BALLS4 method. Use it instead of TREENODEALLBODIESON
 TREENODEBALLS4ON = 0
