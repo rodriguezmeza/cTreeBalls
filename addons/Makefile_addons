@@ -1,0 +1,32 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+# Here insert AddOns´ Makefile modules
+
+
+
+#
+# ------------------------
+# DO NOT DO ANYTHING BELOW
+# ------------------------
+#
+
+#B AddOns section
+ADDONS_ON = 1
+#
+ifeq ($(ADDONS_ON),1)
+ADDONSDIR = ../addons
+#INCLUDES += -I$(ADDONSDIR)
+HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
+ADDONS = addons
+vpath %.c $(ADDONS)
+INCLUDES += -I../addons
+endif
+#
+#E
