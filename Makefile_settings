@@ -47,14 +47,14 @@ OPENMPMACHINE = 1
 # To activate long integers set to 1. Else 0
 LONGINTON = 1
 #
-ADDONSON = 1
+ADDONSON = 0
 #
 #E
 
 
 OPT2ADD =
 
-# This is only if you have balls module. If no set it to 0
+# This is only if you have balls module. If not set it to 0
 BALLS = 1
 ifeq ($(BALLS),1)
 include ./addons/balls_omp/Makefile_settings_balls_omp
