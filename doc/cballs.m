@@ -91,31 +91,23 @@ gives the frequency to save the the number of pivot computed. Useful to see the 
 [a: opt] you may give here various code behavior options.
 
 .SH EXAMPLES
-time ../cballs nbody=100000 rangeN=500 sizeHistN=100 lbox=10000 verb=2.
+time ../cballs nbody=100000 rangeN=500 sizeHistN=100 lbox=10000 verb=2 o=outdata
 
 .sp
 You will have computation written in a file named with option \fBoutfile\fR in a directory named Output. If this directory does not exist, it will be created.
 Also will be created a directory named "tmp" in the folder Output, where a log file will be saved.
 
 .sp
-Reading a Takahasi simulation data file:
+Reading a Takahasi simulation data file downsized to 512:
 
 .sp
-time cballs infile=Takahasi/allskymap_nres12r000.zs9.mag.dat infmt=takahasi options=stop lbox=0.2 o=takas_zs9
+time cballs infile=./full_sky_whole_XYZK__zs9_r000_nside512.bin infmt=binary options=stop
 
 .sp
-The with the output file we run cballs:
+To convert a catalog from binary to ascii do:
 
 .sp
-time cballs in=Input/takas_zs9.txt options=compute-HistN verb=2 sizeHistN=40 rangeN=0.02 search=tree-omp
-
-.sp
-
-.sp
-To convert a catalog from 2D to 3D assuming 2D column format where theta is the first column and phi the second column do:
-
-.sp
-cballs in=Input/Taka_nres12r043.zs9_all.txt infmt=columns-ascii-2d-to-3d o=takas_AA_3D options=convert
+cballs in=./full_sky_whole_XYZK__zs9_r000_nside512.bin infmt=binary o=takas options=convert
 
 .SH SEE ALSO
 nplot2d(1) cballs(1)
