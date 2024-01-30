@@ -10,7 +10,7 @@ cballs - 3 Point Correlation Function computation code
 .sp
 
 .SH DESCRIPTION
-\fBcballs\fR - computes the 3 point correlation function using brute force, complexity O(N^2).
+\fBcballs\fR - computes the 3 point correlation function using tree methods, complexity O(N Log N).
 
 .SH OPTIONS
 All the options have the structure
@@ -46,10 +46,10 @@ Parameter input file may be created by hand with the editor of your choice. Comm
 .sp
 cballs
 .sp
-This will run the \fBcballs\fR code with default values and when it finish you will have in your running directory the file "parameters_null-cballs-usedvalues". Now you may edit this file to adapt to your own plotting parameters. This file can be overwritten so it may be helpful to change this file name to whatever apropriate.
+This will run the \fBcballs\fR code with default values and when it finish you will have in your running output directory the file "parameters_null-cballs-usedvalues". Now you may edit this file to adapt to your own run parameters. This file can be overwritten so it may be helpful to change this file name to whatever apropriate.
 
 .IP "\fBsearchMethod\fR" 12
-[a: search] is the searching method to use. Default is "tree". Other option is to use brute search method: "direct". When the code is compiled with option OPENMPMACHINE=1, then the best options is "treeomp". When using "direct" option, automatically is run the OpenMP version of it.
+[a: search] is the searching method to use. Default is "tree-omp-sincos". Other search options will be added in the addons folder.
 
 .IP "\fBinfile\fR" 12
 [a: in] will give the name of file to input the analysed data.
