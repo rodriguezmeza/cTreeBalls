@@ -11,6 +11,8 @@
 
 
 
+
+
 #
 # ------------------------
 # DO NOT DO ANYTHING BELOW
@@ -22,11 +24,13 @@ ADDONS_ON = 1
 #
 ifeq ($(ADDONS_ON),1)
 ADDONSDIR = ../addons
-#INCLUDES += -I$(ADDONSDIR)
 HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
 ADDONS = addons
 vpath %.c $(ADDONS)
-INCLUDES += -I../addons
+INCLUDES += -I$(ADDONSDIR)
+INCLUDES += -I$(ADDONSDIR)/addons_include
+HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/*.h)
 endif
 #
 #E

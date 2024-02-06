@@ -27,7 +27,7 @@ local void outputdata_bin(void);
 //local void outputdata_ascii_smooth(void);
 
 #ifdef ADDONS
-#include "tpcf_io_00.h"
+#include "tpcf_io_include_01.h"
 #endif
 
 local void outfilefmt_string_to_int(string,int *);
@@ -65,7 +65,7 @@ int inputdata(string filename, int ifile)
             inputdata_takahasi(filename, ifile); break;
 
 #ifdef ADDONS
-#include "tpcf_io_01.h"
+#include "tpcf_io_include_02.h"
 #endif
 
         default:
@@ -78,9 +78,7 @@ int inputdata(string filename, int ifile)
 #endif
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_io_01c.h"
-#endif
+#include "tpcf_io_include_03.h"
 #endif
 
 //    } // end of ifile
@@ -347,7 +345,7 @@ local void inputdata_bin(string filename, int ifile)
 
 
 #ifdef ADDONS
-#include "tpcf_io_02.h"
+#include "tpcf_io_include_04.h"
 #endif
 
 
@@ -945,9 +943,7 @@ int output(void)
 //            outputdata_smooth();
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_io_01b.h"
-#endif
+#include "tpcf_io_include_05.h"
 #endif
 
     }
@@ -1233,9 +1229,13 @@ int EndRun(void)
     free_dmatrix(gd.histXicos,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
     free_dmatrix(gd.histXi,1,cmd.mchebyshev+1,1,cmd.sizeHistN);
 #endif
-    free_dmatrix3D(gd.histXi3pcf,1,cmd.sizeHistN,1,cmd.sizeHistN,1,cmd.sizeHistTheta);
+
     free_dvector(gd.histXi2pcf,1,cmd.sizeHistN);
-    free_dmatrix3D(gd.histNNNSub,1,cmd.sizeHistN,1,cmd.sizeHistN,1,cmd.sizeHistTheta);
+
+ #ifdef ADDONS
+ #include "tpcf_io_include_06.h"
+ #endif
+
     free_dvector(gd.histNNN,1,cmd.sizeHistN);
 // 2pcf
     free_dvector(gd.histNSubXi2pcf,1,cmd.sizeHistN);
@@ -1302,7 +1302,5 @@ int EndRun(void)
 }
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_io_03.h"
-#endif
+#include "tpcf_io_include_07.h"
 #endif

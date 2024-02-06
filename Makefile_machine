@@ -22,7 +22,11 @@ vpath .base build
 # Some of this definitions can be set in a particular machine
 #
 OPT1 =
+#
+# This variable is to show settings
 OPT2 =
+# The one which will be used by CC is CCFLAG. At some point it gets OPT2 definitions...
+#
 # Activate this line to print diagnostic
 #OPT2 += -DDIAGNOSTICS
 #
@@ -121,7 +125,8 @@ MLIBS = -lm
 #CPPFLAG = $(CCFLAG)
 #LDFLAG += $(OPTIMIZE) $(LIBS)
 
-CCFLAG += $(OPT2)
+# This was the original place
+#CCFLAG += $(OPT2)
 
 # your tool for creating static libraries:
 AR        = ar rv
@@ -195,10 +200,10 @@ OPT2 += $(DEBUG)
 endif
 #
 ifeq ($(ADDONSON),1)
+OPT2 += -DADDONS
 # Machine definitions
 include $(MACHINES_DIR)/addons/Makefile_addons
 #
-OPT2 += -DADDONS
 endif
 #E ADDONS
 
@@ -230,6 +235,22 @@ CCFLAG += -DGETPARAM
 #LDFLAGS += -DGETPARAM
 INCLUDES += -I../getparam
 EXTERNAL += getparam.o
+endif
+#
+#E
+
+#
+#B CLASSLIB section
+# Use 0 to get rid off all calls to class_lib routines:
+CLASSLIB_ON = 0
+
+ifeq ($(CLASSLIB_ON),1)
+CLASSLIB = class_lib
+vpath %.c $(CLASSLIB)
+CCFLAG += -DCLASSLIB
+#LDFLAGS += -DCLASSLIB
+INCLUDES += -I../$(CLASSLIB)
+EXTERNAL += common.o
 endif
 #
 #E
@@ -320,6 +341,7 @@ LDFLAG +=  $(MPI_LIBS) $(FFTW_LIBS)
 # END FFTW, GSL, MPI DEFINITIONS (if needed)
 #--------------------------------------------
 
+CCFLAG += $(OPT2)
 
 %.o:  %.c .base
 	cd $(WRKDIR);$(CC) $(OPTFLAG) $(OMPFLAG) $(CCFLAG) $(INCLUDES) -c ../$< -o $*.o

@@ -4,7 +4,7 @@
  Starting date: april 2023
  Purpose: Definitions of global variables and parameters
  Language: C
- Use: '#include "global_defs.h"
+ Use: '#include "globaldefs.h"
  Major revisions:
  ==============================================================================*/
 //        1          2          3          4          5          6          7
@@ -12,12 +12,15 @@
 #ifndef _globaldefs_h
 #define _globaldefs_h
 
-//===============================================
-#include <string.h>     // Incluido para quitar el warning:
-                        // "Implicit declaration of built-in function 'strcpy' y 'strchr'"
+//B ===============================================
+#include <string.h>                                 // Incluido para quitar
+                                                    //  el warning:
+                                                    // "Implicit declaration of
+                                                    //  built-in function 
+                                                    //  'strcpy' y 'strchr'"
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/time.h>       // To get time of the day
+#include <sys/time.h>                               // To get time of the day
 
 #include "stdinc.h"
 #include "vectdefs.h"
@@ -28,50 +31,6 @@
 #include "inout.h"
 #include "constant.h"
 
-/*
-//B CLASSLIB section
-// Also in globaldefs_01.h, need to fix this part
-// standard libraries from Julien Lesgourges CLASS
-#ifdef CLASSLIB
-#include "stdio.h"
-#include "stdlib.h"
-#include "math.h"
-#include "string.h"
-#include "float.h"
-#ifdef _OPENMP
-#include "omp.h"
-#endif
-#include "common.h"
-#else
-#define _SUCCESS_ 0 // integer returned after successful call of a function
-#define _FAILURE_ 1 // integer returned after failure in a function
-#define _ERRORMSGSIZE_ 2048 // generic error messages are cut beyond this number of characters
-typedef char ErrorMsg[_ERRORMSGSIZE_]; // Generic error messages
-
-#define MIN(a,b) (((a)<(b)) ? (a) : (b) ) // **< the usual "min" function
-#define MAX(a,b) (((a)<(b)) ? (b) : (a) ) // **< the usual "max" function
-#define SIGN(a) (((a)>0) ? 1. : -1. )
-#define NRSIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
-#define index_symmetric_matrix(i1,i2,N) (((i1)<=(i2)) ? ((i2)+N*(i1)-((i1)*((i1)+1))/2) : ((i1)+N*(i2)-((i2)*((i2)+1))/2)) //< assigns an index from 0 to [N(N+1)/2-1] to the coefficients M_{i1,i2} of an N*N symmetric matrix; useful for converting a symmetric matrix to a vector, without losing or double-counting any information
-
-#endif
-//E
-*/
-
-/*
-//B OpenMP section
-//  Timing variables
-#ifdef OPENMPCODE
-#include "omp.h"
-//static double relstart,relend,absstart,absend;
-global double relstart,relend,absstart,absend;
-#else
-#include <time.h>
-//static time_t relstart,relend,absstart,absend;
-global time_t relstart,relend,absstart,absend;
-#endif
-//E
-*/
 
 //B GSL section
 #ifndef NOGSL
@@ -122,40 +81,30 @@ global time_t relstart,relend,absstart,absend;
 //  Timing variables
 #ifdef OPENMPCODE
 #include "omp.h"
-//static double relstart,relend,absstart,absend;
 global double relstart,relend,absstart,absend;
 #else
 #include <time.h>
-//static time_t relstart,relend,absstart,absend;
 global time_t relstart,relend,absstart,absend;
 #endif
 //E
 
 //B Usefule MACROS and other constants:
 //#define CPUTIME         (cputime())
-#define CPUTIME         (second()/60.0)         // Gives cputime in minutes
-#define REALTIME        (gettimeofday(&gd.current_time, NULL)) // Gives time of the day in minutes
+#define CPUTIME         (second()/60.0)             // Gives cputime in minutes
+#define REALTIME        (gettimeofday(&gd.current_time, NULL)) // Gives time of
+                                                    //  the day in minutes
 #define PRNUNITOFTIMEUSED   "min."
-
 #define MAXITEMS    100
-
-//#define MAXLENGTHOFFILES       200
 #define MAXLENGTHOFFILES       300
 #define MAXLENGTHOFSTRSCMD     200
 #define EXTFILES            ".txt"
-#define INMB                9.536743116E-7      // 1/(1024*1024)
-// Already in Makefile_settings. Set it there
-//#define NLOGBINPD   5       // bins per decade for log histograms
+#define INMB                9.536743116E-7          // 1/(1024*1024)
 //E
 
-//B
+//B MPI definitions
 #ifdef MPICODE
 #include <mpi.h>
-// Get the rank of the process
-//int world_rank;
 global int ThisTask;
-// Get the number of processes
-//int world_size;
 global int NTask;
 global int PTask;
 
@@ -165,14 +114,14 @@ global int name_len;
 #endif
 //E
 
-//===============================================
+//E ===============================================
+
 
 typedef struct {
 // Every item in cmdline_defs.h must have an item here::
 
-    string statefile;
     INTEGER stepState;
-    string restorefile;
+
     string script;
     string options;
     string version;
@@ -181,7 +130,8 @@ typedef struct {
 	string paramfile;
 
 #ifndef GETPARAM
-    char ParameterFile[MAXLENGTHOFFILES]; // May be we should incrase this number
+    char ParameterFile[MAXLENGTHOFFILES];           // May be we should incrase
+                                                    //  this number
 #endif
 
     string searchMethod;
@@ -202,13 +152,12 @@ typedef struct {
     real rangeN;
     real rminHist;
 //    bool logHist;
-    int sizeHistTheta;
 
     string infile;
     string infilefmt;
-//B 2023.11.29
+
     string iCatalogs;
-//E
+
     string rootDir;
     string outfile;
     string outfilefmt;
@@ -222,39 +171,31 @@ typedef struct {
     
     int numthreads;
 
-//
-//B NOLSST:
-//
     int seed;
     string nsmooth;
-#ifdef BALLS
-    INTEGER ntosave;
-    int scanLevel;
-// Root nodes:
-    int scanLevelRoot;
-//    int scanLevelMin;
-    string scanLevelMin;
-//
-#else
-    string scanLevelMin;
+
+
+#ifdef ADDONS
+#include "globaldefs_include_01.h"
 #endif
+
     INTEGER stepNodes;
     string ncritical;
-//#endif
+
     string testmodel;
     INTEGER nbody;
     real lengthBox;
+    
+// Not used, delet it:
     int mToPlot;
-//
-//E
-//
 
 } cmdline_data, *cmdline_data_ptr;
+
 
 typedef struct {
     real cpuinit;
     struct timeval current_time;
-    long cpurealinit;       // get time of the day
+    long cpurealinit;                               // get time of the day
 
 	string headline0;
 	string headline1;
@@ -262,19 +203,16 @@ typedef struct {
 	string headline3;
 
     FILE *outlog;
-//B To debug cells:
-//    FILE *outcells;
-//E
-	FILE *outstr_sols;
+// Is it used? (delete)
+    FILE *outstr_sols;
 
 	char mode[2];
 
     int searchmethod_int;
 
-//B 2023.11.29
 //B Settings of the code
-    short dimension;                            // Set dimension of the run
-    bool tpcfon;                               // Set 3pcf computation on
+    short dimension;                                // Set dimension of the run
+    bool tpcfon;                                    // Set 3pcf computation on
 //E
 
 //B Tree
@@ -289,16 +227,14 @@ typedef struct {
 //
     INTEGER nbccalc;
     INTEGER nbbcalc;
-    real rSize;             // Maximum r of the box
+    real rSize;                                     // Maximum r of the box
 
-//B 2023.11.29
-    real rSizeTable[MAXITEMS];             // Maximum r of the box
+    real rSizeTable[MAXITEMS];                      // Maximum r of the box
     INTEGER ncellTable[MAXITEMS];
     INTEGER nbodyTable[MAXITEMS];
     int tdepthTable[MAXITEMS];
     INTEGER nnodescanlevTable[MAXITEMS];
     INTEGER nnodescanlev_rootTable[MAXITEMS];
-//E
 
     cellptr root;
 //E
@@ -306,7 +242,7 @@ typedef struct {
     real cputree;
 
 // Tree:
-     real Rcut;            // Cutoff radius
+     real Rcut;                                     // Cutoff radius
      real RcutSq;
     real cpusearch;
 //
@@ -351,7 +287,6 @@ typedef struct {
     real deltaRmax;
 #ifdef LOGHIST
     real *deltaRV;
-// 2024.12.04
     real *ddeltaRV;
 #endif
 
@@ -395,9 +330,7 @@ typedef struct {
     real i_deltaR;
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "globaldefs_00.h"
-#endif
+#include "globaldefs_include_02.h"
 #endif
 
     char fnameData_kd[128];
@@ -411,15 +344,12 @@ typedef struct {
     float l_box_kd;
     float l_box_half_kd;
 
-//B 2023.11.29
     int ninfiles;
     char *infilenames[MAXITEMS];
     char *infilefmtname[MAXITEMS];
     int iCatalogs[MAXITEMS];
-//E
+
     int nsmooth[MAXITEMS];
-    //B To debug cells:
-//    char cellsfilePath[MAXLENGTHOFFILES];
     INTEGER nnode;
     INTEGER rnnode;
     //E
@@ -445,30 +375,27 @@ typedef struct {
 //B BUCKET
     real rminCell[2];
 //E
+
+#ifdef ADDONS
+#include "globaldefs_include_03.h"
+#endif
+
 } global_data, *global_data_ptr;
 
 global global_data gd;
 global cmdline_data cmd;
 
-//B 2023.11.29
 global bodyptr bodytable[MAXITEMS];
 global nodeptr *nodetablescanlev[MAXITEMS];
 global nodeptr *nodetablescanlev_root[MAXITEMS];
 global cellptr roottable[MAXITEMS];
-//E
 
 global bodyptr bodytab;
 global bodyptr bodytabbf;
 global bodyptr bodytabsm;
 global bodyptr bodytabSel;
 
-//B To debug cells:
-//global cellptr nodetab;
-//global cellptr *nodetab;
 global nodeptr *nodetab;
-//local nodeptr *active;
-//local cellptr interact;
-//E
 
 // BALLS
 global nodeptr *nodetabscanlev;
@@ -483,7 +410,8 @@ global real *histXi2pcf_omp;                        // Auxiliary array.
 global cellptr root;
 // BALLS
 global cellptr rootnode;                            // To make treenodes
-global bodyptr nodetable;                           // To smooth minimum size cells
+global bodyptr nodetable;                           // To smooth minimum size 
+                                                    //  cells
 global bodyptr nodetable_root;
 //E
 
@@ -752,21 +680,14 @@ global real *inout_zval;
 global real *inout_wval;
 
 #ifdef ADDONS
-#include "tpcf_io_00.h"
+#include "globaldefs_include_04.h"
 #endif
 
 
-#ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "globaldefs_01.h"
-#endif
-#endif
-
-//NOLSST:
-// It is already in globaldef.h, need to fix this
 //B CLASSLIB section
 // standard libraries from Julien Lesgourges CLASS
 #ifdef CLASSLIB
+
 #include "stdio.h"
 #include "stdlib.h"
 #include "math.h"
@@ -776,7 +697,7 @@ global real *inout_wval;
 #include "omp.h"
 #endif
 #include "common.h"
-#else
+
 #define _TRUE_ 1 //< integer associated to true statement
 #define _FALSE_ 0 // **< integer associated to false statement
 #define _SUCCESS_ 0 // integer returned after successful call of a function
@@ -794,14 +715,33 @@ typedef char ErrorMsg[_ERRORMSGSIZE_]; // Generic error messages
 #define NRSIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
 #define index_symmetric_matrix(i1,i2,N) (((i1)<=(i2)) ? ((i2)+N*(i1)-((i1)*((i1)+1))/2) : ((i1)+N*(i2)-((i2)*((i2)+1))/2)) // < assigns an index from 0 to [N(N+1)/2-1] to the coefficients M_{i1,i2} of an N*N symmetric matrix; useful for converting a symmetric matrix to a vector, without losing or double-counting any information
 global ErrorMsg errmsg;
+
+#else // ! CLASSLIB
+
+#define _TRUE_ 1 //< integer associated to true statement
+#define _FALSE_ 0 // **< integer associated to false statement
+#define _SUCCESS_ 0 // integer returned after successful call of a function
+#define _FAILURE_ 1 // integer returned after failure in a function
+#define _ERRORMSGSIZE_ 2048 // generic error messages are cut beyond this number of characters
+typedef char ErrorMsg[_ERRORMSGSIZE_]; // Generic error messages
+
+#ifndef MIN
+#define MIN(a,b) (((a)<(b)) ? (a) : (b) ) // **< the usual "min" function
 #endif
+#ifndef MAX
+#define MAX(a,b) (((a)<(b)) ? (b) : (a) ) // **< the usual "max" function
+#endif
+#define SIGN(a) (((a)>0) ? 1. : -1. )
+#define NRSIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
+#define index_symmetric_matrix(i1,i2,N) (((i1)<=(i2)) ? ((i2)+N*(i1)-((i1)*((i1)+1))/2) : ((i1)+N*(i2)-((i2)*((i2)+1))/2)) // < assigns an index from 0 to [N(N+1)/2-1] to the coefficients M_{i1,i2} of an N*N symmetric matrix; useful for converting a symmetric matrix to a vector, without losing or double-counting any information
+global ErrorMsg errmsg;
+
+#endif // ! CLASSLIB
 //E
 
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "globaldefs_02.h"
-#endif
+#include "globaldefs_include_05.h"
 #endif
 
 #include "protodefs.h"

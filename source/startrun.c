@@ -99,10 +99,10 @@ local int startrun_parameterfile(void)
 #ifdef GETPARAM
 	ReadParameterFile(cmd.paramfile);
 
-#ifdef SAVERESTORE
-    if (strnull(cmd.restorefile))
-        startrun_ParamStat();
+#ifdef ADDONS
+#include "startrun_include_01.h"
 #endif
+
 #else
     ReadParameterFile(cmd.ParameterFile);
 #endif
@@ -154,7 +154,6 @@ local void ReadParametersCmdline(void)
     cmd.rangeN = GetdParam("rangeN");
     cmd.rminHist = GetdParam("rminHist");
 //    cmd.logHist = GetbParam("logHist");
-    cmd.sizeHistTheta = GetiParam("sizeHistTheta");
     cmd.infile = GetParam("infile");
     cmd.infilefmt = GetParam("infileformat");
     cmd.iCatalogs = GetParam("iCatalogs");
@@ -169,10 +168,7 @@ local void ReadParametersCmdline(void)
     cmd.suffixOutFiles = GetParam("suffixOutFiles");
 
     cmd.stepState = GetiParam("stepState");
-#ifdef SAVERESTORE
-    cmd.statefile = GetParam("statefile");
-    cmd.restorefile = GetParam("restorefile");
-#endif
+
     cmd.verbose = GetiParam("verbose");
     cmd.verbose_log = GetiParam("verbose_log");
 
@@ -196,14 +192,7 @@ local void ReadParametersCmdline(void)
 //
 
 #ifdef ADDONS
-#ifdef BALLS
-    cmd.ntosave = GetiParam("ntosave");
-        cmd.scanLevel = GetiParam("scanLevel");
-// Root nodes:
-        cmd.scanLevelRoot = GetiParam("scanLevelRoot");
-        cmd.scanLevelMin = GetParam("scanLevelMin");
-//
-#endif
+#include "startrun_include_02.h"
 #endif
 
 #ifdef MPICODE
@@ -223,8 +212,8 @@ local int startrun_Common(void)
 {
     int ifile;
 
-#ifdef SAVERESTORE
-    if (strnull(cmd.restorefile)) {
+#ifdef ADDONS
+#include "startrun_include_03.h"
 #endif
 
         setFilesDirs();
@@ -410,11 +399,6 @@ local int startrun_Common(void)
                        "deltaR=%lf normal scale):\n",gd.deltaR);
 #endif // ! LOGHIST
 
-//
-//B For 3pcf brute force:
-//        gd.deltaTheta = TWOPI/cmd.sizeHistTheta;
-        gd.deltaTheta = PI/cmd.sizeHistTheta;
-//E
         MULVS(gd.cells, gd.Box, 1.0/gd.Rcut);       // Only needed for cellmethod
         AllocMem(gd.cellList, VProd (gd.cells)      // Only needed for cellmethod
                 + cmd.nbody, INTEGER);
@@ -441,49 +425,10 @@ local int startrun_Common(void)
         verb_log_print(cmd.verbose_log, gd.outlog,
                        "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd.nbody,1.0/3.0));
 
+
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "startrun_00.h"
+#include "startrun_include_04.h"
 #endif
-#endif
-
-
-#ifdef SAVERESTORE
-    }    else {                                     // if !strnull(cmd.restorefile)
-
-// We must check the order of memory allocation and dealocation
-//NOLSST
-        restorestate(cmd.restorefile);
-
-#ifdef CLASSLIB
-        class_call(random_init(cmd.seed), errmsg, errmsg);
-#else
-        random_init(cmd.seed);
-#endif
-
-        setFilesDirs_log();
-        strcpy(gd.mode,"a");
-#ifdef MPICODE
-        if(ThisTask==0) {
-#endif
-        if(!(gd.outlog=fopen(gd.logfilePath, gd.mode)))
-            error("\nstart_Common: error opening file '%s' \n",gd.logfilePath);
-#ifdef MPICODE
-        }
-#endif
-        verb_log_print(cmd.verbose_log, gd.outlog, "\n\nAdded after restart from restart file\n");
-        verb_log_print(cmd.verbose_log, gd.outlog, "\nnbody=%d\n",cmd.nbody);
-
-        setFilesDirs();
-
-// We must check the order of memory allocation and dealocation
-        AllocMem(gd.cellList, VProd (gd.cells)      // Only needed for cellmethod
-                + cmd.nbody, INTEGER);
-        gd.bytes_tot += (VProd(gd.cells)+cmd.nbody)*sizeof(INTEGER);
-
-    }
-#endif // ! SAVERESTORE
-
 
     return _SUCCESS_;
 }
@@ -571,6 +516,19 @@ local int startrun_getParamsSpecial(void)
             verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",
                            gd.scanLevelMin[1]);
     }
+    
+    scanrOption(cmd.rsmooth, gd.rsmooth, &nitems, ndummy,
+                2, "rsmooth");
+    gd.rsmoothFlag = TRUE;
+    if (nitems!=1 && !strnull(cmd.rsmooth)) {
+        if (cmd.verbose_log>=3)
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           "option: rsmooth=%s is not valid... going out\n",
+                           cmd.rsmooth);
+        gd.rsmoothFlag = FALSE;
+    } /*else {
+        
+    } */
 #endif
 
     scaniOption(cmd.ncritical, gd.ncritical, &nitems, ndummy, 2, "ncritical");
@@ -686,6 +644,8 @@ local int scanrOption(string optionstr, double *option, int *noption,
     verb_log_print(cmd.verbose_log, gd.outlog, "\nProcessing '%s' option:\n", message);
 #endif
 
+    verb_log_print(cmd.verbose_log, gd.outlog, "\nSplitting string \"%s\" in tokens:\n",message);
+
     if (!strnull(optionstr)) {
         strcpy(optiontmp,optionstr);
         if (cmd.verbose_log>=3)
@@ -793,8 +753,6 @@ local void startrun_ParamStat(void)
         cmd.rminHist = GetdParam("rminHist");
  //   if (GetParamStat("logHist") & ARGPARAM)
  //       cmd.logHist = GetdParam("logHist");
-    if (GetParamStat("sizeHistTheta") & ARGPARAM)
-        cmd.sizeHistTheta = GetiParam("sizeHistTheta");
 
     if (GetParamStat("histNFileName") & ARGPARAM)
         cmd.histNFileName = GetParam("histNFileName");
@@ -847,20 +805,7 @@ local void startrun_ParamStat(void)
 
 
 #ifdef ADDONS
-#ifdef BALLS
-    if (GetParamStat("ntosave") & ARGPARAM)
-        cmd.ntosave = GetiParam("ntosave");
-    if (GetParamStat("scanLevel") & ARGPARAM)
-            cmd.scanLevel = GetiParam("scanLevel");
-// Root nodes:
-        if (GetParamStat("scanLevelRoot") & ARGPARAM)
-                cmd.scanLevelRoot = GetiParam("scanLevelRoot");
-//        if (GetParamStat("scanLevelMin") & ARGPARAM)
-//                cmd.scanLevelMin = GetiParam("scanLevelMin");
-        if (GetParamStat("scanLevelMin") & ARGPARAM)
-                cmd.scanLevelMin = GetParam("scanLevelMin");
-//
-#endif
+#include "startrun_include_05.h"
 #endif
 
 
@@ -910,8 +855,6 @@ local void CheckParameters(void)
         error("CheckParameters: absurd value for rangeN\n");
     if (cmd.rminHist < 0 || cmd.rminHist > cmd.rangeN)
         error("CheckParameters: absurd value for rminHist\n");
-    if (cmd.sizeHistTheta < 2)
-        error("CheckParameters: absurd value for sizeHistTheta\n");
     if (cmd.numthreads <= 0)
         error("CheckParameters: absurd value for numberThreads must be an integer >= 0\n");
 
@@ -944,25 +887,7 @@ local void CheckParameters(void)
 
 
 #ifdef ADDONS
-#ifdef BALLS
-    if (scanopt(cmd.options, "bodyfound"))
-        if (cmd.ntosave < 1 || cmd.ntosave > cmd.nbody)
-            error("CheckParameters: absurd value for ntosave\n");
-    if (cmd.scanLevel < 0)
-        error("CheckParameters: absurd value for scanLevel (%d)\n",cmd.scanLevel);
-//    if (cmd.scanLevel > 12)
-//        error("CheckParameters: too big value for scanLevel (%d)\n",cmd.scanLevel);
-// Root nodes:
-    if (cmd.scanLevelRoot < 0)
-        error("CheckParameters: absurd value for scanLevelRoot (%d)\n",cmd.scanLevelRoot);
-//    if (cmd.scanLevelMin > 0)
-    if ((int)gd.scanLevelMin[0] > 0)
-        error("CheckParameters: absurd value for scanLevelMin[0] (%s)\n",cmd.scanLevelMin);
-//    if (gd.scanLevelMin[1] < 0 || gd.scanLevelMin[1] > 1)
-    if (gd.scanLevelMin[1] > 0)
-        error("CheckParameters: absurd value for scanLevelMin[1] (%s)\n",cmd.scanLevelMin);
-//
-#endif
+#include "startrun_include_06.h"
 #endif
 
 
@@ -1014,17 +939,13 @@ local void ReadParameterFile(char *fname)
     RPName(cmd.rangeN,"rangeN");
     RPName(cmd.rminHist,"rminHist");
 //    BPName(cmd.logHist,"logHist");
-    IPName(cmd.sizeHistTheta,"sizeHistTheta");
     SPName(cmd.histNFileName,"histNFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd.histXi2pcfFileName,"histXi2pcfFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd.histZetaMFileName,"histZetaMFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd.mhistZetaFileName,"mhistZetaFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd.suffixOutFiles,"suffixOutFiles",MAXLENGTHOFSTRSCMD);
     IPName(cmd.stepState,"stepState");
-#ifdef SAVERESTORE
-    SPName(cmd.statefile,"statefile",MAXLENGTHOFSTRSCMD);
-    SPName(cmd.restorefile,"restorefile",MAXLENGTHOFSTRSCMD);
-#endif
+
     IPName(cmd.verbose,"verbose");
     IPName(cmd.verbose_log,"verbose_log");
     IPName(cmd.numthreads,"numberThreads");
@@ -1049,15 +970,7 @@ local void ReadParameterFile(char *fname)
 
 
 #ifdef ADDONS
-#ifdef BALLS
-    IPName(cmd.ntosave,"ntosave");
-    IPName(cmd.scanLevel,"scanLevel");
-// Root nodes:
-        IPName(cmd.scanLevelRoot,"scanLevelRoot");
-//        IPName(cmd.scanLevelMin,"scanLevelMin");
-        SPName(cmd.scanLevelMin,"scanLevelMin",MAXLENGTHOFSTRSCMD);
-//
-#endif
+#include "startrun_include_07.h"
 #endif
 
 
@@ -1183,7 +1096,6 @@ local void PrintParameterFile(char *fname)
 //E
 //        fprintf(fdout,FMTI,"dimension",cmd.dimension);
         fprintf(fdout,FMTI,"sizeHistN",cmd.sizeHistN);
-        fprintf(fdout,FMTI,"sizeHistTheta",cmd.sizeHistTheta);
         fprintf(fdout,FMTR,"rangeN",cmd.rangeN);
         fprintf(fdout,FMTR,"rminHist",cmd.rminHist);
 //        fprintf(fdout,FMTT,"logHist",cmd.logHist ? "true" : "false");
@@ -1193,10 +1105,7 @@ local void PrintParameterFile(char *fname)
         fprintf(fdout,FMTT,"mhistZetaFileName",cmd.mhistZetaFileName);
         fprintf(fdout,FMTT,"suffixOutFiles",cmd.suffixOutFiles);
         fprintf(fdout,FMTIL,"stepState",cmd.stepState);
-#ifdef SAVERESTORE
-        fprintf(fdout,FMTT,"statefile",cmd.statefile);
-        fprintf(fdout,FMTT,"restorefile",cmd.restorefile);
-#endif
+
         fprintf(fdout,FMTI,"verbose",cmd.verbose);
         fprintf(fdout,FMTI,"verbose_log",cmd.verbose_log);
         fprintf(fdout,FMTI,"numberThreads",cmd.numthreads);
@@ -1220,15 +1129,7 @@ local void PrintParameterFile(char *fname)
 
 
 #ifdef ADDONS
-#ifdef BALLS
-        fprintf(fdout,FMTIL,"ntosave",cmd.ntosave);
-        fprintf(fdout,FMTI,"scanLevel",cmd.scanLevel);
-// Root nodes:
-        fprintf(fdout,FMTI,"scanLevelRoot",cmd.scanLevelRoot);
-//        fprintf(fdout,FMTI,"scanLevelMin",cmd.scanLevelMin);
-        fprintf(fdout,FMTT,"scanLevelMin",cmd.scanLevelMin);
-//
-#endif
+#include "startrun_include_08.h"
 #endif
 
 
@@ -1268,7 +1169,7 @@ local int infilefmt_string_to_int(string infmt_str,int *infmt_int)
                                                     *infmt_int = INCOLUMNS2DTO3D;
 
 #ifdef ADDONS
-#include "startrun_01.h"
+#include "startrun_include_09.h"
 #endif
 
     return _SUCCESS_;
@@ -1303,15 +1204,11 @@ global int startrun_memoryAllocation(void)
     bytes_tot_local += cmd.sizeHistN*sizeof(real);
     gd.histNNN = dvector(1,cmd.sizeHistN);
     bytes_tot_local += cmd.sizeHistN*sizeof(real);
-    gd.histNNNSub = dmatrix3D(1,cmd.sizeHistN,1,cmd.sizeHistN,
-                              1,cmd.sizeHistTheta);
-    bytes_tot_local +=
-                (cmd.sizeHistN*cmd.sizeHistN*cmd.sizeHistTheta)*sizeof(real);
+#ifdef ADDONS
+#include "startrun_include_10.h"
+#endif
     gd.histXi2pcf = dvector(1,cmd.sizeHistN);
     bytes_tot_local += cmd.sizeHistN*sizeof(real);
-    gd.histXi3pcf = dmatrix3D(1,cmd.sizeHistN,1,cmd.sizeHistN,1,cmd.sizeHistTheta);
-    bytes_tot_local +=
-                (cmd.sizeHistN*cmd.sizeHistN*cmd.sizeHistTheta)*sizeof(real);
 #ifdef TPCF
     gd.histXi = dmatrix(1,cmd.mchebyshev+1,1,cmd.sizeHistN);
     bytes_tot_local += (cmd.mchebyshev+1)*cmd.sizeHistN*sizeof(real);
@@ -1366,22 +1263,7 @@ local void search_method_string_to_int(string method_str,int *method_int)
                 *method_int = TREEOMPMETHODSINCOS;
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "startrun_02.h"
-#endif
-
-#ifdef TREEOMP
-#include "startrun_tree_normal_omp.h"
-#endif
-#ifdef TREE3PCFDIRECTOMP
-#include "startrun_tree_3pcf_direct_omp.h"
-#endif
-#ifdef BALLS
-#include "startrun_balls_omp.h"
-#endif
-#ifdef DIRECTMETHOD
-#include "startrun_direct_method.h"
-#endif
+#include "startrun_include_11.h"
 #endif
 
 }

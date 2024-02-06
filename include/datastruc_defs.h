@@ -33,11 +33,11 @@
   id[nt++]=STRING;}
 
 
-// The weight can be -> other scalar field of interest
 typedef struct _node {
     short type;
     bool update;
-    real weight;
+    real weight;                                    // The weight can be other
+                                                    //  scalar field of interest
     real kappa;
     vector pos;
     struct _node *next;
@@ -46,30 +46,31 @@ typedef struct _node {
     real **histXi;
     bool histON;
     
+//B kd-tree
     byte flags;                                     // status in b-b calculation
     byte newlevel;                                  //  level set by latest
                                                     //  force calc.
-
-//B To see the bodies belonging to a cell:
-    bool selected;
 //E
-//BODY3
-    INTEGER nbb;                                    // If comes from smoothing
+    bool selected;                                  // To see the bodies
+                                                    //  belonging to a cell
+    INTEGER nbb;                                    // BODY3:
+                                                    // If comes from smoothing
                                                     //  gives number of
                                                     //  smoothingbodies
                                                     // Body will be tagged NBODY3
-
-// BALLS
+//B BALLS
     int lev;
     int idxscanlev;
     INTEGER Id;
 #ifdef DEBUG
     bool hit;
 #endif
-//
-//B Balls-correction. 2023-11-10
+
     INTEGER nb;
     real radius;
+
+    INTEGER nbrmin;
+    INTEGER nbrmin_overlap;
 //E
 
 } node, *nodeptr;
@@ -84,40 +85,44 @@ typedef struct _node {
 #define bXi2pcfsub(x)    (((nodeptr) (x))->bhistXi2pcfsub)
 #define hXi(x)    (((nodeptr) (x))->histXi)
 #define hON(x)    (((nodeptr) (x))->histON)
-// BODY3
-#define Nbb(x)    (((nodeptr) (x))->nbb)
-// BALLS
+
+#define Nbb(x)    (((nodeptr) (x))->nbb)            // BODY3
+//B BALLS
 #define IdNode(x)    (((nodeptr) (x))->Id)
 #define Level(x)    (((nodeptr) (x))->lev)
 #define IDXSCAN(x)    (((nodeptr) (x))->idxscanlev)
 #ifdef DEBUG
 #define HIT(x)    (((nodeptr) (x))->hit)
 #endif
-//
+//E
 
 //B To see the bodies belonging to a cell:
 #define Selected(x)    (((nodeptr) (x))->selected)
 //E
 
-//B Balls-correction. 2023-11-10
+//B Balls-correction.
 #define Nb(x) (((nodeptr) (x))->nb)
 #define Radius(x) (((nodeptr) (x))->radius)
+
+#define NbRmin(x) (((nodeptr) (x))->nbrmin)
+#define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
 //E
 
 #define BODY 00
-#define BODY3 03    // Smooth
+#define BODY3 03                                    // Smooth
 #define CELL 02
 // BALLS
 #define NODEBODY 04
 #define NODECELL 05
-//
+//E
 
-// The meaning of the structure and its components can be changed
+
 typedef struct {
     node bodynode;
     INTEGER Id;
-
+//B kd-tree
     real smooth;                                    // smoothing length
+//E
 } body, *bodyptr;
 
 #define Id(x)    (((bodyptr) (x))->Id)
@@ -125,7 +130,6 @@ typedef struct {
 //B kd-tree
 #define Flags(x)     (((nodeptr) (x))->flags)
 #define NewLevel(x)  (((nodeptr) (x))->newlevel)
-
 #define NthBody(bp,n)  ((bp) + (n))
 #define INQUE    0x04            // body listed in current priority que
 #define DONE     0x08            // smoothing operation is complete
@@ -141,39 +145,20 @@ typedef struct {
 // The meaning of the structure and its components can be changed
 typedef struct {
     node cellnode;
-//B Balls-correction. 2023-11-10
-//    INTEGER nb;
-//E
-//B Balls-correction. 2023-11-10
-//    real radius;
-//B To debug cells:
     real size;
-//
     nodeptr more;
-//    union {
     nodeptr subp[NSUB];
     INTEGER Id;
-//B NOLSST:
     bool inside;
-//    nodeptr up;
-//E
 } cell, *cellptr;
  
-//B Balls-correction. 2023-11-10
-//#define Radius(x) (((cellptr) (x))->radius)
 //B To debug cells:
 #define Size(x) (((cellptr) (x))->size)
-//E
-//B Balls-correction. 2023-11-10
-//#define Nb(x) (((cellptr) (x))->nb)
 //E
 #define More(x)   (((cellptr) (x))->more)
 #define Subp(x)   (((cellptr) (x))->subp)
 #define IdCell(x)   (((cellptr) (x))->Id)
-//B NOLSST:
 #define Inside(x)   (((cellptr) (x))->inside)
-//#define Up(x)   (((cellptr) (x))->up)
-//E
 
 #if !defined(global)                                // global def question must
 #  define global extern                             //  be here
@@ -216,43 +201,7 @@ typedef struct {
 //E ! Tree search
 
 
-//B BALLS4
-//B Useful macros for setting pivot
-// This macro definition gives compiling error
-/*
-#define SETPIVOT3D                                          \
-{                                                           \
-#ifdef TPCF                                                 \
-#if NDIM == 3                                               \
-#ifdef SINCOS                                               \
-            dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, histsincos.q0);   \
-            DOTPSUBV(histsincos.drpq2, histsincos.dr0, Pos(p), histsincos.q0);  \
-            histsincos.drpq = rsqrt(histsincos.drpq2);                          \
-#ifdef PTOPIVOTROTATION                                                         \
-            real rtheta;                                                        \
-            vector dr0rot;                                                      \
-            rtheta = xrandom(0.0, TWOPI);                                       \
-            RotationVecAWRtoVecB(dr0rot, histsincos.dr0, Pos(p), rtheta);       \
-            SETV(histsincos.dr0, dr0rot);                                       \
-#endif                                                                          \
-#else // ! SINCOS                                                               \
-            dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, histcc.q0);       \
-            DOTPSUBV(histcc.drpq2, histcc.dr0, Pos(p), histcc.q0);              \
-            histcc.drpq = rsqrt(histcc.drpq2);                                  \
-#ifdef PTOPIVOTROTATION                                                         \
-          real rtheta;                                                          \
-          vector dr0rot;                                                        \
-          rtheta = xrandom(0.0, TWOPI);                                         \
-          RotationVecAWRtoVecB(dr0rot, histcc.dr0, Pos(p), rtheta);             \
-          SETV(histcc.dr0, dr0rot);                                             \
-#endif                                                                          \
-#endif // // ! SINCOS                                                           \
-#endif // ! NDIM                                                                \
-#endif // ! TPCF                                                                \
-}
-*/
-//E Useful macros for setting pivot
-//E
+
 
 //B Macros useful to compute chebyshev polynomials
 
@@ -453,36 +402,6 @@ typedef struct {
 #endif // ! SINCOS
 
 #else
-/*
-#define CHEBYSHEVTUOMP                                      \
-{                                                           \
-    hist->ChebsT[1] = 1.0;                                        \
-    xicosmphi = xi * hist->ChebsT[1];                             \
-    hist->histXithreadcos[1][n] += xj*xicosmphi;                        \
-    hist->ChebsT[2] = cosphi;                                     \
-    xicosmphi = xi * hist->ChebsT[2];                             \
-    hist->histXithreadcos[2][n] += xj*xicosmphi;                        \
-    hist->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);              \
-    xicosmphi = xi * hist->ChebsT[3];                             \
-    hist->histXithreadcos[3][n] += xj*xicosmphi;                        \
-    hist->ChebsU[1] = 0.0;                                        \
-    xisinmphi = xi * hist->ChebsU[1] * sinphi;                    \
-    hist->histXithreadsin[1][n] += xj*xisinmphi;                        \
-    hist->ChebsU[2] = 1.0;                                        \
-    xisinmphi = xi * hist->ChebsU[2] * sinphi;                    \
-    hist->histXithreadsin[2][n] += xj*xisinmphi;                        \
-    hist->ChebsU[3] = 2.0*cosphi;                                 \
-    xisinmphi = xi * hist->ChebsU[3] * sinphi;                    \
-    hist->histXithreadsin[3][n] += xj*xisinmphi;                        \
-    for (m=4; m<=cmd.mchebyshev+1; m++){                    \
-        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
-        xicosmphi = xi * hist->ChebsT[m];                         \
-        hist->histXithreadcos[m][n] += xj*xicosmphi;                    \
-        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
-        xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
-        hist->histXithreadsin[m][n] += xj*xisinmphi;                    \
-    }}
-*/
 
 #define CHEBYSHEVTUOMP                                      \
 { real xicosmphi; int m;                                              \
@@ -618,11 +537,6 @@ typedef struct {
        hist.histXithread[m][n] += xicosmphi;                \
    }}
 
-// This approximation gives wrong answer. Check!
-//#define ONETHIRD 0.33333333333333333
-//#define FOUR45       0.0888888888888888888888
-//#define XCOS        (1.0-cosphi)
-//Cheb = rcos((real)(m-1) * rsqrt(2.0*XCOS+ONETHIRD*rsqr(XCOS)+FOUR45*rpow(XCOS,3.0)) );
 
 #define NOCHEBYSHEVOMP                                      \
     {real Cheb;                                             \
@@ -746,9 +660,7 @@ typedef struct {
 #define ROTANGLE                0.01
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "datastruc_defs_01.h"
-#endif
+#include "datastruc_defs_include.h"
 #endif
 
 #endif // ! _data_struc_defs_h

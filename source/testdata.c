@@ -266,11 +266,8 @@ global void doBoxWrapping(void)
 #endif
 
 
-//B 2024.01.22
 #ifdef ADDONS
-#ifdef ESTIMATOR
-#include "testdata_estimator_01.h"
-#endif
+#include "testdata_include.h"
 #endif
 
 //E

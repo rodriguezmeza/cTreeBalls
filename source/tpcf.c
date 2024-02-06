@@ -26,10 +26,10 @@ local int printHistZeta_sincos(void);
 local int evalHist(void);
 local int printEvalHist(void);
 
-//B Segment to add tpcf modules routines:
 #ifdef ADDONS
+#include "tpcf_include_01.h"
 #endif
-//E
+
 
 int MainLoop(void)
 {
@@ -38,9 +38,7 @@ int MainLoop(void)
     INTEGER in;
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_01.h"
-#endif
+#include "tpcf_include_02.h"
 #endif
 
     gd.flagSmoothCellMin = FALSE;
@@ -253,26 +251,9 @@ local int evalHist(void)
                             gd.nbodyTable[0], 1, gd.nbodyTable[0]);
             break;
 
-//B Segment to add evalHist AddOns case modules
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_02.h"
+#include "tpcf_include_03.h"
 #endif
-
-#ifdef TREEOMP
-#include "tpcf_tree_normal_omp.h"
-#endif
-#ifdef TREE3PCFDIRECTOMP
-#include "tpcf_tree_3pcf_direct_omp.h"
-#endif
-#ifdef BALLS
-#include "tpcf_balls_omp.h"
-#endif
-#ifdef DIRECTMETHOD
-#include "tpcf_direct_method.h"
-#endif
-#endif
-//E
 
     }
 
@@ -326,26 +307,9 @@ local int printEvalHist(void)
 
 
 
-//B Segment to add evalHist AddOns print case modules
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_03.h"
+#include "tpcf_include_04.h"
 #endif
-
-#ifdef TREEOMP
-#include "tpcf_print_tree_normal_omp.h"
-#endif
-#ifdef TREE3PCFDIRECTOMP
-#include "tpcf_print_tree_3pcf_direct_omp.h"
-#endif
-#ifdef BALLS
-#include "tpcf_print_balls_omp.h"
-#endif
-#ifdef DIRECTMETHOD
-#include "tpcf_print_direct_method.h"
-#endif
-#endif
-//E
 
             }
         } // ! scanoptions no-out-Hist
@@ -700,9 +664,7 @@ local int printHistZeta(void)
 #endif
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "tpcf_04.h"
-#endif
+#include "tpcf_include_05.h"
 #endif
 
     for (m = 1; m <= cmd.mchebyshev+1; m++) {

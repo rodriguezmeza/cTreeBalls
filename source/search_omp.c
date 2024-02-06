@@ -80,9 +80,8 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 //E
 
 
-//B 2023.11.29
-//#pragma omp parallel default(none)   shared(cmd,gd, btab, nbody, root, ipmin, ipmax)
-#pragma omp parallel default(none)   shared(cmd,gd, btab, nbody, roottable, ipmin, ipmax)
+#pragma omp parallel default(none)   \
+    shared(cmd,gd, btab, nbody, roottable, ipmin, ipmax)
  {
      bodyptr p;
      int n;
@@ -122,8 +121,6 @@ global void searchcalc_normal_omp_sincos(bodyptr btab, int nbody,
 #endif // ! TPCF
 //E
 
-//B 2023.11.29
-//         normal_walktree_sincos(p, ((nodeptr) root), gd.rSize, &nbbcalcthread, &nbccalcthread, &hist);
          normal_walktree_sincos(p, ((nodeptr) roottable[0]), gd.rSizeTable[0], &nbbcalcthread, &nbccalcthread, &hist);
         computeBodyProperties_sincos_omp(p, nbody, &hist);
 
@@ -185,7 +182,6 @@ local void normal_walktree_sincos(bodyptr p, nodeptr q, real qsize,
                     if (!scanopt(cmd.options, "no-one-ball")) {
                         accept_body(p, (nodeptr)q, &dr1, dr);
 #ifdef LOGHIST
-//B 2023.12.14
                         if (scanopt(cmd.options, "behavior-ball")) {
                             if ( (Radius(p)+Radius(q))/(dr1) < gd.deltaR)
                                 sumnode_sincos_cell(p, ((cellptr) q),
@@ -219,7 +215,6 @@ local void normal_walktree_sincos(bodyptr p, nodeptr q, real qsize,
                                         nbbcalcthread, nbccalcthread, hist);
 //E Segment as original
                         }
-//E 2023.12.14
 
 #else // ! LOGHIST
                         real rBin;
@@ -579,12 +574,6 @@ local void sumnode_sincos_cell(bodyptr p, cellptr start, cellptr finish,
 
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "search_omp_00b.h"
-#endif
-
-#ifdef ADDONSDEVELOP
-#include "search_omp_01.h"
-#endif
+#include "search_include.h"
 #endif
 

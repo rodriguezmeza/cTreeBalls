@@ -529,11 +529,5 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, 
 }
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "treeutils_01.h"
-#endif
-
-#ifdef ADDONSDEVELOP
-#include "treeutils_02.h"
-#endif
+#include "tree_include.h"
 #endif

@@ -70,7 +70,7 @@ local int save_nodes_root(int ifile);
 local char cellsfilePath[MAXLENGTHOFFILES];
 local FILE *outcells;
 
-global void maketree(bodyptr btab, int nbody, int ifile)
+global int maketree(bodyptr btab, INTEGER nbody, int ifile)
 {
     double cpustart;
     bodyptr p;
@@ -81,10 +81,6 @@ global void maketree(bodyptr btab, int nbody, int ifile)
 
 #ifdef DEBUG
 //B To debug cells:
-// These gd.cellsfilePath and gd.outcells will be local, remove from gd struct
-//    sprintf(gd.cellsfilePath,"%s/cells%s.txt",gd.tmpDir,cmd.suffixOutFiles);
-//    if(!(gd.outcells=fopen(gd.cellsfilePath, "w")))
-//        error("\nstart_Common: error opening file '%s' \n",gd.cellsfilePath);
     sprintf(cellsfilePath,"%s/cells%s.txt",gd.tmpDir,cmd.suffixOutFiles);
     if(!(outcells=fopen(cellsfilePath, "w")))
         error("\nstart_Common: error opening file '%s' \n",cellsfilePath);
@@ -221,6 +217,8 @@ global void maketree(bodyptr btab, int nbody, int ifile)
 
     gd.cputree = CPUTIME - cpustart;
     verb_print(cmd.verbose, "\nCPU tree time : %lf\n", gd.cputree);
+
+    return _SUCCESS_;
 }
 
 
@@ -365,9 +363,7 @@ local int scanLevel(int ifile)
     } // ! scanLevel==0
 
 #ifdef ADDONS
-#ifdef ADDONSDEVELOP
-#include "treeload_01.h"
-#endif
+#include "tree_include.h"
 #endif
 
 //B Root nodes to scan:
@@ -457,6 +453,26 @@ local int scanLevel(int ifile)
                    "Warning! rminCell[1] is greatear than rangeN\n");
     }
 //E Root nodes
+
+    if (strnull(cmd.rsmooth)) {
+        gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]-1];
+        verb_print(cmd.verbose, "\tfixing rsmooth to: %g\n", gd.rsmooth[0]);
+        if (gd.rsmooth[0]>0.1*cmd.rangeN) {
+            verb_print(cmd.verbose,
+                "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
+                       gd.rsmooth[0],0.1*cmd.rangeN);
+            gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]-1];
+            verb_print(cmd.verbose, "\tfixing rsmooth to: %g\n", gd.rsmooth[0]);
+        }
+    } else {
+        if (gd.rsmooth[0]>0.1*cmd.rangeN) {
+            verb_print(cmd.verbose,
+                "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
+                       gd.rsmooth[0],0.1*cmd.rangeN);
+            gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]-1];
+            verb_print(cmd.verbose, "\tfixing rsmooth to: %g\n", gd.rsmooth[0]);
+        }
+    }
 
 #endif // ! BALLS
 
