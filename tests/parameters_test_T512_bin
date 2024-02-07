@@ -12,7 +12,6 @@ thetaR                             1.86166
 phiL                               1.28011
 phiR                               1.86187
 sizeHistN                          20
-sizeHistTheta                      40
 rangeN                             0.0633205
 rminHist                           0.00213811
 histNFileName                      histN
