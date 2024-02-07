@@ -2,7 +2,7 @@
 
 To test the code:
 
-time cballs parameters_test_T512_bin
+time ../cballs parameters_test_T512_bin
 
 Computation time is about a 3 minutes.
 
