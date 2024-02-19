@@ -81,6 +81,8 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
 
+    "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood", ":rsm",
+
 #ifdef ADDONS
 #include "cmdline_defs_include.h"
 #endif

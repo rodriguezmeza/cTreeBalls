@@ -44,6 +44,8 @@ PERIODICON = 0
 # Set this to 1 for OPENMP parallel version, or 0 to switch it off
 OPENMPMACHINE = 1
 #
+# To activate float real set to 1. Else 0
+SINGLEPON = 0
 # To activate long integers set to 1. Else 0
 LONGINTON = 1
 #
@@ -55,10 +57,10 @@ ADDONSON = 0
 OPT2ADD =
 
 # This is only if you have balls module. If not set it to 0
-BALLS = 0
-ifeq ($(BALLS),1)
-include ./addons/balls_omp/Makefile_settings_balls_omp
-endif
+#BALLS = 0
+#ifeq ($(BALLS),1)
+#include ./addons/balls_omp/Makefile_settings_balls_omp
+#endif
 
 #
 #B Searching methods section: choose one uncommenting above (top of file) its line

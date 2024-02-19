@@ -107,7 +107,9 @@ int MainLoop(void)
             SETV(Pos(p),Pos(q));
 // BODY3
             Type(p) = Type(q);
+#ifdef BODY3ON
             Nbb(p) = Nbb(q);
+#endif
             Weight(p) = Weight(q);
             Kappa(p) = Kappa(q);
             Id(p) = p-bodytab+1;
@@ -146,7 +148,9 @@ int MainLoop(void)
             SETV(Pos(p),Pos(q));
 // BODY3
             Type(p) = Type(q);
+#ifdef BODY3ON
             Nbb(p) = Nbb(q);
+#endif
             Weight(p) = Weight(q);
             Kappa(p) = Kappa(q);
             Id(p) = p-bodytab+1;
@@ -224,31 +228,37 @@ local int evalHist(void)
         case TREEOMPMETHODSINCOS:                   // search=tree-omp-sincos
             verb_print(cmd.verbose,
                     "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
-            DO_BODY(p,bodytable[0],bodytable[0]+gd.nbodyTable[0])
+            for (ifile=0; ifile<gd.ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd.nbodyTable[ifile])
                 Update(p) = TRUE;
-            maketree(bodytable[0], gd.nbodyTable[0], 0);
-            searchcalc_normal_omp_sincos(bodytable[0],
-                            gd.nbodyTable[0], 1, gd.nbodyTable[0]);
+                maketree(bodytable[ifile], gd.nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_omp_sincos(bodytable, gd.nbodyTable, 1, 
+                        gd.nbodyTable, gd.iCatalogs[0], gd.iCatalogs[1]);
             break;
         case SEARCHNULL:
             verb_print(cmd.verbose, "\n\tevalHist: null search method.\n");
             verb_print(cmd.verbose,
                     "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
-            DO_BODY(p,bodytable[0],bodytable[0]+gd.nbodyTable[0])
+            for (ifile=0; ifile<gd.ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd.nbodyTable[ifile])
                 Update(p) = TRUE;
-            maketree(bodytable[0], gd.nbodyTable[0], 0);
-            searchcalc_normal_omp_sincos(bodytable[0],
-                            gd.nbodyTable[0], 1, gd.nbodyTable[0]);
+                maketree(bodytable[ifile], gd.nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_omp_sincos(bodytable, gd.nbodyTable, 1, 
+                        gd.nbodyTable, gd.iCatalogs[0], gd.iCatalogs[1]);
             break;
         default:
             verb_print(cmd.verbose, "\n\tevalHist: dafault search method.\n");
             verb_print(cmd.verbose,
                     "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
-            DO_BODY(p,bodytable[0],bodytable[0]+gd.nbodyTable[0])
+            for (ifile=0; ifile<gd.ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd.nbodyTable[ifile])
                 Update(p) = TRUE;
-            maketree(bodytable[0], gd.nbodyTable[0], 0);
-            searchcalc_normal_omp_sincos(bodytable[0],
-                            gd.nbodyTable[0], 1, gd.nbodyTable[0]);
+                maketree(bodytable[ifile], gd.nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_omp_sincos(bodytable, gd.nbodyTable, 1, 
+                        gd.nbodyTable, gd.iCatalogs[0], gd.iCatalogs[1]);
             break;
 
 #ifdef ADDONS

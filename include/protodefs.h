@@ -40,7 +40,8 @@ global int searchcalc_direct_omp(bodyptr, int, INTEGER, INTEGER);
 global int maketree(bodyptr btab, INTEGER nbody, int ifile);
 //E
 
-global void searchcalc_normal_omp_sincos(bodyptr, int, INTEGER, INTEGER);
+global void searchcalc_normal_omp_sincos(bodyptr *,
+                                         INTEGER *, INTEGER, INTEGER *, int, int);
 
 //E
 
@@ -54,7 +55,11 @@ global bool reject_cellcell(nodeptr, nodeptr);
 global bool reject_balls(nodeptr p, nodeptr q, real *drpq, vector dr);
 global bool nodes_condition_balls(nodeptr p, nodeptr q, real *dr1, vector dr);
 
+#ifdef SINGLEP
+global bool accept_body(bodyptr, nodeptr, float *, float *);
+#else
 global bool accept_body(bodyptr, nodeptr, real *, vector);
+#endif
 global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist);
 
 #ifdef OPENMPCODE

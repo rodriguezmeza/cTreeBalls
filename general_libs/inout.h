@@ -33,7 +33,12 @@
 void in_int(stream, int *);
 void in_int_long(stream, INTEGER *);
 void in_short(stream, short *);
+#ifdef SINGLEP
+void in_real(stream, REAL *);
+void in_real_double(stream, double *);
+#else
 void in_real(stream, real *);
+#endif
 void in_vector(stream, vector);
 void out_int(stream, int);
 void out_int_long(stream, INTEGER);
@@ -56,8 +61,13 @@ void out_vector_mar(stream, vector);
 void in_int_bin(stream, int *);
 void in_int_bin_long(stream, INTEGER *);
 void in_short_bin(stream, short *);
-void in_real_bin(stream, real *);             
-void in_vector_bin(stream, vector);           
+#ifdef SINGLEP
+void in_real_bin(stream, float *);
+void in_real_bin_double(stream, double *);
+#else
+void in_real_bin(stream, real *);
+#endif
+void in_vector_bin(stream, vector);
 void out_int_bin(stream, int);
 void out_int_bin_long(stream, INTEGER);
 void out_short_bin(stream, short);

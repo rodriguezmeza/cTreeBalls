@@ -15,8 +15,6 @@ local void testdata_sc(void);
 
 local void Compute_nbody(void);
 local void Compute_Box_Units(void);
-//local void Compute_Parameters(void);
-//void Compute_Parameters(void);
 
 local vector N;                                     // Needed in testdata_sc
 local real weight;
@@ -94,7 +92,7 @@ local void model_string_to_int(string model_str,int *model_int)
 #undef NULLMODEL
 
 // If we change seed or the list of randoms, there will be changes in
-//  the configurations of points... and results. That is way line 119 below.
+//  the configurations of points... and results. That is way line 123 below.
 local void testdata_sc_random(void)
 {
     bodyptr p;
@@ -107,24 +105,19 @@ local void testdata_sc_random(void)
     Compute_nbody();
     Compute_Box_Units();
 
-//B 2024.01.18
     int ifile=0;
     gd.nbodyTable[ifile] = cmd.nbody;
-    bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
     bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
-//E
 
     tweight=0.0;
-//B 2024.01.18
-//	DO_BODY(p, bodytab, bodytab+cmd.nbody) {
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
-//E
-		Id(p) = p-bodytab+1;
+		Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
         Weight(p) = weight;
         DO_COORD(k) {
             Pos(p)[k]    = xrandom(0.0, gd.Box[k]); // Box lower edge is (0,0,0)
-//            Pos(p)[k]    = xrandom(-0.5*gd.Box[k], 0.5*gd.Box[k]);    // Box center is (0,0,0)
+//            Pos(p)[k]    = xrandom(-0.5*gd.Box[k], 0.5*gd.Box[k]);    
+                                                    // Box center is (0,0,0)
         }
 		DO_COORD(k)
             Ekin = grandom(0.0,1.0);                // Dummy line to reproduce
@@ -145,14 +138,15 @@ local void testdata_sc(void)
 {
     bodyptr p;
     real tweight;
-//    int n;
 	int k, i,j,l;
 	vector delta, c;
 	real f, os;
 
     gd.model_comment = "Simple Cubic Box Model";
 
-    bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
+    int ifile=0;
+    gd.nbodyTable[ifile] = cmd.nbody;
+    bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
 
     Compute_nbody();
     Compute_Box_Units();
@@ -171,7 +165,7 @@ local void testdata_sc(void)
 				delta[0],delta[1]);
 	else error("\n\nWrong NDIM!\n\n");
 
-	p = bodytab;
+	p = bodytable[ifile];
 	if (NDIM == 3)
 		for (i=1; i<=N[0]; i++) {
 			c[0] = ((real) (i-1))*delta[0] + os;
@@ -198,12 +192,10 @@ local void testdata_sc(void)
     verb_log_print(cmd.verbose_log, gd.outlog, "\nCreated bodies = %d",cmd.nbody);
 
     tweight=0.0;
-	DO_BODY(p, bodytab, bodytab+cmd.nbody) {
-		Id(p) = p-bodytab+1;
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
+		Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
         Weight(p) = weight;
-//        Kappa(p) = 1.0 + rcos(2.0*PI*Pos(p)[0]/N[0])
-//                        * rsin(2.0*PI*Pos(p)[1]/N[1]);
         if (scanopt(cmd.options, "kappa-constant"))
             Kappa(p) = 2.0;
         else
@@ -223,11 +215,11 @@ local void Compute_nbody(void)
         }
 #endif
     if (NDIM == 3) {
-        N[0] = (int) rpow(cmd.nbody,1./3.);        // nbody = N^3
+        N[0] = (int) rpow(cmd.nbody,1./3.);         // nbody = N^3
         N[1] = N[0]; N[2] = N[0];
         cmd.nbody = N[0]*N[1]*N[2];
     } else if (NDIM == 2) {
-        N[0] = (int) rsqrt(cmd.nbody);            // nbody = N^2
+        N[0] = (int) rsqrt(cmd.nbody);              // nbody = N^2
         N[1] = N[0];
         cmd.nbody = N[0]*N[1];
     } else error("\n\nWrong NDIM!\n\n");
@@ -235,11 +227,11 @@ local void Compute_nbody(void)
 
 local void Compute_Box_Units(void)
 {
-    weight = 1.0;        // Units system
-    if (NDIM == 3) {                        // Size of box side x
+    weight = 1.0;                                   // Units system
+    if (NDIM == 3) {                                // Size of box side x
         gd.Box[0] = cmd.lengthBox;
         gd.Box[1] = gd.Box[0]; gd.Box[2] = gd.Box[0];
-    } else if (NDIM == 2) {                    // Size of box side x
+    } else if (NDIM == 2) {                         // Size of box side x
         gd.Box[0] = cmd.lengthBox;
         gd.Box[1] = gd.Box[0];
     } else error("\n\nWrong NDIM!\n\n");
@@ -254,7 +246,9 @@ global void doBoxWrapping(void)
     bodyptr p;
     int j;
 
-    DO_BODY(p, bodytab, bodytab+cmd.nbody)
+    int ifile=0;
+
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         DO_COORD(j) {
             while(Pos(p)[j] < 0)
                 Pos(p)[j] += gd.Box[j];

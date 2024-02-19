@@ -170,6 +170,31 @@ endif
 #
 
 #
+MANUALCHEBYSHEVON = 1
+#
+ifeq ($(MANUALCHEBYSHEVON),1)
+MANUALCHEBYSHEV = -DMANUALCHEBYSHEV
+OPT2 += $(MANUALCHEBYSHEV)
+endif
+#
+
+#
+ifeq ($(SINGLEPON),1)
+SINGLEP = -DSINGLEP
+OPT2 += $(SINGLEP)
+endif
+#
+
+#
+KAPPAAVGON = 1
+#
+ifeq ($(KAPPAAVGON),1)
+KappaAvgON = -DKappaAvgON
+OPT2 += $(KappaAvgON)
+endif
+#
+
+#
 ifeq ($(LONGINTON),1)
 LONG = -DLONGINT
 OPT2 += $(LONG)

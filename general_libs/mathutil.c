@@ -101,7 +101,11 @@ void Rotation3D(real vec[], real alpha, real beta, real gamma)
 }
 */
 // Small rotations: Angles in radians
+#ifdef SINGLEP
+void dRotation3D(float vec[], real alpha, real beta, real gamma, float *vecp)
+#else
 void dRotation3D(real vec[], real alpha, real beta, real gamma, real *vecp)
+#endif
 {
     real a11, a12, a13;
     real a21, a22, a23;

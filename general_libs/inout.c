@@ -40,7 +40,8 @@ void in_short(stream str, short *iptr)
 	*iptr = tmp;
 }
 
-void in_real(stream str, real *rptr)
+#ifdef SINGLEP
+void in_real(stream str, float *rptr)
 {
     double tmp;
 
@@ -48,6 +49,24 @@ void in_real(stream str, real *rptr)
         error("in_real: input conversion error\n");
     *rptr = tmp;
 }
+void in_real_double(stream str, double *rptr)
+{
+    double tmp;
+
+    if (fscanf(str, "%lf", &tmp) != 1)
+        error("in_real: input conversion error\n");
+    *rptr = tmp;
+}
+#else
+void in_real(stream str, REAL *rptr)
+{
+    double tmp;
+
+    if (fscanf(str, "%lf", &tmp) != 1)
+        error("in_real: input conversion error\n");
+    *rptr = tmp;
+}
+#endif
 
 #if defined(THREEDIM)
 void in_vector(stream str, vector vec)
@@ -194,11 +213,25 @@ void in_short_bin(stream str, short *iptr)
         error("in_short_bin: fread failed\n");
 }
 
+#ifdef SINGLEP
+void in_real_bin(stream str, float *rptr)
+{
+    if (fread((void *) rptr, sizeof(float), 1, str) != 1)
+        error("in_real_bin: fread failed\n");
+}
+
+void in_real_bin_double(stream str, double *rptr)
+{
+    if (fread((void *) rptr, sizeof(double), 1, str) != 1)
+        error("in_real_bin_double: fread failed\n");
+}
+#else
 void in_real_bin(stream str, real *rptr)
 {
     if (fread((void *) rptr, sizeof(real), 1, str) != 1)
         error("in_real_bin: fread failed\n");
 }
+#endif
 
 void in_vector_bin(stream str, vector vec)
 {

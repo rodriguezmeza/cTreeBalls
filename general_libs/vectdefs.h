@@ -39,7 +39,11 @@
 #define NDIM 1
 #endif
 
+#ifdef SINGLEP
+typedef float vector[NDIM];
+#else
 typedef real vector[NDIM];
+#endif
 typedef real matrix[NDIM][NDIM];
 
 typedef INTEGER vectorI[NDIM];

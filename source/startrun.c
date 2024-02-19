@@ -191,6 +191,8 @@ local void ReadParametersCmdline(void)
 //E
 //
 
+        cmd.rsmooth = GetParam("rsmooth");
+
 #ifdef ADDONS
 #include "startrun_include_02.h"
 #endif
@@ -330,16 +332,19 @@ local int startrun_Common(void)
         MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
-        gd.bytes_tot += cmd.nbody*sizeof(body);
-        verb_print(cmd.verbose, "\n\nAllocated %g MByte for particle storage.\n",
-                   cmd.nbody*sizeof(body)*INMB);
+        for (ifile=0; ifile<gd.ninfiles; ifile++) {
+            gd.bytes_tot += gd.nbodyTable[ifile]*sizeof(body);
+            verb_print(cmd.verbose,
+                "\n\nAllocated %g MByte for particle storage (file %d).\n",
+                       gd.nbodyTable[ifile]*sizeof(body)*INMB, ifile);
+        }
 
         search_method_string_to_int(cmd.searchMethod, &gd.searchMethod_int);
         for (ifile=0; ifile<gd.ninfiles; ifile++) {
             gd.rSizeTable[ifile] = 1.0;
             expandbox(bodytable[ifile], gd.nbodyTable[ifile], ifile);
-        if (cmd.rangeN > gd.rSizeTable[ifile])
-            verb_print(cmd.verbose,
+            if (cmd.rangeN > gd.rSizeTable[ifile])
+                verb_print(cmd.verbose,
         "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
                 cmd.rangeN, gd.rSizeTable[ifile]);
         }
@@ -403,14 +408,17 @@ local int startrun_Common(void)
         AllocMem(gd.cellList, VProd (gd.cells)      // Only needed for cellmethod
                 + cmd.nbody, INTEGER);
         gd.bytes_tot += (VProd(gd.cells)+cmd.nbody)*sizeof(INTEGER);
+        verb_print(cmd.verbose,
+                   "\n\nAllocated %g MByte for cells storage...\n",
+                   (VProd(gd.cells)+cmd.nbody)*sizeof(INTEGER)*INMB);
 //E
         real Vol = 1.0;
         int k;
         DO_COORD(k)
             Vol = Vol*gd.Box[k];
         
-        gd.i_deltaR = 1.0/gd.deltaR;                // This is gd.i_r_max change...
-
+        gd.i_deltaR = 1.0/gd.deltaR;                // This is gd.i_r_max 
+                                                    //  change...
         verb_log_print(cmd.verbose_log, gd.outlog,
                        "\nRcut, deltaR: %g %g\n",gd.Rcut,gd.deltaR);
 #if NDIM == 3
@@ -422,8 +430,23 @@ local int startrun_Common(void)
                        "lbox: %g %g\n",gd.Box[0],gd.Box[1]);
 #endif
         verb_log_print(cmd.verbose_log, gd.outlog, "Box volume = %e\n",Vol);
-        verb_log_print(cmd.verbose_log, gd.outlog,
-                       "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd.nbody,1.0/3.0));
+    verb_log_print(cmd.verbose_log, gd.outlog,
+                   "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd.nbody,1.0/3.0));
+    verb_log_print(cmd.verbose_log, gd.outlog,
+                   "Unit sphere (Takahasi): (S/N)^(1/2): %g\n\n",
+                   rpow(2.0*TWOPI/gd.nbodyTable[gd.iCatalogs[0]],1.0/2.0));
+    real rSizeTmp;
+    int i, idepth=64;
+    rSizeTmp = gd.rSizeTable[gd.iCatalogs[0]];
+    for (i = 1; i <= idepth; i++) {
+        rSizeTmp = rSizeTmp/2.0;
+        verb_log_print(cmd.verbose_log, gd.outlog, "Cell size = %e\n",rSizeTmp);
+        if (rSizeTmp < rpow(2.0*TWOPI/gd.nbodyTable[gd.iCatalogs[0]],1.0/2.0)) {
+            verb_log_print(cmd.verbose_log, gd.outlog,
+                           "Cell size threshold = %d\n",i);
+            break;
+        }
+    }
 
 
 #ifdef ADDONS
@@ -487,36 +510,27 @@ local int startrun_getParamsSpecial(void)
             error("\nstartrun_Common: nitems must be equal to number of files\n\n");
     }
 
-//    scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, ndummy, 2, "nsmooth");
     scaniOption(cmd.nsmooth, gd.nsmooth, &nitems, 1, 1, "nsmooth");
 
-//
 #ifdef BALLS
-//    scanrOption(cmd.scanLevelMin, gd.scanLevelMin, &nitems, ndummy,
-//                2, "scanLevelMin");
-//    verb_print_debug(1, "\nAqui voy (00)\n");
-
     verb_log_print(cmd.verbose_log, gd.outlog, "\nSplitting string \"%s\" in tokens:\n",cmd.scanLevelMin);
     scaniOption(cmd.scanLevelMin, gd.scanLevelMin, &nitems, ndummy,
                 2, "scanLevelMin");
-//    verb_print_debug(1, "\nAqui voy (11)\n");
 
-//    printf("\nnitems= %d\n",nitems);
     if (nitems==1)
         gd.scanLevelMin[1]=gd.scanLevelMin[0]-1;
-//    gd.scanLevelMin[1]=0.25;
     if (strnull(cmd.scanLevelMin)) {
         gd.scanLevelMin[0]=0;
         if (cmd.verbose_log>=3)
             verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",
                            gd.scanLevelMin[0]);
-//        gd.scanLevelMin[1]=1;
         gd.scanLevelMin[1]=gd.scanLevelMin[0]-1;
         if (cmd.verbose_log>=3)
             verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",
                            gd.scanLevelMin[1]);
     }
-    
+#endif
+
     scanrOption(cmd.rsmooth, gd.rsmooth, &nitems, ndummy,
                 2, "rsmooth");
     gd.rsmoothFlag = TRUE;
@@ -526,28 +540,26 @@ local int startrun_getParamsSpecial(void)
                            "option: rsmooth=%s is not valid... going out\n",
                            cmd.rsmooth);
         gd.rsmoothFlag = FALSE;
-    } /*else {
-        
-    } */
-#endif
+    }
+//#endif
 
     scaniOption(cmd.ncritical, gd.ncritical, &nitems, ndummy, 2, "ncritical");
     scaniOption(cmd.iCatalogs, gd.iCatalogs, &nitems, gd.ninfiles, 0, "iCatalogs");
     if (gd.ninfiles==1) {
         (gd.iCatalogs[0]) = 0;
-        if (cmd.verbose_log>=3)
+        if (cmd.verbose_log>=2)
             verb_log_print(cmd.verbose_log, gd.outlog,
                         "option: iCatalogs final values: %d\n",
                         gd.iCatalogs[0]);
         (gd.iCatalogs[1]) = 0;
-        if (cmd.verbose_log>=3)
+        if (cmd.verbose_log>=2)
             verb_log_print(cmd.verbose_log, gd.outlog,
                         "option: iCatalogs final values: %d\n",
                         gd.iCatalogs[1]);
     } else {
         for (i=0; i<gd.ninfiles; i++) {
             (gd.iCatalogs[i])--;
-            if (cmd.verbose_log>=3)
+            if (cmd.verbose_log>=2)
                 verb_log_print(cmd.verbose_log, gd.outlog,
                         "option: iCatalogs final values: %d\n",
                         gd.iCatalogs[i]);
@@ -588,7 +600,6 @@ local int scaniOption(string optionstr, int *option, int *noption,
             verb_log_print(cmd.verbose_log, gd.outlog, "%s\n",poptionstr[*noption-1]);
             pch = strtok (NULL, " ,");
         }
-//        verb_print_debug(1, "\nAqui voy (0)\n");
 
         if (cmd.verbose_log>=3)
         verb_log_print(cmd.verbose_log, gd.outlog, "num. of tokens in option %s =%d\n", optionstr,*noption);
@@ -624,8 +635,6 @@ local int scaniOption(string optionstr, int *option, int *noption,
             verb_log_print(cmd.verbose_log, gd.outlog, "option: %d\n",option[i]);
         }
     }
-
-//    verb_print_debug(1, "\nAqui voy (1)\n");
 
     return _SUCCESS_;
 }
@@ -709,8 +718,8 @@ local void startrun_ParamStat(void)
 // Every item in cmdline_defs.h must have an item here::
 
 #ifdef MPICODE
-    if (ThisTask==0) {                                  // Input all parameters on
-                                                        //  proccess 0
+    if (ThisTask==0) {                                  // Input all parameters
+                                                        //  on proccess 0
 #endif
     if (GetParamStat("searchMethod") & ARGPARAM)
         cmd.searchMethod = GetParam("searchMethod");
@@ -797,12 +806,12 @@ local void startrun_ParamStat(void)
         cmd.nbody = GetiParam("nbody");
     if (GetParamStat("lengthBox") & ARGPARAM)
         cmd.lengthBox = GetdParam("lengthBox");
-//    if (GetParamStat("mToPlot") & ARGPARAM)
-//        cmd.mToPlot = GetiParam("mToPlot");
 //
 //E
 //
 
+        if (GetParamStat("rsmooth") & ARGPARAM)
+                cmd.rsmooth = GetParam("rsmooth");
 
 #ifdef ADDONS
 #include "startrun_include_05.h"
@@ -874,17 +883,22 @@ local void CheckParameters(void)
         error("CheckParameters: absurd value for nbody\n");
     if (cmd.lengthBox <= 0)
         error("CheckParameters: absurd value for lengthBox\n");
-//    if (cmd.mToPlot <= 0)
-//        error("CheckParameters: absurd value for mToPlot must be an integer >= 0\n");
 
-    gd.bh86 = scanopt(cmd.options, "bh86"); // Barnes, J. & Hut, P. 1986. Nature 324, 446.
-    gd.sw94 = scanopt(cmd.options, "sw94"); // Salmon, J.K. & Warren, M.S. 1994. J. Comp. Phys. 111, 136
+    gd.bh86 = scanopt(cmd.options, "bh86");             // Barnes, J. & Hut, P. 
+                                                        //  1986. Nature 324,
+                                                        //  446.
+    gd.sw94 = scanopt(cmd.options, "sw94");             // Salmon, J.K. &
+                                                        //  Warren, M.S. 1994.
+                                                        //  J. Comp. Phys. 111,
+                                                        //  136
     if (gd.bh86 && gd.sw94)
         error("CheckParameters: incompatible options bh86 and sw94\n");
 //
 //E
 //
 
+    if (gd.rsmooth[0] < 0 || gd.rsmoothFlag==FALSE)
+        error("CheckParameters: absurd value for rsmooth (%s)\n",cmd.rsmooth);
 
 #ifdef ADDONS
 #include "startrun_include_06.h"
@@ -914,8 +928,8 @@ local void ReadParameterFile(char *fname)
   int  errorFlag=0;
 
 #ifdef MPICODE
-    if (ThisTask==0) {                                  // Input all parameters on
-                                                        //  proccess 0
+    if (ThisTask==0) {                                  // Input all parameters
+                                                        //  on proccess 0
 #endif
   nt=0;
 
@@ -955,19 +969,19 @@ local void ReadParameterFile(char *fname)
 //
 //B NOLSST:
 //
-    IPName(cmd.seed,"seed");                            // to always have defaults
+    IPName(cmd.seed,"seed");                            // to always have 
+                                                        //  defaults
     SPName(cmd.nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
     IPName(cmd.stepNodes,"stepNodes");
     SPName(cmd.ncritical,"ncritical",MAXLENGTHOFSTRSCMD);
-//#endif
     SPName(cmd.testmodel,"testmodel",MAXLENGTHOFSTRSCMD);
     IPName(cmd.nbody,"nbody");
     RPName(cmd.lengthBox,"lengthBox");
-//    IPName(cmd.mToPlot,"mToPlot");
 //
 //E
 //
 
+        SPName(cmd.rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
 
 #ifdef ADDONS
 #include "startrun_include_07.h"
@@ -1021,7 +1035,6 @@ local void ReadParameterFile(char *fname)
     } else {
         fprintf(stdout,"Parameter file %s not found.\n", fname);
         errorFlag=1;
-//        exit(1);
     }
   
     for(i=0;i<nt;i++) {
@@ -1030,7 +1043,6 @@ local void ReadParameterFile(char *fname)
                 "Error. I miss a value for tag '%s' in parameter file '%s'.\n",
                 tag[i],fname);
             errorFlag=1;
-//            exit(0);
         }
     }
 
@@ -1071,8 +1083,8 @@ local void PrintParameterFile(char *fname)
     int  errorFlag=0;
 
 #ifdef MPICODE
-    if (ThisTask==0) {                                  // Output only on proccess
-                                                        //  0
+    if (ThisTask==0) {                                  // Output only on 
+                                                        //  proccess 0
 #endif
     sprintf(buf,"%s/%s%s",cmd.rootDir,fname,"-usedvalues");
     if(!(fdout=fopen(buf,"w"))) {
@@ -1118,15 +1130,14 @@ local void PrintParameterFile(char *fname)
         fprintf(fdout,FMTT,"nsmooth",cmd.nsmooth);
         fprintf(fdout,FMTIL,"stepNodes",cmd.stepNodes);
         fprintf(fdout,FMTT,"ncritical",cmd.ncritical);
-//#endif
         fprintf(fdout,FMTT,"testmodel",cmd.testmodel);
         fprintf(fdout,FMTIL,"nbody",cmd.nbody);
         fprintf(fdout,FMTR,"lengthBox",cmd.lengthBox);
-//        fprintf(fdout,FMTI,"mToPlot",cmd.mToPlot);
 //
 //E
 //
 
+        fprintf(fdout,FMTT,"rsmooth",cmd.rsmooth);
 
 #ifdef ADDONS
 #include "startrun_include_08.h"

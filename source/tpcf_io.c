@@ -11,20 +11,16 @@
 
 #include "globaldefs.h"
 
-//B 2023.11.29
 local void inputdata_ascii(string filename, int);
 #if NDIM == 3
 local void inputdata_ascii_2d_to_3d(string filename, int);
 #endif
 local void inputdata_bin(string filename, int);
 local int inputdata_takahasi(string filename, int);
-//E
+
 local void outputdata(void);
 local void outputdata_ascii(void);
 local void outputdata_bin(void);
-//local void outputdata_smooth(void);
-//local void outputdata_bin_smooth(void);
-//local void outputdata_ascii_smooth(void);
 
 #ifdef ADDONS
 #include "tpcf_io_include_01.h"
@@ -33,17 +29,13 @@ local void outputdata_bin(void);
 local void outfilefmt_string_to_int(string,int *);
 local int outfilefmt_int;
 
-//B 2023.11.29
 int inputdata(string filename, int ifile)
 {
     double cpustart = CPUTIME;
 
-//    int ifile;
-
-//    for (ifile=0; ifile<gd.nfiles; ifile++) {
-
 #ifdef MPICODE
-    if (ThisTask==0) {                      // Only task 0 can get points catalog
+    if (ThisTask==0) {                              // Only task 0
+                                                    //  can get points catalog
 #endif
     switch(gd.infilefmt_int) {
         case INCOLUMNS:
@@ -62,7 +54,13 @@ int inputdata(string filename, int ifile)
             inputdata_bin(filename, ifile); break;
         case INTAKAHASI:
             printf("\n\tInput in takahasi format...\n");
-            inputdata_takahasi(filename, ifile); break;
+#ifdef CLASSLIB
+            class_call(inputdata_takahasi(filename, ifile),
+                       errmsg, errmsg);
+#else
+            inputdata_takahasi(filename, ifile); 
+#endif
+            break;
 
 #ifdef ADDONS
 #include "tpcf_io_include_02.h"
@@ -81,15 +79,12 @@ int inputdata(string filename, int ifile)
 #include "tpcf_io_include_03.h"
 #endif
 
-//    } // end of ifile
-
     gd.cputotalinout += CPUTIME - cpustart;
     verb_print(cmd.verbose, "\n\tinputdata :: reading time = %f\n",CPUTIME - cpustart);
 
     return _SUCCESS_;
 }
 
-//B 2023.11.29
 local void inputdata_ascii(string filename, int ifile)
 {
     stream instr;
@@ -100,7 +95,6 @@ local void inputdata_ascii(string filename, int ifile)
 
     gd.model_comment = "Column form input file";
 
-//    instr = stropen(cmd.infile, "r");
     instr = stropen(filename, "r");
 
     fgets(firstline,200,instr);
@@ -117,9 +111,15 @@ local void inputdata_ascii(string filename, int ifile)
 // Check the center of the box!!!
 #if NDIM == 3
     real Lx, Ly, Lz;
+#ifdef SINGLEP
+    in_real_double(instr, &Lx);
+    in_real_double(instr, &Ly);
+    in_real_double(instr, &Lz);
+#else
     in_real(instr, &Lx);
     in_real(instr, &Ly);
     in_real(instr, &Lz);
+#endif
     gd.Box[0] = Lx;
     gd.Box[1] = Ly;
     gd.Box[2] = Lz;
@@ -132,10 +132,9 @@ local void inputdata_ascii(string filename, int ifile)
 #endif
 
     verb_print(cmd.verbose, "\tInput: nbody and ndim: %d %d...\n", cmd.nbody, ndim);
-    bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
+
     bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
 
-//    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         in_vector(instr, Pos(p));
         in_real(instr, &Kappa(p));
@@ -146,7 +145,6 @@ local void inputdata_ascii(string filename, int ifile)
     fclose(instr);
 
     real kavg=0.0;
-//    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         Type(p) = BODY;
         Weight(p) = weight;
@@ -161,11 +159,8 @@ local void inputdata_ascii(string filename, int ifile)
     bodyptr q;
     real dist2;
     vector distv;
-//    INTEGER ip, iq;
     bool flag=0;
-//    DO_BODY(p, bodytab, bodytab+cmd.nbody-1)
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody-1)
-//        DO_BODY(q, p+1, bodytab+cmd.nbody)
         DO_BODY(q, p+1, bodytable[ifile]+cmd.nbody)
             if (p != q) {
             DOTPSUBV(dist2, distv, Pos(p), Pos(q));
@@ -176,24 +171,9 @@ local void inputdata_ascii(string filename, int ifile)
     if (flag) error("inputdata_ascii: at least two bodies have same position\n");
     }
 //E
-//B 2023.11.29
-    bodytab = bodytable[ifile];
-//    bodytable[ifile] = bodytab;
-/*
-    bodyptr q;
-    q = bodytable[ifile];
-    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
-        SETV(Pos(q), Pos(p));
-        Kappa(q) = Kappa(p);
-        Type(q) = Type(p);
-        Weight(q) = Weight(p);
-        Id(q) = Id(p);
-    }
-*/
 }
 
 #if NDIM == 3
-//B 2023.11.29
 local void inputdata_ascii_2d_to_3d(string filename, int ifile)
 {
     stream instr;
@@ -216,17 +196,22 @@ local void inputdata_ascii_2d_to_3d(string filename, int ifile)
 
 // Check the center of the box!!!
     real Lx, Ly;
+#ifdef SINGLEP
+    in_real_double(instr, &Lx);
+    in_real_double(instr, &Ly);
+#else
     in_real(instr, &Lx);
     in_real(instr, &Ly);
+#endif
     gd.Box[0] = Lx;
     gd.Box[1] = Ly;
 // Added this line to set lbox in z direction. Check if it es necessary
     gd.Box[2] = Ly;
 
-    verb_print(cmd.verbose, "\tInput: nbody and ndim: %d %d...\n", cmd.nbody, ndim);
+    verb_print(cmd.verbose, "\tInput: nbody and ndim: %d %d...\n", 
+               cmd.nbody, ndim);
     bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
 
-//    real tmp;
     DO_BODY(p, bodytab, bodytab+cmd.nbody) {
         in_real(instr, &Pos(p)[0]);
         in_real(instr, &Pos(p)[1]);
@@ -245,7 +230,6 @@ local void inputdata_ascii_2d_to_3d(string filename, int ifile)
     theta_max = theta_min = Pos(p)[0];
     phi_max = phi_min  = Pos(p)[1];
 
-//    for(i=1;i<npix;i++){   // Healpix ring scheme
     DO_BODY(p, bodytab, bodytab+cmd.nbody) {
         theta = Pos(p)[0];
         phi = Pos(p)[1];
@@ -260,8 +244,9 @@ local void inputdata_ascii_2d_to_3d(string filename, int ifile)
                phi_min, phi_max);
 //E
 
-//B 2023.11.29
-    real ra, dec;       // phi, theta from pix2ang :: column 2, column 1, respectively
+    real ra, dec;                                   // phi, theta from pix2ang ::
+                                                    //  column 2, column 1,
+                                                    //  respectively
     if (scanopt(cmd.options, "arfken")) {
         DO_BODY(p, bodytab, bodytab+cmd.nbody) {
             ra = Pos(p)[0];
@@ -288,7 +273,7 @@ local void inputdata_ascii_2d_to_3d(string filename, int ifile)
 }
 #endif // ! NDIM == 3
 
-//B 2023.11.29
+
 local void inputdata_bin(string filename, int ifile)
 {
     stream instr;
@@ -308,10 +293,18 @@ local void inputdata_bin(string filename, int ifile)
         error("inputdata: ndim = %d; expected %d\n", ndim, NDIM);
     verb_print(cmd.verbose, "\tInput: nbody and ndim: %d %d...\n", cmd.nbody, ndim);
 
+#ifdef SINGLEP
+    in_real_bin_double(instr, &gd.Box[0]);
+    in_real_bin_double(instr, &gd.Box[1]);
+#if NDIM == 3
+    in_real_bin_double(instr, &gd.Box[2]);
+#endif
+#else
     in_real_bin(instr, &gd.Box[0]);
     in_real_bin(instr, &gd.Box[1]);
 #if NDIM == 3
     in_real_bin(instr, &gd.Box[2]);
+#endif
 #endif
 
 #if NDIM == 3
@@ -320,14 +313,11 @@ local void inputdata_bin(string filename, int ifile)
     verb_print(cmd.verbose, "\tInput: Box: %g %g %g\n", gd.Box[0], gd.Box[1]);
 #endif
 
-//    bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
     gd.nbodyTable[ifile] = cmd.nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
 
-//    DO_BODY(p, bodytab, bodytab+cmd.nbody)
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody)
         in_vector_bin(instr, Pos(p));
-//    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         in_real_bin(instr, &Kappa(p));
         if (scanopt(cmd.options, "kappa-constant"))
@@ -335,7 +325,6 @@ local void inputdata_bin(string filename, int ifile)
     }
     fclose(instr);
 
-//    DO_BODY(p, bodytab, bodytab+cmd.nbody) {
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd.nbody) {
         Type(p) = BODY;
         Weight(p) = weight;
@@ -361,11 +350,19 @@ void pix2ang(long pix, int nside, double *theta, double *phi);
 
 local int Takahasi_region_selection(int nside, int npix,
             float *conv, float *shear1, float *shear2, float *rotat);
+//#if NDIM == 3
+local int Takahasi_region_selection_3d_all(int nside, int npix,
+    float *conv, float *shear1, float *shear2, float *rotat,
+    real dtheta_rot, real thetaL, real thetaR,
+    real dphi_rot, real phiL, real phiR,
+    real *xmin, real *xmax, real *ymin, real *ymax, real *zmin, real *zmax);
 local int Takahasi_region_selection_3d(int nside, int npix,
     float *conv, float *shear1, float *shear2, float *rotat,
     real dtheta_rot, real thetaL, real thetaR,
     real dphi_rot, real phiL, real phiR,
 real *xmin, real *xmax, real *ymin, real *ymax, real *zmin, real *zmax);
+//#endif
+
 #if NDIM == 2
 local int Takahasi_region_selection_2d(int nside, int npix,
             float *conv, float *shear1, float *shear2, float *rotat,
@@ -374,7 +371,6 @@ local int Takahasi_region_selection_2d(int nside, int npix,
                                        real *xmin, real *xmax, real *ymin, real *ymax);
 #endif
 
-//B 2023.11.29
 local int inputdata_takahasi(string filename, int ifile)
 {
     FILE *fp;
@@ -442,7 +438,7 @@ local int inputdata_takahasi(string filename, int ifile)
     free(shear2);
     free(rotat);
 
-    return 0;
+    return _SUCCESS_;
 }
 
 local int Takahasi_region_selection(int nside, int npix,
@@ -568,18 +564,30 @@ local int Takahasi_region_selection(int nside, int npix,
     real xmin, ymin, zmin;
     real xmax, ymax, zmax;
 
-    Takahasi_region_selection_3d(nside, npix, conv, shear1, shear2, rotat,
+    if (scanopt(cmd.options, "all")) {
+        Takahasi_region_selection_3d_all(nside, npix, conv, shear1, shear2, rotat,
             dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
             &xmin, &xmax, &ymin, &ymax, &zmin, &zmax);
+    } else {
+        Takahasi_region_selection_3d(nside, npix, conv, shear1, shear2, rotat,
+                dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
+                &xmin, &xmax, &ymin, &ymax, &zmin, &zmax);
+    }
 
 #else   // ! TREEDIM
 
     real xmin, ymin;
     real xmax, ymax;
 
-    Takahasi_region_selection_2d(nside, npix, conv, shear1, shear2, rotat,
-            dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
-                                 &xmin, &xmax, &ymin, &ymax);
+//    if (scanopt(cmd.options, "all")) {
+        Takahasi_region_selection_2d(nside, npix, conv, shear1, shear2, rotat,
+                                     dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
+                                     &xmin, &xmax, &ymin, &ymax);
+/*    } else {
+        Takahasi_region_selection_2d(nside, npix, conv, shear1, shear2, rotat,
+                                     dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
+                                     &xmin, &xmax, &ymin, &ymax);
+    } */
 
 #endif
 
@@ -595,6 +603,92 @@ local int Takahasi_region_selection(int nside, int npix,
 }
 
 #if NDIM == 3
+local int Takahasi_region_selection_3d_all(int nside, int npix,
+            float *conv, float *shear1, float *shear2, float *rotat,
+            real dtheta_rot, real thetaL, real thetaR,
+            real dphi_rot, real phiL, real phiR,
+    real *xmin, real *xmax, real *ymin, real *ymax, real *zmin, real *zmax)
+{
+    long i;
+    bodyptr p;
+    real weight = 1.0;
+
+    real theta, phi;
+    real theta_rot, phi_rot;
+    INTEGER iselect = 0;
+
+    cmd.nbody = npix;
+    int ifile=0;
+    gd.nbodyTable[ifile] = cmd.nbody;
+    bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
+    verb_print(cmd.verbose,
+               "\nAllocated %g MByte for all particle (%ld) storage.\n",
+               cmd.nbody*sizeof(body)/(1024.0*1024.0),cmd.nbody);
+
+    *xmin=0., *ymin=0., *zmin=0.;
+    *xmax=0., *ymax=0., *zmax=0.;
+
+    for(i=0;i<npix;i++){                                // Healpix ring scheme
+        pix2ang(i,nside,&theta,&phi);
+//        printf("%ld %f %f %f %f \n", 
+//                i, conv[i], shear1[i], shear2[i], rotat[i]);
+//        printf("%ld %f %f %f \n", i, theta, phi, conv[i]);
+        p = bodytable[ifile]+i;
+        iselect++;
+        if (scanopt(cmd.options, "rotation")) {
+            theta_rot = theta - dtheta_rot;
+            phi_rot = phi - dphi_rot;
+        } else {
+            theta_rot = theta;
+            phi_rot = phi;
+        }
+
+        spherical_to_cartesians(theta_rot, phi_rot, Pos(p));
+
+        if (!scanopt(cmd.options, "kappa-constant"))
+            Kappa(p) = conv[i];
+        else
+            Kappa(p) = 2.0;
+        Type(p) = BODY;
+        Weight(p) = weight;
+        Id(p) = p-bodytable[ifile]+iselect;
+
+        *xmin = Pos(p)[0];
+        *ymin = Pos(p)[1];
+        *zmin = Pos(p)[2];
+        *xmax = Pos(p)[0];
+        *ymax = Pos(p)[1];
+        *zmax = Pos(p)[2];
+
+        Update(p) = TRUE;
+
+    } // ! end for
+
+    real kavg = 0;
+    for(i=0;i<npix;i++){
+        p = bodytable[ifile] +i;
+        *xmin = MIN(*xmin,Pos(p)[0]);
+        *ymin = MIN(*ymin,Pos(p)[1]);
+        *zmin = MIN(*zmin,Pos(p)[2]);
+        *xmax = MAX(*xmax,Pos(p)[0]);
+        *ymax = MAX(*ymax,Pos(p)[1]);
+        *zmax = MAX(*zmax,Pos(p)[2]);
+        kavg += Kappa(p);
+    }
+    verb_print(cmd.verbose, "\n\tinputdata_takahasi: min and max of x = %f %f\n",*xmin, *xmax);
+    verb_print(cmd.verbose, "\tinputdata_takahasi: min and max of y = %f %f\n",*ymin, *ymax);
+    verb_print(cmd.verbose, "\tinputdata_takahasi: min and max of z = %f %f\n",*zmin, *zmax);
+
+    verb_print(cmd.verbose,
+        "\n\tinputdata_takahasi: selected all read points and nbody: %ld %ld\n",
+        iselect, cmd.nbody);
+
+    verb_print(cmd.verbose, "inputdata_takahasi: average of kappa (%ld particles) = %le\n",
+               cmd.nbody, kavg/((real)cmd.nbody) );
+
+    return _SUCCESS_;
+}
+
 local int Takahasi_region_selection_3d(int nside, int npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
@@ -618,9 +712,10 @@ local int Takahasi_region_selection_3d(int nside, int npix,
     *xmin=0., *ymin=0., *zmin=0.;
     *xmax=0., *ymax=0., *zmax=0.;
 
-    for(i=0;i<npix;i++){   // Healpix ring scheme
+    for(i=0;i<npix;i++){                                // Healpix ring scheme
         pix2ang(i,nside,&theta,&phi);
-//        printf("%ld %f %f %f %f \n", i, conv[i], shear1[i], shear2[i], rotat[i]);
+//        printf("%ld %f %f %f %f \n", 
+//                i, conv[i], shear1[i], shear2[i], rotat[i]);
 //        printf("%ld %f %f %f \n", i, theta, phi, conv[i]);
         p = bodytabtmp+i;
         Update(p) = FALSE;
@@ -693,21 +788,17 @@ local int Takahasi_region_selection_3d(int nside, int npix,
     if (!scanopt(cmd.options, "all"))
         cmd.nbody = iselect;
 
-//B 2024.01.18
     int ifile=0;
     gd.nbodyTable[ifile] = cmd.nbody;
     bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
     bodytable[ifile] = (bodyptr) allocate(cmd.nbody * sizeof(body));
-//E
+
     real kavg = 0;
     INTEGER ij=0;
     for(i=0;i<npix;i++){
         q = bodytabtmp+i;
         if(Update(q)) {
-//B 2024.01.18
-//            p = bodytab+ij;
             p = bodytable[ifile]+ij;
-//E
             Pos(p)[0] = Pos(q)[0];
             Pos(p)[1] = Pos(q)[1];
             Pos(p)[2] = Pos(q)[2];
@@ -802,10 +893,8 @@ local int Takahasi_region_selection_2d(int nside, int npix,
 
             *xmin = Pos(p)[0];
             *ymin = Pos(p)[1];
-//            *zmin = Pos(p)[2];
             *xmax = Pos(p)[0];
             *ymax = Pos(p)[1];
-//            *zmax = Pos(p)[2];
 
             Update(p) = TRUE;
 
@@ -832,7 +921,6 @@ local int Takahasi_region_selection_2d(int nside, int npix,
                 Kappa(p) = conv[i];
                 Type(p) = BODY;
                 Weight(p) = weight;
-//                Id(p) = p-bodytab+iselect;
                 Id(p) = p-bodytabtmp+iselect;
 
                 *xmin = Pos(p)[0];
@@ -849,7 +937,6 @@ local int Takahasi_region_selection_2d(int nside, int npix,
     bodyptr q;
     if (!scanopt(cmd.options, "all"))
         cmd.nbody = iselect;
-//    cmd.nbody = iselect;
 
     bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
     INTEGER ij=0;
@@ -939,9 +1026,6 @@ int output(void)
     if (! strnull(cmd.outfile)) {
         outputdata();
 
-//        if (scanopt(cmd.options, "smooth"))
-//            outputdata_smooth();
-
 #ifdef ADDONS
 #include "tpcf_io_include_05.h"
 #endif
@@ -973,30 +1057,9 @@ local void outputdata(void)
     }
 }
 
-/*
-local void outputdata_smooth(void)
-{
-    switch(outfilefmt_int) {
-        case OUTCOLUMNS:
-            verb_print(cmd.verbose, "\n\tcolumns-ascii format output\n");
-            outputdata_ascii_smooth(); break;
-        case OUTCOLUMNSBIN:
-            verb_print(cmd.verbose, "\n\tcolumns-bin format output\n");
-            outputdata_bin_smooth(); break;
-        case OUTNULL:
-            verb_print(cmd.verbose, "\n\tcolumns-bin format output\n");
-            outputdata_ascii_smooth(); break;
-        default:
-            verb_print(cmd.verbose, "\n\toutput: Unknown output format...\n\tprinting in default format (columns-ascii)...\n");
-            outputdata_ascii_smooth(); break;
-    }
-}
-*/
-
 local void outputdata_ascii(void)
 {
     char namebuf[256];
-//    struct stat buf;
     stream outstr;
     bodyptr p;
 
@@ -1024,74 +1087,9 @@ local void outputdata_ascii(void)
     verb_print(cmd.verbose, "\tdata output to file %s\n", namebuf);
 }
 
-/*
-local void outputdata_ascii_smooth(void)
-{
-    char namebuf[256];
-//    struct stat buf;
-    stream outstr;
-    bodyptr p;
-
-//B Locate particles with same position
-    int MAXNUMPOINTS=10;
-    int *checklist;
-    checklist = ivector(1,MAXNUMPOINTS);
-
-    bodyptr q;
-    real dist2;
-    vector distv;
-//    INTEGER ip, iq;
-    bool flag=0;
-    int ifound=0;
-    int i;
-    if (scanopt(cmd.options, "check-eq-pos")) {
-    DO_BODY(p, bodytabsm, bodytabsm+gd.nbodysm-1)
-        DO_BODY(q, p+1, bodytabsm+gd.nbodysm) {
-            DOTPSUBV(dist2, distv, Pos(p), Pos(q));
-            if (dist2 == 0.0) {
-                ifound++;
-                checklist[ifound] = Id(q);
-                    flag=1;
-                }
-        }
-    verb_print(cmd.verbose,
-               "outputdata_ascii_smooth: found %d pair of bodies with same position\n",
-               ifound);
-    }
-//E
-    sprintf(namebuf,"%s/%s%s_smooth%s",cmd.rootDir,cmd.outfile,cmd.suffixOutFiles,EXTFILES);
-    outstr = stropen(namebuf, "w!");
-    fprintf(outstr,"#   nbody NDIM\n# %ld %d ",gd.nbodysm-ifound,NDIM);
-#if NDIM == 3
-    fprintf(outstr,"%lf %lf %lf\n",gd.Box[0],gd.Box[1],gd.Box[2]);
-#else
-    fprintf(outstr,"%lf %lf\n",gd.Box[0],gd.Box[1]);
-#endif
-
-    DO_BODY(p, bodytabsm, bodytabsm+gd.nbodysm) {
-        if (scanopt(cmd.options, "check-eq-pos")) {
-        flag=1;
-        for (i=1; i<=ifound; i++) {
-            if (Id(p)==checklist[i]) {
-                flag=0;
-                continue;
-            }
-        }
-        if (!flag) continue;
-        }
-        out_vector_mar(outstr, Pos(p));
-        out_real_mar(outstr, Kappa(p));
-        fprintf(outstr,"\n");
-    }
-    fclose(outstr);
-    verb_print(cmd.verbose, "\toutputdata_ascii_smooth: data output to file %s\n", namebuf);
-}
-*/
-
 local void outputdata_bin(void)
 {
     char namebuf[256];
-//    struct stat buf;
     stream outstr;
     bodyptr p;
 
@@ -1111,32 +1109,6 @@ local void outputdata_bin(void)
     fclose(outstr);
     verb_print(cmd.verbose, "\tdata output to file %s\n", namebuf);
 }
-
-/*
-local void outputdata_bin_smooth(void)
-{
-    char namebuf[256];
-//    struct stat buf;
-    stream outstr;
-    bodyptr p;
-
-    sprintf(namebuf,"%s/%s%s_smooth%s",cmd.rootDir,cmd.outfile,cmd.suffixOutFiles,EXTFILES);
-    outstr = stropen(namebuf, "w!");
-    out_int_bin_long(outstr, gd.nbodysm);
-    out_int_bin(outstr, NDIM);
-    out_real_bin(outstr, gd.Box[0]);
-    out_real_bin(outstr, gd.Box[1]);
-#if NDIM == 3
-    out_real_bin(outstr, gd.Box[2]);
-#endif
-    DO_BODY(p, bodytabsm, bodytabsm+gd.nbodysm)
-        out_vector_bin(outstr, Pos(p));
-    DO_BODY(p, bodytabsm, bodytabsm+gd.nbodysm)
-        out_real_bin(outstr, Kappa(p));
-    fclose(outstr);
-    verb_print(cmd.verbose, "\tdata output to file %s\n", namebuf);
-}
-*/
 
 local void outfilefmt_string_to_int(string outfmt_str,int *outfmt_int)
 {

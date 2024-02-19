@@ -174,6 +174,7 @@ typedef struct {
     int seed;
     string nsmooth;
 
+    string rsmooth;
 
 #ifdef ADDONS
 #include "globaldefs_include_01.h"
@@ -257,7 +258,11 @@ typedef struct {
     gsl_rng * r;
 #endif
 
+#ifdef SINGLEP
+    double Box[NDIM];
+#else
     vector Box;
+#endif
     realptr histN;
     realptr histCF;
     realptr histNSub;
@@ -375,6 +380,10 @@ typedef struct {
 //B BUCKET
     real rminCell[2];
 //E
+
+    real rsmooth[MAXITEMS];
+    bool rsmoothFlag;
+
 
 #ifdef ADDONS
 #include "globaldefs_include_03.h"
@@ -592,9 +601,15 @@ typedef struct {
     real *histXi2pcfthread;
     real *histXi2pcfthreadsub;
 
+#ifdef SINGLEP
+    float q0[NDIM];
+    float drpq2, drpq;
+    float dr0[NDIM];
+#else
     vector q0;
     real drpq2, drpq;
     vector dr0;
+#endif
     INTEGER ipcount;
 
     int actlen;

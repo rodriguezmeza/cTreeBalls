@@ -74,6 +74,12 @@ typedef float real, *realptr;
 #define Precision "SINGLEPREC"
 #endif
 
+#ifdef SINGLEP
+#define REAL     float
+#else
+#define REAL     real
+#endif
+
 //B Definition of integers:
 #ifdef LONGINT
 typedef long integer, *integerptr;

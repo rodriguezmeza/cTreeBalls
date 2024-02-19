@@ -32,5 +32,5 @@ ncritical                          100,10000
 testmodel                          simple-cubic-random
 nbody                              3145728
 lengthBox                          10000
-
+rsmooth
 

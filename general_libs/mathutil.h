@@ -7,7 +7,11 @@
 
 void RotationVecAWRtoVecB(real *, real *, real *, real);
 void Rotation3D(real *, real, real, real);
+#ifdef SINGLEP
+void dRotation3D(float *, real, real, real, float *);
+#else
 void dRotation3D(real *, real, real, real, real *);
+#endif
 void d1Rotation3D(real vec[], real alpha);
 real radian(real);
 real degree(real);

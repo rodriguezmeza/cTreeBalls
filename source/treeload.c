@@ -100,11 +100,16 @@ global int maketree(bodyptr btab, INTEGER nbody, int ifile)
     expandbox(btab, nbody, ifile);
 
     DO_BODY(p, btab, btab+nbody) {
+#ifdef BODY3ON
         Nbb(p) = 1;                                 // Check consistency with
                                                     //  smoothing... Correction
+#endif
         loadbody(p, ifile);                         // Set body in a cell
         Nb(p) = 1;
         Radius(p) = 0.0;
+#ifdef KappaAvgON
+        KappaAvg(p) = Kappa(p);
+#endif
     }
     gd.tdepthTable[ifile] = 0;
 
@@ -147,6 +152,7 @@ global int maketree(bodyptr btab, INTEGER nbody, int ifile)
 //E
 
 //B To debug cells:
+#ifdef DEBUGCELLS
     icell = 0;
     inode = 0;
     gd.nnode = gd.ncellTable[ifile]/cmd.stepNodes;
@@ -155,6 +161,7 @@ global int maketree(bodyptr btab, INTEGER nbody, int ifile)
     verb_print(cmd.verbose,
         "\nAllocated %g MByte for (%d cells) nodetab storage.\n",
         gd.nnode*sizeof(nodeptr)*INMB,gd.nnode);
+#endif
 //E
 
     Nc1 = gd.ncritical[0];
@@ -246,7 +253,9 @@ local int smoothBodies(bodyptr btab, INTEGER nbody)
                 Id(q) = ipcount;
 // BODY3
                 Type(q) = BODY3;
+#ifdef BODY3ON
                 Nbb(q) = Nbb(p);
+#endif
                 Weight(q) = Weight(p);
                 SETV(Pos(q), Pos(p));
                 Kappa(q) = Kappa(p);
@@ -259,7 +268,9 @@ local int smoothBodies(bodyptr btab, INTEGER nbody)
                     Id(q) = ipcount;
                     Type(q) = BODY;
 // BODY3
+#ifdef BODY3ON
                     Nbb(q) = 1;
+#endif
                     Weight(q) = Weight(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);
@@ -278,8 +289,9 @@ local int smoothBodies(bodyptr btab, INTEGER nbody)
 //B BALLS :: SCANLEV
 local int scanLevel(int ifile)
 {
-#ifdef BALLS
     int i;
+
+#ifdef BALLS
     
     if (!gd.flagSmoothCellMin && scanopt(cmd.options, "smooth-min-cell") ) {
         cmd.scanLevel = gd.tdepthTable[ifile] + 1 + gd.scanLevelMin[0];
@@ -399,13 +411,19 @@ local int scanLevel(int ifile)
             save_nodes_root(ifile);
     }
 
+#endif // ! BALLS
+
     gd.Rcell[0] = gd.rSizeTable[ifile];
-    for (i = 1; i < gd.tdepthTable[ifile]; i++)
+    for (i = 1; i <= gd.tdepthTable[ifile]; i++)
+//    for (i = 1; i <= gd.tdepthTable[ifile]; i++)
         gd.Rcell[i] = gd.Rcell[i-1]/2;
 
     verb_print(cmd.verbose, "\nMaximum and minimum cell size: %e %e\n",
                gd.Rcell[0],gd.Rcell[gd.tdepthTable[ifile]-1]);
-    
+//               gd.Rcell[0],gd.Rcell[gd.tdepthTable[ifile]]);
+
+#ifdef BALLS
+
     if (gd.flagSmoothCellMin) {
         gd.scanLevelMin[0] = gd.scanLevelMin[1];
         verb_print(cmd.verbose,
@@ -415,13 +433,15 @@ local int scanLevel(int ifile)
             gd.rminCell[0] = 0.;
         else
             gd.rminCell[0] =
-                gd.Rcell[gd.tdepthTable[ifile]-1+gd.scanLevelMin[0]+1];
+            gd.Rcell[gd.tdepthTable[ifile]+gd.scanLevelMin[0]];
+//        gd.Rcell[gd.tdepthTable[ifile]-1+gd.scanLevelMin[0]+1];
     } else {
         if (gd.scanLevelMin[0] == 0)
             gd.rminCell[0] = 0.;
         else
             gd.rminCell[0] =
-                gd.Rcell[gd.tdepthTable[ifile]-1+gd.scanLevelMin[0]+1];
+            gd.Rcell[gd.tdepthTable[ifile]+gd.scanLevelMin[0]];
+//        gd.Rcell[gd.tdepthTable[ifile]-1+gd.scanLevelMin[0]+1];
     }
 
     verb_print(cmd.verbose,
@@ -454,14 +474,23 @@ local int scanLevel(int ifile)
     }
 //E Root nodes
 
+    if (gd.infilefmt_int == INTAKAHASI)
+    verb_log_print(cmd.verbose_log, gd.outlog,
+                   "Unit sphere (Takahasi): (S/N)^(1/2): %g\n\n",
+                   rpow(2.0*TWOPI/gd.nbodyTable[gd.iCatalogs[0]],1.0/2.0));
+
+#endif // ! BALLS
+
     if (strnull(cmd.rsmooth)) {
+//        gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]];
         gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]-1];
         verb_print(cmd.verbose, "\tfixing rsmooth to: %g\n", gd.rsmooth[0]);
         if (gd.rsmooth[0]>0.1*cmd.rangeN) {
             verb_print(cmd.verbose,
                 "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
                        gd.rsmooth[0],0.1*cmd.rangeN);
-            gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]-1];
+//            gd.rsmooth[0] = 0.75*gd.Rcell[gd.tdepthTable[ifile]];
+            gd.rsmooth[0] = 0.75*gd.Rcell[gd.tdepthTable[ifile]-1];
             verb_print(cmd.verbose, "\tfixing rsmooth to: %g\n", gd.rsmooth[0]);
         }
     } else {
@@ -469,12 +498,15 @@ local int scanLevel(int ifile)
             verb_print(cmd.verbose,
                 "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
                        gd.rsmooth[0],0.1*cmd.rangeN);
-            gd.rsmooth[0] = gd.Rcell[gd.tdepthTable[ifile]-1];
+            gd.rsmooth[0] = 0.75*gd.Rcell[gd.tdepthTable[ifile]-1];
+//            gd.rsmooth[0] = 0.75*gd.Rcell[gd.tdepthTable[ifile]];
             verb_print(cmd.verbose, "\tfixing rsmooth to: %g\n", gd.rsmooth[0]);
+        } else {
+            verb_print(cmd.verbose, "\trsmooth is set to: %g\n", gd.rsmooth[0]);
         }
     }
 
-#endif // ! BALLS
+//#endif // ! BALLS
 
     return _SUCCESS_;
 }
@@ -631,6 +663,9 @@ local void hackCellProp(cellptr p, real psize, int lev, int ifile)
     Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
+#ifdef KappaAvgON
+    KappaAvg(p) = 0.0;
+#endif
     CLRV(cmpos);
 
     for (i = 0; i < NSUB; i++) {
@@ -645,10 +680,16 @@ local void hackCellProp(cellptr p, real psize, int lev, int ifile)
             if ( Type(q) == CELL) {
                 Nb(p) += Nb(q);
                 Kappa(p) += Weight(q)*Kappa(q);
+#ifdef KappaAvgON
+                KappaAvg(p) += KappaAvg(q);
+#endif
             } else {
                 if (Type(q) == BODY) {
                     Nb(p) += 1;
                     Kappa(p) += Weight(q)*Kappa(q);
+#ifdef KappaAvgON
+                    KappaAvg(p) += Kappa(q);
+#endif
                 } else if (Type(q) == BODY3) {      // To set smoothing body
                     Nb(p) += 1;
                     Kappa(p) += Weight(q)*Kappa(q);
@@ -695,6 +736,7 @@ local void hackCellProp(cellptr p, real psize, int lev, int ifile)
         Kappa(p) /= Nb(p);
     } else
         error("hackCellProp: Nb = 0: %ld\n", Nb(p));
+
 }
 
 // Parameter theta controls size of the cell.
@@ -752,11 +794,13 @@ local void threadtree(nodeptr p, nodeptr n)
         }
 //E
 #else
+#ifdef DEBUGCELLS
         icell++;
         if (icell%cmd.stepNodes == 0 && Nb(p)>= Nc1 && Nb(p)<=Nc2) {
             nodetab[inode] = p;
             inode++;
         }
+#endif
 #endif
 
 //B Smooth(ing) section
@@ -769,8 +813,10 @@ local void threadtree(nodeptr p, nodeptr n)
                     q = ip + bodytabsm -1;
                     Id(q) = ip;
                     Type(q) = BODY3;                // To set smoothing body
+#ifdef BODY3ON
                     Nbb(q) = Nb(p);
                     Nbb(p) = Nb(p);
+#endif
                     Weight(q) = Weight(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);

@@ -16,9 +16,6 @@
 
 #ifdef OPENMPCODE
 
-
-
-
 global int search_init_sincos_omp(gdhistptr_sincos_omp hist)
 {
     int n;
@@ -111,8 +108,10 @@ global int computeBodyProperties_sincos_omp(bodyptr p, int nbody,
         xi = Kappa(p)/nbody;
         xi_2p = Kappa(p);
     } else if (Type(p) == BODY3) {
+#ifdef BODY3ON
         xi = Nbb(p)*Kappa(p)/nbody;
         xi_2p = Nbb(p)*Kappa(p);
+#endif
     }
 //
 
@@ -146,9 +145,6 @@ global int computeBodyProperties_sincos_omp(bodyptr p, int nbody,
 
     return _SUCCESS_;
 }
-
-
-
 
 
 #endif // ! OPENMPCODE
@@ -382,7 +378,11 @@ global bool reject_cellcell(nodeptr p, nodeptr q)
         return (FALSE);
 }
 
+#ifdef SINGLEP
+global bool accept_body(bodyptr p, nodeptr q, float *drpq, float *dr)
+#else
 global bool accept_body(bodyptr p, nodeptr q, real *drpq, vector dr)
+#endif
 {
     real drpq2;
 
