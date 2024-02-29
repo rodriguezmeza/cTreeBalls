@@ -302,16 +302,6 @@ local void sumnode_sincos(bodyptr p, cellptr start, cellptr finish,
 
     for (q = start; q < finish; q++) {
         if (accept_body(p, (nodeptr)q, &dr1, dr)) {
-            
-            if (scanopt(cmd.options, "smooth-pivot"))
-                if (dr1<=gd.rsmooth[0]) {
-                    if (Update(q)=TRUE) {
-                        Update(q) = FALSE;
-//                        NbRmin(p) += 1;
-                    } else {
-//                        NbRminOverlap(p) += 1;
-                    }
-                }
 
 #ifdef LOGHIST
             if(dr1>cmd.rminHist) {
