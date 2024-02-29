@@ -216,16 +216,6 @@ local void normal_walktree_sincos(bodyptr p, nodeptr q, real qsize,
                     if (!scanopt(cmd.options, "no-one-ball")) {
                         accept_body(p, (nodeptr)q, &dr1, dr);
 #ifdef LOGHIST
-                        if (scanopt(cmd.options, "behavior-ball")) {
-                            if ( (Radius(p)+Radius(q))/(dr1) < gd.deltaR)
-                                sumnode_sincos_cell(p, ((cellptr) q),
-                                        ( (cellptr) q+1),
-                                        nbbcalcthread, nbccalcthread, hist);
-                            else
-                                for (l = More(q); l != Next(q); l = Next(l))
-                                    normal_walktree_sincos(p,l,qsize/2,
-                                        nbbcalcthread, nbccalcthread, hist);
-                        } else {
 //B Segment as original
                         if (cmd.rminHist==0)
                             n = (int)(NLOGBINPD*(rlog10(dr1) - rlog10(cmd.rangeN))
@@ -248,7 +238,6 @@ local void normal_walktree_sincos(bodyptr p, nodeptr q, real qsize,
                                 normal_walktree_sincos(p,l,qsize/2,
                                         nbbcalcthread, nbccalcthread, hist);
 //E Segment as original
-                        }
 
 #else // ! LOGHIST
                         real rBin;
