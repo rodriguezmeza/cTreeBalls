@@ -7,6 +7,9 @@ with several major inputs from other people, especially xxx, etc.
 
 For download and information, see https://github.com/rodriguezmeza
 
+License
+-----------------------------------
+This code is open source and distributed with the MIT license.
 
 Compiling cballs and getting started
 -----------------------------------
