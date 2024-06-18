@@ -1,0 +1,42 @@
+searchMethod                       tree-omp-sincos
+theta                              1
+infile                             
+infileformat                       columns-ascii
+iCatalogs                          1
+rootDir                            Output
+outfile                            
+outfileformat                      columns-ascii
+mChebyshev                         8
+thetaL                             1.27993
+thetaR                             1.86166
+phiL                               1.28011
+phiR                               1.86187
+sizeHistN                          40
+sizeHistTheta                      40
+rangeN                             100
+rminHist                           0.001
+histNFileName                      histN
+histXi2pcfFileName                 histXi2pcf
+histZetaMFileName                  histZetaM
+mhistZetaFileName                  mhistZeta
+suffixOutFiles                     
+stepState                          10000
+verbose                            1
+verbose_log                        1
+numberThreads                      4
+script                             
+options                            
+seed                               123
+nsmooth                            2
+stepNodes                          1
+ncritical                          100,10000
+testmodel                          simple-cubic-random
+nbody                              15625
+lengthBox                          10000
+ntosave                            1000
+scanLevel                          6
+scanLevelRoot                      3
+scanLevelMin                       -0
+rsmooth                            
+
+

@@ -1,0 +1,21 @@
+#input information
+#
+# lpicola run
+# See details in: example_cola/run_parameters_064.txt
+#
+data_filename= ./example_cola/files_out_064/example_filename_z0p000
+num_lines= all
+input_format= 1
+output_filename= output_cute_box/corr128_cola_064.dat
+box_size= 500.
+
+#tree stuff
+use_tree= 0
+#use_tree= 1
+max_tree_order= 6
+max_tree_nparts= 100
+
+#irrelevant yet
+use_pm= 0
+#use_pm= 1
+n_grid_side= 256

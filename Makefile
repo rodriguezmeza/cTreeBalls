@@ -48,7 +48,7 @@ $(EXEC)y: lib$(EXEC).a python/$(EXEC)y.pyx python/c$(EXEC)y.pxd
 ifdef OMPFLAG
 	cp python/setup.py python/autosetup.py
 else
-	grep -v "lgomp" python/setup.py > python/autosetup.py
+	grep -v "lgomp lgsl lgslcblas" python/setup.py > python/autosetup.py
 endif
 	cd python; export CC=$(CC); $(PYTHON) autosetup.py install || $(PYTHON) autosetup.py install --user
 	rm python/autosetup.py

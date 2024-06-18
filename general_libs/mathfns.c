@@ -63,10 +63,12 @@ float fcbrt(float x)
 
 #endif
 
+#ifndef USEGSL
 void xsrandom(long idum)
 {
 //	srandom(idum);					// Inicializa la rutina random
 }
+#endif
 
 //#include <stdio.h>
 //#include <gsl/gsl_rng.h>
@@ -79,14 +81,16 @@ double xrandom(double xl, double xh)
 //    return ( xl + (xh - xl) * ((double) ran1(&idum)) );
 
 //    return ( xl + (xh - xl) * ((double) ran2(&idum)) );
-#ifndef NOGSL
+//#ifndef NOGSL
+#ifdef USEGSL
 //B With GSL random uniform generator
 //    gsl_rng * r;
     double ran2 = gsl_rng_uniform (gd.r);
     return ( xl + (xh - xl) * ( ran2 ) );
 //E
 #else
-    return (xl + (xh - xl) * ((double) random()) / 2147483647.0);
+//    return (xl + (xh - xl) * ((double) random()) / 2147483647.0);
+    return ( xl + (xh - xl) * ((double) ran2(&idum)) );
 #endif
 
 //    return ( xl + (xh - xl) * ((double) ran3(&idum)) );

@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+# CLASSLIB
+CLASSLIBON = 1
+ifeq ($(CLASSLIBON),1)
+include $(MACHINES_DIR)/addons/class_lib/Makefile_class_lib
+endif
+#
+
+

@@ -1,6 +1,6 @@
 /*==============================================================================
 	HEADER: getparam.h			[General_libs]
-	Written by: M.A. Rodriguez-Meza
+	Adapted by: M.A. Rodriguez-Meza
 	Starting date: May 2006
 	Purpose: definitions and protodefinitions to initialize the parameters code
 	Language: C
@@ -32,6 +32,7 @@ void InitParam(string *, string *);
 string GetParam(string);
 
 int GetiParam(string);
+long GetlParam(string);
 bool GetbParam(string);
 double GetdParam(string);
 

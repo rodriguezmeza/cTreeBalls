@@ -11,27 +11,24 @@
 
 #include "globaldefs.h"
 
-local int printHistN(void);
-local int printHistCF(void);
-local int printHistrBins(void);
-local int printHistXi2pcf(void);
-local int printHistXi3pcf(void);
-#ifdef TPCF
-local int printHistZetaM(void);
-local int printHistZetaM_exp(void);
-local int printHistZetaM_sincos(void);
-local int printHistZeta(void);
-local int printHistZeta_sincos(void);
-#endif
-local int evalHist(void);
-local int printEvalHist(void);
+local int printHistN(struct cmdline_data* cmd, struct  global_data* gd);
+local int printHistCF(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistrBins(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistZetaM(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistZetaM_exp(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistZetaM_sincos(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistZeta(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printHistZeta_sincos(struct  cmdline_data* cmd, struct  global_data* gd);
+local int printEvalHist(struct  cmdline_data* cmd, struct  global_data* gd);
 
 #ifdef ADDONS
 #include "tpcf_include_01.h"
 #endif
 
 
-int MainLoop(void)
+int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     bodyptr p,q;
     real kavg;
@@ -41,69 +38,69 @@ int MainLoop(void)
 #include "tpcf_include_02.h"
 #endif
 
-    gd.flagSmoothCellMin = FALSE;
-    gd.flagSmooth = FALSE;
-    gd.flagSetNbNoSel = FALSE;
+    gd->flagSmoothCellMin = FALSE;
+    gd->flagSmooth = FALSE;
+    gd->flagSetNbNoSel = FALSE;
 
-    if (scanopt(cmd.options, "smooth-min-cell")) {
-        verb_print(cmd.verbose,
+    if (scanopt(cmd->options, "smooth-min-cell")) {
+        verb_print(cmd->verbose,
                    "\n\tMainLoop: smooth cell min: try making tree...\n\n");
-        DO_BODY(p,bodytable[gd.iCatalogs[0]],
-                bodytable[gd.iCatalogs[0]]+gd.nbodyTable[gd.iCatalogs[0]])
+        DO_BODY(p,bodytable[gd->iCatalogs[0]],
+                bodytable[gd->iCatalogs[0]]+gd->nbodyTable[gd->iCatalogs[0]])
             Update(p) = TRUE;
-        maketree(bodytable[gd.iCatalogs[0]],
-                 gd.nbodyTable[gd.iCatalogs[0]], gd.iCatalogs[0]);
+        maketree(cmd, gd, bodytable[gd->iCatalogs[0]],
+                 gd->nbodyTable[gd->iCatalogs[0]], gd->iCatalogs[0]);
 //B
-        free(bodytable[gd.iCatalogs[0]]);
-        gd.bytes_tot -= gd.nnodescanlevTable[gd.iCatalogs[0]]*sizeof(body);
-        gd.nbodyTable[gd.iCatalogs[0]] = gd.nnodescanlevTable[gd.iCatalogs[0]];
-        bodytab = (bodyptr) allocate(gd.nnodescanlevTable[gd.iCatalogs[0]]
+        free(bodytable[gd->iCatalogs[0]]);
+        gd->bytes_tot -= gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body);
+        gd->nbodyTable[gd->iCatalogs[0]] = gd->nnodescanlevTable[gd->iCatalogs[0]];
+        bodytab = (bodyptr) allocate(gd->nnodescanlevTable[gd->iCatalogs[0]]
                                      * sizeof(body));
-        gd.bytes_tot += gd.nnodescanlevTable[gd.iCatalogs[0]]*sizeof(body);
-        verb_print(cmd.verbose,
+        gd->bytes_tot += gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body);
+        verb_print(cmd->verbose,
 "Allocated %g MByte for final (smoothCellMin) particle (%ld) storage (%ld).\n",
-                   gd.nnodescanlevTable[gd.iCatalogs[0]]*sizeof(body)*INMB,
-                   gd.nnodescanlevTable[gd.iCatalogs[0]],
-                   gd.nnodescanlevTable[gd.iCatalogs[0]]);
+                   gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body)*INMB,
+                   gd->nnodescanlevTable[gd->iCatalogs[0]],
+                   gd->nnodescanlevTable[gd->iCatalogs[0]]);
         kavg = 0;
         q = nodetable;
-        bodytable[gd.iCatalogs[0]] = nodetable;
+        bodytable[gd->iCatalogs[0]] = nodetable;
         in = 0;
-        DO_BODY(p,bodytable[gd.iCatalogs[0]],
-            bodytable[gd.iCatalogs[0]]+gd.nnodescanlevTable[gd.iCatalogs[0]]) {
+        DO_BODY(p,bodytable[gd->iCatalogs[0]],
+            bodytable[gd->iCatalogs[0]]+gd->nnodescanlevTable[gd->iCatalogs[0]]) {
             kavg += Kappa(p);
             in++;
         }
-        verb_print(cmd.verbose,"%ld %d %ld %lg %ld %lg\n",
+        verb_print(cmd->verbose,"%ld %d %ld %lg %ld %lg\n",
                    in,Type(p-1),Id(p-1),Weight(p-1),Nb(p-1),Kappa(p-1));
 //E
-        verb_print(cmd.verbose,
+        verb_print(cmd->verbose,
                    "smoothCellMin: %ld particles in nodetable\n", in);
-        verb_print(cmd.verbose,
+        verb_print(cmd->verbose,
                    "smoothCellMin: Average of kappa (%ld particles) = %le\n",
-                   gd.nnodescanlevTable[gd.iCatalogs[0]],
-                   kavg/((real)gd.nnodescanlevTable[gd.iCatalogs[0]]) );
-        gd.flagSmoothCellMin = TRUE;
+                   gd->nnodescanlevTable[gd->iCatalogs[0]],
+                   kavg/((real)gd->nnodescanlevTable[gd->iCatalogs[0]]) );
+        gd->flagSmoothCellMin = TRUE;
     } // ! smooth-min-cell
 
-    if (scanopt(cmd.options, "smooth")
-        && !scanopt(cmd.options, "set-Nb-noSel")) {
-        verb_print(cmd.verbose, "\n\tMainLoop: smooth: try making tree...\n\n");
-        DO_BODY(p,bodytab,bodytab+cmd.nbody)
+    if (scanopt(cmd->options, "smooth")
+        && !scanopt(cmd->options, "set-Nb-noSel")) {
+        verb_print(cmd->verbose, "\n\tMainLoop: smooth: try making tree...\n\n");
+        DO_BODY(p,bodytab,bodytab+cmd->nbody)
             Update(p) = TRUE;
-        maketree(bodytab, cmd.nbody, 0);
+        maketree(cmd, gd, bodytab, cmd->nbody, 0);
 //B
         free(bodytab);
-        gd.bytes_tot -= cmd.nbody*sizeof(body);
-        cmd.nbody = gd.nbodysm;
-        bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
-        gd.bytes_tot += cmd.nbody*sizeof(body);
-        verb_print(cmd.verbose,
+        gd->bytes_tot -= cmd->nbody*sizeof(body);
+        cmd->nbody = gd->nbodysm;
+        bodytab = (bodyptr) allocate(cmd->nbody * sizeof(body));
+        gd->bytes_tot += cmd->nbody*sizeof(body);
+        verb_print(cmd->verbose,
             "Allocated %g MByte for final (smooth) particle (%ld) storage.\n",
-            cmd.nbody*sizeof(body)*INMB, cmd.nbody);
+            cmd->nbody*sizeof(body)*INMB, cmd->nbody);
         kavg = 0;
         q = bodytabsm;
-        DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+        DO_BODY(p, bodytab, bodytab+cmd->nbody) {
             SETV(Pos(p),Pos(q));
 // BODY3
             Type(p) = Type(q);
@@ -118,33 +115,33 @@ int MainLoop(void)
             kavg += Kappa(p);
         }
         free(bodytabsm);
-        gd.bytes_tot -= gd.nbodysm*sizeof(body);
+        gd->bytes_tot -= gd->nbodysm*sizeof(body);
 //E
-        verb_print(cmd.verbose,
+        verb_print(cmd->verbose,
                    "smooth: Average of kappa (%ld particles) = %le\n",
-                   cmd.nbody, kavg/((real)cmd.nbody) );
-        gd.flagSmooth = TRUE;
-    }
+                   cmd->nbody, kavg/((real)cmd->nbody) );
+        gd->flagSmooth = TRUE;
+    } // ! smooth && set-Nb-noSel
 
-    if ( scanopt(cmd.options, "smooth")
-        && scanopt(cmd.options, "set-Nb-noSel") ) {
-        verb_print(cmd.verbose,
+    if ( scanopt(cmd->options, "smooth")
+        && scanopt(cmd->options, "set-Nb-noSel") ) {
+        verb_print(cmd->verbose,
                "\n\tMainLoop: smooth & set-Nb-noSel: try making tree...\n\n");
-        DO_BODY(p,bodytab,bodytab+cmd.nbody)
+        DO_BODY(p,bodytab,bodytab+cmd->nbody)
             Update(p) = TRUE;
-        maketree(bodytab, cmd.nbody, 0);
+        maketree(cmd, gd, bodytab, cmd->nbody, 0);
 //B
         free(bodytab);
-        gd.bytes_tot -= cmd.nbody*sizeof(body);
-        cmd.nbody = gd.nbodySel;
-        bodytab = (bodyptr) allocate(cmd.nbody * sizeof(body));
-        gd.bytes_tot += cmd.nbody*sizeof(body);
-        verb_print(cmd.verbose,
+        gd->bytes_tot -= cmd->nbody*sizeof(body);
+        cmd->nbody = gd->nbodySel;
+        bodytab = (bodyptr) allocate(cmd->nbody * sizeof(body));
+        gd->bytes_tot += cmd->nbody*sizeof(body);
+        verb_print(cmd->verbose,
         "Allocated %g MByte for final (smooth-noSel) particle (%ld) storage.\n",
-        cmd.nbody*sizeof(body)*INMB, cmd.nbody);
+        cmd->nbody*sizeof(body)*INMB, cmd->nbody);
         kavg = 0;
         q = bodytabSel;
-        DO_BODY(p, bodytab, bodytab+cmd.nbody) {
+        DO_BODY(p, bodytab, bodytab+cmd->nbody) {
             SETV(Pos(p),Pos(q));
 // BODY3
             Type(p) = Type(q);
@@ -159,163 +156,165 @@ int MainLoop(void)
             kavg += Kappa(p);
         }
         free(bodytabSel);
-        gd.bytes_tot -= gd.nbodySel*sizeof(body);
+        gd->bytes_tot -= gd->nbodySel*sizeof(body);
 //E
-        verb_print(cmd.verbose,
+        verb_print(cmd->verbose,
             "smooth-set-Nb-noSel: Average of kappa (%ld particles) = %le\n",
-            cmd.nbody, kavg/((real)cmd.nbody) );
-        gd.flagSmooth = TRUE;
-        gd.flagSetNbNoSel = TRUE;
-    }
+            cmd->nbody, kavg/((real)cmd->nbody) );
+        gd->flagSmooth = TRUE;
+        gd->flagSetNbNoSel = TRUE;
+    } // ! smooth && set-Nb-noSel
 
-    if ( scanopt(cmd.options, "make-tree") ) {
-    verb_print(cmd.verbose, "\n\tMainLoop: make-tree: try making tree...\n\n");
-        DO_BODY(p,bodytab,bodytab+cmd.nbody)
+    if ( scanopt(cmd->options, "make-tree") ) {
+    verb_print(cmd->verbose, "\n\tMainLoop: make-tree: try making tree...\n\n");
+        DO_BODY(p,bodytab,bodytab+cmd->nbody)
             Update(p) = TRUE;
-        maketree(bodytab, cmd.nbody, 0);
+        maketree(cmd, gd, bodytab, cmd->nbody, 0);
     }
 
-    if (scanopt(cmd.options, "stop")) {
-        if (!strnull(cmd.outfile))
-            output();
-        verb_print(cmd.verbose, "\n\tMainLoop: stopping...\n\n");
+    if (scanopt(cmd->options, "stop")) {
+        if (!strnull(cmd->outfile))
+            output(cmd, gd);
+        verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
         exit(1);
     }
 
 // To see the hists::
 #ifdef DEBUG
-//    DO_BODY(p,bodytab,bodytab+cmd.nbody)
+//    DO_BODY(p,bodytab,bodytab+cmd->nbody)
 //        Update(p) = TRUE;
-//    maketree(bodytab, cmd.nbody);
+//    maketree(bodytab, cmd->nbody);
 #endif
-//    if (!strnull(cmd.outfile))
+//    if (!strnull(cmd->outfile))
 //        output();
 
-    evalHist();
+    evalHist(cmd, gd);
 
-    if (!gd.stopflag)
-        printEvalHist();
+    if (!gd->stopflag)
+        printEvalHist(cmd, gd);
 
 #ifdef DEBUG
-    if (!strnull(cmd.outfile))
-        output();
+    if (!strnull(cmd->outfile))
+        output(cmd, gd);
 #endif
 
 //B Post-processing:
     double cpustart;
     char buf[200];
-    if (scanopt(cmd.options, "post-processing")) {
+    if (scanopt(cmd->options, "post-processing")) {
         cpustart = CPUTIME;
-        sprintf(buf,"%s",cmd.script);
-        verb_print(cmd.verbose, "\npost-processing: executing %s...",cmd.script);
+        sprintf(buf,"%s",cmd->script);
+        verb_print(cmd->verbose, 
+                   "\npost-processing: executing '%s'...", cmd->script);
         system(buf);
-        verb_print(cmd.verbose, "done.\n");
-        gd.cputotal += CPUTIME - cpustart;
-        verb_print(cmd.verbose, "cpu time expended in this script %g\n\n",
+        verb_print(cmd->verbose, "done.\n");
+        gd->cputotal += CPUTIME - cpustart;
+        verb_print(cmd->verbose, "cpu time expended in this script %g\n\n",
                    CPUTIME - cpustart);
     }
 //E
 
+    verb_print_debug(1, "\nAqui voy (8): %g %d\n", cmd->theta, cmd->sizeHistN);
+
     return _SUCCESS_;
 }
 
-local int evalHist(void)
+int evalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     bodyptr p;
     int ifile;
 
-    switch(gd.searchMethod_int) {
+    switch(gd->searchMethod_int) {
         case TREEOMPMETHODSINCOS:                   // search=tree-omp-sincos
-            verb_print(cmd.verbose,
+            verb_print(cmd->verbose,
                     "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
-            for (ifile=0; ifile<gd.ninfiles; ifile++) {
-                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd.nbodyTable[ifile])
+            for (ifile=0; ifile<gd->ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
                 Update(p) = TRUE;
-                maketree(bodytable[ifile], gd.nbodyTable[ifile], ifile);
+                maketree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
             }
-            searchcalc_normal_omp_sincos(bodytable, gd.nbodyTable, 1, 
-                        gd.nbodyTable, gd.iCatalogs[0], gd.iCatalogs[1]);
-            break;
-        case SEARCHNULL:
-            verb_print(cmd.verbose, "\n\tevalHist: null search method.\n");
-            verb_print(cmd.verbose,
-                    "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
-            for (ifile=0; ifile<gd.ninfiles; ifile++) {
-                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd.nbodyTable[ifile])
-                Update(p) = TRUE;
-                maketree(bodytable[ifile], gd.nbodyTable[ifile], ifile);
-            }
-            searchcalc_normal_omp_sincos(bodytable, gd.nbodyTable, 1, 
-                        gd.nbodyTable, gd.iCatalogs[0], gd.iCatalogs[1]);
-            break;
-        default:
-            verb_print(cmd.verbose, "\n\tevalHist: dafault search method.\n");
-            verb_print(cmd.verbose,
-                    "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
-            for (ifile=0; ifile<gd.ninfiles; ifile++) {
-                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd.nbodyTable[ifile])
-                Update(p) = TRUE;
-                maketree(bodytable[ifile], gd.nbodyTable[ifile], ifile);
-            }
-            searchcalc_normal_omp_sincos(bodytable, gd.nbodyTable, 1, 
-                        gd.nbodyTable, gd.iCatalogs[0], gd.iCatalogs[1]);
+            class_call_cballs(searchcalc_normal_omp_sincos(cmd, gd, bodytable,
+                            gd->nbodyTable, 1, gd->nbodyTable, gd->iCatalogs[0],
+                            gd->iCatalogs[1]), errmsg, errmsg);
             break;
 
 #ifdef ADDONS
 #include "tpcf_include_03.h"
 #endif
 
+        case SEARCHNULL:
+            verb_print(cmd->verbose, "\n\tevalHist: null search method.\n");
+            verb_print(cmd->verbose,
+                    "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
+            for (ifile=0; ifile<gd->ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
+                Update(p) = TRUE;
+                maketree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_omp_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
+                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+        default:
+            verb_print(cmd->verbose, "\n\tevalHist: dafault search method.\n");
+            verb_print(cmd->verbose,
+                    "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
+            for (ifile=0; ifile<gd->ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
+                Update(p) = TRUE;
+                maketree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_omp_sincos(cmd, gd, bodytable, gd->nbodyTable, 1, 
+                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
     }
 
     return _SUCCESS_;
 }
 
-local int printEvalHist(void)
+local int printEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 {
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
         double cpustart = CPUTIME;
-        if (!scanopt(cmd.options, "no-out-Hist")) {
-    switch(gd.searchMethod_int) {
+        if (!scanopt(cmd->options, "no-out-Hist")) {
+    switch(gd->searchMethod_int) {
         case TREEOMPMETHODSINCOS:
-            verb_print(cmd.verbose,
+            verb_print(cmd->verbose,
             "\n\tprintEvalHist: printing normal tree method (omp-sincos)\n\n");
-            if (scanopt(cmd.options, "compute-HistN")) printHistN();
-            printHistrBins();
-            printHistXi2pcf();
-#ifdef TPCF
-            printHistZetaM_sincos();
-            if (scanopt(cmd.options, "out-m-HistZeta"))
-            printHistZeta_sincos();
-#endif
+            if (scanopt(cmd->options, "compute-HistN")) printHistN(cmd, gd);
+            printHistrBins(cmd, gd);
+            printHistXi2pcf(cmd, gd);
+            if (cmd->computeTPCF) {
+                printHistZetaM_sincos(cmd, gd);
+                if (scanopt(cmd->options, "out-m-HistZeta"))
+                    printHistZeta_sincos(cmd, gd);
+            }
             break;
         case SEARCHNULL:
-            verb_print(cmd.verbose,
+            verb_print(cmd->verbose,
                        "\n\tprintEvalHist: printing null search method.\n\n");
-            if (scanopt(cmd.options, "compute-HistN")) printHistN();
-            printHistrBins();
-            printHistXi2pcf();
-#ifdef TPCF
-            printHistZetaM();
-            if (scanopt(cmd.options, "out-m-HistZeta"))
-            printHistZeta();
-#endif
+            if (scanopt(cmd->options, "compute-HistN")) printHistN(cmd, gd);
+            printHistrBins(cmd, gd);
+            printHistXi2pcf(cmd, gd);
+            if (cmd->computeTPCF) {
+                printHistZetaM_sincos(cmd, gd);
+                if (scanopt(cmd->options, "out-m-HistZeta"))
+                    printHistZeta_sincos(cmd, gd);
+            }
             break;
         default:
-            verb_print(cmd.verbose,
+            verb_print(cmd->verbose,
                        "\n\tprintEvalHist: printing dafault search method.\n\n");
-            if (scanopt(cmd.options, "compute-HistN")) printHistN();
-            printHistrBins();
-            printHistXi2pcf();
-#ifdef TPCF
-            printHistZetaM();
-            if (scanopt(cmd.options, "out-m-HistZeta"))
-            printHistZeta();
-#endif
+            if (scanopt(cmd->options, "compute-HistN")) printHistN(cmd, gd);
+            printHistrBins(cmd, gd);
+            printHistXi2pcf(cmd, gd);
+            if (cmd->computeTPCF) {
+                printHistZetaM_sincos(cmd, gd);
+                if (scanopt(cmd->options, "out-m-HistZeta"))
+                    printHistZeta_sincos(cmd, gd);
+            }
             break;
-
-
 
 #ifdef ADDONS
 #include "tpcf_include_04.h"
@@ -324,7 +323,7 @@ local int printEvalHist(void)
             }
         } // ! scanoptions no-out-Hist
 
-        gd.cputotalinout += CPUTIME - cpustart;
+        gd->cputotalinout += CPUTIME - cpustart;
 
 #ifdef MPICODE
     }
@@ -333,7 +332,7 @@ local int printEvalHist(void)
     return _SUCCESS_;
 }
 
-local int printHistN(void)
+local int printHistN(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n;
@@ -342,36 +341,36 @@ local int printHistN(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    outstr = stropen(gd.fpfnamehistNFileName, "w!");
+    outstr = stropen(gd->fpfnamehistNFileName, "w!");
 
-    verb_print(cmd.verbose,
-               "Printing : to a file %s ...\n",gd.fpfnamehistNFileName);
+    verb_print(cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistNFileName);
 
-    for (n=1; n<=cmd.sizeHistN; n++) {
-#ifdef LOGHIST
-        if (cmd.rminHist==0) {
-            rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            if (cmd->rminHist==0) {
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+            } else {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
+            }
+            rBin=rpow(10.0,rbinlog);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
+            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        rBin=rpow(10.0,rbinlog);
-#else
-        rBin = cmd.rminHist + ((real)n-0.5)*gd.deltaR;
-#endif
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd.histN[n]);
+        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histN[n]);
     }
     fclose(outstr);
 #ifdef MPICODE
     }
 #endif
 
-    if (scanopt(cmd.options, "and-CF"))
-        printHistCF();
+    if (scanopt(cmd->options, "and-CF"))
+        printHistCF(cmd, gd);
 
     return _SUCCESS_;
 }
 
-local int printHistCF(void)
+local int printHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n;
@@ -380,23 +379,23 @@ local int printHistCF(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    outstr = stropen(gd.fpfnamehistCFFileName, "w!");
+    outstr = stropen(gd->fpfnamehistCFFileName, "w!");
 
-    verb_print(cmd.verbose,
-               "Printing : to a file %s ...\n",gd.fpfnamehistCFFileName);
+    verb_print(cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistCFFileName);
 
-    for (n=1; n<=cmd.sizeHistN; n++) {
-#ifdef LOGHIST
-        if (cmd.rminHist==0) {
-            rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            if (cmd->rminHist==0) {
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+            } else {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
+            }
+            rBin=rpow(10.0,rbinlog);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
+            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        rBin=rpow(10.0,rbinlog);
-#else
-        rBin = cmd.rminHist + ((real)n-0.5)*gd.deltaR;
-#endif
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd.histCF[n]);
+        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histCF[n]);
     }
     fclose(outstr);
 #ifdef MPICODE
@@ -406,7 +405,7 @@ local int printHistCF(void)
     return _SUCCESS_;
 }
 
-local int printHistrBins(void)
+local int printHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n;
@@ -415,22 +414,22 @@ local int printHistrBins(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    outstr = stropen(gd.fpfnamehistrBinsFileName, "w!");
+    outstr = stropen(gd->fpfnamehistrBinsFileName, "w!");
 
-    verb_print(cmd.verbose,
-               "Printing : to a file %s ...\n",gd.fpfnamehistrBinsFileName);
+    verb_print(cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistrBinsFileName);
 
-    for (n=1; n<=cmd.sizeHistN; n++) {
-#ifdef LOGHIST
-        if (cmd.rminHist==0) {
-            rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            if (cmd->rminHist==0) {
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+            } else {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
+            }
+            rBin=rpow(10.0,rbinlog);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
+            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        rBin=rpow(10.0,rbinlog);
-#else
-        rBin = cmd.rminHist + ((real)n-0.5)*gd.deltaR;
-#endif
         fprintf(outstr,"%16.8e\n",rBin);
     }
     fclose(outstr);
@@ -441,7 +440,7 @@ local int printHistrBins(void)
     return _SUCCESS_;
 }
 
-local int printHistXi2pcf(void)
+local int printHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n;
@@ -450,23 +449,23 @@ local int printHistXi2pcf(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    outstr = stropen(gd.fpfnamehistXi2pcfFileName, "w!");
+    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
 
-    verb_print(cmd.verbose,
-               "Printing : to a file %s ...\n",gd.fpfnamehistXi2pcfFileName);
+    verb_print(cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
 
-    for (n=1; n<=cmd.sizeHistN; n++) {
-#ifdef LOGHIST
-        if (cmd.rminHist==0) {
-            rbinlog = ((real)(n-cmd.sizeHistN))/NLOGBINPD + rlog10(cmd.rangeN);
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            if (cmd->rminHist==0) {
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+            } else {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
+            }
+            rBin=rpow(10.0,rbinlog);
         } else {
-            rbinlog = rlog10(cmd.rminHist) + ((real)(n)-0.5)*gd.deltaR;
+            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        rBin=rpow(10.0,rbinlog);
-#else
-        rBin = cmd.rminHist + ((real)n-0.5)*gd.deltaR;
-#endif
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd.histXi2pcf[n]);
+        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
     }
     fclose(outstr);
 #ifdef MPICODE
@@ -476,7 +475,7 @@ local int printHistXi2pcf(void)
     return _SUCCESS_;
 }
 
-local int printHistXi3pcf(void)
+local int printHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n;
@@ -485,19 +484,19 @@ local int printHistXi3pcf(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    outstr = stropen(gd.fpfnamehistXi2pcfFileName, "w!");
+    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
 
-    verb_print(cmd.verbose,
-               "Printing : to a file %s ...\n",gd.fpfnamehistXi2pcfFileName);
+    verb_print(cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
 
-    for (n=1; n<=cmd.sizeHistN; n++) {
-#ifdef LOGHIST
-        rbinlog = ((real)(n)-0.5)*gd.deltaR;
-        rBin=rpow(10,rbinlog);
-#else
-        rBin = ((int)n-0.5)*gd.deltaR;
-#endif
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd.histXi2pcf[n]);
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            rbinlog = ((real)(n)-0.5)*gd->deltaR;
+            rBin=rpow(10,rbinlog);
+        } else {
+            rBin = ((int)n-0.5)*gd->deltaR;
+        }
+        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
     }
     fclose(outstr);
 #ifdef MPICODE
@@ -508,10 +507,7 @@ local int printHistXi3pcf(void)
 }
 
 
-
-#ifdef TPCF
-
-local int printHistZetaM(void)
+local int printHistZetaM(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n1, n2, m;
     stream outstr;
@@ -522,35 +518,35 @@ local int printHistZetaM(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    for (m=1; m<=cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s_%d%s", gd.fpfnamehistZetaMFileName, m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+    for (m=1; m<=cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s_%d%s", gd->fpfnamehistZetaMFileName, m, EXTFILES);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-            for (n2=1; n2<=cmd.sizeHistN; n2++) {
-                if (scanopt(cmd.options, "xr1r2")) {
-#ifdef LOGHIST
-                    if (cmd.rminHist==0) {
-                        rbinlog1 = ((real)(n1-cmd.sizeHistN))/NLOGBINPD
-                                    + rlog10(cmd.rangeN);
-                        rbinlog2 = ((real)(n2-cmd.sizeHistN))/NLOGBINPD
-                                    + rlog10(cmd.rangeN);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                if (scanopt(cmd->options, "xr1r2")) {
+                    if (cmd->useLogHist) {
+                        if (cmd->rminHist==0) {
+                            rbinlog1 = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+                            rbinlog2 = ((real)(n2-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+                        } else {
+                            rbinlog1 = rlog10(cmd->rminHist)
+                            + ((real)(n1)-0.5)*gd->deltaR;
+                            rbinlog2 = rlog10(cmd->rminHist)
+                            + ((real)(n2)-0.5)*gd->deltaR;
+                        }
+                        rBin1=rpow(10.0,rbinlog1);
+                        rBin2=rpow(10.0,rbinlog2);
                     } else {
-                        rbinlog1 = rlog10(cmd.rminHist)
-                                    + ((real)(n1)-0.5)*gd.deltaR;
-                        rbinlog2 = rlog10(cmd.rminHist)
-                                    + ((real)(n2)-0.5)*gd.deltaR;
+                        rBin1 = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+                        rBin2 = cmd->rminHist + ((real)n2-0.5)*gd->deltaR;
                     }
-                    rBin1=rpow(10.0,rbinlog1);
-                    rBin2=rpow(10.0,rbinlog2);
-#else
-                    rBin1 = cmd.rminHist + ((real)n1-0.5)*gd.deltaR;
-                    rBin2 = cmd.rminHist + ((real)n2-0.5)*gd.deltaR;
-#endif
                     fprintf(outstr,"%16.8e ",
-                            rBin1*rBin2*gd.histZetaM[m][n1][n2]);
+                            rBin1*rBin2*gd->histZetaM[m][n1][n2]);
                 } else {
-                    fprintf(outstr,"%16.8e ",gd.histZetaM[m][n1][n2]);
+                    fprintf(outstr,"%16.8e ",gd->histZetaM[m][n1][n2]);
                 }
             }
             fprintf(outstr,"\n");
@@ -564,7 +560,8 @@ local int printHistZetaM(void)
     return _SUCCESS_;
 }
 
-local int printHistZetaM_exp(void)
+#ifdef USEGSL
+local int printHistZetaM_exp(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n1, n2, m;
     stream outstr;
@@ -572,16 +569,16 @@ local int printHistZetaM_exp(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    outstr = stropen(gd.fpfnamehistZetaMFileName, "w!");
-    verb_print(cmd.verbose,
-               "Printing : to a file %s ...\n",gd.fpfnamehistZetaMFileName);
+    outstr = stropen(gd->fpfnamehistZetaMFileName, "w!");
+    verb_print(cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistZetaMFileName);
 
     gsl_complex Atmp;
 
-    for (m=0; m<=cmd.mchebyshev; m++) {
+    for (m=0; m<=cmd->mchebyshev; m++) {
         fprintf(outstr,"\n\nm=%d\n",m);
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-            for (n2=1; n2<=cmd.sizeHistN; n2++) {
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 Atmp = gsl_matrix_complex_get(histZetaMatrix[m].histZetaM,n1,n1);
                 fprintf(outstr,"%16.8e %16.8e ",GSL_REAL(Atmp),GSL_IMAG(Atmp));
             }
@@ -595,8 +592,9 @@ local int printHistZetaM_exp(void)
 
     return _SUCCESS_;
 }
+#endif // ! USEGSL
 
-local int printHistZetaM_sincos(void)
+local int printHistZetaM_sincos(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n1, n2, m;
     stream outstr;
@@ -605,40 +603,40 @@ local int printHistZetaM_sincos(void)
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    for (m=1; m<=cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd.fpfnamehistZetaMFileName,
+    for (m=1; m<=cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
                 "_cos", m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-            for (n2=1; n2<=cmd.sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd.histZetaMcos[m][n1][n2]);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gd->histZetaMcos[m][n1][n2]);
             }
             fprintf(outstr,"\n");
         }
         fclose(outstr);
     }
-    for (m=1; m<=cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd.fpfnamehistZetaMFileName,
+    for (m=1; m<=cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
                 "_sin", m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-            for (n2=1; n2<=cmd.sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd.histZetaMsin[m][n1][n2]);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gd->histZetaMsin[m][n1][n2]);
             }
             fprintf(outstr,"\n");
         }
         fclose(outstr);
     }
-    for (m=1; m<=cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd.fpfnamehistZetaMFileName,
+    for (m=1; m<=cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
                 "_sincos", m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-            for (n2=1; n2<=cmd.sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd.histZetaMsincos[m][n1][n2]);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gd->histZetaMsincos[m][n1][n2]);
             }
             fprintf(outstr,"\n");
         }
@@ -654,7 +652,7 @@ local int printHistZetaM_sincos(void)
 #define MHISTZETA \
 "%16.8e %16.8e %16.8e %16.8e %16.8e %16.8e\n"
 
-local int printHistZeta(void)
+local int printHistZeta(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n1, m;
@@ -666,8 +664,10 @@ local int printHistZeta(void)
     real Zeta5;
     int Nbins;
     char namebuf[256];
-    Nbins = cmd.sizeHistN;
+    Nbins = cmd->sizeHistN;
+#ifdef USEGSL
     gsl_complex Atmp; // Use in tpcf_04.h
+#endif
 
 #ifdef MPICODE
     if (ThisTask==0) {
@@ -677,27 +677,27 @@ local int printHistZeta(void)
 #include "tpcf_include_05.h"
 #endif
 
-    for (m = 1; m <= cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s_%d%s", gd.fpfnamemhistZetaFileName, m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+    for (m = 1; m <= cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s_%d%s", gd->fpfnamemhistZetaFileName, m, EXTFILES);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-#ifdef LOGHIST
-            if (cmd.rminHist==0) {
-                rbinlog = ((real)(n1-cmd.sizeHistN))/NLOGBINPD
-                        + rlog10(cmd.rangeN);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
             } else {
-                rbinlog = rlog10(cmd.rminHist) + ((real)(n1)-0.5)*gd.deltaR;
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            rBin=rpow(10.0,rbinlog);
-#else
-            rBin = cmd.rminHist + ((real)n1-0.5)*gd.deltaR;
-#endif
-            Zeta = gd.histZetaM[m][n1][n1];
-            Zeta2 = gd.histZetaM[m][n1][(int)(Nbins/4.0)];
-            Zeta3 = gd.histZetaM[m][n1][(int)(2.0*Nbins/4.0)];
-            Zeta4 = gd.histZetaM[m][n1][(int)(3.0*Nbins/4.0)];
-            Zeta5 = gd.histZetaM[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            Zeta = gd->histZetaM[m][n1][n1];
+            Zeta2 = gd->histZetaM[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gd->histZetaM[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gd->histZetaM[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gd->histZetaM[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
             fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
         fclose(outstr);
@@ -710,7 +710,7 @@ local int printHistZeta(void)
     return _SUCCESS_;
 }
 
-local int printHistZeta_sincos(void)
+local int printHistZeta_sincos(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n1, m;
@@ -723,87 +723,87 @@ local int printHistZeta_sincos(void)
     int Nbins;
     char namebuf[256];
 
-    Nbins = cmd.sizeHistN;
+    Nbins = cmd->sizeHistN;
 
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
-    for (m = 1; m <= cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd.fpfnamemhistZetaFileName,
+    for (m = 1; m <= cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaFileName,
                 "_cos", m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-#ifdef LOGHIST
-            if (cmd.rminHist==0) {
-                rbinlog = ((real)(n1-cmd.sizeHistN))/NLOGBINPD
-                    + rlog10(cmd.rangeN);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
             } else {
-                rbinlog = rlog10(cmd.rminHist) + ((real)(n1)-0.5)*gd.deltaR;
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            rBin=rpow(10.0,rbinlog);
-#else
-            rBin = cmd.rminHist + ((real)n1-0.5)*gd.deltaR;
-#endif
-            Zeta = gd.histZetaMcos[m][n1][n1];
-            Zeta2 = gd.histZetaMcos[m][n1][(int)(Nbins/4.0)];
-            Zeta3 = gd.histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
-            Zeta4 = gd.histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
-            Zeta5 = gd.histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            Zeta = gd->histZetaMcos[m][n1][n1];
+            Zeta2 = gd->histZetaMcos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gd->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gd->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gd->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
             fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
         fclose(outstr);
     }
         
-    for (m = 1; m <= cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd.fpfnamemhistZetaFileName,
+    for (m = 1; m <= cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaFileName,
                 "_sin", m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-#ifdef LOGHIST
-            if (cmd.rminHist==0) {
-                rbinlog = ((real)(n1-cmd.sizeHistN))/NLOGBINPD
-                    + rlog10(cmd.rangeN);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
             } else {
-                rbinlog = rlog10(cmd.rminHist) + ((real)(n1)-0.5)*gd.deltaR;
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            rBin=rpow(10.0,rbinlog);
-#else
-            rBin = cmd.rminHist + ((real)n1-0.5)*gd.deltaR;
-#endif
-                Zeta = gd.histZetaMsin[m][n1][n1];
-                Zeta2 = gd.histZetaMsin[m][n1][(int)(Nbins/4.0)];
-                Zeta3 = gd.histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
-                Zeta4 = gd.histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
-                Zeta5 = gd.histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                Zeta = gd->histZetaMsin[m][n1][n1];
+                Zeta2 = gd->histZetaMsin[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = gd->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = gd->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = gd->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
                 fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
         fclose(outstr);
     }
 
-    for (m = 1; m <= cmd.mchebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd.fpfnamemhistZetaFileName,
+    for (m = 1; m <= cmd->mchebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaFileName,
                 "_sincos", m, EXTFILES);
-        verb_print(cmd.verbose, "Printing : to a file %s ...\n",namebuf);
+        verb_print(cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd.sizeHistN; n1++) {
-#ifdef LOGHIST
-            if (cmd.rminHist==0) {
-                rbinlog = ((real)(n1-cmd.sizeHistN))/NLOGBINPD
-                    + rlog10(cmd.rangeN);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
             } else {
-                rbinlog = rlog10(cmd.rminHist) + ((real)(n1)-0.5)*gd.deltaR;
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            rBin=rpow(10.0,rbinlog);
-#else
-            rBin = cmd.rminHist + ((real)n1-0.5)*gd.deltaR;
-#endif
-            Zeta = gd.histZetaMsincos[m][n1][n1];
-            Zeta2 = gd.histZetaMsincos[m][n1][(int)(Nbins/4.0)];
-            Zeta3 = gd.histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
-            Zeta4 = gd.histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
-            Zeta5 = gd.histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            Zeta = gd->histZetaMsincos[m][n1][n1];
+            Zeta2 = gd->histZetaMsincos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gd->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gd->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gd->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
             fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
         fclose(outstr);
@@ -817,4 +817,3 @@ local int printHistZeta_sincos(void)
 }
 
 #undef MHISTZETA
-#endif // ! TPCF

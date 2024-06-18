@@ -1,0 +1,11 @@
+
+from cballys import cballs
+Balls = cballs()
+Balls.set({'infile':'./Eladio/full_sky_whole_XYZK__zs9_r081_nside1024.txt','theta':1.0})
+Balls.set({'rangeN':0.0633205,'rminHist':0.00213811,'sizeHistN':20,'verbose':2,'verbose_log':2,'numberThreads':16})
+Balls.set({'searchMethod':'balls-omp','scanLevelRoot':0})
+Balls.set({'rootDir':'Output'})
+Balls.set({'options':'compute-HistN,and-CF,out-m-HistZeta'})
+Balls.Run()
+print(Balls.theta())
+

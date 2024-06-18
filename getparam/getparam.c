@@ -1,6 +1,6 @@
 /*==============================================================================
 	MODULE: getparam.c			[general_libs]
-	Written by: M.A. Rodriguez-Meza
+	Adapted by: M.A. Rodriguez-Meza
 	Starting date: May 2006
 	Purpose: routines to initialize the parameters code
 	Language: C
@@ -40,6 +40,7 @@ local int CountDefaults(string *);
 local void SetProgram(param *, string);
 local void CopyDefaults(param *, string *);
 local void CheckHelp(param *, string);
+local void CheckVersion(param *, string);
 local void PrintHeader(string, string);
 local void PrintItem(string, string, string);
 local void SetArguments(param *, string *);
@@ -67,6 +68,7 @@ void InitParam(string *argv, string *defv)
     SetArguments(pvec, argv);
     ReqArguments(pvec);
     paramvec = pvec;
+    CheckVersion(pvec, argv[1]);
 }
 
 local int CountDefaults(string *defv)
@@ -133,20 +135,35 @@ local void CheckHelp(param *pvec, string argv1)
     param *pp;
     char buf[128];
 
-    if (argv1 != NULL && streq(argv1, "-clue")) {
-                                               
+    if (argv1 != NULL && (streq(argv1, "--clue") || streq(argv1, "-c"))) {
         printf("%s", pvec->value);
         for (pp = pvec+1; pp->name != NULL; pp++)
             printf(" %s=%s", pp->name, pp->value);
         printf("\n");
         exit(0);
     }
-    if (argv1 != NULL && streq(argv1, "-help")) {
+    if (argv1 != NULL && (streq(argv1, "-help")
+            || streq(argv1, "-h") || streq(argv1, "--help") ) ) {
         PrintHeader(pvec->value, pvec->comment);
         for (pp = pvec+1; pp->name != NULL; pp++) {
             sprintf(buf, "  %s=%s", pp->name, pp->value);
             PrintItem(buf, pp->comment, pp->name_alias);
         }
+        exit(0);
+    }
+}
+
+local void CheckVersion(param *pvec, string argv1)
+{
+    param *pp;
+    char buf[128];
+
+    if (argv1 != NULL && streq(argv1, "--version")) {
+        printf("Version = %s\n", getversion());
+        exit(0);
+    }
+    if (argv1 != NULL && streq(argv1, "-v")) {
+        printf("Version = %s\n", getversion());
         exit(0);
     }
 }
@@ -258,7 +275,12 @@ int GetParamStat(string name)
 
 int GetiParam(string name)
 {
-    return (atoi(GetParam(name)));              
+    return (atoi(GetParam(name)));
+}
+
+long GetlParam(string name)
+{
+    return (atol(GetParam(name)));
 }
 
 double GetdParam(string name)
@@ -270,13 +292,13 @@ bool GetbParam(string name)
 {
     char *val;
 
-    val = GetParam(name);                       
-    if (strchr("tTyY1", *val) != NULL)          
+    val = GetParam(name);
+    if (strchr("tTyY1", *val) != NULL)
         return (TRUE);
-    if (strchr("fFnN0", *val) != NULL)          
+    if (strchr("fFnN0", *val) != NULL)
         return (FALSE);
     error("getbparam: %s=%s not bool\n", name, val);
-    return (FALSE);                             
+    return (FALSE);
 }
 
 local param *FindParam(string name, param *pvec)

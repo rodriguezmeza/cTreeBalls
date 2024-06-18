@@ -1,0 +1,25 @@
+searchMethod                       = balls-omp
+scanLevel                          = 11
+scanLevelRoot                      = 0
+theta                              = 1
+nsmooth                            = 1
+scanLevelMin                       = -0,0
+rsmooth =
+#options                            = compute-HistN,and-CF,out-m-HistZeta,no-arfken,post-processing
+options                            = compute-HistN,and-CF,out-m-HistZeta,no-arfken
+#options                            = compute-HistN,and-CF,out-m-HistZeta,no-arfken,post-processing,smooth-pivot
+infile                             = ./Eladio/full_sky_whole_XYZK__zs9_r081_nside1024.txt
+infileformat                       = columns-ascii
+iCatalogs                          = 1
+rootDir                            = Output
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+mChebyshev                         = 8
+stepState                          = 1000
+verbose                            = 2
+verbose_log                        = 2
+numberThreads                      = 16
+script                             = "python plot2pcf.py"
+#script                             = ""
+

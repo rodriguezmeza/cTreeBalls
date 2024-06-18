@@ -20,6 +20,16 @@ Note: it is not necessary to have the parameter_shortname item. Then in this cas
  
  "parameter_name=default_value",   ";Parameter comment/or brief explanation",
 
+After adding line for the new parameter you need to add corresponding line(s) in four routines in startrun.c:
+ 
+ - ReadParametersCmdline
+ - startrun_ParamStat
+ - ReadParameterFile
+ - PrintParameterFile
+
+and if necessary in
+ - CheckParameters
+ 
  */
 
 
@@ -27,7 +37,7 @@ Note: it is not necessary to have the parameter_shortname item. Then in this cas
 #define _cmdline_defs_h
 
 #define HEAD1	"LSST/CosmoININ"
-#define HEAD2	"cballs Code for computing 3pcf, expected: O(N logN)"
+#define HEAD2	"cballs Code for computing (2,3)pcf, expected: O(N logN)"
 #define HEAD3	"..."
 
 string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
@@ -35,6 +45,14 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 //
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
 //
+//#ifdef TPCF
+    "mChebyshev=8",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
+//#endif
+    "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
+    "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood", ":rsm",
+    "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
+
+//B Input catalog parameters:
     "infile=",                          ";File names with points to analyse", ":in",
     "infileformat=columns-ascii",       ";Data input files format (columns-ascii or binary)", ":infmt",
     "iCatalogs=1",                      ";index of point catalogs to analyse", ":icats",
@@ -45,7 +63,6 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "phiL=1.280107",                    ";Angle phi left side of the region",
     "phiR=1.861869",                    ";Angle phi right side of the region",
 //E
-    "mChebyshev=8",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
 //
     "rootDir=Output",                   ";Output dir, where output files will be written", ":root",
     "outfile=",                         ";Output file of the points analysed (default ext: .txt)", ":o",
@@ -61,34 +78,34 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "mhistZetaFileName=mhistZeta",      ";File name (without extension) to save histograms of matrix ZetaM in some directions", ":mhistZfname",
     "suffixOutFiles=",                  ";Suffix to add to output filenames", ":suffix",
 //E
-    "stepState=10000",                  ";number of steps to save a state-run info (pivot number completed in the log file)",
 
-    "verbose=1",                        ";Option to activate the amount of information sent to standard output", ":verb",
-    "verbose_log=1",                    ";Option to activate the amount of information sent to log file", ":verblog",
-
-    "numberThreads=4",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
-
+//B Set of parameters needed to construct a test model. They are used in testdata.c
     "seed=123",                         ";Random number seed to test run or useful to change a random region in Takahasi simulations",
-    "nsmooth=2",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
-    "stepNodes=1",                      ";number of nodes to jump and make a list of nodes to search in balls4 method",
-    "ncritical=100,10000",               ";Range of number of bodies select nodes to search in balls4 method (use also theta=0.5)", ":nc",
-
     "testmodel=simple-cubic-random",    ";Test model name to analyse", ":tstmodel",
     "nbody=16384",                      ";Number of points to test",
     "lengthBox=10000",                  ";Length of the box to test", ":lbox",
-
+//E
     "script=",                          ";Scripts in shell or python that can be run in pre-processing or post-processing.",
 
-    "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
+    "stepState=10000",                  ";number of steps to save a state-run info (pivot number completed in the log file)",
+    "verbose=1",                        ";Option to activate the amount of information sent to standard output", ":verb",
+    "verbose_log=1",                    ";Option to activate the amount of information sent to log file", ":verblog",
 
-    "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood", ":rsm",
+#ifdef OPENMPCODE
+    "numberThreads=4",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
+#endif
 
 #ifdef ADDONS
 #include "cmdline_defs_include.h"
 #endif
 
+    "computeTPCF=true",        ";If true, compute 3pcf", ":tpcf",
+    "useLogHist=true",        ";If true, use logaritmic scale for histograms", ":loghist",
+    "logHistBinsPD=5",           ";Bins per decades", ":binspd",
+    "usePeriodic=false",        ";If false, don't use periodic boundary condition", ":periodic",
+
     "options=",                         ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
-    "Version=0.1",			            ";Mario A. Rodríguez-Meza (2023)",
+    "Version=1.0.0",			        ";Mario A. Rodríguez-Meza (2023-2024)",
     NULL,
 };
 

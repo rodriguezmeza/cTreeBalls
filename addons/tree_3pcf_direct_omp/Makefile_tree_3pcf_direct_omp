@@ -1,0 +1,19 @@
+# ----- MAKE FILE module definitions (tree_3pcf_direct_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(TREE3PCFDIRECTOMPON),1)
+OPT2 += -DTREE3PCFDIRECTOMP
+TREE3PCFDIRECTOMP = ../addons/tree_3pcf_direct_omp/
+vpath %.c ./addons/tree_3pcf_direct_omp/
+#CCFLAG += -DTREE3PCFDIRECTOMP
+#LDFLAGS += -DTREE3PCFDIRECTOMP
+INCLUDES += -I$(TREE3PCFDIRECTOMP)
+HEADERFILES = $(wildcard $(TREE3PCFDIRECTOMP)/*.h)
+EXTERNAL += search_tree_3pcf_direct_omp.o
+endif
+#
+#E

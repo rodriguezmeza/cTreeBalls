@@ -9,7 +9,44 @@
 
 # Here insert AddOns´ Makefile modules
 
+# BALLSOMP
+# For computing 3pcf using balls method
+BALLSON = 1
+ifeq ($(BALLSON),1)
+include ./addons/balls_omp/Makefile_settings_balls_omp
+include $(MACHINES_DIR)/addons/balls_omp/Makefile_balls_omp
+endif
+#
 
+# Gadget I/O
+# For computing 3pcf using balls method
+GADGETIOON = 1
+ifeq ($(GADGETIOON),1)
+include $(MACHINES_DIR)/addons/gadget_io/Makefile_gadget_io
+endif
+#
+
+# DIRECTMETHOD
+DIRECTMETHODON = 1
+ifeq ($(DIRECTMETHODON),1)
+include $(MACHINES_DIR)/addons/direct_method/Makefile_direct_method
+endif
+#
+
+# TREE3PCFDIRECTOMP
+# For computing 3pcf using brute force
+TREE3PCFDIRECTOMPON = 1
+ifeq ($(TREE3PCFDIRECTOMPON),1)
+include $(MACHINES_DIR)/addons/tree_3pcf_direct_omp/Makefile_tree_3pcf_direct_omp
+endif
+#
+
+# CLASSLIB
+CLASSLIBON = 1
+ifeq ($(CLASSLIBON),1)
+include $(MACHINES_DIR)/addons/class_lib/Makefile_class_lib
+endif
+#
 
 
 #
@@ -28,8 +65,26 @@ ADDONS = addons
 vpath %.c $(ADDONS)
 INCLUDES += -I$(ADDONSDIR)
 INCLUDES += -I$(ADDONSDIR)/addons_include
+INCLUDES += -I$(ADDONSDIR)/addons_include/general_libs
+INCLUDES += -I$(ADDONSDIR)/addons_include/include
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/search
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/startrun
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/testdata
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/tpcf
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/tpcf_io
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/tree
+INCLUDES += -I$(ADDONSDIR)/addons_include/source/treeutils
 HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
 HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/general_libs/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/include/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/search/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/startrun/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/testdata/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/tpcf/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/tpcf_io/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/tree/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/treeutils/*.h)
 endif
 #
 #E

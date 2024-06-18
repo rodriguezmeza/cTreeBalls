@@ -9,19 +9,31 @@ void RotationVecAWRtoVecB(real C[], real A[], real B[], real theta)
 {
     real x1, x2;
     real magA, magW;
-    vector W;
 
+#if defined(THREEDIM)
+    vector W;
     CROSSVP(W,B,A);
     ABSV(magA, A);
     ABSV(magW, W);
     x1 = rcos(theta)/magA;
     x2 = rsin(theta)/magW;
-
     C[0] = magA * ( x1*A[0] + x2*W[0] );
     C[1] = magA * ( x1*A[1] + x2*W[1] );
     C[2] = magA * ( x1*A[2] + x2*W[2] );
-
 //    printf("%g %g %g %g\n",theta,C[0],C[1],C[2]);
+#else
+// Check that these lines applied to 2D case!!!!
+    real W;
+    CROSSVP(W,B,A);
+    ABSV(magA, A);
+    magW = ABS(W);
+    x1 = rcos(theta)/magA;
+    x2 = rsin(theta)/magW;
+    C[0] = magA * ( x1*A[0] + x2*W );
+    C[1] = magA * ( x1*A[1] + x2*W );
+//    printf("%g %g %g %g\n",theta,C[0],C[1]);
+#endif
+
 }
 
 // https://en.wikipedia.org/wiki/Euler_angles

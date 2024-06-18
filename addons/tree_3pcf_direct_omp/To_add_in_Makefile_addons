@@ -1,0 +1,18 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+# TREE3PCFDIRECTOMP
+# For computing 3pcf using brute force
+TREE3PCFDIRECTOMPON = 1
+ifeq ($(TREE3PCFDIRECTOMPON),1)
+include $(MACHINES_DIR)/addons/tree_3pcf_direct_omp/Makefile_tree_3pcf_direct_omp
+endif
+#
+
+

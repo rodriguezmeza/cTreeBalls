@@ -25,6 +25,7 @@ OPT1 =
 #
 # This variable is to show settings
 OPT2 =
+OPT2LIB =
 # The one which will be used by CC is CCFLAG. At some point it gets OPT2 definitions...
 #
 # Activate this line to print diagnostic
@@ -43,14 +44,16 @@ OPT2 =
 # your C compiler: Comment/uncomment as convenient
 #
 # For MPI parallel version set it to 1.
-#MPIMACHINE = 1
+MPIMACHINE = 0
 #
 ifeq ($(MPIMACHINE),1)
+MPI = 1
 CC = mpicc
 MPICODE = -DMPICODE
 #OPTIONS += $(MPICODE)
 OPT2 += $(MPICODE)
 else
+MPI = 0
 # C compiler:
 CC       = gcc
 # With icc (Intel):
@@ -60,15 +63,6 @@ CC       = gcc
 endif
 #
 
-#
-# Definition to set where FFTW, GSL and MPI are located
-#
-# NagBody dir if needed or adapt it to point
-#     the location of FFTW GSL and MPI
-NAGBODYDIR = $(HOME)/NagBody_pkg/local
-# In other machines can be:
-#NAGBODYDIR = /opt/local
-#
 #
 #E LINES TO ADAPT TO YOUR PLATEFORM
 
@@ -90,7 +84,9 @@ NAGBODYDIR = $(HOME)/NagBody_pkg/local
 PYTHON ?= python
 
 # your optimization flag
-OPTFLAG = -O4 -ffast-math #-march=native
+# clang-12: warning: -O4 is equivalent to -O3 [-Wdeprecated]
+#OPTFLAG = -O4 -ffast-math #-march=native
+OPTFLAG = -O3 -ffast-math #-march=native
 #OPTFLAG = -Ofast -ffast-math #-march=native
 #OPTFLAG = -fast
 
@@ -104,8 +100,7 @@ CCFLAG = -g -fPIC
 LDFLAG = -g -fPIC
 
 # pass current working directory to the code
-#CCFLAG += -D__CLASSDIR__='"$(MDIR)"'
-CCFLAG += -D__TPCF_N2DIR__='"$(MDIR)"'
+CCFLAG += -D__CTREEBALLSDIR__='"$(MDIR)"'
 
 # where to find include files *.h
 INCLUDES = -I../include
@@ -138,7 +133,7 @@ EXTERNAL =
 #
 # 2023.11.29
 # Dimension of the code is set at compilation time so far.
-OPT2 += -DNDIMMAKE
+#OPT2 += -DNDIMMAKE
 #
 ifeq ($(DEFDIMENSION),2)
     DIMCODE = -DTWODIMCODE
@@ -156,18 +151,6 @@ OMPCODE = -DOPENMPCODE
 OPT2 += $(OMPCODE)
 endif
 #
-#
-ifeq ($(PERIODICON),1)
-PBC = -DPERIODIC
-OPT2 += $(PBC)
-endif
-#
-#
-ifeq ($(LOGHISTON),1)
-LOG = -DLOGHIST
-OPT2 += $(LOG) -DNLOGBINPD=$(NLOGBINPD)
-endif
-#
 
 #
 MANUALCHEBYSHEVON = 1
@@ -178,6 +161,8 @@ OPT2 += $(MANUALCHEBYSHEV)
 endif
 #
 
+# To activate float real set to 1. Else 0
+SINGLEPON = 0
 #
 ifeq ($(SINGLEPON),1)
 SINGLEP = -DSINGLEP
@@ -194,20 +179,14 @@ OPT2 += $(KappaAvgON)
 endif
 #
 
+# To activate long integers set to 1. Else 0
+LONGINTON = 1
 #
 ifeq ($(LONGINTON),1)
 LONG = -DLONGINT
 OPT2 += $(LONG)
 endif
 #
-
-
-#
-ifeq ($(TPCFON),1)
-OPT2 += -DTPCF
-endif
-#
-
 
 #
 ifeq ($(PTOPIVOTROTATIONON),1)
@@ -242,7 +221,7 @@ GENERALLIBS = general_libs
 vpath %.c $(GENERALLIBS)
 INCLUDES += -I../$(GENERALLIBS)
 HEADERFILES = $(wildcard ../general_libs/*.h)
-EXTERNAL += clib.o mathfns.o inout.o mathutil.o
+EXTERNAL += clib.o mathfns.o inout.o mathutil.o numrec.o
 # numrec.o
 endif
 #
@@ -256,7 +235,8 @@ GETPARAM_ON = 1
 ifeq ($(GETPARAM_ON),1)
 GETPARAM = getparam
 vpath %.c $(GETPARAM)
-CCFLAG += -DGETPARAM
+#CCFLAG += -DGETPARAM
+OPT2 += -DGETPARAM
 #LDFLAGS += -DGETPARAM
 INCLUDES += -I../getparam
 EXTERNAL += getparam.o
@@ -267,17 +247,18 @@ endif
 #
 #B CLASSLIB section
 # Use 0 to get rid off all calls to class_lib routines:
-CLASSLIB_ON = 0
+#CLASSLIB_ON = 1
 
-ifeq ($(CLASSLIB_ON),1)
-CLASSLIB = class_lib
-vpath %.c $(CLASSLIB)
-CCFLAG += -DCLASSLIB
-#LDFLAGS += -DCLASSLIB
-INCLUDES += -I../$(CLASSLIB)
-EXTERNAL += common.o
-endif
-#
+#ifeq ($(CLASSLIB_ON),1)
+#CLASSLIB = addons/class_lib
+#vpath %.c $(CLASSLIB)
+#OPT2 += -DCLASSLIB
+##CCFLAG += -DCLASSLIB
+##LDFLAGS += -DCLASSLIB
+#INCLUDES += -I../$(CLASSLIB)
+#EXTERNAL += common.o input.o parser.o
+#endif
+##
 #E
 
 
@@ -285,27 +266,49 @@ endif
 # BEGIN GSL, FFTW, MPI DEFINITIONS (if needed)
 #
 
+#
+# Definition to set where FFTW, GSL and MPI are located
+#
+# NagBody dir if needed or adapt it to point
+#     the location of FFTW GSL and MPI
+NAGBODYDIR = $(HOME)/NagBody_pkg/local
+# In other machines can be:
+#NAGBODYDIR = /opt/local
+#
+
+
+# -------------------
 #B GSL section
+ifeq ($(USEGSL),1)
+#CCFLAG += -DUSEGSL
+OPT2 += -DUSEGSL
+
+
 GSLON = 1
 
 ifeq ($(GSLON),1)
 
 ifeq ($(GSLINTERNAL),0)
+# Change these lines to fit your GSL installation
     GSL_INCL =  -I$(NAGBODYDIR)/gsl/include
     GSL_LIBS =  -L$(NAGBODYDIR)/gsl/lib -lgsl -lgslcblas
     CCFLAG += $(GSL_INCL)
     LDFLAG += $(GSL_LIBS)
+    CCFLAG += -DNOINTERNALGSL
 endif
 
 ifeq ($(GSLINTERNAL),1)
 include $(MACHINES_DIR)Makefile_gsl
 endif
 
-else
-    CCFLAG += -DNOGSL
-endif
-#E
+else # ! GSLON
+#    CCFLAG += -DNOGSL
+#    CCFLAG += -DNOINTERNALGSL
+endif # ! GSLON
 
+endif # ! USEGSL
+#E
+# -------------------
 
 #
 # FFTW 2 flags
@@ -348,10 +351,12 @@ endif
 
 #
 # MPI defintions:
-MPI = 0
+#MPI = 0
 ifeq ($(MPI),1)
-MPI_INCL  = -I/opt/local/include/openmpi-mp/
-MPI_LIBS  = -L/opt/local/lib/openmpi-mp/ -lmpi
+#MPI_INCL  = -I/opt/local/include/openmpi-mp/
+#MPI_LIBS  = -L/opt/local/lib/openmpi-mp/ -lmpi
+MPI_INCL  = -I/usr/local/include/
+MPI_LIBS  = -L/usr/local/lib/ -lmpi
 else
 MPI_INCL  =
 MPI_LIBS  =
@@ -366,7 +371,10 @@ LDFLAG +=  $(MPI_LIBS) $(FFTW_LIBS)
 # END FFTW, GSL, MPI DEFINITIONS (if needed)
 #--------------------------------------------
 
+
 CCFLAG += $(OPT2)
+#LDFLAG += $(OPT2LIB)
+#MLIBS += $(OPT2LIB)
 
 %.o:  %.c .base
 	cd $(WRKDIR);$(CC) $(OPTFLAG) $(OMPFLAG) $(CCFLAG) $(INCLUDES) -c ../$< -o $*.o

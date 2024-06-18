@@ -11,28 +11,6 @@
 #ifndef _data_struc_defs_h
 #define _data_struc_defs_h
 
-#define IPName(param,paramtext)										\
-  {strcpy(tag[nt],paramtext);										\
-  addr[nt]=&(param);												\
-  id[nt++]=INT;}
-
-#define RPName(param,paramtext)										\
-  {strcpy(tag[nt],paramtext);										\
-  addr[nt]=&param;													\
-  id[nt++]=DOUBLE;}
-
-#define BPName(param,paramtext)										\
-  {strcpy(tag[nt],paramtext);										\
-  addr[nt]=&param;													\
-  id[nt++]=BOOLEAN;}
-
-#define SPName(param,paramtext,n)									\
-  {strcpy(tag[nt],paramtext);										\
-  param=(string) malloc(n);											\
-  addr[nt]=param;													\
-  id[nt++]=STRING;}
-
-
 typedef struct _node {
     short type;
     bool update;
@@ -47,12 +25,7 @@ typedef struct _node {
     REAL **histXi;
     bool histON;
 #endif
-    
-//B kd-tree
-    byte flags;                                     // status in b-b calculation
-    byte newlevel;                                  //  level set by latest
-                                                    //  force calc.
-//E
+
     bool selected;                                  // To see the bodies
                                                     //  belonging to a cell
 #ifdef BODY3ON
@@ -76,12 +49,17 @@ typedef struct _node {
     INTEGER nb;
     REAL radius;
 
-//    INTEGER nbrmin;
-//    INTEGER nbrmin_overlap;
+    REAL kapparmin;
+    INTEGER nbrmin;
+    INTEGER nbrmin_overlap;
 //E
 
 #ifdef KappaAvgON
     REAL kappaavg;
+#endif
+
+#ifdef ADDONS
+#include "datastruc_defs_include_00.h"
 #endif
 
 } node, *nodeptr;
@@ -125,8 +103,10 @@ typedef struct _node {
 #define Nb(x) (((nodeptr) (x))->nb)
 #define Radius(x) (((nodeptr) (x))->radius)
 
-//#define NbRmin(x) (((nodeptr) (x))->nbrmin)
-//#define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
+
+#define KappaRmin(x)    (((nodeptr) (x))->kapparmin)
+#define NbRmin(x) (((nodeptr) (x))->nbrmin)
+#define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
 //E
 
 #define BODY 00
@@ -141,25 +121,14 @@ typedef struct _node {
 typedef struct {
     node bodynode;
     INTEGER Id;
-//B kd-tree
-    REAL smooth;                                    // smoothing length
-//E
+
+#ifdef ADDONS
+#include "datastruc_defs_include_01.h"
+#endif
+
 } body, *bodyptr;
 
 #define Id(x)    (((bodyptr) (x))->Id)
-
-//B kd-tree
-#define Flags(x)     (((nodeptr) (x))->flags)
-#define NewLevel(x)  (((nodeptr) (x))->newlevel)
-#define NthBody(bp,n)  ((bp) + (n))
-#define INQUE    0x04            // body listed in current priority que
-#define DONE     0x08            // smoothing operation is complete
-#define Smooth(x)    (((bodyptr) (x))->smooth)
-#define SetFlag(x,f)  (Flags(x) |= (f))
-#define ClrFlag(x,f)  (Flags(x) &= ~(f))
-#define InQue(x)    ((Flags(x) & INQUE) != 0)
-#define Done(x)     ((Flags(x) & DONE) != 0)
-//E
 
 #define NSUB (1 << NDIM)
 
@@ -185,23 +154,57 @@ typedef struct {
 #endif
 #define Inside(x)   (((cellptr) (x))->inside)
 
+#ifdef ADDONS
+#include "datastruc_defs_include_02.h"
+#endif
+
+
 #if !defined(global)                                // global def question must
 #  define global extern                             //  be here
 #endif
+
+
+//B I/O Macros
+#define IPName(param,paramtext)                                 \
+  {strcpy(tag[nt],paramtext);                                   \
+  addr[nt]=&(param);                                            \
+  id[nt++]=INT;}
+
+#define LPName(param,paramtext)                                 \
+  {strcpy(tag[nt],paramtext);                                   \
+  addr[nt]=&(param);                                            \
+  id[nt++]=LONG;}
+
+#define RPName(param,paramtext)                                 \
+  {strcpy(tag[nt],paramtext);                                   \
+  addr[nt]=&param;                                              \
+  id[nt++]=DOUBLE;}
+
+#define BPName(param,paramtext)                                 \
+  {strcpy(tag[nt],paramtext);                                   \
+  addr[nt]=&param;                                              \
+  id[nt++]=BOOLEAN;}
+
+#define SPName(param,paramtext,n)                               \
+  {strcpy(tag[nt],paramtext);                                   \
+  param=(string) malloc(n);                                     \
+  addr[nt]=param;                                               \
+  id[nt++]=STRING;}
+//E I/O Macros
 
 //B Tree search
 
 // Alternative definition for VWrap. (0,0,..) center of the box
 
 #define VWrap1(v, t)                                         \
-   if (v[t] >= 0.5 * gd.Box[t])      v[t] -= gd.Box[t];     \
-   else if (v[t] < -0.5 * gd.Box[t]) v[t] += gd.Box[t]
+   if (v[t] >= 0.5 * gd->Box[t])      v[t] -= gd->Box[t];     \
+   else if (v[t] < -0.5 * gd->Box[t]) v[t] += gd->Box[t]
 
 // Alternative definition for VWrap. (0,0,..) lower edge of the box
 
 #define VWrap2(v, t)                                        \
-   if (v[t] >= gd.Box[t])      v[t] -= gd.Box[t];           \
-   else if (v[t] < 0.0) v[t] += gd.Box[t]
+   if (v[t] >= gd->Box[t])      v[t] -= gd->Box[t];           \
+   else if (v[t] < 0.0) v[t] += gd->Box[t]
 
 //Chose one PBC::
 // By now it is only working with boxes centered at (0,0,...)
@@ -229,6 +232,7 @@ typedef struct {
 
 
 //B Macros useful to compute chebyshev polynomials
+//#ifdef TPCF
 
 //B BALLS4
 #define CHEBYSHEVOMPCC                                      \
@@ -242,7 +246,7 @@ typedef struct {
    hist->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
    xicosmphi = xi * hist->Chebs[3];                    \
    hist->histXithread[3][n] += xicosmphi;                   \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist->Chebs[m] = 2.0*(cosphi)*hist->Chebs[m-1] - hist->Chebs[m-2];  \
        xicosmphi = xi * hist->Chebs[m];                \
        hist->histXithread[m][n] += xicosmphi;               \
@@ -258,7 +262,7 @@ typedef struct {
    hist->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
    xicosmphi = xj * xi * hist->Chebs[3];                    \
    hist->histXithread[3][n] += xicosmphi;                   \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist->Chebs[m] = 2.0*(cosphi)*hist->Chebs[m-1] - hist->Chebs[m-2];  \
        xicosmphi = xj * xi * hist->Chebs[m];                \
        hist->histXithread[m][n] += xicosmphi;               \
@@ -277,7 +281,7 @@ typedef struct {
    hist_omp.Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);       \
    xicosmphi = xi * hist_omp.Chebs[3];                      \
    hist_omp.histXithread[3][n] += xicosmphi;                \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist_omp.Chebs[m] = 2.0*(cosphi)*hist_omp.Chebs[m-1] - hist_omp.Chebs[m-2];  \
        xicosmphi = xi * hist_omp.Chebs[m];                  \
        hist_omp.histXithread[m][n] += xicosmphi;            \
@@ -327,7 +331,7 @@ typedef struct {
     hist->ChebsU[6] = 1.0 -12.0*cosphi2 + 16.0*cosphi4;           \
     xisinmphi = xi * hist->ChebsU[6] * sinphi;                    \
     hist->histXithreadsin[6][n] += xisinmphi;                     \
-    for (m=7; m<=cmd.mchebyshev+1; m++){                          \
+    for (m=7; m<=cmd->mchebyshev+1; m++){                          \
         hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
         xicosmphi = xi * hist->ChebsT[m];                         \
         hist->histXithreadcos[m][n] += xicosmphi;                 \
@@ -356,7 +360,7 @@ typedef struct {
     hist->ChebsU[3] = 2.0*cosphi;                                 \
     xisinmphi = xi * hist->ChebsU[3] * sinphi;                    \
     hist->histXithreadsin[3][n] += xisinmphi;                     \
-    for (m=4; m<=cmd.mchebyshev+1; m++){                          \
+    for (m=4; m<=cmd->mchebyshev+1; m++){                          \
         hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
         xicosmphi = xi * hist->ChebsT[m];                         \
         hist->histXithreadcos[m][n] += xicosmphi;                 \
@@ -376,7 +380,7 @@ typedef struct {
    hist->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);          \
    xicosmphi = xi * hist->Chebs[3];                         \
    hist->histXithread[3][n] += xj*xicosmphi;                \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist->Chebs[m] = 2.0*(cosphi)*hist->Chebs[m-1] - hist->Chebs[m-2];  \
        xicosmphi = xi * hist->Chebs[m];                     \
        hist->histXithread[m][n] += xj*xicosmphi;            \
@@ -392,7 +396,7 @@ typedef struct {
    hist.Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);           \
    xicosmphi = xi * hist.Chebs[3];                          \
    hist.histXithread[3][n] += xicosmphi;                    \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist.Chebs[m] = 2.0*(cosphi)*hist.Chebs[m-1] - hist.Chebs[m-2];  \
        xicosmphi = xi * hist.Chebs[m];                      \
        hist.histXithread[m][n] += xicosmphi;                \
@@ -401,7 +405,7 @@ typedef struct {
 
 #define NOCHEBYSHEVOMP                                      \
     {real Cheb;                                             \
-    for (m=1; m<=cmd.mchebyshev+1; m++){                    \
+    for (m=1; m<=cmd->mchebyshev+1; m++){                    \
       Cheb = rcos((real)(m-1) * racos(cosphi));             \
         xicosmphi = xi * Cheb;                              \
         hist->histXithread[m][n] += xicosmphi;              \
@@ -409,7 +413,7 @@ typedef struct {
 
 #define NOCHEBYSHEVDIRECTOMP                                      \
     {real Cheb;                                             \
-    for (m=1; m<=cmd.mchebyshev+1; m++){                    \
+    for (m=1; m<=cmd->mchebyshev+1; m++){                    \
       Cheb = rcos((real)(m-1) * racos(cosphi));             \
         xicosmphi = xi * Cheb;                              \
         hist.histXithread[m][n] += xicosmphi;              \
@@ -417,58 +421,58 @@ typedef struct {
 
 // Same as above. Unify
 #define NOCHEBYSHEV                                         \
-{real Cheb;for (m=1; m<=cmd.mchebyshev+1; m++){             \
+{real Cheb;for (m=1; m<=cmd->mchebyshev+1; m++){             \
         Cheb = rcos((real)(m-1) * racos(cosphi));           \
         xicosmphi = xi * Cheb;                              \
-        gd.histXi[m][n] += xicosmphi;                       \
+        gd->histXi[m][n] += xicosmphi;                       \
     }}
 
 #define CHEBYSHEV                                           \
 {Chebs[1] = 1.0;                                  \
    xicosmphi = xi * Chebs[1];                               \
-   gd.histXi[1][n] += xicosmphi;                            \
+   gd->histXi[1][n] += xicosmphi;                            \
    Chebs[2] = cosphi;                                       \
    xicosmphi = xi * Chebs[2];                               \
-   gd.histXi[2][n] += xicosmphi;                            \
+   gd->histXi[2][n] += xicosmphi;                            \
    Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);                \
    xicosmphi = xi * Chebs[3];                               \
-   gd.histXi[3][n] += xicosmphi;                            \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   gd->histXi[3][n] += xicosmphi;                            \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
           Chebs[m] = 2.0*(cosphi)*Chebs[m-1] - Chebs[m-2];  \
           xicosmphi = xi * Chebs[m];                        \
-          gd.histXi[m][n] += xicosmphi;                     \
+          gd->histXi[m][n] += xicosmphi;                     \
    }}
 
 #define CHEBYSHEVNEW                                        \
 {hist.Chebs[1] = 1.0;                                       \
    xicosmphi = xi * hist.Chebs[1];                          \
-   gd.histXi[1][n] += xicosmphi;                            \
+   gd->histXi[1][n] += xicosmphi;                            \
    hist.Chebs[2] = cosphi;                                  \
    xicosmphi = xi * hist.Chebs[2];                          \
-   gd.histXi[2][n] += xicosmphi;                            \
+   gd->histXi[2][n] += xicosmphi;                            \
    hist.Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);           \
    xicosmphi = xi * hist.Chebs[3];                          \
-   gd.histXi[3][n] += xicosmphi;                            \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   gd->histXi[3][n] += xicosmphi;                            \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist.Chebs[m] = 2.0*(cosphi)*hist.Chebs[m-1] - hist.Chebs[m-2];  \
        xicosmphi = xi * hist.Chebs[m];                      \
-          gd.histXi[m][n] += xicosmphi;                     \
+          gd->histXi[m][n] += xicosmphi;                     \
    }}
 
 #define CHEBYSHEVNEWNEW                                     \
 {hist->Chebs[1] = 1.0;                                       \
    xicosmphi = xi * hist->Chebs[1];                          \
-   gd.histXi[1][n] += xicosmphi;                            \
+   gd->histXi[1][n] += xicosmphi;                            \
    hist->Chebs[2] = cosphi;                                  \
    xicosmphi = xi * hist->Chebs[2];                          \
-   gd.histXi[2][n] += xicosmphi;                            \
+   gd->histXi[2][n] += xicosmphi;                            \
    hist->Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);           \
    xicosmphi = xi * hist->Chebs[3];                          \
-   gd.histXi[3][n] += xicosmphi;                            \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   gd->histXi[3][n] += xicosmphi;                            \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
        hist->Chebs[m] = 2.0*(cosphi)*hist->Chebs[m-1] - hist->Chebs[m-2];  \
        xicosmphi = xi * hist->Chebs[m];                      \
-          gd.histXi[m][n] += xicosmphi;                     \
+          gd->histXi[m][n] += xicosmphi;                     \
    }}
 
 #define CHEBYSHEVOMP1                                       \
@@ -481,12 +485,13 @@ typedef struct {
    Chebs[3] = 2.0*(cosphi)*(cosphi) - (1.0);                \
    xicosmphi = xi * Chebs[3];                               \
    histXithread[3][n] += xicosmphi;                         \
-   for (m=4; m<=cmd.mchebyshev+1; m++){                     \
+   for (m=4; m<=cmd->mchebyshev+1; m++){                     \
           Chebs[m] = 2.0*(cosphi)*Chebs[m-1] - Chebs[m-2];  \
           xicosmphi = xi * Chebs[m];                        \
           histXithread[m][n] += xicosmphi;                  \
    }}
 
+//#endif // ! TPCF
 //E End chebyshev definitions
 
 
@@ -500,9 +505,10 @@ typedef struct {
 #define INCOLUMNS       0
 #define INCOLUMNSBIN    2
 #define INNULL          1
-// takahasi
-#define INTAKAHASI      3
+#define INTAKAHASI      3                           // Takahasi
 #define INCOLUMNS2DTO3D 4
+#define INCOLUMNSPOS    6                           // To read only
+                                                    //  position columns (ascii)
 //E
 
 //B Output file formats:
@@ -520,8 +526,18 @@ typedef struct {
 //Rotation angle in radians. To use in a sphere (3D case)
 #define ROTANGLE                0.01
 
+
+#ifdef CLASSLIB
+#define class_call_cballs(function, error_message_from_function, error_message_output) \
+class_call(function, error_message_from_function, error_message_output)
+#else
+#define class_call_cballs(function, error_message_from_function, error_message_output) \
+function;
+#endif
+
+
 #ifdef ADDONS
-#include "datastruc_defs_include.h"
+#include "datastruc_defs_include_03.h"
 #endif
 
 #endif // ! _data_struc_defs_h

@@ -231,6 +231,14 @@
             (p)[_i][_j] = (q)[_i][_j] + (r)[_i][_j];                    \
 }
 
+#define AVGM_ext(p,q,r,dim)                                             \
+{                                                                       \
+    int _i, _j;                                                         \
+    for (_i = 1; _i <= dim; _i++)                                       \
+        for (_j = 1; _j <= dim; _j++)                                   \
+            (p)[_i][_j] = 0.5*( (q)[_i][_j] + (r)[_i][_j] );            \
+}
+
 #define SUBM(p,q,r)                                                     \
 {                                                                       \
     int _i, _j;                                                         \

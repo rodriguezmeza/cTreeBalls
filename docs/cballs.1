@@ -1,0 +1,189 @@
+'t" t
+.TH cballs 1 "April 2023" UNIX "LSST/CosmoININ PROJECT"
+.na
+.nh   
+
+.SH NAME
+cballs - 2-3 Points Correlation Function computation code
+.SH SYNOPSIS
+\fBcballs\fR [ \fIparameter_file_name\fR ] [ \fIoptions\fR ]
+.sp
+
+.SH DESCRIPTION
+\fBcballs\fR - computes the 2-3 point correlation function using tree methods, complexity O(N Log N).
+
+.SH OPTIONS
+All the options have the structure
+.sp
+\fIoption_name\fR=<option_value>
+.sp
+except option \fB--help\fR.
+.sp
+
+Options and their possible values are:
+
+.IP "\fB--help\fR" 12
+By writting
+
+.sp
+cballs --help
+.sp
+
+you will get the list of all parameters and their default values. An option may have an alias which is a short name of the option. If an option has an alias in the list above it comes after its description surrounded by brackets tagged with 'a:'. For example,
+
+.sp
+option_name=<option_value>	... Description ... [a: opt]
+.sp
+here 'opt' is the short name of the option. In the description of the options below, when an option has an alias it will be noted in the same way but before its description.
+
+.IP "\fBparamfile\fR" 12
+is the name file with the values of the input parameters. Overwrite parameters
+values below. You may input this filename by only writing:
+.sp
+cballs paramfile=parameters_input_file_name
+.sp
+Parameter input file may be created by hand with the editor of your choice. Comment lines start with an "%" or "#". Follow each name option with a blank space and the option value. The order of the option lines does not matter.  Also you may create an example input file by executing
+.sp
+cballs
+.sp
+This will run the \fBcballs\fR code with default values and when it finish you will have in your running output directory the file "parameters_null-cballs-usedvalues". Now you may edit this file to adapt to your own run parameters. This file can be overwritten so it may be helpful to change this file name to whatever apropriate.
+
+.IP "\fBsearchMethod\fR" 12
+[a: search] is the searching method to use. Default is "tree-omp-sincos". Other search options will be added in the addons folder.
+
+.IP "\fBmChebyshev\fR" 12
+[a: mcheb] is the total number of chebyshev multipoles to use in the harmonic expansion to compute the 3 points correlation function.
+
+.IP "\fBnsmooth\fR" 12
+[a: nsm] is the number of bodies to smooth out (or in a bucket) to use.
+
+.IP "\fBrsmooth\fR" 12
+[a: rsm] radius of the pivot smoothing neighbourhood.
+
+.IP "\fBtheta\fR" 12
+is a control to search the tree. Can be used to increase speed. Values greather than one decrease artificially the size of the tree cells. The contrary ocurrs if value is less than one. A value of zero will give the direct method with complexity O(N^2).
+
+.IP "\fBinfile\fR" 12
+[a: in]  gives the name of file to input the data to analyse. It can given several files to analysed.
+
+.IP "\fBinfileformat\fR" 12
+[a: infmt] gives the format of input data file. They are: columns-ascii  (default value), binary or takahasi. Ascii files have first three columns for x, y, z positions and the four column for the scalar convergence. The binary format first has number of bodies, nbody, second is dimension, ndim, then has size of the box, Lx, Ly, Lz. Follows the first block of size nbody of positions of bodies, x, y, z, then followed by the next block of scalar convergence, also of size, nbody. Takahasi format is a special format for a set of simulations at several redshift and downsize values.
+
+.IP "\fBiCatalog\fR" 12
+[a: icats] index of the point catalogs given in \fBinfile\fR.
+
+.IP "\fBthetaL\fR" 12
+is the theta (DEC) left side of the region to limit the Takahasi input data that span all the unit sphere.
+
+.IP "\fBthetaR\fR" 12
+is the theta (DEC) right side of the region to limit the Takahasi input data that span all the unit sphere.
+
+.IP "\fBphiL\fR" 12
+is the phi (RA) left side of the region to limit the Takahasi input data that span all the unit sphere.
+
+.IP "\fBphiR\fR" 12
+is the phi (RA) right side of the region to limit the Takahasi input data that span all the unit sphere.
+
+.IP "\fBrootDir\fR" 12
+[a: root] output directory, where all output and log files will be written when cBalls is executed. It is not needed to be created before run. If it not exist it will be maked. If it exists it is overwritten.
+
+.IP "\fBoutfile\fR" 12
+[a: o] will give the name of file to save the analysed data. The output is written in column form by default, there is also a binary format. And by default this option is empty then no output file is saved.
+
+.IP "\fBoutfileformat\fR" 12
+[a: ofmt] gives the format of input data file. They are: columns-ascii  (default value), binary. They are very similar to \fBinfileformat\fR.
+
+.IP "\fBsizeHistN\fR" 12
+gives the number of bins to create.
+
+.IP "\fBrangeN\fR" 12
+is the maximum separtion of bodies to search for sampling.
+
+.IP "\fBrminHist\fR" 12
+[a: rmin] is the radial minimu separtion of bodies to search for sampling.
+
+.IP "\fBhistNFileName\fR" 12
+[a: histNfname] is the file name (without extension) to save histograms of N (counts). Extension is always ".txt" and is not given in the name of the file.
+
+.IP "\fBhistXi2pcfFileName\fR" 12
+[a: histXi2pcffname] is the file name (without extension) to save histograms of Xi2pcf (scalar convergence).
+
+.IP "\fBhistZetaMFileName\fR" 12
+[a: histZMfname] is the file name (without extension) to save histograms (a matrix) of the multipoles of the 3 points correlation function (of scalar convergence).
+
+.IP "\fBmhistZetaMFileName\fR" 12
+[a: mhistZMfname] is the file name (without extension) to save histograms (a matrix) of the multipoles of the 3 points correlation function (of scalar convergence) in some directions.
+
+.IP "\fBsuffixOutFiles\fR" 12
+[a: suffix] is a suffix to add to the output filenames.
+
+.IP "\fBseed\fR" 12
+gives the seed to init the random generator.
+
+.IP "\fBtestmodel\fR" 12
+[a: tstmodel] is the name of the model of data to create. By default creates a box of random points. A spherical surface in 3D with uniform random points can be created also. Convergence values are set to 2.
+
+.IP "\fBlengthBox\fR" 12
+[a: lbox] is the length of the box side. The box is where the bodies reside.
+
+.IP "\fBnbody\fR" 12
+is the total number of bodies to make as a test case. By default a box of size given by \fBlengthBox\fR is created and there \fBnbody\fR random points are generated. The random generator is initialize with a seed given by \fBseed\fR option.
+
+.IP "\fBscript\fR" 12
+is a script in shell, python or other exe files that can be run in pre-processing or post-processing. It can not be used in a parameter file. See examples section below.
+
+.IP "\fBstepState\fR" 12
+gives the frequency to save the the number of pivot computed. Useful to see the state of the run.
+
+.IP "\fBverbose\fR" 12
+[a: verb] to print messages to stdout. There are three levels of information. When is "0", no information is written.
+
+.IP "\fBverbose_log\fR" 12
+[a: verblog] to print messages to a log file (in directory "tmp"). When is "0" no information is written.
+
+.IP "\fBnumberThreads\fR" 12
+[a: nthreads] is the number of threads to use in a parallel computation using OpenMP. When OpenMP is switched off this parameters is deactivated.
+
+.IP "\fBoptions\fR" 12
+[a: opt] you may give here various code behavior options. See examples below.
+
+.SH Note:
+All parameters have default values. If you do not give any one of them, cBalls will use its default value.
+
+.SH EXAMPLES
+Go to directory "tests". If you execute in the command line:
+
+$ ../cballs --help
+
+will give all parameters, their default values and a brief description of them. And this
+
+$ time ../cballs
+
+will run \fBcballs\fR with all parameters using their default values. It will create a simple cube of uniformly random points and do the search to construct the histograms. At the end will print the CPU time taken to execute.
+
+$ time ../cballs nbody=64000 rangeN=100 sizeHistN=100 lbox=10000 verb=2 o=outdata
+
+.sp
+You will have computation written in a file named with option \fBoutfile\fR in a directory named Output. If this directory does not exist, it will be created.
+Also will be created a directory named "tmp" in the folder Output, where a log file will be saved.
+
+.sp
+Reading a Takahasi simulation data file downsized to 512:
+
+.sp
+$ time cballs infile=./full_sky_whole_XYZK__zs9_r000_nside512.bin infmt=binary options=stop
+
+.sp
+To convert a catalog from binary to ascii do:
+
+.sp
+cballs in=./full_sky_whole_XYZK__zs9_r000_nside512.bin infmt=binary o=takas options=convert
+
+.SH SEE ALSO
+nplot2d(1)
+
+.SH COPYRIGHT
+Copyright (C) 2023--2024
+.br
+Mario A. Rodriguez-Meza
+.br

@@ -1,97 +1,42 @@
 # ----- MAKE FILE DEFINITIONS FOR cballs CODE -----
 # Mario A. Rodriguez-Meza, Ciudad de Mexico, 27.04.2023
 #
-#
-# Select one set of settings...
 
-#SEARCHMETHOD = DEFAULTSET
-#SEARCHMETHOD = 2PCF
-
-#
 #
 # Change environment variables below as it is convient to you.
-# Must be commented all lines above
-#
-# For histograms in logscale version set to 1. Else 0
-LOGHISTON = 1
-# And set the number of bins per decade:
-NLOGBINPD = 5
-#
-# To compute 3pcf in harmonic base set to 1. Else 0
-TPCFON = 1
-#
-PTOPIVOTROTATIONON = 0
-#
-
-
-#B Following options are almost not to be changed...
 #
 # Select dimension of the run: 2, 3
 DEFDIMENSION = 3
 #
+#
 # Default GSL public (not the internal sources version, not included).
-# If you want the internal gsl version set it to 1.
-GSLINTERNAL = 0
+# GSL can be switched off by setting USEGSL to 0, by default is 1, means GSL is used:
+USEGSL = 0
+# If you want the internal gsl version set it to 1, but you will need the gsl sources files.
+GSLINTERNAL = 1
 # When GSLINTERNAL = 0 you must configure GSL directory in the system
 #   in order to be found. See Makefile_machine
 #   and set NAGBODYDIR to point to GSL directory in your machine.
-#
-# Select periodic boundary conditions: 1 for periodic, 0 otherwise
-PERIODICON = 0
 #
 # For an OpenMP machine could be important to set (maximum number of threads to use):
 # export OMP_NUM_THREADS=8
 # Set this to 1 for OPENMP parallel version, or 0 to switch it off
 OPENMPMACHINE = 1
 #
-# To activate float real set to 1. Else 0
-SINGLEPON = 0
-# To activate long integers set to 1. Else 0
-LONGINTON = 1
 #
-ADDONSON = 0
+# If you have a least one addon then set to 1:
+ADDONSON = 1
 #
-#E
-
+PTOPIVOTROTATIONON = 0
+#
 
 OPT2ADD =
 
 # This is only if you have balls module. If not set it to 0
-#BALLS = 0
+#BALLS = 1
 #ifeq ($(BALLS),1)
 #include ./addons/balls_omp/Makefile_settings_balls_omp
 #endif
-
-#
-#B Searching methods section: choose one uncommenting above (top of file) its line
-
-ifeq ($(SEARCHMETHOD), 2PCF)
-# sincos base
-LOGHISTON = 1
-NLOGBINPD = 5
-TPCFON = 0
-OPT2ADD += -DTWOPCFEXEC
-SEARCHMETHODIS = 2pcf
-SEARCHMETHODISDEFINED = TRUE
-endif
-
-ifeq ($(SEARCHMETHOD), DEFAULTSET)
-DEFAULTSETON = 1
-LOGHISTON = 1
-NLOGBINPD = 5
-TPCFON = 1
-OPT2ADD +=
-SEARCHMETHODIS =
-SEARCHMETHODISDEFINED = TRUE
-endif
-
-#ifndef SEARCHMETHODISDEFINED
-#  $(error ERROR: MODEL is not recognized)
-#endif
-
-#E Searching methods section
-#
-
 
 #
 # Machine definitions. Edit this file according to your needs

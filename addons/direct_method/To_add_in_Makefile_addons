@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+# DIRECTMETHOD
+DIRECTMETHODON = 1
+ifeq ($(DIRECTMETHODON),1)
+include $(MACHINES_DIR)/addons/direct_method/Makefile_direct_method
+endif
+#
+
+

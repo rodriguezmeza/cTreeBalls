@@ -1,0 +1,232 @@
+/*==============================================================================
+ HEADER: global_data.h		[cTreeBalls]
+ Written by: Mario A. Rodriguez-Meza
+ Starting date: april 2023
+ Purpose: Definitions of global variables and parameters
+ Language: C
+ Use: '#include "global_data.h"
+ Major revisions:
+ ==============================================================================*/
+//        1          2          3          4          5          6          7
+
+#ifndef _global_data_h
+#define _global_data_h
+
+#include "vectdefs.h"
+#include "datastruc_defs.h"
+#include "common_defs.h"
+
+struct global_data{
+    real cpuinit;
+    struct timeval current_time;
+    long cpurealinit;                               // get time of the day
+
+	string headline0;
+	string headline1;
+	string headline2;
+	string headline3;
+
+    FILE *outlog;
+// Is it used? (delete)
+    FILE *outstr_sols;
+
+	char mode[2];
+
+    int searchmethod_int;
+
+//B Settings of the code
+//    short dimension;                                // Set dimension of the run
+//    bool tpcfon;                                    // Set 3pcf computation on
+//E
+
+//B Tree
+    INTEGER ncell;
+    int tdepth;
+    INTEGER actmax;
+// BALLS
+    INTEGER ncccalc;
+    FILE *outnodelev;
+    FILE *outbodylev;
+    INTEGER nsmoothcount;
+//
+    INTEGER nbccalc;
+    INTEGER nbbcalc;
+    real rSize;                                     // Maximum r of the box
+
+    real rSizeTable[MAXITEMS];                      // Maximum r of the box
+    INTEGER ncellTable[MAXITEMS];
+    INTEGER nbodyTable[MAXITEMS];
+    int tdepthTable[MAXITEMS];
+    INTEGER nnodescanlevTable[MAXITEMS];
+    INTEGER nnodescanlev_rootTable[MAXITEMS];
+
+    cellptr root;
+//E
+
+    real cputree;
+
+// Tree:
+     real Rcut;                                     // Cutoff radius
+     real RcutSq;
+    real cpusearch;
+//
+// Cell search
+     vectorI cells;
+    INTEGER *cellList;
+//
+
+    int infilefmt_int;
+
+//#ifndef NOGSL
+#ifdef USEGSL
+    gsl_rng * r;
+#endif
+
+#ifdef SINGLEP
+    double Box[NDIM];
+#else
+    vector Box;
+#endif
+
+//B Histogram arrays
+    realptr histN;
+    realptr histCF;
+    realptr histNSub;
+// 2pcf
+    realptr histNSubXi2pcf;
+//B kappa Avg Rmin
+//    realptr histNSubXi2pcfRmin;
+    realptr histNSubXi2pcftotal;
+//E
+    real *histXi2pcf;
+// TPCF
+    real ***histZetaMcos;
+    real ***histZetaMsin;
+    real ***histZetaMsincos;
+//E Histogram arrays
+    real ***histZetaM;
+//
+    real *histNNN;
+    real ***histNNNSub;
+    real *histXi2pcf_omp;
+    real ***histXi3pcf;
+// TPCF
+    real **histXi;
+    real **histXicos;
+    real **histXisin;
+//#ifndef NOGSL
+#ifdef USEGSL
+    gsl_matrix_complex *histXi_gsl;
+#endif
+    real rCutSq;
+    int searchMethod_int;
+
+    real deltaR;
+    real deltaRmin;
+    real deltaRmax;
+//#ifdef LOGHIST
+    real *deltaRV;
+    real *ddeltaRV;
+//#endif
+
+    real rrRange;
+    real deltaTheta;
+
+// Activate later...
+//    string histCFFileName;
+
+    char logfilePath[MAXLENGTHOFFILES];
+    char outputDir[MAXLENGTHOFFILES];
+    char tmpDir[MAXLENGTHOFFILES];
+
+    char fpfnameOutputFileName[MAXLENGTHOFFILES];
+    char fpfnamehistNFileName[MAXLENGTHOFFILES];
+    char fpfnamehistCFFileName[MAXLENGTHOFFILES];
+    char fpfnamehistrBinsFileName[MAXLENGTHOFFILES];
+    char fpfnamehistXi2pcfFileName[MAXLENGTHOFFILES];
+// TPCF
+    char fpfnamehistZetaMFileName[MAXLENGTHOFFILES];
+    char fpfnamemhistZetaFileName[MAXLENGTHOFFILES];
+
+    char fpfnameCPUFileName[MAXLENGTHOFFILES];
+
+    string model_comment;
+    
+    int stopflag;
+    INTEGER ip;
+    real cputotalinout;
+    real cputotal;
+
+    INTEGER bytes_tot;
+    INTEGER bytes_tot_cells;
+
+//B To see the bodies belonging to a cell:
+    INTEGER nbodySel;
+//E
+    INTEGER nbodysm;
+    INTEGER nbodybf;
+
+    bool bh86, sw94;
+
+    real i_deltaR;
+
+#ifdef ADDONS
+#include "globaldefs_include_02.h"
+#endif
+
+    char fnameData_kd[128];
+    char fnameOut_kd[128];
+    int input_format_kd;
+    int use_tree_kd;
+    int max_tree_order_kd;
+    int max_tree_nparts_kd;
+    int use_pm_kd;
+    INTEGER n_objects_kd;
+    float l_box_kd;
+    float l_box_half_kd;
+
+    int ninfiles;
+    char *infilenames[MAXITEMS];
+    char *infilefmtname[MAXITEMS];
+    int iCatalogs[MAXITEMS];
+
+    int nsmooth[MAXITEMS];
+    INTEGER nnode;
+    INTEGER rnnode;
+    //E
+//#ifdef BALLS
+//    real scanLevelMin[MAXITEMS];
+    int scanLevelMin[MAXITEMS];
+//    int ncritical[MAXITEMS];
+
+    char nodesfilePath[MAXLENGTHOFFILES];
+    int nnodescanlev;
+// Root nodes:
+    int nnodescanlev_root;
+#define MAXLEVEL  32
+    real Rcell[MAXLEVEL];
+#undef MAXLEVEL
+//
+    char bodiesfilePath[MAXLENGTHOFFILES];
+//#endif
+
+    bool flagSmoothCellMin;
+    bool flagSmooth;
+    bool flagSetNbNoSel;
+//B BUCKET
+    real rminCell[2];
+//E
+
+    real rsmooth[MAXITEMS];
+    bool rsmoothFlag;
+
+    int irsmooth;
+
+#ifdef ADDONS
+#include "globaldefs_include_03.h"
+#endif
+
+};
+
+#endif // ! _global_data_h
+

@@ -8,7 +8,7 @@
  ===============================================================================
  //       1          2          3          4          5          6          7
 
- Use: cballs -help
+ Use: cballs --help
  Input: 	Command line parameters, Parameters file, data catalogs
  Output: several histograms containg 2pcf, 3pcf,...
  Units:
@@ -26,6 +26,9 @@
 
 int main(int argc, string argv[])
 {
+    struct cmdline_data cmd;
+    struct global_data gd;
+
 #ifdef MPICODE
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
@@ -53,10 +56,9 @@ int main(int argc, string argv[])
 //ADDONS: Setting this line here makes mpirun -np 2 tpcf run in Cosma
 //#include "tpcf_01.h"
 
-    StartRun(argv[0], HEAD1, HEAD2, HEAD3);
-	MainLoop();
-
-	EndRun();
+    StartRun(&cmd, &gd, argv[0], HEAD1, HEAD2, HEAD3);
+	MainLoop(&cmd, &gd);
+	EndRun(&cmd, &gd);
 
 #ifdef MPICODE
     MPI_Finalize();
