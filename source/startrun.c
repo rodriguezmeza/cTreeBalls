@@ -149,7 +149,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
         class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
     } else
-        error("no parameter file was given.\n");
+        startrun_cmdline(cmd, gd);
+//        error("no parameter file was given.\n");
 #else
     class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg), errmsg, errmsg);
     class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
