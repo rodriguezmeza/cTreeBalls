@@ -150,7 +150,6 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
     } else
         startrun_cmdline(cmd, gd);
-//        error("no parameter file was given.\n");
 #else
     class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg), errmsg, errmsg);
     class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
@@ -158,11 +157,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #endif
 
     class_call_cballs(startrun_Common(cmd, gd), errmsg, errmsg);
-    verb_print_debug(1, "\nAqui voy (5): %g %d %s\n",
-                     cmd->theta, cmd->sizeHistN, cmd->rootDir);
 
 #ifdef GETPARAM
-    PrintParameterFile(cmd, cmd->paramfile);
 #else
     PrintParameterFile(cmd, cmd->ParameterFile);
 #endif
@@ -190,13 +186,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 
 local int startrun_parameterfile(struct  cmdline_data* cmd, struct  global_data* gd)
 {
-    
-    verb_print_debug(1, "\nAqui voy (0.0): %s\n", cmd->paramfile);
-
 #ifdef GETPARAM
 	ReadParameterFile(cmd, gd, cmd->paramfile);
-    verb_print_debug(1, "\nAqui voy (1)\n");
-
     ReadParametersCmdline_short(cmd, gd);
 
 #ifdef ADDONS
@@ -350,9 +341,6 @@ local void ReadParametersCmdline_short(struct  cmdline_data* cmd, struct  global
         }
 #endif
 
-     verb_print_debug(1, "\nAqui voy (3): %g %d %s\n",
-                      cmd->theta, cmd->sizeHistN, cmd->rootDir);
-
      class_call_cballs(startrun_getParamsSpecial(cmd, gd), errmsg, errmsg);
      class_call_cballs(random_init(cmd, gd, cmd->seed), errmsg, errmsg);
      class_call_cballs(CheckParameters(cmd, gd), errmsg, errmsg);
@@ -392,8 +380,6 @@ local void ReadParametersCmdline_short(struct  cmdline_data* cmd, struct  global
         }
 //E
 
-     verb_print_debug(1, "\nAqui voy (3.1): %g\n", cmd->theta);
-
 #ifdef MPICODE
         MPI_Barrier(MPI_COMM_WORLD);
         MPI_Bcast(&gd, sizeof(struct  global_data), MPI_BYTE, 0, MPI_COMM_WORLD);
@@ -422,8 +408,6 @@ local void ReadParametersCmdline_short(struct  cmdline_data* cmd, struct  global
         "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
                 cmd->rangeN, gd->rSizeTable[ifile]);
         }
-
-     verb_print_debug(1, "\nAqui voy (4): %g\n", cmd->theta);
 
 //B Tree search:
         gd->Rcut = cmd->rangeN;                       // Maximum search radius
@@ -1006,8 +990,6 @@ local void ReadParameterFile(struct  cmdline_data* cmd, struct  global_data* gd,
 #endif
   nt=0;
 
-        verb_print_debug(1, "\nAqui voy (2): %s\n", fname);
-
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
     SPName(cmd->infile,"infile",MAXLENGTHOFSTRSCMD);
@@ -1057,8 +1039,6 @@ local void ReadParameterFile(struct  cmdline_data* cmd, struct  global_data* gd,
     IPName(cmd->logHistBinsPD,"logHistBinsPD");
     BPName(cmd->usePeriodic,"usePeriodic");
 
-        verb_print_debug(1, "\nAqui voy (3): %s\n", fname);
-
 #ifdef ADDONS
 #include "startrun_include_07.h"
 #endif
@@ -1095,8 +1075,6 @@ local void ReadParameterFile(struct  cmdline_data* cmd, struct  global_data* gd,
                         break;
                     case STRING:
                         if (strcmp(buf1,"script") == 0){ // To remove both '"'
-                            verb_print_debug(1, "\nAqui voy (4): %s\n", buf1);
-                            
                             printf("ReadParamterFile: script: %s %s\n", buf3, buf4);
                             slen = strlen(buf3);
                             cmd->script = (char*) malloc((slen-2)*sizeof(char));
@@ -1115,23 +1093,6 @@ local void ReadParameterFile(struct  cmdline_data* cmd, struct  global_data* gd,
                             printf("ReadParamterFile: buf5: %s\n", buf5);
                             strcpy(cmd->script,buf5);
                             printf("ReadParamterFile: addr: %s\n", cmd->script);
-
-/*
-                            slen = strlen(buf3);
-                            cmd->script = (char*) malloc((slen-2)*sizeof(char));
-                            script1 = (char*) malloc(slen*sizeof(char));
-                            memcpy(script1,buf3,slen);
-                            script2 = strchr(script1, '"');
-                            slen = strlen(script2);
-                            script3 = (char*) malloc(slen*sizeof(char));
-                            memcpy(script3,script2+1,slen);
-                            slen = strlen(buf4);
-                            script4 = (char*) malloc(slen*sizeof(char));
-                            memcpy(script4,buf4,slen-1);
-                            sprintf(buf5,"%s %s",script3,script4);
-                            strcpy(cmd->script,buf5);
-*/
-                            verb_print_debug(1, "\nAqui voy (5): %s\n", buf1);
                         } else {
                             strcpy(addr[j],buf3);
                         }
@@ -1252,8 +1213,6 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
     char buf[200];
     int  errorFlag=0;
 
-//    verb_print_debug(1, "\nAqui voy (5): %s\n", cmd->rootDir);
-
 #ifdef MPICODE
     if (ThisTask==0) {                                  // Output only on 
                                                         //  proccess 0
@@ -1367,6 +1326,7 @@ local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int se
     T = gsl_rng_default;
     gd->r = gsl_rng_alloc (T);
     gsl_rng_set(gd->r, seed);
+    r_gsl = gd->r;
     gd->bytes_tot += (1)*sizeof(gsl_rng_type);
 #else
     saveidum=idum;
@@ -1380,8 +1340,6 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd, struct  global_d
 {
     // Free allocated memory in reverse order as were allocated
     INTEGER bytes_tot_local=0;
-    
-    verb_print_debug(1, "\nAqui voy (4.1): %d\n", cmd->sizeHistN);
     
     gd->histN = dvector(1,cmd->sizeHistN);
     gd->histCF = dvector(1,cmd->sizeHistN);

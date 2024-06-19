@@ -86,8 +86,11 @@ global int searchcalc_normal_3pcf_direct_omp(struct cmdline_data* cmd,
 
 //B Init:
     search_init_gd_hist(cmd, gd);
+
+    int mm, ll;
+
     if (cmd->computeTPCF) {
-        int mm, ll;
+//        int mm, ll;
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
             gd->histNNN[nn] = 0.0;
             for (mm = 1; mm <= cmd->sizeHistN; mm++)
@@ -187,7 +190,7 @@ global int searchcalc_normal_3pcf_direct_omp(struct cmdline_data* cmd,
 
 //B Computation of tpcf:
     // Make version not using GSL
-#ifdef TPCF
+#ifdef USEGSL
     if (cmd->computeTPCF) {
         int i;
         double data[cmd->sizeHistTheta];
@@ -210,6 +213,8 @@ global int searchcalc_normal_3pcf_direct_omp(struct cmdline_data* cmd,
         
         gsl_fft_real_wavetable_free (real);
     }
+#else
+// Include here the version without GSL...
 #endif
 //E
 

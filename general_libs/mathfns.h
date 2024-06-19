@@ -3,6 +3,7 @@
 #define _mathfns_h
 
 #include <math.h>
+#include "globaldefs.h"
 
 #if defined(MIXEDPREC) || defined(DOUBLEPREC)
 #define rsqrt    sqrt
@@ -67,18 +68,7 @@
 
 real rsqr(real);
 real rqbe(real);
-/* 
-Las siguientes dos funciones causan el warning de definici'on
-multiple. Parece que ya estan incluidas en las librerias del
-sistema.
-*/
 
-/* No estan incluidas en VEGA	*/
-
-/*
-real rlog2(real);
-real rexp2(real);
-*/
 real rdex(real);
 
 #if defined(SINGLEPREC)
@@ -88,7 +78,6 @@ float rcbrt(float);
 void xsrandom(long);
 double xrandom(double, double);
 double grandom(double, double);
-
 
 #if defined(MIXEDPREC)
 #define pickshell mpickshell
@@ -108,14 +97,9 @@ double grandom(double, double);
 #define pickbox   fpickbox
 #endif
 
-
 void pickshell(real *, int, real);
 void pickball(real *, int, real);
 void pickbox(real *, int, real);
-
-/*
-real Heaveside(real);
-*/
 
 int nint(real);
 

@@ -32,12 +32,6 @@ PTOPIVOTROTATIONON = 0
 
 OPT2ADD =
 
-# This is only if you have balls module. If not set it to 0
-#BALLS = 1
-#ifeq ($(BALLS),1)
-#include ./addons/balls_omp/Makefile_settings_balls_omp
-#endif
-
 #
 # Machine definitions. Edit this file according to your needs
 MACHINES_DIR = ./

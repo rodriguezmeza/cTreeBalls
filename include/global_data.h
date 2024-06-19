@@ -33,12 +33,6 @@ struct global_data{
 	char mode[2];
 
     int searchmethod_int;
-
-//B Settings of the code
-//    short dimension;                                // Set dimension of the run
-//    bool tpcfon;                                    // Set 3pcf computation on
-//E
-
 //B Tree
     INTEGER ncell;
     int tdepth;
@@ -77,7 +71,6 @@ struct global_data{
 
     int infilefmt_int;
 
-//#ifndef NOGSL
 #ifdef USEGSL
     gsl_rng * r;
 #endif
@@ -124,10 +117,8 @@ struct global_data{
     real deltaR;
     real deltaRmin;
     real deltaRmax;
-//#ifdef LOGHIST
     real *deltaRV;
     real *ddeltaRV;
-//#endif
 
     real rrRange;
     real deltaTheta;

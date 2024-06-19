@@ -114,7 +114,8 @@ local int model_string_to_int(struct  cmdline_data* cmd, struct  global_data* gd
 
 // If we change seed or the list of randoms, there will be changes in
 //  the configurations of points... and results. That is way line 123 below.
-local int testdata_sc_random(struct  cmdline_data* cmd, struct  global_data* gd)
+local int testdata_sc_random(struct  cmdline_data* cmd,
+                             struct  global_data* gd)
 {
     bodyptr p;
     real Ekin;
@@ -137,7 +138,7 @@ local int testdata_sc_random(struct  cmdline_data* cmd, struct  global_data* gd)
         Weight(p) = weight;
         DO_COORD(k) {
             Pos(p)[k]    = xrandom(0.0, gd->Box[k]); // Box lower edge is (0,0,0)
-//            Pos(p)[k]    = xrandom(-0.5*gd->Box[k], 0.5*gd->Box[k]);    
+//            Pos(p)[k]    = xrandom(-0.5*gd->Box[k], 0.5*gd->Box[k]);
                                                     // Box center is (0,0,0)
         }
 		DO_COORD(k)
@@ -231,7 +232,8 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
 }
 
 #if defined(THREEDIM)
-local int testdata_unit_sphere_random(struct  cmdline_data* cmd, struct  global_data* gd)
+local int testdata_unit_sphere_random(struct  cmdline_data* cmd, 
+                                      struct  global_data* gd)
 {
     bodyptr p;
     real tweight;

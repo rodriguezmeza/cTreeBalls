@@ -558,7 +558,8 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
     return _SUCCESS_;
 }
 
-local int Takahasi_region_selection(struct cmdline_data* cmd, struct  global_data* gd,
+local int Takahasi_region_selection(struct cmdline_data* cmd, 
+                                    struct  global_data* gd,
                                     int nside, int npix,
             float *conv, float *shear1, float *shear2, float *rotat, int ifile)
 {
@@ -587,8 +588,13 @@ local int Takahasi_region_selection(struct cmdline_data* cmd, struct  global_dat
     real rphi, rtheta;
 //B Change selection to random or fix, given by thetaL, phiL, thetaR, phiR
     if (scanopt(cmd->options, "random-point")) {
+//#ifdef USEGSL
+//        rphi    = 2.0 * PI * xrandom_gsl(0.0, 1.0, gd);
+//        rtheta    = racos(1.0 - 2.0 * xrandom_gsl(0.0, 1.0, gd));
+//#else
         rphi    = 2.0 * PI * xrandom(0.0, 1.0);
         rtheta    = racos(1.0 - 2.0 * xrandom(0.0, 1.0));
+//#endif
         verb_print(cmd->verbose,
                    "\n\tinputdata_takahasi: random theta and phi = %f %f\n",rtheta, rphi);
     } else {

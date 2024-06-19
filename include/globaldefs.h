@@ -82,7 +82,10 @@
 
 #include "datastruc_defs.h"
 
-#ifndef USEGSL
+#ifdef USEGSL
+//global long idum;                // seed for random generators
+global gsl_rng * r_gsl;                // seed for random generators
+#else
 global long idum;                // seed for random generators
 #endif
 

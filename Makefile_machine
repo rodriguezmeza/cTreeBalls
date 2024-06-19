@@ -244,23 +244,6 @@ endif
 #
 #E
 
-#
-#B CLASSLIB section
-# Use 0 to get rid off all calls to class_lib routines:
-#CLASSLIB_ON = 1
-
-#ifeq ($(CLASSLIB_ON),1)
-#CLASSLIB = addons/class_lib
-#vpath %.c $(CLASSLIB)
-#OPT2 += -DCLASSLIB
-##CCFLAG += -DCLASSLIB
-##LDFLAGS += -DCLASSLIB
-#INCLUDES += -I../$(CLASSLIB)
-#EXTERNAL += common.o input.o parser.o
-#endif
-##
-#E
-
 
 #---------------------------------------------
 # BEGIN GSL, FFTW, MPI DEFINITIONS (if needed)

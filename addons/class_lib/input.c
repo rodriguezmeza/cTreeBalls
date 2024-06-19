@@ -160,16 +160,10 @@ int input_read_from_file(struct cmdline_data *cmd, struct file_content * pfc,
 
     int input_verbose = 0;
 
-    verb_print_debug(1, "\ninput_read_from_file: Aqui voy (0)\n");
-
     class_read_int("verbose",input_verbose);
     verb_print(input_verbose, "Reading input parameters...\n");
 
-    verb_print_debug(1, "\nAqui voy (1): %g\n", cmd->theta);
-
     class_call(input_read_parameters(cmd, pfc, errmsg),errmsg,errmsg);
-
-    verb_print_debug(1, "\nAqui voy (2): %g %s\n", cmd->theta,cmd->rootDir);
 
   return _SUCCESS_;
 }

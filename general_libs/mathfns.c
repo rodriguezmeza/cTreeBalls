@@ -1,12 +1,9 @@
 
-// STATIC problem: gcc version 11
 #include "globaldefs.h"
 
 #include <math.h>
-//#include "machines.h"
 #include "stdinc.h"
 #include "mathfns.h"
-//#include "numrec.h"
 #include "vectdefs.h"
 
 #if defined(MATRIX) || defined(LINUX) || defined(PC169) || defined(LAJAURIA)
@@ -25,28 +22,6 @@ real rqbe(real x)
 {
     return (x * x * x);
 }
-
-/* 
-Las siguientes dos funciones causan el warning de definici'on
-multiple. Parece que ya estan incluidas en las librerias del
-sistema.
-*/
-
-/* No estan incluidas en VEGA	*/
-
-/*
-real rlog2(real x)
-{
-    return (rlog(x) / M_LN2);
-}
-*/
-
-/*
-real rexp2(real x)
-{
-    return (rexp(M_LN2 * x));
-}
-*/
 
 real rdex(real x)
 {
@@ -70,33 +45,30 @@ void xsrandom(long idum)
 }
 #endif
 
-//#include <stdio.h>
-//#include <gsl/gsl_rng.h>
-
+#ifdef USEGSL
 double xrandom(double xl, double xh)
 {
-//    return (xl + (xh - xl) * ((double) random()) / 2147483647.0);	// use srandom(seed) to init
+    printf("gd.r = %g\n", *r_gsl);
+    double ran2 = gsl_rng_uniform (r_gsl);
+    return ( xl + (xh - xl) * ( ran2 ) );
+
+}
+#else
+double xrandom(double xl, double xh)
+{
+//    return (xl + (xh - xl) * ((double) random()) / 2147483647.0);    // use srandom(seed) to init
 //    return ( xl + (xh - xl) * ((double) rand()) / ((double)(RAND_MAX+1)) );
 //    return ( xl + (xh - xl) * ((double) ran0(&idum)) );
 //    return ( xl + (xh - xl) * ((double) ran1(&idum)) );
 
 //    return ( xl + (xh - xl) * ((double) ran2(&idum)) );
 //#ifndef NOGSL
-#ifdef USEGSL
-//B With GSL random uniform generator
-//    gsl_rng * r;
-    double ran2 = gsl_rng_uniform (gd.r);
-    return ( xl + (xh - xl) * ( ran2 ) );
-//E
-#else
 //    return (xl + (xh - xl) * ((double) random()) / 2147483647.0);
     return ( xl + (xh - xl) * ((double) ran2(&idum)) );
-#endif
-
 //    return ( xl + (xh - xl) * ((double) ran3(&idum)) );
 //    return ( xl + (xh - xl) * ((double) ran4(&idum)) );
 }
-
+#endif
 
 double grandom(double mean, double sdev)
 {
@@ -109,7 +81,6 @@ double grandom(double mean, double sdev)
     } while (s >= 1.0);
     return (mean + sdev * v1 * sqrt(-2.0 * log(s) / s));
 }
-
 
 void pickshell(real vec[], int ndim, real rad)
 {
@@ -128,7 +99,6 @@ void pickshell(real vec[], int ndim, real rad)
         vec[i] = vec[i] * rscale;
 }
 
-
 void pickball(real vec[], int ndim, real rad) 
 {
     real rsq;
@@ -144,7 +114,6 @@ void pickball(real vec[], int ndim, real rad)
     for (i = 0; i < ndim; i++)
         vec[i] = vec[i] * rad;
 }
-
 
 void pickbox(real vec[], int ndim, real size) 
 {
@@ -184,13 +153,6 @@ void VRand(vector p)
 }
 
 #endif
-
-/*
-real Heaveside(real x)
-{
-   return (x<0.) ? 0.0 : 1.0;
-}
-*/
 
 // Entero mas cercano (Aumentar el rango de enteros mas que 15 digitos)
 
@@ -393,7 +355,6 @@ double bessi0(real x)
         return (u * exp(ABS(x)) / sqrt(ABS(x)));
     }
 }
-
 
 // BESSI1: modified Bessel function I1(x). 
 
@@ -608,7 +569,6 @@ double Chebyshev(int n, double x)
     
     return Tnp1;
 }
-
 
 void int_piksrt(int n, int arr[])    // Ordena un arreglo de enteros
 {                                    // de menor a mayor.
