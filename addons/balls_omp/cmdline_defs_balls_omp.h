@@ -20,7 +20,7 @@
 //
     "scanLevel=6",                     ";Scan level to start the search (look at tdepth value, will be the maximum for this parameter)", ":scl",
 // Root nodes:
-    "scanLevelRoot=3",                 ";Scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter)", ":sclroot",
+    "scanLevelRoot=0",                 ";Scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter)", ":sclroot",
     "scanLevelMin=-0",                 ";Scan level of size cells to stop the search. Integer negative values (look at tdepth value, will be tdepth-1+scanLevelMin+1)", ":sclmin",
     "ntosave=1000",                     ";Number of found bodies to save; use in combination with 'bodyfound', balls4' method", ":ntsav",
 //    "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood", ":rsm",

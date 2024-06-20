@@ -159,6 +159,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     class_call_cballs(startrun_Common(cmd, gd), errmsg, errmsg);
 
 #ifdef GETPARAM
+    if (!strnull(cmd->paramfile))
+        PrintParameterFile(cmd, cmd->paramfile);
 #else
     PrintParameterFile(cmd, cmd->ParameterFile);
 #endif

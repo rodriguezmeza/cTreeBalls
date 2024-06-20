@@ -1,0 +1,21 @@
+#
+# command line version:
+# 
+# time cballs search=direct-simple-sincos in=./scripts/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary options=compute-HistN,and-CF,out-m-HistZeta rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20
+#
+searchMethod                       = direct-simple-sincos
+options                            = compute-HistN,and-CF,out-m-HistZeta
+infile                             = ./scripts/Abraham/kappa_nres12_zs9NS256r000.bin
+infileformat                       = binary
+iCatalogs                          = 1
+rootDir                            = Output
+# This values are in such a way to have a search range of 8 arcmin to 200 arcmin:
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+mChebyshev                         = 8
+stepState                          = 1000
+verbose                            = 2
+verbose_log                        = 2
+script                             = "python plot2pcf.py"
+

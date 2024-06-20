@@ -24,9 +24,12 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
 local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
                              string filename, int);
 
-local int outputdata(struct cmdline_data* cmd, struct  global_data* gd);
-local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd);
-local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd);
+local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
+                     bodyptr bodytab, INTEGER nbody);
+local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
+                         bodyptr bodytab, INTEGER nbody);
+local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
+                         bodyptr bodytab, INTEGER nbody);
 
 #ifdef ADDONS
 #include "tpcf_io_include_01.h"
@@ -1147,14 +1150,15 @@ int StartOutput(struct cmdline_data *cmd)
     return _SUCCESS_;
 }
 
-int output(struct cmdline_data* cmd, struct  global_data* gd)
+int output(struct cmdline_data* cmd, struct  global_data* gd,
+           bodyptr *btable, INTEGER *nbody, int ifile)
 {
     double cpustart = CPUTIME;
 #ifdef MPICODE
     if (ThisTask==0) {
 #endif
     if (! strnull(cmd->outfile)) {
-        outputdata(cmd, gd);
+        outputdata(cmd, gd, btable[ifile], nbody[ifile]);
 
 #ifdef ADDONS
 #include "tpcf_io_include_05.h"
@@ -1169,27 +1173,29 @@ int output(struct cmdline_data* cmd, struct  global_data* gd)
     return _SUCCESS_;
 }
 
-local int outputdata(struct cmdline_data* cmd, struct  global_data* gd)
+local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
+                     bodyptr btable, INTEGER nbody)
 {
     switch(outfilefmt_int) {
         case OUTCOLUMNS:
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
-            outputdata_ascii(cmd, gd); break;
+            outputdata_ascii(cmd, gd, btable, nbody); break;
         case OUTCOLUMNSBIN:
-            verb_print(cmd->verbose, "\n\tcolumns-bin format output\n");
-            outputdata_bin(cmd, gd); break;
+            verb_print(cmd->verbose, "\n\tbinary format output\n");
+            outputdata_bin(cmd, gd, btable, nbody); break;
         case OUTNULL:
-            verb_print(cmd->verbose, "\n\tcolumns-bin format output\n");
-            outputdata_ascii(cmd, gd); break;
+            verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
+            outputdata_ascii(cmd, gd, btable, nbody); break;
         default:
             verb_print(cmd->verbose, "\n\toutput: Unknown output format...\n\tprinting in default format (columns-ascii)...\n");
-                outputdata_ascii(cmd, gd); break;
+                outputdata_ascii(cmd, gd, btable, nbody); break;
     }
 
     return _SUCCESS_;
 }
 
-local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd)
+local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
+                             bodyptr bodytab, INTEGER nbody)
 {
     char namebuf[256];
     stream outstr;
@@ -1221,7 +1227,8 @@ local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd)
     return _SUCCESS_;
 }
 
-local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd)
+local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
+                         bodyptr bodytab, INTEGER nbody)
 {
     char namebuf[256];
     stream outstr;
@@ -1229,16 +1236,16 @@ local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd)
 
     sprintf(namebuf, gd->fpfnameOutputFileName);
     outstr = stropen(namebuf, "w!");
-    out_int_bin_long(outstr, cmd->nbody);
+    out_int_bin_long(outstr, nbody);
     out_int_bin(outstr, NDIM);
     out_real_bin(outstr, gd->Box[0]);
     out_real_bin(outstr, gd->Box[1]);
 #if NDIM == 3
     out_real_bin(outstr, gd->Box[2]);
 #endif
-    DO_BODY(p, bodytab, bodytab+cmd->nbody)
+    DO_BODY(p, bodytab, bodytab+nbody)
         out_vector_bin(outstr, Pos(p));
-    DO_BODY(p, bodytab, bodytab+cmd->nbody)
+    DO_BODY(p, bodytab, bodytab+nbody)
         out_real_bin(outstr, Kappa(p));
     fclose(outstr);
     verb_print(cmd->verbose, "\tdata output to file %s\n", namebuf);

@@ -172,9 +172,10 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
         maketree(cmd, gd, bodytab, cmd->nbody, 0);
     }
 
+    int ifile=0;
     if (scanopt(cmd->options, "stop")) {
         if (!strnull(cmd->outfile))
-            output(cmd, gd);
+            output(cmd, gd, bodytable, gd->nbodyTable, ifile);
         verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
         exit(1);
     }
@@ -213,8 +214,6 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
                    CPUTIME - cpustart);
     }
 //E
-
-    verb_print_debug(1, "\nAqui voy (8): %g %d\n", cmd->theta, cmd->sizeHistN);
 
     return _SUCCESS_;
 }

@@ -33,6 +33,15 @@ int input_find_file(char *fname,
   input_file[0]='\0';
   precision_file[0]='\0';
 
+    stream outstr;
+    if (strnull(fname)) {
+        verb_print(1, "If you intend to use a parameter file call with <ParameterFileName>\n");
+        return _FAILURE_;
+    } else {
+        outstr = stropen(fname, "r");
+        fclose(outstr);
+    }
+
     strcpy(input_file,fname);
 
     if (!strnull(fname)) {
@@ -618,7 +627,6 @@ int input_default_params(struct cmdline_data *cmd)
 
 #ifdef ADDONS
 #ifdef BALLS
-//#include "startrun_include_02.h"
         cmd->scanLevel = 6;
         cmd->scanLevelRoot = 3;
         cmd->scanLevelMin = "-0";

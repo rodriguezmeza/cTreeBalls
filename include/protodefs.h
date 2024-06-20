@@ -12,7 +12,8 @@
 #ifndef _protodefs_h
 #define _protodefs_h
 
-int output(struct cmdline_data* cmd, struct  global_data* gd);
+int output(struct cmdline_data* cmd, struct  global_data* gd,
+           bodyptr *btable, INTEGER *nbody, int ifile);
 
 int MainLoop(struct cmdline_data* cmd, struct  global_data* gd);
 int StartRun(struct cmdline_data* cmd, struct  global_data* gd,

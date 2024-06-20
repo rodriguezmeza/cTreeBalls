@@ -45,9 +45,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 //
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
 //
-//#ifdef TPCF
     "mChebyshev=8",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
-//#endif
     "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood", ":rsm",
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
