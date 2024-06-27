@@ -24,9 +24,9 @@ Dependencies: cBalls needs gsl version 2.7.1 installed in your system. Go to web
 
 Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make`). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: `-O4 -ffast-math`) and of the OpenMP flag (default: `-fopenmp`; this flag is facultative, you are free to compile without OpenMP if you don't want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with `-fopenmp`). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
 
-To check that the code runs, you are in `cTreeBalls` directory, type:
+To check that the code runs, if you are in `cTreeBalls` directory, type:
 
-    make clean; make
+    make clean; make all
     cd tests
     ../cballs
 
@@ -59,13 +59,9 @@ cBalls can be configured by switching on/off several options. Configuration file
 
 | Option         | Description                                                                                                                                                   |
 |:--------------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `LOGHISTON`           | `= 1` set log scale. Set it `= 0` to have radial bins in normal scale                                                                                                                                           |
-| `NLOGBINPD`        | `= 5` set the number of bins per decade. Not active when `LOGHISTON = 0`                                                                                                                          |
-| `TPCFON`       | `= 1` switch on computation of 3-point correlation function. When `= 0` only 2pcf is computed                                                                                                                      |
 | `DEFDIMENSION`       | `= 3` select dimension of the run: 2 or 3                                                                                                                     |
 | `USEGSL`       | `= 1` switch on computation of 3-point correlation function                                                                                                                      |
 | `GSLINTERNAL`     | `= 1` for enabling OpenMP parallelism<br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
-| `PERIODICON`     | `= 1` for enabling periodic boundary condition                                                                                                                              |
 | `OPENMPMACHINE`     | `= 1` for enabling OpenMP parallelism<br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
 | `SINGLEPON`    | `= 0` for disabling single precision                                                                                                                             |
 | `LONGINTON`    | `= 1` for enabling long integers                                                                                                                             |
@@ -86,9 +82,18 @@ See also the man page as explained above.
 
 ## Python
 
-Under development python cballs for importing under python codes or
-Jupyter notebooks. 
+To install cBalls python module (cballys) go to directory 'python' and execute:
 
+    python setup.py build
+    python setup.py install --user
+
+Note: make sure you create cBalls library:
+
+    make clean; make all
+
+To test it go to directory 'tests' and run:
+
+    python test_cython_balls.py
 
 
 ## Plotting utilities
@@ -97,9 +102,12 @@ Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are avai
 
 https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks
 
+Other python scripts are in directory 'tests/scripts'
+
+
 ## License
 
-**cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE). If you use this program in research work that results in publications, please cite the following paper:
+**cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE.txt). If you use this program in research work that results in publications, please cite the following paper:
 
 Mario A. Rodriguez-Meza et al. 202X, [arXiv:xxxx.xxxxx](https://ui.adsabs.harvard.edu/abs/202XarXivxxxxxxxxxX/abstract)
 
@@ -111,4 +119,5 @@ cBalls use/is based on the following codes or projects:
 -   [CUTE](https://github.com/damonge/CUTE)
 -   [Numerical recipies](https://numerical.recipes/)
 -   [GSL](https://www.gnu.org/software/gsl/)
+-   [CLASS](https://github.com/lesgourg/class_public)
 
