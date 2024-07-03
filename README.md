@@ -60,8 +60,8 @@ cBalls can be configured by switching on/off several options. Configuration file
 | Option         | Description                                                                                                                                                   |
 |:--------------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `DEFDIMENSION`       | `= 3` select dimension of the run: 2 or 3                                                                                                                     |
-| `USEGSL`       | `= 1` switch on computation of 3-point correlation function                                                                                                                      |
-| `GSLINTERNAL`     | `= 1` for enabling OpenMP parallelism<br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
+| `USEGSL`       | `= 1` switch on use of GSL routines                                                                                                                      |
+| `GSLINTERNAL`     | `= 1` for enabling GSL internal sources <br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
 | `OPENMPMACHINE`     | `= 1` for enabling OpenMP parallelism<br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
 | `SINGLEPON`    | `= 0` for disabling single precision                                                                                                                             |
 | `LONGINTON`    | `= 1` for enabling long integers                                                                                                                             |
