@@ -53,7 +53,7 @@ cdef class cballs:
     """
     cballs wrapping, creates the glue between C and python
 
-    The actual cballs wrapping, the only class we will call from MontePython
+    The actual cballs wrapping, the only class we will call from Python
     (indeed the only one we will import, with the command:
     from cballys import cballs
 
@@ -63,7 +63,7 @@ cdef class cballs:
     cdef file_content fc
 
     cdef int computed # Flag to see if cballys has already computed with the given pars
-    cdef int allocated # Flag to see if classy structs are allocated already
+    cdef int allocated # Flag to see if cballys structs are allocated already
     cdef object _pars # Dictionary of the parameters
     cdef object ncp   # Keeps track of the structures initialized, in view of cleaning.
 
@@ -172,7 +172,7 @@ cdef class cballs:
 
         .. warning::
 
-            the ordering of modules is obviously dependent on CLASS module order
+            the ordering of modules is obviously dependent on cBalls module order
             in the main.c file. This has to be updated in case of a change to
             this file.
 
