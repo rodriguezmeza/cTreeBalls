@@ -23,7 +23,7 @@ def viewdictitems(d):
 
 from ccballys cimport *
 
-class CosmoError(Exception):
+class cBallsError(Exception):
     def __init__(self, message=""):
         self.message = message.decode() if isinstance(message,bytes) else message
 
@@ -31,7 +31,7 @@ class CosmoError(Exception):
         return '\n\nError in cballs: ' + self.message
 
 
-class CosmoSevereError(CosmoError):
+class cBallsSevereError(cBallsError):
     """
     Raised when cballs failed to understand one or more input parameters.
 
@@ -41,7 +41,7 @@ class CosmoSevereError(CosmoError):
     """
     pass
 
-class CosmoComputationError(CosmoError):
+class cBallsComputationError(cBallsError):
     """
     Raised when cballs could not compute the computation at this point.
 
@@ -115,7 +115,7 @@ cdef class cballs:
         if len(pars)==1:
             self._pars.update(dict(pars[0]))
         elif len(pars)!=0:
-            raise CosmoSevereError("bad call")
+            raise cBallsSevereError("bad call")
         self._pars.update(kars)
         if viewdictitems(self._pars) <= viewdictitems(oldpars):
           return # Don't change the computed states, if the new dict was already contained in the previous dict
@@ -260,7 +260,7 @@ cdef class cballs:
 
         if "input" in level:
             if input_read_from_file(&self.cmd, &self.fc, errmsg) == _FAILURE_:
-                raise CosmoSevereError(errmsg)
+                raise cBallsSevereError(errmsg)
             self.ncp.add("input")
             problem_flag = False
             problematic_parameters = []
@@ -269,32 +269,32 @@ cdef class cballs:
                     problem_flag = True
                     problematic_parameters.append(self.fc.name[i].decode())
             if problem_flag:
-                raise CosmoSevereError(
+                raise cBallsSevereError(
                     "cballs did not read input parameter(s): %s\n" % ', '.join(
                     problematic_parameters))
 
         if "startrun_Common" in level:
             if startrun_Common(&(self.cmd), &(self.gd)) == _FAILURE_:
                 self.struct_cleanup()
-                raise CosmoComputationError(self.op.error_message)
+                raise cBallsComputationError(self.op.error_message)
             self.ncp.add("startrun_Common")
 
         if "PrintParameterFile" in level:
             if PrintParameterFile(&(self.cmd), "cballys_param.txt") == _FAILURE_:
                 self.struct_cleanup()
-                raise CosmoComputationError(self.op.error_message)
+                raise cBallsComputationError(self.op.error_message)
             self.ncp.add("PrintParameterFile")
 
         if "set_number_threads" in level:
             if set_number_threads(&(self.cmd)) == _FAILURE_:
                 self.struct_cleanup()
-                raise CosmoComputationError(self.op.error_message)
+                raise cBallsComputationError(self.op.error_message)
             self.ncp.add("set_number_threads")
 
         if "MainLoop" in level:
             if MainLoop(&(self.cmd), &(self.gd)) == _FAILURE_:
                 self.struct_cleanup()
-                raise CosmoComputationError(self.op.error_message)
+                raise cBallsComputationError(self.op.error_message)
             self.ncp.add("MainLoop")
 
 
