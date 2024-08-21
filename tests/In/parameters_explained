@@ -1,0 +1,103 @@
+#
+# -------------------------
+# To test tree-omp-sincos searching method
+# -------------------------
+# In Makefile_settings set:
+#
+# Select dimension of the run: 2, 3
+# 	DEFDIMENSION = 3
+#
+# See other settings in Makefile_settings file.
+# Then in terminal do "make clean; make"
+#
+# To test performance 3pcf vs 2pcf only set computeTPCF to true/false below.
+#
+# -------------------------
+# -------------------------
+#
+# Set parameters to values according to your needs.
+# 	It is not necessary to give all of them explicitly. You may set only the ones
+# 	need to be set the others will have their defaults values that are ok with you.
+#
+searchMethod                       = tree-omp-sincos
+#
+theta                              = 1
+nsmooth                            = 1
+rsmooth
+#
+options                            = compute-HistN,out-m-HistZeta	# You may add pre-/post-processing and 
+								# invoque the appropriate script 
+								# in the command line after parameters file name
+# 
+# Give the name of the point catalog to analyze and its format.
+infile                             = ./Takahasi/full_sky_whole_XYZK__zs9_r000_nside512.bin
+infileformat                       = binary		# can be columns-ascii (default value), binary or takahasi
+iCatalogs                          = 1		# This is the tag associated to catalog giving in above.
+#
+rootDir                            = Output
+#
+# Set of parameters to define histogram bins
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+#
+# Give the number of Chebyshev multipoles to compute. Is active when is cBalls has been given computeTPCF = true
+mChebyshev                         = 7		# mChebyshev + 1 must be a power of 2
+stepState                          = 1000		# gives the frequency to save the the number of pivot computed. Useful to see the state of the run
+#
+verbose                            = 2
+verbose_log                        = 2
+#
+# Give the number of threads to use if cBalls has been configured with OPENMPMACHINE = 1
+numberThreads                      = 16
+#
+#
+# -------------------------
+# Nothing to change below
+# -------------------------
+#
+# You may save the input catalog in a different format
+outfile                            
+outfileformat                      = columns-ascii
+#
+# To compute 3pcf in harmonic base set to true. Else false
+computeTPCF                         = true
+# For histograms in logscale version set to true. Else false
+useLogHist                          = true
+# And set the number of bins per decade:
+logHistBinsPD                       = 5
+#
+# To use periodic boundary conditions set it true.
+usePeriodic                         = false
+#
+# Set of 4 parameters to set a region on the unit sphere.
+#	These parameters act only when reading a Takahasi simulation.
+thetaL                             = 1.27993
+thetaR                             = 1.86166
+phiL                               = 1.28011
+phiR                               = 1.86187
+#
+# Set of parameters to define names of the histograms output files
+histNFileName                      = histNN
+histXi2pcfFileName                 = histXi2pcf
+histZetaMFileName                  = histZetaM
+mhistZetaFileName                  = mhistZeta
+suffixOutFiles                     
+#
+# Python/shell/C script to use as a pre/post processing
+script                             = ""
+# For example, script = "python plot2pcf.py" to plot 2pcf at the end of computation.
+#
+# Set of parameters to define a test model, computed inside the code.
+# They will be useful to compute random catalogs to build estimators.
+testmodel                          = simple-cubic-random
+nbody                              = 16384
+lengthBox                          = 10000
+# To init random number generator
+seed                               = 123
+#
+# For the above test model use the following values for above parameters: 
+# sizeHistN			40
+# rangeN				100.0
+
+

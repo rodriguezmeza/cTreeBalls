@@ -1,0 +1,45 @@
+#
+# -------------------------
+# To test tree-omp-sincos searching method
+# -------------------------
+#
+#
+# cd tests/test_cute_box
+# ../../cballs parameters_to-test_data_txt script="python plotCF.py"
+# 
+#
+# -------------------------
+# -------------------------
+#
+searchMethod                       = tree-omp-sincos
+#
+options =                            compute-HistN,and-CF
+#
+infile =                             ./data.txt
+infileformat =                      multi-columns-ascii
+#infile =                             ./data_format_cballs.txt
+#infileformat                       columns-ascii-pos
+iCatalogs     =                     1
+columns = 1,2,3
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+rangeN =                             100
+# rminHist > 0 when LOGHISTON is set to 1
+rminHist =                          0.1
+sizeHistN =                         30
+#
+stepState =                          1000
+#
+verbose =                           2
+verbose_log =                       2
+numberThreads =                      16
+#
+computeTPCF = false
+setLogHist = false
+usePeriodic = true
+#
+
+
+
