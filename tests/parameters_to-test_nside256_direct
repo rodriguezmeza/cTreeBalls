@@ -1,0 +1,18 @@
+#
+# command line version:
+# 
+# time cballs search=direct-simple-sincos in=./scripts/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20
+#
+# Run in approximately 70:00 minutes 
+#
+searchMethod                       = direct-simple-sincos
+infile                             = ./scripts/Abraham/kappa_nres12_zs9NS256r000.bin
+infileformat                       = binary
+# This values are in such a way to have a search range of 8 arcmin to 200 arcmin:
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+mChebyshev                         = 8
+#
+options                             = compute-HistN,out-m-HistZeta
+

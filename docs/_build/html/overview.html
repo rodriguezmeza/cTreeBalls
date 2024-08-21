@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overview &mdash; cTreeBalls 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="installation.html" />
+    <link rel="prev" title="cTreeBalls documentation" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cTreeBalls
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#compiling-and-getting-started">Compiling and getting started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#python">Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#plotting-utilities">Plotting utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#license">License</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#acknowledgements">Acknowledgements</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="params.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="input_files.html">Input files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pre_post_process.html">Pre/Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="addons.html">AddOn’s</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python.html">Python interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="handson.html">Hands on</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2pcf.html">2-point correlation functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3pcf.html">3-point correlation functions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cTreeBalls</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Overview</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/overview.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="overview">
+<h1>Overview<a class="headerlink" href="#overview" title="Permalink to this heading"></a></h1>
+<p>cTreeBalls: Correlation functions computation with Tree/Balls methods</p>
+<p>Author: Mario A. Rodriguez-Meza</p>
+<p>For download and information, see <a class="reference external" href="https://github.com/rodriguezmeza/cTreeBalls">https://github.com/rodriguezmeza/cTreeBalls</a></p>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this heading"></a></h2>
+<p>Corrlations function computation with Tree/Balls methods (short-name cBalls) is a C code for computing correlation functions using tree and balls methods. So far can compute 2 points correlation function (2pcf) and 3 points correlation function for scalar fields like weak lensing convergence.</p>
+</section>
+<section id="compiling-and-getting-started">
+<h2>Compiling and getting started<a class="headerlink" href="#compiling-and-getting-started" title="Permalink to this heading"></a></h2>
+<p>Download the code by cloning it from <a class="reference external" href="https://github.com/rodriguezmeza/cTreeBalls">https://github.com/rodriguezmeza/cTreeBalls</a>.</p>
+<p>Dependencies: cBalls optionally needs gsl version 2.7.1 installed in your system. Go to its web page <a class="reference external" href="https://www.gnu.org/software/gsl/">GSL</a> for details or ask to your system administrator. Make necessary changes in <code class="docutils literal notranslate"><span class="pre">Makefile_machine</span></code> file and look up for <code class="docutils literal notranslate"><span class="pre">GSL</span></code>. Can be switched off: USEGSL = 0 in <code class="docutils literal notranslate"><span class="pre">Makefile_settings</span></code>.</p>
+<p>Go to the <code class="docutils literal notranslate"><span class="pre">cTreeBalls</span></code> directory (<code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">cTreeBalls</span></code>) and compile (<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">clean;</span> <span class="pre">make</span></code>). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: <code class="docutils literal notranslate"><span class="pre">-O4</span> <span class="pre">-ffast-math</span></code>) and of the OpenMP flag (default: -fopenmp; this flag is facultative, you are free to compile without OpenMP if you don’t want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with <code class="docutils literal notranslate"><span class="pre">-fopenmp</span></code>). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac &gt;= 10.9 despite of the clang incompatibility with OpenMP).</p>
+<p>To check that the code runs, type:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">tests</span>
+<span class="o">../</span><span class="n">cballs</span> <span class="n">parameters_explained</span>
+</pre></div>
+</div>
+<p>The parameters_explained file is a reference input file, containing and explaining the use of all possible input parameters.</p>
+<p>On top of that, if you wish to modify the code, you will find comments directly in the files in the folder <code class="docutils literal notranslate"><span class="pre">addons</span></code>, and the modules you may add must go in this folder.</p>
+<p>For the moment you may consult man page:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">man</span> <span class="o">../</span><span class="n">docs</span><span class="o">/</span><span class="n">cballs</span><span class="o">.</span><span class="n">m</span>
+</pre></div>
+</div>
+<p>or open with a browser the html file: docs/cballs.html</p>
+<p>See more details about parameters needed by cBalls below (<a class="reference internal" href="#parameters"><span class="std std-ref">Parameters</span></a>).</p>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this heading"></a></h2>
+<p>cBalls can be configured by switching on/off several options. Configuration file is <code class="docutils literal notranslate"><span class="pre">Makefile_setting</span></code>.</p>
+</section>
+<section id="parameters">
+<span id="id1"></span><h2>Parameters<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h2>
+<p>The list of available command line parameters can be consulted using the <code class="docutils literal notranslate"><span class="pre">--help</span></code> flag:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">../</span><span class="n">cballs</span> <span class="o">--</span><span class="n">help</span>
+</pre></div>
+</div>
+<p>or its short version:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">../</span><span class="n">cballs</span> <span class="o">-</span><span class="n">h</span>
+</pre></div>
+</div>
+</section>
+<section id="python">
+<h2>Python<a class="headerlink" href="#python" title="Permalink to this heading"></a></h2>
+<p>To install cBalls python module (cballys) go to directory ‘python’ and execute:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">build</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span> <span class="o">--</span><span class="n">user</span>
+</pre></div>
+</div>
+<p>Note: make sure you create cBalls library: in directory cTreeBalls execute:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">clean</span><span class="p">;</span> <span class="n">make</span> <span class="nb">all</span>
+</pre></div>
+</div>
+<p>To test it go to directory tests and ‘run’:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">test_cython_balls</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+</section>
+<section id="plotting-utilities">
+<h2>Plotting utilities<a class="headerlink" href="#plotting-utilities" title="Permalink to this heading"></a></h2>
+<p>Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are available to process cBalls results. They are in the github repository:</p>
+<p><a class="reference external" href="https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks">https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks</a></p>
+<p>or you can find more scripts in <code class="docutils literal notranslate"><span class="pre">tests</span></code> folder.</p>
+</section>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Permalink to this heading"></a></h2>
+<p>cBalls is written by Mario A. Rodriguez-Meza, and is distributed under the <a class="reference external" href="https://github.com/rodriguezmeza/cTreeBalls/blob/main/LICENSE.txt">MIT license</a>. If you use this program in research work that results in publications, please cite the following paper:</p>
+<p>Mario A. Rodriguez-Meza et al. 202X, [arXiv:xxxx.xxxxx](https://ui.adsabs.harvard.edu/abs/202XarXivxxxxxxxxxX/abstract)</p>
+</section>
+<section id="acknowledgements">
+<h2>Acknowledgements<a class="headerlink" href="#acknowledgements" title="Permalink to this heading"></a></h2>
+<p>cBalls use/is based on the following codes or projects:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://home.ifa.hawaii.edu/users/barnes/zeno/index.html">Zeno</a></p></li>
+<li><p><a class="reference external" href="https://wwwmpa.mpa-garching.mpg.de/gadget/">Gadget-2</a></p></li>
+<li><p><a class="reference external" href="https://github.com/damonge/CUTE">CUTE</a></p></li>
+<li><p><a class="reference external" href="https://numerical.recipes/">Numerical recipies</a></p></li>
+<li><p><a class="reference external" href="https://www.gnu.org/software/gsl/">GSL</a></p></li>
+<li><p><a class="reference external" href="https://github.com/lesgourg/class_public">CLASS</a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="cTreeBalls documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Mario A. Rodriguez-Meza.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,35 @@
+#
+# Run it as:
+# cd tests
+#
+# Version parameter file:
+# time ../cballs parameters_to-test_nside512_balls-omp
+#
+# In command line:
+# time cballs options=compute-HistN,out-m-HistZeta rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 stepState=1000 verb=2 verblog=2 nthreads=16 in=./Takahasi/full_sky_whole_XYZK__zs9_r081_nside1024.bin infmt=binary
+#
+# -------------------------
+# -------------------------
+#
+#
+searchMethod =                       balls-omp
+#
+options =                           compute-HistN,out-m-HistZeta
+#
+infile =                            ./Takahasi/full_sky_whole_XYZK__zs9_r000_nside512.bin
+infileformat =                       binary
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+rangeN =                            0.0633205
+rminHist =                           0.00213811
+sizeHistN =                         20
+#
+mChebyshev =                         8
+stepState   =                       1000
+#
+verbose  =                          2
+verbose_log =                        2
+numberThreads =                      16
+#

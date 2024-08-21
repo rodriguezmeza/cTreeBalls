@@ -1,0 +1,129 @@
+
+../cballs_sincos
+LSST/CosmoININ: cballs Code for computing 3pcf, expected: O(N logN)
+	 ...
+Version = 0.1
+
+
+startrun_memoryAllocation: Allocated 0.416412 MByte for histograms storage.
+
+	Input in takahasi format...
+
+Allocated 3072 MByte for pixel storage.
+
+	inputdata_takahasi: total read points = 201326592
+
+	inputdata_takahasi: min and max of theta = 0.000199 3.141393
+	inputdata_takahasi: min and max of phi = 0.000000 6.282994
+
+	inputdata_takahasi: fix theta and phi = 1.570796 1.570988
+
+inputdata_takahasi: Warning! lengthBox is greater than one of the angular ranges...
+using length = PI
+
+	inputdata_takahasi: theta and phi (no-rotation) = 1.570796 1.570988
+	inputdata_takahasi: theta and phi of the center of the selected region = 1.570796 1.570988
+	inputdata_takahasi: radius of the selected region = 0.411359
+	inputdata_takahasi: left and right theta = 1.279928 1.861664
+	inputdata_takahasi: left and right phi = 1.280107 1.861869
+	inputdata_takahasi: theta and phi d_rotation = 0.000000 0.000000
+
+Allocated 27648 MByte for particle (201326592) storage.
+
+	inputdata_takahasi: min and max of x = -0.999843 0.999843
+	inputdata_takahasi: min and max of y = -1.000000 1.000000
+	inputdata_takahasi: min and max of z = -1.000000 1.000000
+
+	inputdata_takahasi: selected read points and nbody: 201326592 201326592
+inputdata_takahasi: average of kappa (201326592 particles) = -2.477898e-08
+
+	inputdata :: reading time = 0.581443
+
+
+Allocated 27648 MByte for particle storage.
+
+	options: all
+
+StartRun: Total allocated 29184.7 MByte storage so far.
+StartRun: elapsed time: 0.595402
+
+
+	evalHist: with normal tree method (sincos-omp)
+
+findRootCenter: Pos(root) = 0.000000
+findRootCenter: Pos(root) = 0.000000
+findRootCenter: Pos(root) = 0.000000
+findRootCenter: len = 2.000000
+findRootCenter: Pos(root) = 0.000000
+findRootCenter: Pos(root) = 0.000000
+findRootCenter: Pos(root) = 0.000000
+findRootCenter: len = 2.000000
+treeload expandbox: rSize = 2.000000
+
+Allocated 890.416 MByte for (116708632 cells) nodetab storage.
+threadtree: number ip of selected cells = 0
+1385452 real node (range of nodes to search: >nc1 && <nc2)
+
+Selected vs NotSelected and total: 0 201326592 201326592
+
+Allocated 1780.83 MByte for (233417264) scan root nodetab storage.
+Found 272 root nodes to scan at level 3.
+0 particles were left out at root level.
+Maximum and minimum cell size: 2.000000e+00 5.421011e-20
+Cell size at scanLevelMin (0): 0.000000e+00
+Allocated 24931.7 MByte for (116708632) cells storage.
+
+maketree : root number of bodies = 201326592
+
+CPU tree time : 1.221968
+evalHistN: Running ... (tree omp-sincos) 
+
+Using 128 threads 
+Going out: CPU time = 10.459877
+
+	printEvalHist: printing normal tree method (omp-sincos)
+
+Printing : to a file fs_zs25_r002_treeompsincos_binario/rbins.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histXi2pcf.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_1.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_2.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_3.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_4.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_5.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_6.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_7.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_8.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_cos_9.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_1.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_2.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_3.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_4.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_5.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_6.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_7.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_8.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sin_9.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_1.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_2.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_3.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_4.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_5.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_6.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_7.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_8.txt ...
+Printing : to a file fs_zs25_r002_treeompsincos_binario/histZetaM_sincos_9.txt ...
+
+rSize 		= 2.000000
+nbbcalc 	= 6336162647086
+nbccalc 	= 4611755341107
+ncccalc 	= 0
+tdepth 		= 66
+ncell 		= 116708632
+cpusearch 	= 1338.864213 (be aware of the number of threads)
+cputotalinout 	= 1.191432
+
+Final CPU time : 12.309894 min.
+Final real time: 32198 min.
+
+4106645.72user 82.05system 8:56:38elapsed 12754%CPU (0avgtext+0avgdata 59771852maxresident)k
+835222inputs+44208outputs (2648major+9372311minor)pagefaults 0swaps

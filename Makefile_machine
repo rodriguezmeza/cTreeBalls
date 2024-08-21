@@ -1,0 +1,267 @@
+# ----- MAKE FILE machine definitions -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+
+MDIR := $(shell pwd)
+WRKDIR = $(MDIR)/build
+
+.base:
+	if ! [ -e $(WRKDIR) ]; then mkdir $(WRKDIR) ; mkdir $(WRKDIR)/lib; fi;
+	touch build/.base
+
+vpath %.c source:general_libs:main
+vpath %.o build
+vpath .base build
+
+#B LINES TO ADAPT TO YOUR PLATFORM
+#
+#--------------------------------------------
+# Set other local options to this code
+# 	INCLUDES :: OPT1
+# 	OTHER OPTIONS :: OPT2
+# Some of this definitions can be set in a particular machine
+#
+OPT1 =
+#
+# This variable is to show settings
+#   and set the corresponding definitions to the compiler
+OPT2 =
+OPT2LIB =
+# The one which will be used by CC is CCFLAG. At some point it gets OPT2 definitions...
+#
+#
+#OPT1    +=  -I ./
+#OPT1    +=  -I ./general_libs
+# Add as many as needed
+#
+#OPT2   +=  -DOPTIONNAME
+# Add as many as needed
+
+#PRECISION = DOUBLEPREC
+
+#
+# your C compiler: Comment/uncomment as convenient
+#
+# GNU c
+CC       = gcc
+# With icc (Intel):
+#CC       = icc
+#
+
+#
+#E LINES TO ADAPT TO YOUR PLATFORM
+
+#
+# Nothing to do below. Almost... may be some compiler options should be changed
+#
+
+
+#
+# Your python interpreter.
+# In order to use Python 3, you can manually
+# substitute python3 to python in the line below, or you can simply
+# add a compilation option on the terminal command line:
+# "PYTHON=python3 make all" (THanks to Marius Millea for pyhton3
+# compatibility)
+PYTHON ?= python
+
+# your optimization flag
+# clang-12: warning: -O4 is equivalent to -O3 [-Wdeprecated]
+#OPTFLAG = -O4 -ffast-math #-march=native
+OPTFLAG = -O3 -ffast-math #-march=native
+#OPTFLAG = -Ofast -ffast-math #-march=native
+#OPTFLAG = -fast
+
+# your openmp flag (comment for compiling without openmp)
+OMPFLAG   = -fopenmp
+#OMPFLAG   = -mp -mp=nonuma -mp=allcores -g
+#OMPFLAG   = -openmp
+
+# all other compilation flags
+CCFLAG = -g -fPIC
+LDFLAG = -g -fPIC
+
+# pass current working directory to the code
+CCFLAG += -D__CTREEBALLSDIR__='"$(MDIR)"'
+
+# where to find include files *.h
+INCLUDES = -I../include
+HEADERFILES = $(wildcard ./include/*.h)
+
+#INCLUDES += $(OPT1)
+
+#
+MLIBS = -lm
+#
+
+# your tool for creating static libraries:
+AR        = ar rv
+
+# automatically add external programs if needed. First, initialize to blank.
+EXTERNAL =
+
+#
+ifeq ($(DEFDIMENSION),2)
+    DIMCODE = -DTWODIMCODE
+    OPT2 += $(DIMCODE)
+else
+    DIMCODE = -DTHREEDIMCODE
+    OPT2 += $(DIMCODE)
+endif
+#
+
+#
+ifeq ($(OPENMPMACHINE),1)
+OMPCODE = -DOPENMPCODE
+OPT2 += $(OMPCODE)
+endif
+#
+
+#
+MANUALCHEBYSHEVON = 1
+#
+ifeq ($(MANUALCHEBYSHEVON),1)
+MANUALCHEBYSHEV = -DMANUALCHEBYSHEV
+OPT2 += $(MANUALCHEBYSHEV)
+endif
+#
+
+# To activate float real set to 1. Else 0
+SINGLEPON = 0
+#
+ifeq ($(SINGLEPON),1)
+SINGLEP = -DSINGLEP
+OPT2 += $(SINGLEP)
+endif
+#
+
+#
+KAPPAAVGON = 1
+#
+ifeq ($(KAPPAAVGON),1)
+KappaAvgON = -DKappaAvgON
+OPT2 += $(KappaAvgON)
+endif
+#
+
+# To activate long integers set to 1. Else 0
+LONGINTON = 1
+#
+ifeq ($(LONGINTON),1)
+LONG = -DLONGINT
+OPT2 += $(LONG)
+endif
+#
+
+#
+#   will be deprecated...
+PTOPIVOTROTATIONON = 0
+ifeq ($(PTOPIVOTROTATIONON),1)
+OPT2 += -DPTOPIVOTROTATION
+endif
+#
+
+#B ADDONS
+# To print/save some useful info to study a process set to 1. Else 0
+#   you must add the programming (to output) lines in the sources...
+#   useful when you try to understand how building/walking a tree works
+STUDYON = 0
+#
+ifeq ($(STUDYON),1)
+STUDY = -DSTUDY
+OPT2 += $(STUDY)
+endif
+#
+# To print some useful info set to 1. Else 0
+#   acts as DIAGNOSTICS flag was intended...
+DEBUGON = 0
+#
+ifeq ($(DEBUGON),1)
+DEBUG = -Wall -DDEBUG
+OPT2 += $(DEBUG)
+endif
+#
+ifeq ($(ADDONSON),1)
+OPT2 += -DADDONS
+# Machine definitions
+include $(MACHINES_DIR)/addons/Makefile_addons
+#
+endif
+#E ADDONS
+
+#
+#B GENERALLIBS section
+# Use 0 to get rid off all calls to general_libs routines:
+GENERALLIBS_ON = 1
+
+ifeq ($(GENERALLIBS_ON),1)
+GENERALLIBS = general_libs
+vpath %.c $(GENERALLIBS)
+INCLUDES += -I../$(GENERALLIBS)
+HEADERFILES += $(wildcard ../general_libs/*.h)
+EXTERNAL += clib.o mathfns.o inout.o mathutil.o numrec.o
+endif
+#
+#E
+
+#
+#B GETPARAM section
+# Use 0  to get rid off all calls to getparam routines:
+GETPARAM_ON = 1
+
+ifeq ($(GETPARAM_ON),1)
+GETPARAM = getparam
+vpath %.c $(GETPARAM)
+OPT2 += -DGETPARAM
+INCLUDES += -I../getparam
+EXTERNAL += getparam.o
+endif
+#
+#E
+
+
+#---------------------------------------------
+# BEGIN GSL DEFINITIONS (if needed)
+#
+
+#
+# Definition to set where GSL are located
+#
+# NagBody dir if needed or adapt it to point
+#     the location of GSL
+NAGBODYDIR = $(HOME)/NagBody_pkg/local
+# In other machines can be:
+#NAGBODYDIR = /opt/local
+#
+
+# -------------------
+#B GSL section
+ifeq ($(USEGSL),1)
+OPT2 += -DUSEGSL
+GSLON = 1
+ifeq ($(GSLON),1)
+ifeq ($(GSLINTERNAL),0)
+# Change these lines to fit your GSL installation
+    GSL_INCL =  -I$(NAGBODYDIR)/gsl/include
+    GSL_LIBS =  -L$(NAGBODYDIR)/gsl/lib -lgsl -lgslcblas
+    CCFLAG += $(GSL_INCL)
+    LDFLAG += $(GSL_LIBS)
+    CCFLAG += -DNOINTERNALGSL
+endif
+ifeq ($(GSLINTERNAL),1)
+include $(MACHINES_DIR)Makefile_gsl
+endif
+endif # ! GSLON
+endif # ! USEGSL
+#E
+# -------------------
+
+#
+# END GSL DEFINITIONS (if needed)
+#--------------------------------------------
+
+CCFLAG += $(OPT2)
+
+%.o: %.c .base $(HEADERFILES)
+	cd $(WRKDIR);$(CC) $(OPTFLAG) $(OMPFLAG) $(CCFLAG) $(INCLUDES) -c ../$< -o $*.o
+

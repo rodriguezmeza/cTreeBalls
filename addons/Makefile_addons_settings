@@ -1,0 +1,30 @@
+# ----- MAKE FILE machine definitions (AddOns settings) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#B Here switch on/off the AddOns´ modules
+
+# BALLSOMP
+# For computing 3pcf using balls method
+BALLSON = 1
+
+# Gadget I/O
+# For computing 3pcf using balls method
+GADGETIOON = 1
+
+# DIRECTMETHOD
+DIRECTMETHODON = 1
+
+# CLASSLIB
+CLASSLIBON = 0
+
+# IOLIB
+# Several I/O routines
+IOLIBON = 1
+
+
+#E
+

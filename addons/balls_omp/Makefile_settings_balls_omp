@@ -1,0 +1,66 @@
+# ----- MAKE FILE DEFINITIONS FOR balls-omp CODE -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 27.04.2023
+#
+#
+# Select one set of settings...
+
+#SEARCHMETHOD = BALLSSINCOS
+#SEARCHMETHOD = BALLS
+
+#
+#
+# Change environment variables below as it is convient to you.
+# Must be commented all lines above
+#
+# Histograms in this module are always in logscale.
+# Set to 1 LOGHISTON in Makefile_settings
+#
+#
+# To activate sincos base under balls
+#   (set TPCFON to 1 in Makefile_settings)
+SINCOSON = 1
+#
+# To check all body in bodytab
+TREENODEALLBODIESON = 1
+#
+# This is for BALLS4 method. Use it instead of TREENODEALLBODIESON
+TREENODEBALLS4ON = 0
+#
+#
+
+
+#
+#B Searching methods section: choose one uncommenting above (top of file) its line
+
+ifeq ($(SEARCHMETHOD), BALLS)
+# cos base
+TREENODEALLBODIESON = 0
+TREENODEBALLS4ON = 0
+SINCOSON = 0
+OPT2ADD += -DBALLSEXEC
+SEARCHMETHODIS = 2balls
+SEARCHMETHODISDEFINED = TRUE
+endif
+
+ifeq ($(SEARCHMETHOD), BALLSSINCOS)
+# sincos base
+TREENODEALLBODIESON = 1
+TREENODEBALLS4ON = 0
+SINCOSON = 1
+OPT2ADD += -DBALLSSINCOSEXEC
+SEARCHMETHODIS = sincos
+SEARCHMETHODISDEFINED = TRUE
+endif
+
+
+#ifndef SEARCHMETHODISDEFINED
+#  $(error ERROR: MODEL is not recognized)
+#endif
+
+#E Searching methods section
+#
+
+
+# Note:  Be careful in the options to set 1 or 0 without further space
+#        or a comment starting with #...
+

@@ -1,0 +1,505 @@
+
+Splitting string "nsmooth" in tokens:
+
+Splitting string "-0" in tokens:
+
+Splitting string "scanLevelMin" in tokens:
+
+Splitting string "rsmooth" in tokens:
+
+Splitting string "iCatalogs" in tokens:
+option: iCatalogs final values: 0
+option: iCatalogs final values: 0
+deltaRV (deltaR=0.073576 logscale):
+ 0 0.00253283
+ 2 0.00300042 0.000467588
+ 3 0.00355433 0.000553909
+ 4 0.00421049 0.000656167
+ 5 0.0049878 0.000777303
+ 6 0.0059086 0.000920801
+ 7 0.00699939 0.00109079
+ 8 0.00829155 0.00129216
+ 9 0.00982226 0.00153071
+ 10 0.0116356 0.0018133
+ 11 0.0137836 0.00214805
+ 12 0.0163282 0.0025446
+ 13 0.0193426 0.00301437
+ 14 0.0229134 0.00357085
+ 15 0.0271435 0.00423007
+ 16 0.0321545 0.00501098
+ 17 0.0380905 0.00593607
+ 18 0.0451225 0.00703193
+ 19 0.0534526 0.0083301
+ 20 0.0633205 0.00986793
+deltaRV min and max: 0.000467588 0.00986793
+
+Rcut, deltaR: 0.0633205 0.0735757
+lbox: 2 2 2
+Box volume = 8.000000e+00
+(V/N)^(1/3): 0.0136497
+
+Unit sphere (Takahasi): (S/N)^(1/2): 0.00199868
+
+Cell size = 1.000000e+00
+Cell size = 5.000000e-01
+Cell size = 2.500000e-01
+Cell size = 1.250000e-01
+Cell size = 6.250000e-02
+Cell size = 3.125000e-02
+Cell size = 1.562500e-02
+Cell size = 7.812500e-03
+Cell size = 3.906250e-03
+Cell size = 1.953125e-03
+Cell size threshold = 10
+
+deltaRadius = 0.0606061
+
+maketree: radius histogram:
+0 1555076
+33 1160
+66 0
+99 272
+132 0
+165 0
+198 0
+231 56
+264 0
+297 0
+330 0
+363 0
+396 0
+429 0
+462 8
+495 0
+528 0
+561 0
+594 0
+627 0
+660 0
+693 0
+726 0
+759 0
+792 0
+825 0
+858 0
+891 0
+924 1
+957 0
+990 0
+1023 0
+1056 0
+
+
+maketree: Nb histogram:
+0 0
+1 0
+2 559948
+3 230252
+4 250768
+5 182576
+6 43684
+7 11132
+8 10420
+9 12036
+10 11216
+11 9360
+12 12204
+13 10984
+14 14064
+15 33924
+16 16356
+17 18292
+18 27000
+19 12172
+20 8564
+21 4364
+22 2064
+23 1176
+24 1080
+25 728
+26 612
+27 704
+28 696
+29 484
+30 780
+31 696
+32 512
+
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+
+Allocated 3.90564 MByte for active list storage.
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+search_init_balls_omp: actlen=511920
+
+Allocated 3.90564 MByte for active list storage.
+search_init_balls_omp: actlen=511920
+
+Allocated 3.90564 MByte for active list storage.
+search_init_balls_omp: actlen=511920
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+search_init_balls_omp: actlen=511920
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+Allocated 101.547 MByte for interact list storage.
+search_init_balls_omp: actlen=511920
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+Allocated 101.547 MByte for interact list storage.
+Allocated 101.547 MByte for interact list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+
+Allocated 3.90564 MByte for active list storage.
+Allocated 101.547 MByte for interact list storage.
+ - Completed pivot node: 10000
+ - Completed pivot node: 20000
+ - Completed pivot node: 30000
+ - Completed pivot node: 40000
+ - Completed pivot node: 50000
+ - Completed pivot node: 60000
+ - Completed pivot node: 70000
+ - Completed pivot node: 80000
+ - Completed pivot node: 90000
+ - Completed pivot node: 100000
+ - Completed pivot node: 110000
+ - Completed pivot node: 120000
+ - Completed pivot node: 130000
+ - Completed pivot node: 140000
+ - Completed pivot node: 150000
+ - Completed pivot node: 160000
+ - Completed pivot node: 170000
+ - Completed pivot node: 180000
+ - Completed pivot node: 190000
+ - Completed pivot node: 200000
+ - Completed pivot node: 210000
+ - Completed pivot node: 220000
+ - Completed pivot node: 230000
+ - Completed pivot node: 240000
+ - Completed pivot node: 250000
+ - Completed pivot node: 260000
+ - Completed pivot node: 270000
+ - Completed pivot node: 280000
+ - Completed pivot node: 290000
+ - Completed pivot node: 300000
+ - Completed pivot node: 310000
+ - Completed pivot node: 320000
+ - Completed pivot node: 330000
+ - Completed pivot node: 340000
+ - Completed pivot node: 350000
+ - Completed pivot node: 360000
+ - Completed pivot node: 370000
+ - Completed pivot node: 380000
+ - Completed pivot node: 390000
+ - Completed pivot node: 400000
+ - Completed pivot node: 410000
+ - Completed pivot node: 420000
+ - Completed pivot node: 430000
+ - Completed pivot node: 440000
+ - Completed pivot node: 450000
+ - Completed pivot node: 460000
+ - Completed pivot node: 470000
+ - Completed pivot node: 480000
+ - Completed pivot node: 490000
+ - Completed pivot node: 500000
+ - Completed pivot node: 510000
+ - Completed pivot node: 520000
+ - Completed pivot node: 530000
+ - Completed pivot node: 540000
+ - Completed pivot node: 550000
+ - Completed pivot node: 560000
+ - Completed pivot node: 570000
+ - Completed pivot node: 580000
+ - Completed pivot node: 590000
+ - Completed pivot node: 600000
+ - Completed pivot node: 610000
+ - Completed pivot node: 620000
+ - Completed pivot node: 630000
+ - Completed pivot node: 640000
+ - Completed pivot node: 650000
+ - Completed pivot node: 660000
+ - Completed pivot node: 670000
+ - Completed pivot node: 680000
+ - Completed pivot node: 690000
+ - Completed pivot node: 700000
+ - Completed pivot node: 710000
+ - Completed pivot node: 720000
+ - Completed pivot node: 730000
+ - Completed pivot node: 740000
+ - Completed pivot node: 750000
+ - Completed pivot node: 760000
+ - Completed pivot node: 770000
+ - Completed pivot node: 780000
+ - Completed pivot node: 790000
+ - Completed pivot node: 800000
+ - Completed pivot node: 810000
+ - Completed pivot node: 820000
+ - Completed pivot node: 830000
+ - Completed pivot node: 840000
+ - Completed pivot node: 850000
+ - Completed pivot node: 860000
+ - Completed pivot node: 870000
+ - Completed pivot node: 880000
+ - Completed pivot node: 890000
+ - Completed pivot node: 900000
+ - Completed pivot node: 910000
+ - Completed pivot node: 920000
+ - Completed pivot node: 930000
+ - Completed pivot node: 940000
+ - Completed pivot node: 950000
+ - Completed pivot node: 960000
+ - Completed pivot node: 970000
+ - Completed pivot node: 980000
+ - Completed pivot node: 990000
+ - Completed pivot node: 1000000
+ - Completed pivot node: 1010000
+ - Completed pivot node: 1020000
+ - Completed pivot node: 1030000
+ - Completed pivot node: 1040000
+ - Completed pivot node: 1050000
+ - Completed pivot node: 1060000
+ - Completed pivot node: 1070000
+ - Completed pivot node: 1080000
+ - Completed pivot node: 1090000
+ - Completed pivot node: 1100000
+ - Completed pivot node: 1110000
+ - Completed pivot node: 1120000
+ - Completed pivot node: 1130000
+ - Completed pivot node: 1140000
+ - Completed pivot node: 1150000
+ - Completed pivot node: 1160000
+ - Completed pivot node: 1170000
+ - Completed pivot node: 1180000
+ - Completed pivot node: 1190000
+ - Completed pivot node: 1200000
+ - Completed pivot node: 1210000
+ - Completed pivot node: 1220000
+ - Completed pivot node: 1230000
+ - Completed pivot node: 1240000
+ - Completed pivot node: 1250000
+ - Completed pivot node: 1260000
+ - Completed pivot node: 1270000
+ - Completed pivot node: 1280000
+ - Completed pivot node: 1290000
+ - Completed pivot node: 1300000
+ - Completed pivot node: 1310000
+ - Completed pivot node: 1320000
+ - Completed pivot node: 1330000
+ - Completed pivot node: 1340000
+ - Completed pivot node: 1350000
+ - Completed pivot node: 1360000
+ - Completed pivot node: 1370000
+ - Completed pivot node: 1380000
+ - Completed pivot node: 1390000
+ - Completed pivot node: 1400000
+ - Completed pivot node: 1410000
+ - Completed pivot node: 1420000
+ - Completed pivot node: 1430000
+ - Completed pivot node: 1440000
+ - Completed pivot node: 1450000
+ - Completed pivot node: 1460000
+ - Completed pivot node: 1470000
+ - Completed pivot node: 1480000
+ - Completed pivot node: 1490000
+ - Completed pivot node: 1500000
+ - Completed pivot node: 1510000
+ - Completed pivot node: 1520000
+ - Completed pivot node: 1530000
+ - Completed pivot node: 1540000
+ - Completed pivot node: 1550000
+ - Completed pivot node: 1560000
+ - Completed pivot node: 1570000
+ - Completed pivot node: 1580000
+ - Completed pivot node: 1590000
+ - Completed pivot node: 1600000
+ - Completed pivot node: 1610000
+ - Completed pivot node: 1620000
+ - Completed pivot node: 1630000
+ - Completed pivot node: 1640000
+ - Completed pivot node: 1650000
+ - Completed pivot node: 1660000
+ - Completed pivot node: 1670000
+ - Completed pivot node: 1680000
+ - Completed pivot node: 1690000
+ - Completed pivot node: 1700000
+ - Completed pivot node: 1710000
+ - Completed pivot node: 1720000
+ - Completed pivot node: 1730000
+ - Completed pivot node: 1740000
+ - Completed pivot node: 1750000
+ - Completed pivot node: 1760000
+ - Completed pivot node: 1770000
+ - Completed pivot node: 1780000
+ - Completed pivot node: 1790000
+ - Completed pivot node: 1800000
+ - Completed pivot node: 1810000
+ - Completed pivot node: 1820000
+ - Completed pivot node: 1830000
+ - Completed pivot node: 1840000
+ - Completed pivot node: 1850000
+ - Completed pivot node: 1860000
+ - Completed pivot node: 1870000
+ - Completed pivot node: 1880000
+ - Completed pivot node: 1890000
+ - Completed pivot node: 1900000
+ - Completed pivot node: 1910000
+ - Completed pivot node: 1920000
+ - Completed pivot node: 1930000
+ - Completed pivot node: 1940000
+ - Completed pivot node: 1950000
+ - Completed pivot node: 1960000
+ - Completed pivot node: 1970000
+ - Completed pivot node: 1980000
+ - Completed pivot node: 1990000
+ - Completed pivot node: 2000000
+ - Completed pivot node: 2010000
+ - Completed pivot node: 2020000
+ - Completed pivot node: 2030000
+ - Completed pivot node: 2040000
+ - Completed pivot node: 2050000
+ - Completed pivot node: 2060000
+ - Completed pivot node: 2070000
+ - Completed pivot node: 2080000
+ - Completed pivot node: 2090000
+ - Completed pivot node: 2100000
+ - Completed pivot node: 2110000
+ - Completed pivot node: 2120000
+ - Completed pivot node: 2130000
+ - Completed pivot node: 2140000
+ - Completed pivot node: 2150000
+ - Completed pivot node: 2160000
+ - Completed pivot node: 2170000
+ - Completed pivot node: 2180000
+ - Completed pivot node: 2190000
+ - Completed pivot node: 2200000
+ - Completed pivot node: 2210000
+ - Completed pivot node: 2220000
+ - Completed pivot node: 2230000
+ - Completed pivot node: 2240000
+ - Completed pivot node: 2250000
+ - Completed pivot node: 2260000
+ - Completed pivot node: 2270000
+ - Completed pivot node: 2280000
+ - Completed pivot node: 2290000
+ - Completed pivot node: 2300000
+ - Completed pivot node: 2310000
+ - Completed pivot node: 2320000
+ - Completed pivot node: 2330000
+ - Completed pivot node: 2340000
+ - Completed pivot node: 2350000
+ - Completed pivot node: 2360000
+ - Completed pivot node: 2370000
+ - Completed pivot node: 2380000
+ - Completed pivot node: 2390000
+ - Completed pivot node: 2400000
+ - Completed pivot node: 2410000
+ - Completed pivot node: 2420000
+ - Completed pivot node: 2430000
+ - Completed pivot node: 2440000
+ - Completed pivot node: 2450000
+ - Completed pivot node: 2460000
+ - Completed pivot node: 2470000
+ - Completed pivot node: 2480000
+ - Completed pivot node: 2490000
+ - Completed pivot node: 2500000
+ - Completed pivot node: 2510000
+ - Completed pivot node: 2520000
+ - Completed pivot node: 2530000
+ - Completed pivot node: 2540000
+ - Completed pivot node: 2550000
+ - Completed pivot node: 2560000
+ - Completed pivot node: 2570000
+ - Completed pivot node: 2580000
+ - Completed pivot node: 2590000
+ - Completed pivot node: 2600000
+ - Completed pivot node: 2610000
+ - Completed pivot node: 2620000
+ - Completed pivot node: 2630000
+ - Completed pivot node: 2640000
+ - Completed pivot node: 2650000
+ - Completed pivot node: 2660000
+ - Completed pivot node: 2670000
+ - Completed pivot node: 2680000
+ - Completed pivot node: 2690000
+ - Completed pivot node: 2700000
+ - Completed pivot node: 2710000
+ - Completed pivot node: 2720000
+ - Completed pivot node: 2730000
+ - Completed pivot node: 2740000
+ - Completed pivot node: 2750000
+ - Completed pivot node: 2760000
+ - Completed pivot node: 2770000
+ - Completed pivot node: 2780000
+ - Completed pivot node: 2790000
+ - Completed pivot node: 2800000
+ - Completed pivot node: 2810000
+ - Completed pivot node: 2820000
+ - Completed pivot node: 2830000
+ - Completed pivot node: 2840000
+ - Completed pivot node: 2850000
+ - Completed pivot node: 2860000
+ - Completed pivot node: 2870000
+ - Completed pivot node: 2880000
+ - Completed pivot node: 2890000
+ - Completed pivot node: 2900000
+ - Completed pivot node: 2910000
+ - Completed pivot node: 2920000
+ - Completed pivot node: 2930000
+ - Completed pivot node: 2940000
+ - Completed pivot node: 2950000
+ - Completed pivot node: 2960000
+ - Completed pivot node: 2970000
+ - Completed pivot node: 2980000
+ - Completed pivot node: 2990000
+ - Completed pivot node: 3000000
+ - Completed pivot node: 3010000
+ - Completed pivot node: 3020000
+ - Completed pivot node: 3030000
+ - Completed pivot node: 3040000
+ - Completed pivot node: 3050000
+ - Completed pivot node: 3060000
+ - Completed pivot node: 3070000
+ - Completed pivot node: 3080000
+ - Completed pivot node: 3090000
+ - Completed pivot node: 3100000
+ - Completed pivot node: 3110000
+ - Completed pivot node: 3120000
+ - Completed pivot node: 3130000
+ - Completed pivot node: 3140000

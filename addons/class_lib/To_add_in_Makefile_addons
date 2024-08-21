@@ -1,0 +1,23 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# CLASSLIB
+#
+# This line is added to ../Makefile_addons_settings
+#CLASSLIBON = 1
+#   ... then comment it
+#
+ifeq ($(CLASSLIBON),1)
+include $(MACHINES_DIR)/addons/class_lib/Makefile_class_lib
+endif
+#
+
+
