@@ -30,7 +30,7 @@ options                            = compute-HistN,out-m-HistZeta	# You may add 
 								# in the command line after parameters file name
 # 
 # Give the name of the point catalog to analyze and its format.
-infile                             = ./Takahasi/full_sky_whole_XYZK__zs9_r000_nside512.bin
+infile                             = ./scripts/Abraham/kappa_nres12_zs9NS256r000.bin
 infileformat                       = binary		# can be columns-ascii (default value), binary or takahasi
 iCatalogs                          = 1		# This is the tag associated to catalog giving in above.
 #
