@@ -17,13 +17,6 @@
 struct cmdline_data{
 // Every item in cmdline_defs.h must have an item here::
 
-    INTEGER stepState;
-
-    string script;
-    string options;
-    string version;
-    short verbose;
-    short verbose_log;
 	string paramfile;
 
 #ifndef GETPARAM
@@ -31,63 +24,70 @@ struct cmdline_data{
                                                     //  this number
 #endif
 
+    //B Parameters related to the searching method
     string searchMethod;
-
-    real theta;
-
-//B TPCF
-    int sizeHistTheta;
     int mChebyshev;
-//E
+    string nsmooth;
+    string rsmooth;
+    real theta;
+    bool computeTPCF;
+    bool usePeriodic;
+    //E
 
-//B Parameters to set a region in the sky, for example for Takahasi data set.
+    //B Parameters about the I/O file(s)
+    // Input catalog parameters
+    string infile;
+    string infilefmt;
+    string iCatalogs;
+    // Output parameters
+    string rootDir;
+    string outfile;
+    string outfilefmt;
+    // Parameters to set a region in the sky, for example for Takahasi data set
     real thetaL;
     real thetaR;
     real phiL;
     real phiR;
-//E
+    //E
 
+    //B Parameters to control histograms and their output files
+    bool useLogHist;
+    int logHistBinsPD;
+    //
     int sizeHistN;
     real rangeN;
     real rminHist;
-
-    string infile;
-    string infilefmt;
-
-    string iCatalogs;
-
-    string rootDir;
-    string outfile;
-    string outfilefmt;
-    
-
+    int sizeHistTheta;
+    //
     string histNNFileName;
     string histXi2pcfFileName;
     string histZetaFileName;
     string suffixOutFiles;
-    
+    //E
+
+    //B Set of parameters needed to construct a test model
+    int seed;
+    string testmodel;
+    INTEGER nbody;
+    real lengthBox;
+    //E
+
+    //B Miscellaneous parameters
+    string script;
+    INTEGER stepState;
+    short verbose;
+    short verbose_log;
 #ifdef OPENMPCODE
     int numthreads;
 #endif
+    string options;
+    //E
 
-    int seed;
-    string nsmooth;
-
-    string rsmooth;
+    string version;
 
 #ifdef ADDONS
 #include "globaldefs_include_01.h"
 #endif
-
-    string testmodel;
-    INTEGER nbody;
-    real lengthBox;
-
-    bool computeTPCF;
-    bool useLogHist;
-    int logHistBinsPD;
-    bool usePeriodic;
-
 };
 
 #endif // ! _cmdline_data_h

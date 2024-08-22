@@ -7,7 +7,7 @@
 !	Use: 'testdata();'															!
 !	Major revisions:															!
 !==============================================================================*/
-//        1          2          3          4          5          6          7
+//        1          2          3          4        ^ 5          6          7
 
 #include "globaldefs.h"
 local int testdata_sc_random(struct  cmdline_data* cmd, struct  global_data* gd);
@@ -139,8 +139,8 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
         Type(p) = BODY;
         Weight(p) = weight;
         DO_COORD(k) {
-            Pos(p)[k]    = xrandom(0.0, gd->Box[k]); // Box lower edge is (0,0,0)
-//            Pos(p)[k]    = xrandom(-0.5*gd->Box[k], 0.5*gd->Box[k]);
+            Pos(p)[k] = xrandom(0.0, gd->Box[k]);   // Box lower edge is (0,0,0)
+//            Pos(p)[k] = xrandom(-0.5*gd->Box[k], 0.5*gd->Box[k]);
                                                     // Box center is (0,0,0)
         }
 		DO_COORD(k)
@@ -177,9 +177,9 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
     Compute_nbody(cmd, gd);
     Compute_Box_Units(cmd, gd);
 
-	os =0.05*gd->Box[0];						            // offset
-	f = 1.0 - 2.0*os/gd->Box[0];				            // scaling delta
-                                                        //  to 1 - 2 os/Lk
+	os =0.05*gd->Box[0];						    // offset
+	f = 1.0 - 2.0*os/gd->Box[0];				    // scaling delta
+                                                    //  to 1 - 2 os/Lk
 	DO_COORD(k)
 		delta[k]=f*gd->Box[k]/((real) (N[k]-1));
 
@@ -244,6 +244,10 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
 
     gd->model_comment = "Random unit sphere Model";
 
+    gd->Box[0] = 2.0;
+    gd->Box[1] = 2.0;
+    gd->Box[2] = 2.0;
+
     int ifile=0;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
@@ -262,7 +266,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
         } else {
             ra = phi;
             dec = theta;
-// Standard transformation. See Arfken
+            // Standard transformation. See Arfken
             Pos(p)[0] = rsin(dec)*rcos(ra);
             Pos(p)[1] = rsin(dec)*rsin(ra);
             Pos(p)[2] = rcos(dec);
@@ -271,9 +275,14 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
         Type(p) = BODY;
         Weight(p) = weight;
         if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;                             // use kapp-constant
-        else
-            Kappa(p) = grandom(1.0, 0.25);
+            Kappa(p) = 2.0;                         // use kapp-constant
+        else {
+            // a takahasi simulation with nside1024 gives:
+            //  inputdata_ascii: average and std dev of kappa
+            //  (12582912 particles) = 2.936728e-08 6.528639e-03
+            Kappa(p) = grandom(2.936728e-08, 6.528639e-03);
+//            Kappa(p) = grandom(1.0, 0.25);
+        }
         tweight += Weight(p);
     }
     
@@ -287,11 +296,11 @@ local int Compute_nbody(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     fprintf(gd->outlog,"\n\nInitial nbody=%ld",cmd->nbody);
     if (NDIM == 3) {
-        N[0] = (int) rpow(cmd->nbody,1./3.);             // nbody = N^3
+        N[0] = (int) rpow(cmd->nbody,1./3.);        // nbody = N^3
         N[1] = N[0]; N[2] = N[0];
         cmd->nbody = N[0]*N[1]*N[2];
     } else if (NDIM == 2) {
-        N[0] = (int) rsqrt(cmd->nbody);                  // nbody = N^2
+        N[0] = (int) rsqrt(cmd->nbody);             // nbody = N^2
         N[1] = N[0];
         cmd->nbody = N[0]*N[1];
     } else error("\n\nWrong NDIM!\n\n");
@@ -301,11 +310,11 @@ local int Compute_nbody(struct  cmdline_data* cmd, struct  global_data* gd)
 
 local int Compute_Box_Units(struct  cmdline_data* cmd, struct  global_data* gd)
 {
-    weight = 1.0;                                       // Units system
-    if (NDIM == 3) {                                    // Size of box side x
+    weight = 1.0;                                   // Units system
+    if (NDIM == 3) {                                // Size of box side x
         gd->Box[0] = cmd->lengthBox;
         gd->Box[1] = gd->Box[0]; gd->Box[2] = gd->Box[0];
-    } else if (NDIM == 2) {                             // Size of box side x
+    } else if (NDIM == 2) {                         // Size of box side x
         gd->Box[0] = cmd->lengthBox;
         gd->Box[1] = gd->Box[0];
     } else error("\n\nWrong NDIM!\n\n");
@@ -315,7 +324,7 @@ local int Compute_Box_Units(struct  cmdline_data* cmd, struct  global_data* gd)
 
 
 // Seams that this routine is not used... delete it!!!
-//  or move it to treeutils...
+//  or move it to cballsutils...
 //
 // This function makes sure that all bodies coordinates (Pos) are
 // mapped onto the interval [0, Box].

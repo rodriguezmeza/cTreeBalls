@@ -226,52 +226,50 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd, struct  global_data*
 {
 // Every item in cmdline_defs.h must have an item here::
 
+    //B Parameters related to the searching method
     cmd->searchMethod = GetParam("searchMethod");
-    cmd->theta = GetdParam("theta");
     cmd->mChebyshev = GetiParam("mChebyshev");
-    cmd->sizeHistTheta = GetiParam("sizeHistTheta");
-//B Parameters to set a region in the sky, for example for Takahasi data set.
+    cmd->nsmooth = GetParam("nsmooth");
+    cmd->rsmooth = GetParam("rsmooth");
+    cmd->theta = GetdParam("theta");
+    cmd->computeTPCF = GetbParam("computeTPCF");
+    cmd->usePeriodic = GetbParam("usePeriodic");
+    //E
+
+    //B Parameters about the I/O file(s)
+    // Input catalog parameters
+    cmd->infile = GetParam("infile");
+    cmd->infilefmt = GetParam("infileformat");
+    cmd->iCatalogs = GetParam("iCatalogs");
+    // Output parameters
+    cmd->rootDir = GetParam("rootDir");
+    cmd->outfile = GetParam("outfile");
+    cmd->outfilefmt = GetParam("outfileformat");
+    // Parameters to set a region in the sky, for example for Takahasi data set
     cmd->thetaL = GetdParam("thetaL");
     cmd->thetaR = GetdParam("thetaR");
     cmd->phiL = GetdParam("phiL");
     cmd->phiR = GetdParam("phiR");
-//E
+    //E
+
+    //B Parameters to control histograms and their output files
+    cmd->useLogHist = GetbParam("useLogHist");
+    cmd->logHistBinsPD = GetiParam("logHistBinsPD");
+    //
     cmd->sizeHistN = GetiParam("sizeHistN");
     cmd->rangeN = GetdParam("rangeN");
     cmd->rminHist = GetdParam("rminHist");
-    cmd->infile = GetParam("infile");
-    cmd->infilefmt = GetParam("infileformat");
-    cmd->iCatalogs = GetParam("iCatalogs");
-    cmd->rootDir = GetParam("rootDir");
-    cmd->outfile = GetParam("outfile");
-    cmd->outfilefmt = GetParam("outfileformat");
-
+    cmd->sizeHistTheta = GetiParam("sizeHistTheta");
+    //
     cmd->histNNFileName = GetParam("histNNFileName");
     cmd->histXi2pcfFileName = GetParam("histXi2pcfFileName");
     cmd->histZetaFileName = GetParam("histZetaFileName");
     cmd->suffixOutFiles = GetParam("suffixOutFiles");
+    //E
 
-#ifdef LONGINT
-        cmd->stepState = GetlParam("stepState");
-#else
-        cmd->stepState = GetiParam("stepState");
-#endif
-
-    cmd->verbose = GetiParam("verbose");
-    cmd->verbose_log = GetiParam("verbose_log");
-
-#ifdef OPENMPCODE
-    cmd->numthreads = GetiParam("numberThreads");
-#endif
-
-    cmd->script = GetParam("script");
-    cmd->options = GetParam("options");
-
-//
-//
+    //B Set of parameters needed to construct a test model
     cmd->seed=GetiParam("seed");                    // to always have defaults
                                                     //  Check in gsl
-    cmd->nsmooth = GetParam("nsmooth");
     cmd->testmodel = GetParam("testmodel");
 #ifdef LONGINT
     cmd->nbody = GetlParam("nbody");
@@ -279,15 +277,22 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd, struct  global_data*
     cmd->nbody = GetiParam("nbody");
 #endif
     cmd->lengthBox = GetdParam("lengthBox");
-//
-//
+    //E
 
-    cmd->rsmooth = GetParam("rsmooth");
-
-    cmd->computeTPCF = GetbParam("computeTPCF");
-    cmd->useLogHist = GetbParam("useLogHist");
-    cmd->logHistBinsPD = GetiParam("logHistBinsPD");
-    cmd->usePeriodic = GetbParam("usePeriodic");
+    //B Miscellaneous parameters
+    cmd->script = GetParam("script");
+#ifdef LONGINT
+        cmd->stepState = GetlParam("stepState");
+#else
+        cmd->stepState = GetiParam("stepState");
+#endif
+    cmd->verbose = GetiParam("verbose");
+    cmd->verbose_log = GetiParam("verbose_log");
+#ifdef OPENMPCODE
+    cmd->numthreads = GetiParam("numberThreads");
+#endif
+    cmd->options = GetParam("options");
+    //E
 
 #ifdef ADDONS
 #include "startrun_include_02.h"
