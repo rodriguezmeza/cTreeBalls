@@ -36,15 +36,15 @@ It will run using all default values and a directory named `Output` will be crea
 
 If you execute:
 
-    ../cballs options=post-processing script="python plot2pcf.py"
+    ../cballs options=post-processing script="python scripts/plot2pcf.py"
 
 will do the same but now will plot the 2pcf and save it as a pdf file. Now, let us use a parameter file, execute:
 
     ../cballs parameters_explained
 
-Directory `Output` is already created then **cBalls** will overwritte all histograms files, parameter file as was run, and the log file. The parameters_explained file is a reference input file, containing (and explaining) the use of all possible input parameters. In this case as can be seen in `parameters_explained` file a catalog of points is read from the file `full_sky_whole_XYZK__zs9_r000_nside512.bin`.
+Directory `Output` is already created then **cBalls** will overwritte all histograms files, parameter file as was run, and the log file. The parameters_explained file is a reference input file, containing (and explaining) the use of all possible input parameters. In this case as can be seen in `parameters_explained` file a catalog of points is read from the file `kappa_nres12_zs9NS256r000.bin`.
 
-To see a plot of the 2pcf, edit parameters_explained and set option to "post-processing", script="python plot2pcf.py" and execute:
+To see a plot of the 2pcf, edit parameters_explained and set options to "post-processing", script="python scripts/plot2pcf.py" and execute again:
  
     ../cballs parameters_explained
 
