@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (pxd python interface routines) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(PXDON),1)
+OPT2 += -DPXD
+PXD = ../addons/pxd/
+vpath %.c ./addons/pxd/
+INCLUDES += -I$(PXD)
+HEADERFILES += $(wildcard $(PXD)/*.h)
+EXTERNAL +=
+endif
+#
+#E

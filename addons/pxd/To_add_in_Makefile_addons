@@ -1,0 +1,31 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# PXD
+# For cython interfacing...
+#
+# These lines are added to ../Makefile_addons_settings
+#
+#ifeq ($(CLASSLIBON),1)
+#PXDON = 1
+#else
+#$(info ) To compile with PXD needs CLASSLIBON = 1, deactivating...
+#PXDON = 0
+#endif
+#
+#   ... then comment them
+#
+ifeq ($(PXDON),1)
+include $(MACHINES_DIR)/addons/pxd/Makefile_pxd
+endif
+#E
+
+
