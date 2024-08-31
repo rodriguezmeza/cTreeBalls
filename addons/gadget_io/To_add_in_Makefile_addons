@@ -1,0 +1,22 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# Gadget I/O
+# For input data catalog in gadget format
+#
+# This line is added to ../Makefile_addons_settings
+#GADGETIOON = 1
+ifeq ($(GADGETIOON),1)
+include $(MACHINES_DIR)/addons/gadget_io/Makefile_gadget_io
+endif
+#
+
+

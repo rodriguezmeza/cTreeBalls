@@ -1,0 +1,42 @@
+#
+# Run it as:
+# cd tests
+#
+# First create the sphere:
+# cballs nbody=1048576 o=points_on_sphere testmodel=unit-sphere-random options=stop
+#
+# Then run cBalls on this data
+#
+# Version parameter file:
+# time ../cballs ./In/parameters_to-test_unit-sphere-random_balls-omp
+#
+# In command line:
+# time ../cballs options=compute-HistN,and-CF,out-m-HistZeta rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 stepState=1000 verb=2 verblog=2 nthreads=16 in=./Output/points_on_sphere.txt search=balls-omp
+#
+# To plot Zeta matrix vs standard results:
+# python scripts/mZetaM_plots_test.py
+#
+# -------------------------
+# -------------------------
+#
+searchMethod =                       balls-omp
+#
+options =                            compute-HistN,and-CF,out-m-HistZeta
+#
+infile =                            ./Output/points_on_sphere.txt
+infileformat =                       columns-ascii
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+rangeN =                            0.0633205
+rminHist =                           0.00213811
+sizeHistN =                         20
+#
+mChebyshev =                         7
+stepState   =                       1000
+#
+verbose  =                          2
+verbose_log =                        2
+numberThreads =                      16
+#

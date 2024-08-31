@@ -1,0 +1,129 @@
+#
+# -------------------------
+# To test tree-omp-sincos searching method
+# -------------------------
+# In Makefile_settings set:
+#
+# Select dimension of the run: 2, 3
+# 	DEFDIMENSION = 3
+#
+# See other settings in Makefile_settings file.
+# Then in terminal do "make clean; make"
+#
+# To test performance 3pcf vs 2pcf only set computeTPCF to true/false below.
+#
+# Run it as:
+# cd tests
+# then, with the version parameter file:
+# time ../cballs ./In/parameters_explained
+#
+# -------------------------
+# -------------------------
+#
+# Set parameters to values according to your needs.
+# 	It is not necessary to give all of them explicitly. You may set only the ones
+# 	needed to be set, the others will have their defaults values that are ok with you.
+#
+searchMethod                       = tree-omp-sincos
+#
+# Parameters (next three) useful to change cBalls performance 
+theta                              = 1			# increases or decreases artificially size of the cells
+								# values > 1 decreases the size
+								# values < 1 increases the size
+nsmooth                            = 1			# in kd-tree methods act as the usual nbucket 
+								# 	as it is used in other codes...
+rsmooth
+#
+options                            = compute-HistN,and-CF,out-m-HistZeta	
+								# you may add 'pre-/post-processing' and 
+								# 	invoque the appropriate script 
+								# 	in 'script' option below
+								# if add 'no-one-ball' to the 'options'
+								#	cBalls will act as a direct searching method
+								#	but will be slower than the default searching method
+# 
+# Give the name of the point catalog to analyze and its format.
+infile                             = ./scripts/Abraham/kappa_nres12_zs9NS256r000.bin
+infileformat                       = binary		# can be columns-ascii (default value), binary or takahasi
+iCatalogs                          = 1			# this is the tag associated to catalog giving in above
+								# several files can be given, the 'iCatalog' tag them
+								# this is useful to do cross-correlations
+#
+rootDir                            = Output
+#
+# Set of parameters to define histogram bins
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+#
+# Give the number of Chebyshev multipoles to compute. Is active when is cBalls has been given computeTPCF = true
+mChebyshev                         = 7			# mChebyshev + 1 must be a power of 2
+stepState                          = 1000		# gives the frequency to save the the number of pivot computed. Useful to see the state of the run
+#
+verbose                            = 2
+verbose_log                        = 2
+#
+# Give the number of threads to use if cBalls has been configured with OPENMPMACHINE = 1
+numberThreads                      = 16
+#
+#
+# -------------------------
+# Nothing to change below
+# -------------------------
+#
+# You may save the input catalog in a different format:
+outfile                            = 				# if it empty no file is save
+									# if it is not empty file is saved
+									#	but use in combination with
+									#	'options = stop' because normally
+									#	just want to save the file in a
+									#	different format or check if data 
+									#	read properly
+									# 'options = stop' means cBalls do not
+									#	follow the searching process
+outfileformat                      = columns-ascii
+#
+# To compute 3pcf in harmonic base set to true. Else false
+computeTPCF                         = true
+# For histograms in logscale version set to true. Else false
+useLogHist                          = true
+# And set the number of bins per decade:
+logHistBinsPD                       = 5
+#
+# To use periodic boundary conditions set it true.
+usePeriodic                         = false
+#
+# Set of 4 parameters to set a region on the unit sphere.
+#	These parameters act only when reading a Takahasi simulation.
+thetaL                             = 1.27993
+thetaR                             = 1.86166
+phiL                               = 1.28011
+phiR                               = 1.86187
+#
+# Set of parameters to define names of the histograms output files
+histNFileName                      = histNN
+histXi2pcfFileName                 = histXi2pcf
+histZetaMFileName                  = histZetaM
+mhistZetaFileName                  = mhistZeta
+suffixOutFiles                     
+#
+# Python/shell/C script to use as a pre/post processing
+#	in options above add 'pre-processing' or 'post-processing'
+script                             = ""				# you can set, i.e., "python scripts/plot2pcf.py"
+									#	in order to plot the 2pcf
+									#	at the end of the computation
+									#	if use with 'options = post-processing'
+#
+# Set of parameters to define a test model, computed inside the code.
+# They will be useful to compute random catalogs to build estimators.
+testmodel                          = simple-cubic-random
+nbody                              = 16384
+lengthBox                          = 10000
+seed                               = 123				# to init random number generator
+#
+# For the above test model use the following values for above parameters: 
+# sizeHistN                        = 40
+# rangeN				 = 100.0
+#
+
+

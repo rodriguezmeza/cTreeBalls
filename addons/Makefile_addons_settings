@@ -1,0 +1,54 @@
+# ----- MAKE FILE machine definitions (AddOns settings) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#B Here switch on/off the AddOns´ modules
+
+# BALLSOMP
+# For computing 3pcf using balls method
+BALLSON = 1
+
+# Gadget I/O
+# For input data catalog in gadget format
+GADGETIOON = 1
+
+# DIRECTMETHOD
+# For computing 3pcf using direct method
+DIRECTMETHODON = 1
+
+# CLASSLIB
+# Several I/O routines from CLASS
+CLASSLIBON = 1
+
+# IOLIB
+# Several I/O routines
+IOLIBON = 1
+
+# CFITSIO
+# To IO fit format
+# This addon requires IOLIBON = 1, check it...
+ifeq ($(IOLIBON),1)
+# default is OFF.
+# When user knows where cfitsio lives,
+#   make respective changes in Makefile_machine file
+#   and then set it ON
+CFITSIOON = 0
+else
+$(info ) To compile with CFITSIO needs IOLIBON = 1, deactivating...
+CFITSIOON = 0
+endif
+
+# PXD
+# For cython interfacing...
+ifeq ($(CLASSLIBON),1)
+PXDON = 1
+else
+$(info ) To compile with PXD needs CLASSLIBON = 1, deactivating...
+PXDON = 0
+endif
+
+#E
+
