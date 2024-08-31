@@ -109,7 +109,7 @@ Other python scripts are in directory 'tests/scripts'
 
 ## License
 
-**cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE.txt). If you use this program in research work that results in publications, please cite the following paper:
+**cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE). If you use this program in research work that results in publications, please cite the following paper:
 
 Mario A. Rodriguez-Meza et al. 202X, [arXiv:xxxx.xxxxx](https://ui.adsabs.harvard.edu/abs/202XarXivxxxxxxxxxX/abstract)
 
