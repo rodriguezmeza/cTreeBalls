@@ -97,6 +97,7 @@ To test it go to directory `tests` and run:
 
     python test_cython_balls.py
 
+Note: this interface in Cython was tested in a python environment with python3.7.
 
 ## Plotting utilities
 
