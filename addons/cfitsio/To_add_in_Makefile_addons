@@ -1,0 +1,36 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# CFITSIO
+# To IO fit format
+#
+# These lines are added to ../Makefile_addons_settings
+#
+#B This addon requires IOLIBON = 1, check it in ../Makefile_addons_settings
+#ifeq ($(IOLIBON),1)
+#CFITSIOON = 1
+#else
+#$(info ) To compile with CFITSIO needs IOLIBON = 1, deactivating...
+#CFITSIOON = 0
+#endif
+#E
+#
+# This line is added to ../Makefile_addons_settings
+#CFITSIOON = 1
+#   ... then comment it
+#
+ifeq ($(CFITSIOON),1)
+include $(MACHINES_DIR)/addons/cfitsio/Makefile_cfitsio
+endif
+#
+#E
+
+

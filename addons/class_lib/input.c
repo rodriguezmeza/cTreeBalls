@@ -541,7 +541,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
             cmd->usePeriodic=0;
     }
 
-
+/*
 #ifdef ADDONS
 #ifdef BALLS
     class_call(parser_read_int(pfc,"scanLevel",
@@ -587,6 +587,10 @@ int input_read_parameters_general(struct cmdline_data *cmd,
         }
     }
 #endif
+#endif
+*/
+#ifdef ADDONS
+#include "class_lib_include_01.h"
 #endif
 
     class_call(parser_read_int(pfc,"sizeHistTheta",
@@ -649,7 +653,7 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->lengthBox = 10000.0;
 
     cmd->rsmooth = "";
-
+/*
 #ifdef ADDONS
 #ifdef BALLS
         cmd->scanLevel = 6;
@@ -666,6 +670,11 @@ int input_default_params(struct cmdline_data *cmd)
 #ifdef TREE3PCFDIRECTOMP
 #endif
 #endif
+*/
+#ifdef ADDONS
+#include "class_lib_include_02.h"
+#endif
+
 
     cmd->sizeHistTheta = 32;
 

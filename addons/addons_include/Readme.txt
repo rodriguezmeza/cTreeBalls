@@ -18,6 +18,7 @@ Files of the cTreeBalls tree are:
 	- tpcf.c
 	- treeload.c
 	- treeutils.c
+4. addons folder
 
 Any possible AddOn item will be inserted into corresponding files above that are located in the addons/addons_include folder.
 

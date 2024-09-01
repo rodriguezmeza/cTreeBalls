@@ -167,10 +167,10 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
                phi_min, phi_max);
 //E
 
-    real ra, dec;                                   // phi, theta from pix2ang ::
+//    real ra, dec;                                   // phi, theta from pix2ang ::
                                                     //  column 2, column 1,
                                                     //  respectively
-    if (scanopt(cmd->options, "arfken")) {
+/*    if (scanopt(cmd->options, "arfken")) {
         DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
             ra = Pos(p)[0];
             dec = Pos(p)[1];
@@ -186,6 +186,13 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
             Pos(p)[1] = rcos(dec)*rsin(ra);
             Pos(p)[2] = rsin(dec);
         }
+    } */
+
+//    real theta, phi;
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        theta = Pos(p)[0];
+        phi = Pos(p)[1];
+        spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
     }
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {

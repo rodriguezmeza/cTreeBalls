@@ -76,6 +76,7 @@ HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
 ADDONS = addons
 vpath %.c $(ADDONS)
 INCLUDES += -I$(ADDONSDIR)
+INCLUDES += -I$(ADDONSDIR)/addons_include/addons
 INCLUDES += -I$(ADDONSDIR)/addons_include
 INCLUDES += -I$(ADDONSDIR)/addons_include/general_libs
 INCLUDES += -I$(ADDONSDIR)/addons_include/include
@@ -87,6 +88,7 @@ INCLUDES += -I$(ADDONSDIR)/addons_include/source/cballsio
 INCLUDES += -I$(ADDONSDIR)/addons_include/source/tree
 INCLUDES += -I$(ADDONSDIR)/addons_include/source/cballsutils
 HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
+HEADERFILES = $(wildcard $(ADDONSDIR)/addons/*.h)
 HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/*.h)
 HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/general_libs/*.h)
 HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/include/*.h)

@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (iolib) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(CFITSIOON),1)
+OPT2 += -DCFITSIO
+CFITSIO = ../addons/cfitsio/
+vpath %.c ./addons/cfitsio/
+INCLUDES += -I$(CFITSIO)
+HEADERFILES += $(wildcard $(CFITSIO)/*.h)
+EXTERNAL +=
+endif
+#
+#E
