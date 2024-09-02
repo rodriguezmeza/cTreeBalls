@@ -11,7 +11,7 @@
 # time ../cballs ./In/parameters_to-test_nside256_direct
 #
 # command line version:
-# time ../cballs search=direct-simple-sincos in=./scripts/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 options=compute-HistN,and-CF,out-m-HistZeta
+# time cballs search=direct-simple-sincos in=./scripts/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 options=compute-HistN,and-CF,out-m-HistZeta
 #
 # To plot Zeta matrix vs standard results:
 # python scripts/mZetaM_plots_test.py

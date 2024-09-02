@@ -12,7 +12,7 @@
 
 //
 // We must check the order of memory allocation and dealocation!!!
-// Here and in EndRun in tpfc_io.c
+// Here and in EndRun in cballsio.c
 //
 
 #include "globaldefs.h"
@@ -23,8 +23,6 @@ local int startrun_cmdline(struct  cmdline_data*, struct  global_data*);
 local void ReadParametersCmdline(struct  cmdline_data*, struct  global_data*);
 local void ReadParametersCmdline_short(struct  cmdline_data*, 
                                        struct  global_data*);
-//local int PrintParameterFile(struct cmdline_data *, char *);
-local void startrun_ParamStat(struct  cmdline_data*, struct  global_data*);
 local int CheckParameters(struct  cmdline_data*, struct  global_data*);
 local int random_init(struct  cmdline_data*, struct  global_data*, int);
 local void search_method_string_to_int(string method_str,int *method_int);
@@ -336,46 +334,51 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 
   nt=0;
 
+    //B Parameters related to the searching method
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
+    IPName(cmd->mChebyshev,"mChebyshev");
+    SPName(cmd->nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
+    BPName(cmd->computeTPCF,"computeTPCF");
+    BPName(cmd->computeShearCF,"computeShearCF");
+    BPName(cmd->usePeriodic,"usePeriodic");
+    //E
+
+    //B Parameters to control the I/O file(s)
+    // Input catalog parameters
     SPName(cmd->infile,"infile",MAXLENGTHOFSTRSCMD);
     SPName(cmd->infilefmt,"infileformat",MAXLENGTHOFSTRSCMD);
     SPName(cmd->iCatalogs,"iCatalogs",MAXLENGTHOFSTRSCMD);
+    // Output parameters
     SPName(cmd->rootDir,"rootDir",MAXLENGTHOFSTRSCMD);
     SPName(cmd->outfile,"outfile",MAXLENGTHOFSTRSCMD);
     SPName(cmd->outfilefmt,"outfileformat",MAXLENGTHOFSTRSCMD);
-    IPName(cmd->mChebyshev,"mChebyshev");
-    IPName(cmd->sizeHistTheta,"sizeHistTheta");
-//B Parameters to set a region in the sky, for example for Takahasi data set.
+    //B Parameters to set a region in the sky, for example for Takahasi data set.
     RPName(cmd->thetaL,"thetaL");
     RPName(cmd->thetaR,"thetaR");
     RPName(cmd->phiL,"phiL");
     RPName(cmd->phiR,"phiR");
-//E
+    //E
+
+    //B Parameters to control histograms and their output files
+    BPName(cmd->useLogHist,"useLogHist");
+    IPName(cmd->logHistBinsPD,"logHistBinsPD");
+    //
     IPName(cmd->sizeHistN,"sizeHistN");
     RPName(cmd->rangeN,"rangeN");
     RPName(cmd->rminHist,"rminHist");
+    IPName(cmd->sizeHistTheta,"sizeHistTheta");
+    //
     SPName(cmd->histNNFileName,"histNNFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd->histXi2pcfFileName,"histXi2pcfFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd->histZetaFileName,"histZetaFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd->suffixOutFiles,"suffixOutFiles",MAXLENGTHOFSTRSCMD);
-#ifdef LONGINT
-    LPName(cmd->stepState,"stepState");
-#else
-    IPName(cmd->stepState,"stepState");
-#endif
+    //E
 
-    IPName(cmd->verbose,"verbose");
-    IPName(cmd->verbose_log,"verbose_log");
-#ifdef OPENMPCODE
-    IPName(cmd->numthreads,"numberThreads");
-#endif
-    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
-    SPName(cmd->options,"options",MAXLENGTHOFSTRSCMD);
-
+    //B Set of parameters needed to construct a test model
     IPName(cmd->seed,"seed");                       // to always have
                                                     //  defaults
-    SPName(cmd->nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
     SPName(cmd->testmodel,"testmodel",MAXLENGTHOFSTRSCMD);
 #ifdef LONGINT
     LPName(cmd->nbody,"nbody");
@@ -383,15 +386,23 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
     IPName(cmd->nbody,"nbody");
 #endif
     RPName(cmd->lengthBox,"lengthBox");
+    //E
 
-    SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
-
-    BPName(cmd->computeTPCF,"computeTPCF");
-    BPName(cmd->computeShearCF,"computeShearCF");
-    BPName(cmd->useLogHist,"useLogHist");
-    IPName(cmd->logHistBinsPD,"logHistBinsPD");
-    BPName(cmd->usePeriodic,"usePeriodic");
-
+    //B Miscellaneous parameters
+    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
+#ifdef LONGINT
+    LPName(cmd->stepState,"stepState");
+#else
+    IPName(cmd->stepState,"stepState");
+#endif
+    IPName(cmd->verbose,"verbose");
+    IPName(cmd->verbose_log,"verbose_log");
+#ifdef OPENMPCODE
+    IPName(cmd->numthreads,"numberThreads");
+#endif
+    SPName(cmd->options,"options",MAXLENGTHOFSTRSCMD);
+    //E
+    
 #ifdef ADDONS
 #include "startrun_include_03.h"
 #endif
@@ -768,112 +779,6 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 }
 
 
-#ifdef GETPARAM
-//B Section of parameter stat
-local void startrun_ParamStat(struct  cmdline_data* cmd, struct  global_data* gd)
-{
-// Every item in cmdline_defs.h must have an item here::
-
-    if (GetParamStat("searchMethod") & ARGPARAM)
-        cmd->searchMethod = GetParam("searchMethod");
-
-    if (GetParamStat("theta") & ARGPARAM)
-        cmd->theta = GetdParam("theta");
-    if (GetParamStat("infile") & ARGPARAM)
-        cmd->infile = GetParam("infile");
-    if (GetParamStat("infilefmt") & ARGPARAM)
-        cmd->infilefmt = GetParam("infileformat");
-    if (GetParamStat("iCatalogs") & ARGPARAM)
-        cmd->iCatalogs = GetParam("iCatalogs");
-    if (GetParamStat("rootDir") & ARGPARAM)
-        cmd->rootDir = GetParam("rootDir");
-    if (GetParamStat("outfile") & ARGPARAM)
-        cmd->outfile = GetParam("outfile");
-    if (GetParamStat("outfilefmt") & ARGPARAM)
-        cmd->outfilefmt = GetParam("outfileformat");
-
-    if (GetParamStat("mChebyshev") & ARGPARAM)
-        cmd->mChebyshev = GetiParam("mChebyshev");
-    if (GetParamStat("sizeHistTheta") & ARGPARAM)
-        cmd->sizeHistTheta = GetiParam("sizeHistTheta");
-//B Parameters to set a region in the sky, for example for Takahasi data set.
-    if (GetParamStat("thetaL") & ARGPARAM)
-        cmd->thetaL = GetdParam("thetaL");
-    if (GetParamStat("thetaR") & ARGPARAM)
-        cmd->thetaR = GetdParam("thetaR");
-    if (GetParamStat("phiL") & ARGPARAM)
-        cmd->phiL = GetdParam("phiL");
-    if (GetParamStat("thetaR") & ARGPARAM)
-        cmd->phiR = GetdParam("phiR");
-//E
-    if (GetParamStat("sizeHistN") & ARGPARAM)
-        cmd->sizeHistN = GetiParam("sizeHistN");
-    if (GetParamStat("rangeN") & ARGPARAM)
-        cmd->rangeN = GetdParam("rangeN");
-    if (GetParamStat("rminHist") & ARGPARAM)
-        cmd->rminHist = GetdParam("rminHist");
-
-    if (GetParamStat("histNNFileName") & ARGPARAM)
-        cmd->histNNFileName = GetParam("histNNFileName");
-    if (GetParamStat("histXi2pcfFileName") & ARGPARAM)
-        cmd->histXi2pcfFileName = GetParam("histXi2pcfFileName");
-    if (GetParamStat("histZetaFileName") & ARGPARAM)
-        cmd->histZetaFileName = GetParam("histZetaFileName");
-    if (GetParamStat("suffixOutFiles") & ARGPARAM)
-        cmd->suffixOutFiles = GetParam("suffixOutFiles");
-
-    if (GetParamStat("verbose") & ARGPARAM)
-        cmd->verbose = GetiParam("verbose");
-    if (GetParamStat("verbose_log") & ARGPARAM)
-        cmd->verbose_log = GetiParam("verbose_log");
-
-#ifdef OPENMPCODE
-    if (GetParamStat("numberThreads") & ARGPARAM)
-        cmd->numthreads = GetiParam("numberThreads");
-#endif
-
-    if (GetParamStat("script") & ARGPARAM)
-        cmd->script = GetParam("script");
-    if (GetParamStat("options") & ARGPARAM)
-        cmd->options = GetParam("options");
-
-//
-    if (GetParamStat("seed") & ARGPARAM)
-        cmd->seed = GetiParam("seed");
-    if (GetParamStat("nsmooth") & ARGPARAM)
-        cmd->nsmooth = GetParam("nsmooth");
-    if (GetParamStat("testmodel") & ARGPARAM)
-        cmd->testmodel = GetParam("testmodel");
-    if (GetParamStat("nbody") & ARGPARAM)
-#ifdef LONGINT
-        cmd->nbody = GetlParam("nbody");
-#else
-        cmd->nbody = GetiParam("nbody");
-#endif
-    if (GetParamStat("lengthBox") & ARGPARAM)
-        cmd->lengthBox = GetdParam("lengthBox");
-//
-
-    if (GetParamStat("rsmooth") & ARGPARAM)
-        cmd->rsmooth = GetParam("rsmooth");
-
-    if (GetParamStat("computeTPCF") & ARGPARAM)
-        cmd->computeTPCF = GetbParam("computeTPCF");
-    if (GetParamStat("computeShearCF") & ARGPARAM)
-        cmd->computeShearCF = GetbParam("computeShearCF");
-    if (GetParamStat("useLogHist") & ARGPARAM)
-        cmd->useLogHist = GetbParam("useLogHist");
-    if (GetParamStat("logHistBinsPD") & ARGPARAM)
-        cmd->logHistBinsPD = GetiParam("logHistBinsPD");
-    if (GetParamStat("usePeriodic") & ARGPARAM)
-        cmd->usePeriodic = GetbParam("usePeriodic");
-
-#ifdef ADDONS
-#include "startrun_include_06.h"
-#endif
-}
-//E
-#endif
 
 
 //B Section of parameter check
@@ -886,18 +791,29 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 //        fprintf(stdout,"\nCheckParameters: Warning! : %s\n\n",
 //            "You are using options restorefile and infile at the same time");
 
-    if (cmd->theta < 0)
-        error("CheckParameters: absurd value for theta\n");
+    //B Parameters related to the searching method
+    if (cmd->useLogHist==FALSE && (strcmp(cmd->searchMethod,"balls-omp") == 0))
+        error("CheckParameters: can´t have loghist false and balls-omp (%d %s)\n",
+              cmd->useLogHist, cmd->searchMethod);
     if (cmd->computeTPCF) {
         if (cmd->mChebyshev + 1 < 2 || (cmd->mChebyshev + 1)&(cmd->mChebyshev))
             error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive and a power of 2\n", cmd->mChebyshev+1);
     }
-    if (cmd->sizeHistTheta < 2 || cmd->sizeHistTheta&(cmd->sizeHistTheta-1))
-    error("CheckParameters: absurd value for sizeHistTheta\n\tmust be a power of 2\n");
-    // We can get ride off one parameter if do sizeHistTheta = 2(mChebyshev + 1)
     if (cmd->mChebyshev + 1 > cmd->sizeHistTheta)
         error("CheckParameters: mChebyshev + 1 must be less thatn sizeHistTheta\n");
-//B Parameters to set a region in the sky, for example for Takahasi data set.
+    if (gd->nsmooth[0] < 1)
+        error("CheckParameters: absurd value for nsmooth\n");
+    if (gd->rsmooth[0] < 0 || gd->rsmoothFlag==FALSE)
+        error("CheckParameters: absurd value for rsmooth (%s)\n",cmd->rsmooth);
+    if (cmd->theta < 0)
+        error("CheckParameters: absurd value for theta\n");
+    // We can get ride off one parameter if do sizeHistTheta = 2(mChebyshev + 1)
+    //E
+
+    //B Parameters to control the I/O file(s)
+    // Input catalog parameters
+    // Output parameters
+    // Parameters to set a region in the sky, for example for Takahasi data set
     if (cmd->thetaL < 0 || cmd->thetaL > PI)
         error("CheckParameters: absurd value for thetaL (must be in the range 0--pi)\n");
     if (cmd->thetaR < 0 || cmd->thetaR > PI)
@@ -910,28 +826,47 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
         error("CheckParameters: absurd value for thetaL (must be greater thatn thetaR)\n");
     if (cmd->phiL > cmd->phiR)
         error("CheckParameters: absurd value for phiL (must be greater thatn phiR)\n");
-//E
+    //E
+
+    //B Parameters to control histograms and their output files
+    if (cmd->useLogHist==TRUE && cmd->rminHist == 0)
+        error("CheckParameters: can´t have useLogHist=true and rminHist=0 (%d %g)\n",
+              cmd->useLogHist, cmd->rminHist);
+    //
     if (cmd->sizeHistN < 2)
         error("CheckParameters: absurd value for sizeHistN\n");
     if (cmd->rangeN < 0)
         error("CheckParameters: absurd value for rangeN\n");
     if (cmd->rminHist < 0 || cmd->rminHist > cmd->rangeN)
         error("CheckParameters: absurd value for rminHist\n");
-
-#ifdef OPENMPCODE
-    if (cmd->numthreads <= 0)
-        error("CheckParameters: absurd value for numberThreads must be an integer >= 0\n");
-#endif
-
-//
-    if (gd->nsmooth[0] < 1)
-        error("CheckParameters: absurd value for nsmooth\n");
+    if (cmd->sizeHistTheta < 2 || cmd->sizeHistTheta&(cmd->sizeHistTheta-1))
+    error("CheckParameters: absurd value for sizeHistTheta\n\tmust be a power of 2\n");
+    //
+    //E
+    
+    //B Set of parameters needed to construct a test model
     if (cmd->nbody < 3) {
         error("CheckParameters: absurd value for nbody: %d\n", cmd->nbody);
     }
     if (cmd->lengthBox <= 0)
         error("CheckParameters: absurd value for lengthBox\n");
 
+    //E
+
+    //B Miscellaneous parameters
+    if (cmd->stepState <= 0)
+        error("CheckParameters: absurd value for stepState must be an integer > 0\n");
+    if (cmd->verbose <= 0)
+        error("CheckParameters: absurd value for stepState must be an integer > 0\n");
+    if (cmd->verbose_log <= 0)
+        error("CheckParameters: absurd value for stepState must be an integer > 0\n");
+#ifdef OPENMPCODE
+    if (cmd->numthreads <= 0)
+        error("CheckParameters: absurd value for numberThreads must be an integer >= 0\n");
+#endif
+    //E
+
+    //
     gd->bh86 = scanopt(cmd->options, "bh86");       // Barnes, J. & Hut, P.
                                                     //  1986. Nature 324,
                                                     //  446.
@@ -941,18 +876,7 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
                                                     //  136
     if (gd->bh86 && gd->sw94)
         error("CheckParameters: incompatible options bh86 and sw94\n");
-//
-
-    if (gd->rsmooth[0] < 0 || gd->rsmoothFlag==FALSE)
-        error("CheckParameters: absurd value for rsmooth (%s)\n",cmd->rsmooth);
-
-    if (cmd->useLogHist==TRUE && cmd->rminHist == 0)
-        error("CheckParameters: can´t have useLogHist=true and rminHist=0 (%d %g)\n",
-              cmd->useLogHist, cmd->rminHist);
-
-    if (cmd->useLogHist==FALSE && (strcmp(cmd->searchMethod,"balls-omp") == 0))
-        error("CheckParameters: can´t have loghist false and balls-omp (%d %s)\n",
-              cmd->useLogHist, cmd->searchMethod);
+    //
 
 #ifdef ADDONS
 #include "startrun_include_07.h"
@@ -1006,47 +930,51 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
         fprintf(stdout,"error opening file '%s' \n",buf);
         errorFlag=1;
     } else {
+        //B Parameters related to the searching method
         fprintf(fdout,FMTT,"searchMethod",cmd->searchMethod);
+        fprintf(fdout,FMTI,"mChebyshev",cmd->mChebyshev);
+        fprintf(fdout,FMTT,"nsmooth",cmd->nsmooth);
+        fprintf(fdout,FMTT,"rsmooth",cmd->rsmooth);
         fprintf(fdout,FMTR,"theta",cmd->theta);
+        fprintf(fdout,FMTT,"computeTPCF",cmd->computeTPCF ? "true" : "false");
+        fprintf(fdout,FMTT,"computeShearCF",
+                cmd->computeShearCF ? "true" : "false");
+        fprintf(fdout,FMTT,"usePeriodic",cmd->usePeriodic ? "true" : "false");
+        //E
+
+        //B Parameters to control the I/O file(s)
+        // Input catalog parameters
         fprintf(fdout,FMTT,"infile",cmd->infile);
         fprintf(fdout,FMTT,"infileformat",cmd->infilefmt);
         fprintf(fdout,FMTT,"iCatalogs",cmd->iCatalogs);
+        // Output parameters
         fprintf(fdout,FMTT,"rootDir",cmd->rootDir);
         fprintf(fdout,FMTT,"outfile",cmd->outfile);
         fprintf(fdout,FMTT,"outfileformat",cmd->outfilefmt);
-        fprintf(fdout,FMTI,"mChebyshev",cmd->mChebyshev);
-        fprintf(fdout,FMTI,"sizeHistTheta",cmd->sizeHistTheta);
-//B Parameters to set a region in the sky, for example for Takahasi data set.
+        // Parameters to set a region in the sky, for example for Takahasi data set
         fprintf(fdout,FMTR,"thetaL",cmd->thetaL);
         fprintf(fdout,FMTR,"thetaR",cmd->thetaR);
         fprintf(fdout,FMTR,"phiL",cmd->phiL);
         fprintf(fdout,FMTR,"phiR",cmd->phiR);
-//E
+        //E
+
+        //B Parameters to control histograms and their output files
+        fprintf(fdout,FMTT,"useLogHist",cmd->useLogHist ? "true" : "false");
+        fprintf(fdout,FMTI,"logHistBinsPD",cmd->logHistBinsPD);
+        //
         fprintf(fdout,FMTI,"sizeHistN",cmd->sizeHistN);
         fprintf(fdout,FMTR,"rangeN",cmd->rangeN);
         fprintf(fdout,FMTR,"rminHist",cmd->rminHist);
+        fprintf(fdout,FMTI,"sizeHistTheta",cmd->sizeHistTheta);
+        //
         fprintf(fdout,FMTT,"histNNFileName",cmd->histNNFileName);
         fprintf(fdout,FMTT,"histXi2pcfFileName",cmd->histXi2pcfFileName);
         fprintf(fdout,FMTT,"histZetaFileName",cmd->histZetaFileName);
         fprintf(fdout,FMTT,"suffixOutFiles",cmd->suffixOutFiles);
-#ifdef LONGINT
-        fprintf(fdout,FMTIL,"stepState",cmd->stepState);
-#else
-        fprintf(fdout,FMTI,"stepState",cmd->stepState);
-#endif
-
-        fprintf(fdout,FMTI,"verbose",cmd->verbose);
-        fprintf(fdout,FMTI,"verbose_log",cmd->verbose_log);
-#ifdef OPENMPCODE
-        fprintf(fdout,FMTI,"numberThreads",cmd->numthreads);
-#endif
-        if (cmd->verbose>=2)
-            verb_print(cmd->verbose, "PrintParamterFile: script: %s\n", cmd->script);
-        fprintf(fdout,FMTTS,"script",cmd->script);
-        fprintf(fdout,FMTT,"options",cmd->options);
-//
+        //E
+        
+        //B Set of parameters needed to construct a test model
         fprintf(fdout,FMTI,"seed",cmd->seed);
-        fprintf(fdout,FMTT,"nsmooth",cmd->nsmooth);
         fprintf(fdout,FMTT,"testmodel",cmd->testmodel);
 #ifdef LONGINT
         fprintf(fdout,FMTIL,"nbody",cmd->nbody);
@@ -1054,16 +982,24 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
         fprintf(fdout,FMTI,"nbody",cmd->nbody);
 #endif
         fprintf(fdout,FMTR,"lengthBox",cmd->lengthBox);
-//
+        //E
 
-        fprintf(fdout,FMTT,"rsmooth",cmd->rsmooth);
-
-        fprintf(fdout,FMTT,"computeTPCF",cmd->computeTPCF ? "true" : "false");
-        fprintf(fdout,FMTT,"computeShearCF",
-                cmd->computeShearCF ? "true" : "false");
-        fprintf(fdout,FMTT,"useLogHist",cmd->useLogHist ? "true" : "false");
-        fprintf(fdout,FMTI,"logHistBinsPD",cmd->logHistBinsPD);
-        fprintf(fdout,FMTT,"usePeriodic",cmd->usePeriodic ? "true" : "false");
+        //B Miscellaneous parameters
+        fprintf(fdout,FMTTS,"script",cmd->script);
+#ifdef LONGINT
+        fprintf(fdout,FMTIL,"stepState",cmd->stepState);
+#else
+        fprintf(fdout,FMTI,"stepState",cmd->stepState);
+#endif
+        fprintf(fdout,FMTI,"verbose",cmd->verbose);
+        fprintf(fdout,FMTI,"verbose_log",cmd->verbose_log);
+#ifdef OPENMPCODE
+        fprintf(fdout,FMTI,"numberThreads",cmd->numthreads);
+#endif
+        if (cmd->verbose>=2)
+            verb_print(cmd->verbose, "PrintParamterFile: script: %s\n", cmd->script);
+        fprintf(fdout,FMTT,"options",cmd->options);
+        //E
 
 #ifdef ADDONS
 #include "startrun_include_08.h"

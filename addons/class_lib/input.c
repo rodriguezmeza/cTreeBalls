@@ -219,6 +219,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 
 // All malloc have to be freed at the end of the run (EndRun)
 
+    //B Parameters related to the searching method
     class_call(parser_read_string(pfc,"searchMethod",&string1,&flag1,errmsg),
              errmsg,errmsg);
 
@@ -233,10 +234,9 @@ int input_read_parameters_general(struct cmdline_data *cmd,
         }
     }
 
-  class_call(parser_read_double(pfc,"theta",&param1,&flag1,errmsg),errmsg,errmsg);
-  if (flag1 == TRUE){
-    cmd->theta = param1;
-  }
+    class_call(parser_read_int(pfc,"mChebyshev",&param,&flag,errmsg),errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->mChebyshev = param;
 
     class_call(parser_read_string(pfc,"nsmooth",&string1,&flag1,errmsg),
                errmsg,errmsg);
@@ -250,6 +250,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
+
     class_call(parser_read_string(pfc,"rsmooth",&string1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE) {
@@ -262,18 +263,42 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
-    class_call(parser_read_string(pfc,"options",&string1,&flag1,errmsg),
-               errmsg,errmsg);
-    if (flag1 == TRUE) {
-        for (index=0;index<pfc->size;++index){
-          if (strcmp(pfc->name[index],"options") == 0){
-              slen = strlen(pfc->value[index]);
-              cmd->options = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->options,pfc->value[index],slen+1);
-            break;
-          }
-        }
+
+    class_call(parser_read_double(pfc,"theta",&param1,&flag1,errmsg),errmsg,errmsg);
+    if (flag1 == TRUE){
+      cmd->theta = param1;
     }
+
+    class_call(parser_read_string(pfc,"computeTPCF",&string1,&flag1,errmsg),
+             errmsg,errmsg);
+    if (flag1 == TRUE) {
+        if (strchr("tTyY1", *string1) != NULL)
+            cmd->computeTPCF=1;
+        if (strchr("fFnN0", *string1) != NULL)
+            cmd->computeTPCF=0;
+    }
+
+    class_call(parser_read_string(pfc,"computeShearCF",&string1,&flag1,errmsg),
+             errmsg,errmsg);
+    if (flag1 == TRUE) {
+        if (strchr("tTyY1", *string1) != NULL)
+            cmd->computeShearCF=1;
+        if (strchr("fFnN0", *string1) != NULL)
+            cmd->computeShearCF=0;
+    }
+
+    class_call(parser_read_string(pfc,"usePeriodic",&string1,&flag1,errmsg),
+             errmsg,errmsg);
+    if (flag1 == TRUE) {
+        if (strchr("tTyY1", *string1) != NULL)
+            cmd->usePeriodic=1;
+        if (strchr("fFnN0", *string1) != NULL)
+            cmd->usePeriodic=0;
+    }
+    //E
+
+    //B Parameters about the I/O file(s)
+    // Input catalog parameters
     class_call(parser_read_string(pfc,"infile",&string1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE) {
@@ -287,6 +312,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
+
     class_call(parser_read_string(pfc,"infileformat",&string1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE) {
@@ -312,6 +338,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
+    // Output parameters
     class_call(parser_read_string(pfc,"rootDir",&string1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE) {
@@ -325,48 +352,6 @@ int input_read_parameters_general(struct cmdline_data *cmd,
         }
     }
 
-    class_call(parser_read_double(pfc,"rangeN",&param1,&flag1,errmsg),
-               errmsg,errmsg);
-    if (flag1 == TRUE){
-      cmd->rangeN = param1;
-    }
-    class_call(parser_read_double(pfc,"rminHist",&param1,&flag1,errmsg),
-               errmsg,errmsg);
-    if (flag1 == TRUE){
-      cmd->rminHist = param1;
-    }
-    class_call(parser_read_int(pfc,"sizeHistN",&param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->sizeHistN = param;
-
-    class_call(parser_read_int(pfc,"mChebyshev",&param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->mChebyshev = param;
-
-    class_call(parser_read_int(pfc,"sizeHistTheta",
-                               &param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->sizeHistTheta = param;
-
-    class_call(parser_read_int(pfc,"stepState",&param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->stepState = param;
-
-    class_call(parser_read_int(pfc,"verbose",&param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->verbose = param;
-    class_call(parser_read_int(pfc,"verbose_log",&param,&flag,errmsg),
-               errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->verbose_log = param;
-
-#ifdef OPENMPCODE
-    class_call(parser_read_int(pfc,"numberThreads",&param,&flag,errmsg),
-               errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->numthreads = param;
-#endif
-
     class_call(parser_read_string(pfc,"outfile",&string1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE) {
@@ -379,6 +364,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
+
     class_call(parser_read_string(pfc,"outfileformat",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
@@ -392,7 +378,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
-
+    // Parameters to set a region in the sky, for example for Takahasi data set
     class_call(parser_read_double(pfc,"thetaL",&param1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE){
@@ -413,7 +399,41 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     if (flag1 == TRUE){
       cmd->phiR = param1;
     }
+    //E
 
+    //B Parameters to control histograms and their output files
+    class_call(parser_read_string(pfc,"useLogHist",&string1,&flag1,errmsg),
+             errmsg,errmsg);
+    if (flag1 == TRUE) {
+        if (strchr("tTyY1", *string1) != NULL)
+            cmd->useLogHist=1;
+        if (strchr("fFnN0", *string1) != NULL)
+            cmd->useLogHist=0;
+    }
+    class_call(parser_read_int(pfc,"logHistBinsPD",
+                               &param,&flag,errmsg),errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->logHistBinsPD = param;
+    //
+    class_call(parser_read_int(pfc,"sizeHistN",&param,&flag,errmsg),errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->sizeHistN = param;
+    class_call(parser_read_double(pfc,"rangeN",&param1,&flag1,errmsg),
+               errmsg,errmsg);
+    if (flag1 == TRUE){
+      cmd->rangeN = param1;
+    }
+    class_call(parser_read_double(pfc,"rminHist",&param1,&flag1,errmsg),
+               errmsg,errmsg);
+    if (flag1 == TRUE){
+      cmd->rminHist = param1;
+    }
+
+    class_call(parser_read_int(pfc,"sizeHistTheta",
+                               &param,&flag,errmsg),errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->sizeHistTheta = param;
+    //
     class_call(parser_read_string(pfc,"histNNFileName",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
@@ -453,7 +473,6 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
-
     class_call(parser_read_string(pfc,"suffixOutFiles",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
@@ -467,25 +486,9 @@ int input_read_parameters_general(struct cmdline_data *cmd,
           }
         }
     }
+    //E
 
-    class_call(parser_read_string(pfc,"script",&string1,&flag1,errmsg),
-               errmsg,errmsg);
-    char *script1;
-    char *script2;
-    if (flag1 == TRUE) {
-        for (index=0;index<pfc->size;++index){
-          if (strcmp(pfc->name[index],"script") == 0){
-              slen = strlen(pfc->value[index]);
-              cmd->script = (char*) malloc((slen-2)*sizeof(char));
-              script1 = (char*) malloc(slen*sizeof(char));
-              memcpy(script1,pfc->value[index],slen);
-              script2 = strchr(script1, '"');
-              memcpy(cmd->script,script2+1,slen-2);
-            break;
-          }
-        }
-    }
-
+    //B Set of parameters needed to construct a test model
     class_call(parser_read_int(pfc,"seed",&param,&flag,errmsg),errmsg,errmsg);
     if (flag == TRUE)
       cmd->seed = param;
@@ -509,86 +512,75 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     if (flag1 == TRUE){
       cmd->lengthBox = param1;
     }
+    //E
 
-    class_call(parser_read_string(pfc,"computeTPCF",&string1,&flag1,errmsg),
-             errmsg,errmsg);
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->computeTPCF=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->computeTPCF=0;
-    }
-
-    class_call(parser_read_string(pfc,"useLogHist",&string1,&flag1,errmsg),
-             errmsg,errmsg);
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->useLogHist=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->useLogHist=0;
-    }
-    class_call(parser_read_int(pfc,"logHistBinsPD",
-                               &param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->logHistBinsPD = param;
-
-    class_call(parser_read_string(pfc,"usePeriodic",&string1,&flag1,errmsg),
-             errmsg,errmsg);
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->usePeriodic=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->usePeriodic=0;
-    }
-
-/*
-#ifdef ADDONS
-#ifdef BALLS
-    class_call(parser_read_int(pfc,"scanLevel",
-                               &param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->scanLevel = param;
-    class_call(parser_read_int(pfc,"scanLevelRoot",
-                               &param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->scanLevelRoot = param;
-
-    class_call(parser_read_string(pfc,"scanLevelMin",&string1,&flag1,errmsg),
+    //B Miscellaneous parameters
+    class_call(parser_read_string(pfc,"script",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    char *script1;
+    char *script2;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
-          if (strcmp(pfc->name[index],"scanLevelMin") == 0){
-              cmd->scanLevelMin = strdup(pfc->value[index]);
-            break;
-          }
-        }
-    }
-
-    class_call(parser_read_int(pfc,"ntosave",
-                               &param,&flag,errmsg),errmsg,errmsg);
-    if (flag == TRUE)
-      cmd->ntosave = param;
-#endif
-
-#ifdef TREE3PCFDIRECTOMP
-#endif
-
-#ifdef IOLIB
-    class_call(parser_read_string(pfc,"columns",&string1,&flag1,errmsg),
-               errmsg,errmsg);
-    if (flag1 == TRUE) {
-        for (index=0;index<pfc->size;++index){
-          if (strcmp(pfc->name[index],"columns") == 0){
+          if (strcmp(pfc->name[index],"script") == 0){
               slen = strlen(pfc->value[index]);
-              cmd->columns = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->columns,pfc->value[index],slen+1);
+              cmd->script = (char*) malloc((slen-2)*sizeof(char));
+              script1 = (char*) malloc(slen*sizeof(char));
+              memcpy(script1,pfc->value[index],slen);
+              script2 = strchr(script1, '"');
+              memcpy(cmd->script,script2+1,slen-2);
             break;
           }
         }
     }
+
+    class_call(parser_read_int(pfc,"stepState",&param,&flag,errmsg),errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->stepState = param;
+
+    class_call(parser_read_int(pfc,"verbose",&param,&flag,errmsg),errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->verbose = param;
+    class_call(parser_read_int(pfc,"verbose_log",&param,&flag,errmsg),
+               errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->verbose_log = param;
+
+#ifdef OPENMPCODE
+    class_call(parser_read_int(pfc,"numberThreads",&param,&flag,errmsg),
+               errmsg,errmsg);
+    if (flag == TRUE)
+      cmd->numthreads = param;
 #endif
-#endif
-*/
+
+    class_call(parser_read_string(pfc,"options",&string1,&flag1,errmsg),
+               errmsg,errmsg);
+    if (flag1 == TRUE) {
+        for (index=0;index<pfc->size;++index){
+          if (strcmp(pfc->name[index],"options") == 0){
+              slen = strlen(pfc->value[index]);
+              cmd->options = (char*) malloc(slen*sizeof(char));
+            memcpy(cmd->options,pfc->value[index],slen+1);
+            break;
+          }
+        }
+    }
+    //E
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #ifdef ADDONS
 #include "class_lib_include_01.h"
 #endif
@@ -608,80 +600,70 @@ int input_default_params(struct cmdline_data *cmd)
 {
 // Every item in cmdline_defs.h must have an item here::
 
+    //B Parameters related to the searching method
     cmd->searchMethod = "tree-omp-sincos";
-    cmd->theta = 1.0;
     cmd->mChebyshev = 7;
-    cmd->sizeHistTheta = 32;
-//B Parameters to set a region in the sky, for example for Takahasi data set.
+    cmd->nsmooth = "1";
+    cmd->rsmooth = "";
+    cmd->theta = 1.0;
+    cmd->computeTPCF = 1;
+    cmd->computeShearCF = 0;
+    cmd->usePeriodic = 0;
+    //E
+
+    //B Parameters about the I/O file(s)
+    // Input catalog parameters
+    cmd->infile = "";
+    cmd->infilefmt = "columns-ascii";
+    cmd->iCatalogs = "1";
+    // Output parameters
+    cmd->rootDir = "output";
+    cmd->outfile = "";
+    cmd->outfilefmt = "columns-ascii";
+    // Parameters to set a region in the sky, for example for Takahasi data set
     cmd->thetaL = 1.279928;
     cmd->thetaR = 1.861664;
     cmd->phiL = 1.280107;
     cmd->phiR = 1.861869;
-//E
+    //E
+
+    //B Parameters to control histograms and their output files
+    cmd->useLogHist = 1;
+    cmd->logHistBinsPD = 5;
+    //
     cmd->sizeHistN = 40;
     cmd->rangeN = 100.0;
     cmd->rminHist = 1.0e-3;
-    cmd->infile = "";
-    cmd->infilefmt = "columns-ascii";
-    cmd->iCatalogs = "1";
-    cmd->rootDir = "output";
-    cmd->outfile = "";
-    cmd->outfilefmt = "columns-ascii";
-
+    cmd->sizeHistTheta = 32;
+    //
     cmd->histNNFileName = "histNN";
     cmd->histXi2pcfFileName = "histXi2pcf";
     cmd->histZetaFileName = "histZeta";
     cmd->suffixOutFiles = "";
+    //E
 
-    cmd->stepState = 10000;
-
-    cmd->verbose = 1;
-    cmd->verbose_log = 1;
-
-#ifdef OPENMPCODE
-    cmd->numthreads = 4;
-#endif
-
-    cmd->script = "";
-    cmd->options = "";
-
+    //B Set of parameters needed to construct a test model
     cmd->seed=123;                                          // to always have
                                                             //  defaults Check in gsl
-    cmd->nsmooth = "1";
     cmd->testmodel = "simple-cubic-random";
     cmd->nbody = 16384;
     cmd->lengthBox = 10000.0;
+    //E
 
-    cmd->rsmooth = "";
-/*
-#ifdef ADDONS
-#ifdef BALLS
-        cmd->scanLevel = 6;
-        cmd->scanLevelRoot = 3;
-        cmd->scanLevelMin = "-0";
-        cmd->ntosave = 1000;
+    //B Miscellaneous parameters
+    cmd->script = "";
+    cmd->stepState = 10000;
+    cmd->verbose = 1;
+    cmd->verbose_log = 1;
+#ifdef OPENMPCODE
+    cmd->numthreads = 4;
 #endif
-#ifdef IOLIB
-        // pos, kappa, gamma1, gamma2, weight, seven places maximum
-        // use in multi-columns-ascii and cfitsio
-        // default is 3D: three pos and one convergence (kappa)
-        cmd->columns = "1,2,3,4";
-#endif
-#ifdef TREE3PCFDIRECTOMP
-#endif
-#endif
-*/
+    cmd->options = "";
+    //E
+
 #ifdef ADDONS
 #include "class_lib_include_02.h"
 #endif
-
-
-    cmd->sizeHistTheta = 32;
-
-    cmd->computeTPCF = 1;
-    cmd->useLogHist = 1;
-    cmd->logHistBinsPD = 5;
-    cmd->usePeriodic = 0;
 
   return SUCCESS;
 }

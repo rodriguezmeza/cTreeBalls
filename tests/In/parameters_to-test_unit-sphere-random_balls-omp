@@ -5,9 +5,6 @@
 # First create the sphere:
 # cballs nbody=1048576 o=points_on_sphere testmodel=unit-sphere-random options=stop
 #
-# You may plot it (it takes to long if you use 1048576, use lesser points, like 16384)
-# python scripts/plot3D_points-on-sphere.py 
-#
 # Then run cBalls on this data
 #
 # Version parameter file:
