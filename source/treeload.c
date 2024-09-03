@@ -48,7 +48,8 @@ local void walktree_selected(nodeptr, real); // To see the bodies belonging
 local INTEGER icell;                                // To debug cells
 local INTEGER inode;
 #ifdef DEBUG
-local int walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd, nodeptr, real);
+local void walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd,
+                        nodeptr, real);
 #endif
 
 //B not needed in the public version... they are part of an addon
@@ -232,7 +233,7 @@ global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr 
 #ifdef DEBUG
     DO_BODY(p,btab,btab+nbody)
         HIT(p) = FALSE;
-    walktree_hit((nodeptr) roottable[ifile], Size(roottable[ifile]));
+    walktree_hit(cmd, gd, (nodeptr) roottable[ifile], Size(roottable[ifile]));
 #endif
 //E
 
@@ -1046,14 +1047,15 @@ local void walktree_index_scan_lev_root(struct cmdline_data* cmd, struct  global
 
 //B BALLS :: DIAGNOSTICS (DEBUG)
 #ifdef DEBUG
-local void walktree_hit(nodeptr q, real qsize)
+local void walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd,
+                        nodeptr q, real qsize)
 {
     nodeptr l;
-    int i;
+//    int i;
 
     if (Type(q) == CELL) {
         for (l = More(q); l != Next(q); l = Next(l)) {
-            walktree_hit(l,qsize/2);
+            walktree_hit(cmd, gd, l,qsize/2);
         }
     } else {
         HIT(q) = TRUE;

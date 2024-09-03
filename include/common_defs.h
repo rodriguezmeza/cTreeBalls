@@ -18,7 +18,7 @@
 #define REALTIME        (gettimeofday(&gd.current_time, NULL)) // Gives time of
                                                     //  the day in minutes
 #define PRNUNITOFTIMEUSED   "min."
-#define MAXLENGTHOFSTRSCMD     512
+#define MAXLENGTHOFSTRSCMD     1024
 #define EXTFILES            ".txt"
 #define INMB                9.536743116E-7          // 1/(1024*1024)
 //E

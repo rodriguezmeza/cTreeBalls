@@ -31,7 +31,7 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
         fits_open_file(&fptr, filename, READONLY, &status);
     else
         fits_open_data(&fptr, filename, READONLY, &status);
-    if (status) {                               // print any error messages
+    if (status) {                                   // print any error messages
         verb_print(cmd->verbose,
                    "\tinputdata_cfitsio: open status: %d...\n\n",
                    status);
@@ -39,21 +39,21 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
     }
 
     fits_get_hdrspace(fptr, &nkeys, NULL, &status);
-    if (status) {                               // print any error messages
+    if (status) {                                   // print any error messages
         verb_print(cmd->verbose,
                    "\tinputdata_cfitsio: get_hdrspace status: %d...\n\n",
                    status);
         fits_report_error(stderr, status);
     }
     fits_get_num_rows(fptr, &cmd->nbody, &status);
-    if (status) {                               // print any error messages
+    if (status) {                                   // print any error messages
         verb_print(cmd->verbose,
                    "\tinputdata_cfitsio: get_num_rows status: %d...\n\n",
                    status);
         fits_report_error(stderr, status);
     }
 
-    if (scanopt(cmd->options, "fits-header-info")){
+    if (scanopt(cmd->options, "header-info")){
         for (ii = 1; ii <= nkeys; ii++) {
             fits_read_record(fptr, ii, card, &status); // read keyword
             printf("%s\n", card);

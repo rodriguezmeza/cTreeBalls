@@ -40,6 +40,21 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 #endif
 
 
+/*
+ MainLoop routine:
+
+ To be called in main:
+    MainLoop(&cmd, &gd);
+
+ This routine is in charge of making the tree
+    and do the searching.
+
+ Arguments:
+    * `cmd`: Input: structure cmdline_data pointer
+    * `gd`: Input: structure global_data pointer
+ Return (the error status):
+    int SUCCESS or FAILURE
+ */
 int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     bodyptr p,q;
@@ -189,7 +204,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
     if (scanopt(cmd->options, "stop")) {
         if (!strnull(cmd->outfile))
-            Output(cmd, gd, bodytable, gd->nbodyTable, ifile);
+            OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
         verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
         exit(1);
     }
@@ -201,7 +216,8 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
 #ifdef DEBUG
     if (!strnull(cmd->outfile))
-        Output(cmd, gd);
+        OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
+//        OutputData(cmd, gd);
 #endif
 
 //B Post-processing:

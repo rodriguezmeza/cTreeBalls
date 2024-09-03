@@ -33,7 +33,25 @@ local int EndRun_FreeMemory(struct cmdline_data*, struct  global_data*);
 local int outfilefmt_string_to_int(string,int *);
 local int outfilefmt_int;
 
-int InputData(struct cmdline_data* cmd, 
+
+/*
+ InputData routine:
+
+ To be called by StartRun_Common in startrun.c:
+    InputData(cmd, gd, gd->infilenames[ifile], ifile);
+
+ This routine is in charge of reading catalog of data
+    to be analyzed
+
+ Arguments:
+    * `cmd`:        Input: structure cmdline_data pointer
+    * `gd`:         Input: structure global_data pointer
+    * `filename`:   Input: catalog of data filename
+    * `ifile`:      Input: catalog file tag
+ Return (the error status):
+    int SUCCESS or FAILURE
+ */
+int InputData(struct cmdline_data* cmd,
               struct  global_data* gd, string filename, int ifile)
 {
     double cpustart = CPUTIME;
@@ -69,11 +87,17 @@ int InputData(struct cmdline_data* cmd,
     }
 
     gd->cputotalinout += CPUTIME - cpustart;
-    verb_print(cmd->verbose, "\n\tinputdata :: reading time = %f\n",
-               CPUTIME - cpustart);
+
+#ifdef DEBUG
+    verb_print(cmd->verbose,
+               "\n\tinputdata :: reading time = %f\n",CPUTIME-cpustart);
+#else
+    printf("\n\tinputdata :: reading time = %f\n",CPUTIME - cpustart);
+#endif
 
     return SUCCESS;
 }
+
 
 local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
                            string filename, int ifile)
@@ -87,6 +111,19 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     gd->input_comment = "Column form input file";
 
     instr = stropen(filename, "r");
+
+    if (scanopt(cmd->options, "header-info")){
+        fgets(firstline,200,instr);
+        verb_print(cmd->verbose, "\n\tinputdata_ascii: header of %s\n", filename);
+        verb_print(cmd->verbose, "\t1st line: %s", firstline);
+        fgets(firstline,200,instr);
+        verb_print(cmd->verbose, "\t2nd line: %s\n", firstline);
+        rewind(instr);
+        if (scanopt(cmd->options, "stop")) {
+            fclose(instr);
+            exit(1);
+        }
+    }
 
     fgets(firstline,200,instr);
     fscanf(instr,"%1s",gato);
@@ -122,7 +159,16 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     gd->Box[1] = Ly;
 #endif
 
-    verb_print(cmd->verbose, "\tInput: nbody and ndim: %d %d...\n", cmd->nbody, ndim);
+    verb_print(cmd->verbose,
+               "\tinputdata_ascii: nbody and ndim: %d %d...\n",
+               cmd->nbody, ndim);
+    verb_print(cmd->verbose,
+               "\tinputdata_ascii: lbox dimensions: ");
+    int k;
+    DO_COORD(k)
+    verb_print(cmd->verbose,
+               "%g ", gd->Box[k]);
+    verb_print(cmd->verbose,"\n\n");
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
@@ -187,6 +233,41 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
     gd->input_comment = "Binary input file";
 
     instr = stropen(filename, "r");
+
+    if (scanopt(cmd->options, "header-info")){
+        verb_print(cmd->verbose, "\n\tinputdata_bin: header of %s\n", 
+                   filename);
+        in_int_bin_long(instr, &cmd->nbody);
+        verb_print(cmd->verbose, "\t1st line: %d\n", cmd->nbody);
+        in_int_bin(instr, &ndim);
+        verb_print(cmd->verbose, "\t2nd line: %d\n", ndim);
+#ifdef SINGLEP
+        in_real_bin_double(instr, &gd->Box[0]);
+        in_real_bin_double(instr, &gd->Box[1]);
+#if NDIM == 3
+        in_real_bin_double(instr, &gd->Box[2]);
+#endif
+#else
+        in_real_bin(instr, &gd->Box[0]);
+        in_real_bin(instr, &gd->Box[1]);
+#if NDIM == 3
+        in_real_bin(instr, &gd->Box[2]);
+#endif
+#endif
+#if NDIM == 3
+        verb_print(cmd->verbose, "\tinputdata_bin: Box: %g %g %g\n\n",
+                   gd->Box[0], gd->Box[1], gd->Box[2]);
+#else
+        verb_print(cmd->verbose, "\tinputdata_bin: Box: %g %g %g\n\n",
+                   gd->Box[0], gd->Box[1]);
+#endif
+        rewind(instr);
+        if (scanopt(cmd->options, "stop")) {
+            fclose(instr);
+            exit(1);
+        }
+    }
+
     in_int_bin_long(instr, &cmd->nbody);
     verb_print(cmd->verbose, "\tInput: nbody %d\n", cmd->nbody);
     if (cmd->nbody < 1)
@@ -194,7 +275,8 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
     in_int_bin(instr, &ndim);
     if (ndim != NDIM)
         error("inputdata: ndim = %d; expected %d\n", ndim, NDIM);
-    verb_print(cmd->verbose, "\tInput: nbody and ndim: %d %d...\n", cmd->nbody, ndim);
+    verb_print(cmd->verbose, "\tInput: nbody and ndim: %d %d...\n", 
+               cmd->nbody, ndim);
 
 #ifdef SINGLEP
     in_real_bin_double(instr, &gd->Box[0]);
@@ -295,6 +377,17 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
 //E Begin reading Takahasi file
     fp = stropen(filename, "rb");
 
+    if (scanopt(cmd->options, "header-info")){
+        verb_print(cmd->verbose, "\n\tinputdata_takahasi: header of %s... ",
+                   filename);
+        verb_print(cmd->verbose, "not available yet... sorry!\n\n");
+        if (scanopt(cmd->options, "stop")) {
+            fclose(fp);
+            exit(1);
+        }
+    }
+
+    
     fread(&negi, sizeof(int), 1, fp);
     fread(&nside, sizeof(int), 1, fp);
     fread(&npix, sizeof(long), 1, fp);
@@ -948,7 +1041,24 @@ int StartOutput(struct cmdline_data *cmd)
     return SUCCESS;
 }
 
-int Output(struct cmdline_data* cmd, struct  global_data* gd,
+/*
+ OutputData routine:
+
+ To be called by MainLoop in cballs.c:
+    OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
+
+ This routine is in charge of saving a catalog of data
+
+ Arguments:
+    * `cmd`: Input: structure cmdline_data pointer
+    * `gd`: Input: structure global_data pointer
+    * `btable`: Input: a body pointer structure array
+    * `nbody`: Input: number of points in table array
+    * `ifile`: Input: catalog file tag
+ Return (the error status):
+    int SUCCESS or FAILURE
+ */
+int OutputData(struct cmdline_data* cmd, struct  global_data* gd,
            bodyptr *btable, INTEGER *nbody, int ifile)
 {
     double cpustart = CPUTIME;
@@ -996,10 +1106,11 @@ local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
 
     sprintf(namebuf, gd->fpfnameOutputFileName);
     outstr = stropen(namebuf, "w!");
-    fprintf(outstr,"#   nbody NDIM\n# %ld %d ",cmd->nbody,NDIM);
 #if NDIM == 3
+    fprintf(outstr,"# nbody NDIM Lx Ly Lz\n# %ld %d ",cmd->nbody,NDIM);
     fprintf(outstr,"%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
 #else
+    fprintf(outstr,"# nbody NDIM Lx Ly\n# %ld %d ",cmd->nbody,NDIM);
     fprintf(outstr,"%lf %lf\n",gd->Box[0],gd->Box[1]);
 #endif
     DO_BODY(p, bodytab, bodytab+cmd->nbody) {
@@ -1159,6 +1270,21 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 }
 
 
+/*
+ EndRun routine:
+
+ To be called in main:
+    EndRun(&cmd, &gd);
+
+ This routine is in charge of closing log file, printing a summary
+    of the run and freeing the allocated memory
+
+ Arguments:
+    * `cmd`: Input: structure cmdline_data pointer
+    * `gd`: Input: structure global_data pointer
+ Return (the error status):
+    int SUCCESS or FAILURE
+ */
 int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 {
     stream outstr;
@@ -1220,7 +1346,7 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 //
 local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 {
-    int m;
+//    int m;
 
     if (cmd->computeShearCF) {
         free_dvector(gd->histXitx,1,cmd->sizeHistN);
@@ -1234,6 +1360,7 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
         free_dmatrix3D(gd->histZetaGmRe,
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
 #ifdef USEGSL
+        int m;
         for (m=1; m<=cmd->mChebyshev+1; m++)
             gsl_matrix_complex_free(histZetaMatrix[m].histZetaM);
         free(histZetaMatrix);

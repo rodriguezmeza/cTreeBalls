@@ -172,8 +172,8 @@ STUDY = -DSTUDY
 OPT2 += $(STUDY)
 endif
 #
-# To print some useful info set to 1. Else 0
-#   acts as DIAGNOSTICS flag was intended...
+# To print some useful debuggin info set to 1. Else 0
+#   acts also as (thoroughly )DIAGNOSTICS flag...
 DEBUGON = 0
 #
 ifeq ($(DEBUGON),1)

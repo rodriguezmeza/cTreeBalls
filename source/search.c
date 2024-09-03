@@ -51,8 +51,8 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
     *                                    histNNSubXi2pcf, histNNSubXi2pcftotal,
     *                                    histXi2pcf, histXi,
     * Counting encounters (in global gd): nbbcalc, nbccalc, ncccalc
- Return:
-    int : status of the routine run: SUCCESS or _FAILURE_
+ Return (the error status):
+    int SUCCESS or FAILURE
  */
 global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
                                     struct  global_data* gd,

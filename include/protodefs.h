@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 
-int Output(struct cmdline_data* cmd, struct  global_data* gd,
+int OutputData(struct cmdline_data* cmd, struct  global_data* gd,
            bodyptr *btable, INTEGER *nbody, int ifile);
 
 int MainLoop(struct cmdline_data* cmd, struct  global_data* gd);

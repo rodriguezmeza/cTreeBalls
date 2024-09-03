@@ -16,7 +16,7 @@ Author: Mario A. Rodriguez-Meza
 
 **c**orrelations function computation with **T**ree/**B**alls methods (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
 
-Complete documentation can be found here: [documentation](docs/_build/html/index.html).
+Complete documentation will be found here: [documentation](docs/_build/html/index.html).
 
 ## Compiling and getting started
 
@@ -49,6 +49,21 @@ To see a plot of the 2pcf, edit parameters_explained and set option to "post-pro
     ../cballs parameters_explained
 
 At the end of the run you will, as before, have a pdf file of the plot.
+
+By default **cBalls** reads/writes catalog of points to analyzed files in 4-column format with x, y, z columns first and then value of the convergence field. It has a two line header:
+
+    # nbody NDIM Lx Ly Lz
+    # nbody-value NDIM-value Lx Ly Lz - values
+
+Try running:
+
+    ../cballs nbody=6480 o=points_on_sphere testmodel=unit-sphere-random options=stop
+
+In the `Output` directory you will have a file: `points_on_sphere.txt`. View its contents to see the two lines header and the 4 columns structure of data. You can plot this file:
+
+    python scripts/plot3D_points-on-sphere.py
+
+Note: in the above example `points_on_sphere` was not given an extension. By default **cBalls** gives to the output files the extension `.txt`.
 
 You may also consult the code´s man page for more detailed information on how to run **cBalls**:
 
@@ -97,7 +112,7 @@ To test it go to directory `tests` and run:
 
     python test_cython_balls.py
 
-Note: this interface in Cython was tested in a python environment with python3.7.
+Note: this interface in Cython was tested in a python environment with `python3.7`.
 
 ## Plotting utilities
 
@@ -105,7 +120,7 @@ Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are avai
 
 https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks
 
-Other python scripts are in directory 'tests/scripts'
+Other python scripts are in directory `tests/scripts`.
 
 
 ## License

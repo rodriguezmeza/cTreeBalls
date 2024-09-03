@@ -43,22 +43,25 @@ local long saveidum;
  StartRun routine:
 
  To be called in main:
- StartRun(argv[0], HEAD1, HEAD2, HEAD3);
+ StartRun(&cmd, &gd, argv[0], HEAD1, HEAD2, HEAD3);
  
- This routine is in charge of setting all global structures in order
+ This routine is in charge of setting all global structures in order to
     the comutation process run smoothly with all parameters given
     by the user set and checked.
 
  Arguments:
+    * `cmd`: Input: structure cmdline_data pointer
+    * `gd`: Input: structure global_data pointer
     * `head0`: Input: string
     * `head1`: Input: string
     * `head2`: Input: string
     * `head3`: Input: string
- Return:
-    The error status: int
+ Return (the error status):
+    int SUCCESS or FAILURE
  */
 #ifndef CLASSLIB
-int StartRun(struct  cmdline_data* cmd, struct  global_data* gd, string head0, string head1, string head2, string head3)
+int StartRun(struct  cmdline_data* cmd, struct  global_data* gd, 
+             string head0, string head1, string head2, string head3)
 {
     double cpustart = CPUTIME;
 
