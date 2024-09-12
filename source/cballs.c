@@ -450,11 +450,17 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     real rBin, rbinlog;
     int n;
     stream outstr;
+    char namebuf[256];
 
-    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
+//    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
+//    verb_print_q(2, cmd->verbose,
+//               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
 
-    verb_print_q(2, cmd->verbose,
-               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
+    sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
+            cmd->suffixOutFiles, EXTFILES);
+    verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+    outstr = stropen(namebuf, "w!");
+
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
