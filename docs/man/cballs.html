@@ -88,23 +88,36 @@
 
 
        <B>mChebyshev</B>  [a: mcheb] is the total number of chebyshev multipoles to
-                   use. (mChebyshev + 1) must be a power of 2.
+                   use. (mChebyshev + 1) must be a power of 2. Default value
+                   is 7, which means that will be computed 8 multipoles.
 
 
-       <B>nsmooth</B>     [a: nsm] Number of bodies to smooth out (or in a bucket).
+       <B>nsmooth</B>     [a: nsm] Number of bodies to smooth out (or in a bucket if
+                   you are using 'searchMethod=kdtree-omp'). Default is 1, but
+                   if you are using kdtree-omp it is convenient to use
+                   'nsmooth=8'.
 
 
        <B>rsmooth</B>     [a: rsm] Radius of the pivot smoothing neighbourhood.
 
 
        <B>theta</B>       Control tree search parameter, can be used to increase
-                   speed.
+                   speed. It has the effect of increasing ('theta&lt;1') or
+                   decreasing ('theta&gt;1') the radius of cells. Default value
+                   is 1. Experiment with 'theta=1.1' to see the speeding-up of
+                   the code.
 
 
        <B>computeTPCF</B> [a: tpcf] If true, compute 3pcf.
 
 
-       <B>usePeriodic</B> [a: tpcf] If false, don't use periodic boundary condition.
+       <B>usePeriodic</B> [a: tpcf] If false, do not use periodic boundary condition.
+                   Useful to compute 2-point correlations functions of
+                   periodic boxes steaming from N-body simulations or to
+                   analyze halo catalogs from Rockstar for example. In such a
+                   case use in combinations with 'computeTPCF=false'. <B>cballs</B>
+                   is able to read Gadget format or multi-columns format files
+                   like the ones given by Rockstar. See below.
 
 
        <B>infile</B>      [a: in]  gives the name of file to input the data to
@@ -118,19 +131,51 @@
                    data point info is in column form: positions and
                    convergence field. The binary format is a <B>cballs</B> binary
                    format. Whereas takahasi format is for reading Takahasi
-                   simulations data.
+                   simulations data. Other file formats are in the addons.
+                   Gadget format is ones of them. Other is 'multi-columns-
+                   ascii' which can be used in combinations with 'columns'
+                   option in order to read files that are Rockstar output.
+                   Also, <B>cballs</B> can read fits files. You have to activate this
+                   options and recompile the code. Note that in this case you
+                   need to edit Makefile_machine to set cfitsio path. Note:
+                   you need to set properly the format of the point catalog
+                   that you are pretending to analyze, because if you
+                   mistakenly set wrong format or positions or fields columns,
+                   you will obtain wrong results or get a 'segmentation fault'
+                   error and the code will stop. Please follow the examples
+                   given in the tests folder.
+
+
+       <B>iCatalog</B>    [a: icats] gives the indexes of point catalogs to analyse.
+                   Usefult to read several point catalogs to do cross-
+                   correlations.
+
+
+       <B>rootDir</B>     [a: root] gives output dir, where output files will be
+                   written.
 
 
        <B>outfile</B>     [a: o] will give the name of file to save the analysed
                    data. The output is written in column form by default,
                    there is also a binary format. And by default this options
-                   is empty then no output file is saved.
+                   is empty then no output file is saved. You can use in
+                   combinations with 'options=stop' to just convert input file
+                   format that can be use by other applications.
 
 
        <B>oufileformat</B>
                    [a: ofmt]  gives format of file to output the data to be
                    analysed. Common options are: columns-ascii, binary. They
                    follow the <B>infileformat</B> above.
+
+
+       <B>useLogHist</B>  [a: loghist] If true, it will use log scale in the r-bins
+                   of histograms.
+
+
+       <B>logHistBinsPD</B>
+                   [a: binspd] Bins per decades in r-bins when
+                   'useLogHist=true'.
 
 
        <B>sizeHistN</B>   gives the number of bins to create.
@@ -161,6 +206,14 @@
                    the bodies reside.
 
 
+       <B>script</B>
+                       Scripts in shell or python that can be run in pre-
+
+                   processing or post-processing. Use in combinations with
+                   'options=pre-processing' or 'options=post-processing'. Last
+                   setting is necessary to activate the script.
+
+
        <B>stepState</B>   gives the frequency to save the the number of pivot
                    computed. Useful to see the state of the run.
 
@@ -175,8 +228,8 @@
 
 
        <B>numberThreads</B>
-                   [a: nthreads] you may give here various code behavior
-                   options.
+                   [a: nthreads] you may give number of threads to compute in
+                   parallel.
 
 
        <B>options</B>     [a: opt] you may give here various code behavior options.
