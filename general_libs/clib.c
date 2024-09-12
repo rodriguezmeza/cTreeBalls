@@ -332,6 +332,8 @@ void verb_print_q(int iq, int verbose, string fmt, ...)
     }
 }
 
+// DEBUG WARNING!!
+//  check lines: 91--106 routine InputData in cballsio.c
 void verb_print(int verbose, string fmt, ...)
 {
     va_list ap;

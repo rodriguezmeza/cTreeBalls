@@ -1,13 +1,13 @@
 /* ==============================================================================
-|	MODULE: treeload.c			[cTreeBalls]
-|	Written by: M.A. Rodriguez-Meza
-|	Starting date:	april 2023
-|	Purpose: 3-point correlation function computation
-|	Language: C
-|	Use: maketree(cmd, gd, btab, nbody, ifile)
-|	Major revisions:
-|==============================================================================*/
-//        1          2          3          4          5          6          7
+ MODULE: treeload.c			[cTreeBalls]
+ Written by: M.A. Rodriguez-Meza
+ Starting date:	april 2023
+ Purpose: 3-point correlation function computation
+ Language: C
+ Use: maketree(cmd, gd, btab, nbody, ifile)
+ Major revisions:
+ ==============================================================================*/
+//        1          2          3          4        ^ 5          6          7
 
 // Work to do in order to use with boxes not centered at (0,0,...)
 
@@ -15,8 +15,6 @@
 
 local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int);
 local cellptr makecell(struct  cmdline_data* cmd, struct  global_data* gd, int);
-//local int expandbox(struct  cmdline_data* cmd, struct  global_data* gd,
-//                    bodyptr, int, int);
 local int loadbody(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr, int);
 local int subindex(bodyptr, cellptr);
 local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd, 
@@ -25,9 +23,6 @@ local int setRadius(struct  cmdline_data* cmd, struct  global_data* gd,
                     cellptr, vector, real, int);
 local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, 
                       nodeptr, nodeptr);
-//local int findRootCenter(struct  cmdline_data* cmd, struct  global_data* gd,
-//                         bodyptr, int, int);
-//local int centerBodies(bodyptr, int, int);
 
 #define MAXLEVEL  32
 
@@ -42,10 +37,10 @@ local int cellRadius[NbMax];
 local real deltaRadius;
 //E
 
-local void walktree_selected(nodeptr, real); // To see the bodies belonging
+local void walktree_selected(nodeptr, real);        // To see the bodies belonging
                                                     //  to a cell
 
-local INTEGER icell;                                // To debug cells
+//local INTEGER icell;                                // To debug cells
 local INTEGER inode;
 #ifdef DEBUG
 local void walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd,
@@ -64,22 +59,27 @@ local INTEGER inodelev;
 local INTEGER ibodyleftout;
 
 //B Root nodes:
-local void walktree_index_scan_lev_root(struct cmdline_data* cmd, struct  global_data* gd,
+local void walktree_index_scan_lev_root(struct cmdline_data* cmd, 
+                                        struct  global_data* gd,
                                         nodeptr, int, int);
 local INTEGER inodelev_root;
 local INTEGER ibodyleftout_root;
 //E
 
 local INTEGER isel, inosel;
-local int smoothBodies(struct  cmdline_data*, struct  global_data* gd, bodyptr, INTEGER);
+local int smoothBodies(struct  cmdline_data*, 
+                       struct  global_data* gd, bodyptr, INTEGER);
 
-local int save_nodes(struct  cmdline_data*, struct  global_data* gd, int ifile);
-local int save_nodes_root(struct  cmdline_data*, struct  global_data* gd, int ifile);
+local int save_nodes(struct  cmdline_data*, 
+                     struct  global_data* gd, int ifile);
+local int save_nodes_root(struct  cmdline_data*, 
+                          struct  global_data* gd, int ifile);
 
 local char cellsfilePath[MAXLENGTHOFFILES];
 local FILE *outcells;
 
-global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr btab, INTEGER nbody, int ifile)
+global int MakeTree(struct  cmdline_data* cmd, 
+                    struct  global_data* gd, bodyptr btab, INTEGER nbody, int ifile)
 {
     double cpustart;
     bodyptr p;
@@ -113,7 +113,7 @@ global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr 
         Nbb(p) = 1;                                 // Check consistency with
                                                     //  smoothing... Correction
 #endif
-        loadbody(cmd, gd, p, ifile);                         // Set body in a cell
+        loadbody(cmd, gd, p, ifile);                // Set body in a cell
         Nb(p) = 1;
         Radius(p) = 0.0;
 #ifdef KappaAvgON
@@ -160,28 +160,6 @@ global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr 
         }
 //E
 
-//B not needed in the public version... they are part of an addon
-//B To debug cells:
-/*
-#ifdef DEBUGCELLS
-    icell = 0;
-    inode = 0;
-    gd->nnode = gd->ncellTable[ifile]/cmd->stepNodes;
-    nodetab = (nodeptr *) allocate(gd->nnode * sizeof(nodeptr));
-    gd->bytes_tot += gd->nnode*sizeof(nodeptr);
-    verb_print(cmd->verbose,
-        "\nAllocated %g MByte for (%d cells) nodetab storage.\n",
-        gd->nnode*sizeof(nodeptr)*INMB,gd->nnode);
-#endif
-*/
-//E
-//E
-
-//B not needed in the public version... they are part of an addon
-//    Nc1 = gd->ncritical[0];
-//    Nc2 = gd->ncritical[1];
-//E
-
     ip = 0;
     threadtree(cmd, gd, (nodeptr) roottable[ifile], NULL);
     verb_print(cmd->verbose,
@@ -206,8 +184,8 @@ global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr 
     verb_print(cmd->verbose,
         "tdepth = %d\n\n",gd->tdepthTable[ifile]);
 
-    scanLevel(cmd, gd, ifile);                               // Scan pivot and root trees
-    smoothBodies(cmd, gd, btab, nbody);                      // Smooth cells
+    scanLevel(cmd, gd, ifile);                      // Scan pivot and root trees
+    smoothBodies(cmd, gd, btab, nbody);             // Smooth cells
 
 //B Histogram useful to smooth cells
     verb_log_print(cmd->verbose_log,gd->outlog,
@@ -226,7 +204,7 @@ global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr 
         Nb(roottable[ifile]));
 
 #ifdef DEBUG
-    fclose(outcells);                            // Close file to debug cells
+    fclose(outcells);                               // Close file to debug cells
 #endif
 
 //B BALLS :: DIAGNOSTICS (DEBUG)
@@ -245,10 +223,12 @@ global int MakeTree(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr 
 
 
 //B Smooth(ing) section
-local int smoothBodies(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr btab, INTEGER nbody)
+local int smoothBodies(struct  cmdline_data* cmd, 
+                       struct  global_data* gd, bodyptr btab, INTEGER nbody)
 {
-    bodyptr p, q;
-    int i;
+    bodyptr p;
+//    bodyptr q;
+//    int i;
 
     if (!gd->flagSmooth || !gd->flagSetNbNoSel) {
         if ( (scanopt(cmd->options, "smooth")
@@ -271,7 +251,7 @@ local int smoothBodies(struct  cmdline_data* cmd, struct  global_data* gd, bodyp
 #ifdef BODY3ON
                 Nbb(q) = Nbb(p);
 #endif
-                Weight(q) = Weight(p);
+                Mass(q) = Mass(p);
                 SETV(Pos(q), Pos(p));
                 Kappa(q) = Kappa(p);
                 q++;
@@ -286,7 +266,7 @@ local int smoothBodies(struct  cmdline_data* cmd, struct  global_data* gd, bodyp
 #ifdef BODY3ON
                     Nbb(q) = 1;
 #endif
-                    Weight(q) = Weight(p);
+                    Mass(q) = Mass(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);
                     q++;
@@ -598,7 +578,8 @@ local cellptr makecell(struct  cmdline_data* cmd,
     Update(c) = FALSE;
     for (i = 0; i < NSUB; i++)                  
         Subp(c)[i] = NULL;
-    (gd->ncellTable[ifile])++;
+//    (gd->ncellTable[ifile])++;
+    gd->ncellTable[ifile] = gd->ncellTable[ifile] + 1;
     gd->bytes_tot_cells += sizeof(cell);
     return (c);
 }
@@ -717,7 +698,7 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->tdepthTable[ifile] = MAX(gd->tdepthTable[ifile], lev);
     cellhist[lev]++;
     Level(p) = lev;                                 // To set scanLevel
-    Weight(p) = 0.0;
+    Mass(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
 #ifdef KappaAvgON
@@ -733,26 +714,26 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
             Selected(p) |= Selected(q);             // To see the bodies belonging
                                                     //  to a cell
             Update(p) |= Update(q);
-            Weight(p) += Weight(q);
+            Mass(p) += Mass(q);
             if ( Type(q) == CELL) {
                 Nb(p) += Nb(q);
-                Kappa(p) += Weight(q)*Kappa(q);
+                Kappa(p) += Mass(q)*Kappa(q);
 #ifdef KappaAvgON
                 KappaAvg(p) += KappaAvg(q);
 #endif
             } else {
                 if (Type(q) == BODY) {
                     Nb(p) += 1;
-                    Kappa(p) += Weight(q)*Kappa(q);
+                    Kappa(p) += Mass(q)*Kappa(q);
 #ifdef KappaAvgON
                     KappaAvg(p) += Kappa(q);
 #endif
                 } else if (Type(q) == BODY3) {      // To set smoothing body
                     Nb(p) += 1;
-                    Kappa(p) += Weight(q)*Kappa(q);
+                    Kappa(p) += Mass(q)*Kappa(q);
                 }
             }
-            MULVS(tmpv, Pos(q), Weight(q));
+            MULVS(tmpv, Pos(q), Mass(q));
             ADDV(cmpos, cmpos, tmpv);           
         }
     }
@@ -762,8 +743,8 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
     }
 //E
     if (scanopt(cmd->options, "center-of-mass")) {
-        if (Weight(p) > 0.0) {
-            DIVVS(cmpos, cmpos, Weight(p));
+        if (Mass(p) > 0.0) {
+            DIVVS(cmpos, cmpos, Mass(p));
         } else {
             SETV(cmpos, Pos(p));
         }
@@ -772,7 +753,7 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
 
 #define EPSILON 1.0E-16
 // Here there appears an error for big numbers of points such 201 millions...
-// See line above and uncomment DIVVS(cmpos, cmpos, Weight(p)); line (not working!)
+// See line above and uncomment DIVVS(cmpos, cmpos, Mass(p)); line (not working!)
 	DO_COORD(k)
         if (cmpos[k] < Pos(p)[k] - psize/2 || Pos(p)[k] + psize/2 <= cmpos[k]) {
             if (psize/2 > 2.710505e-20 + EPSILON)
@@ -793,7 +774,6 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
         Kappa(p) /= Nb(p);
     } else
         error("hackCellProp: Nb = 0: %ld\n", Nb(p));
-
 }
 
 // Parameter theta controls size of the cell.
@@ -826,9 +806,12 @@ local int setRadius(struct  cmdline_data* cmd, struct  global_data* gd,
     int n;
     n = (int) (Radius(p) / deltaRadius);
     (cellRadius[n])++;
+
+    return SUCCESS;
 }
 
-local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, nodeptr p, nodeptr n)
+local void threadtree(struct  cmdline_data* cmd, 
+                      struct  global_data* gd, nodeptr p, nodeptr n)
 {
     int ndesc, i;
     nodeptr desc[NSUB+1];
@@ -837,35 +820,7 @@ local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, nodept
 
     Next(p) = n;
     if (Type(p) == CELL) {
-
-//B not needed in the public version... they are part of an addon
-/*
-#ifdef DEBUG
-//B To debug cells:
-        icell++;
-        if (icell%cmd->stepNodes == 0 && Nb(p)>= Nc1 && Nb(p)<=Nc2) {
-            out_vector_mar(outcells, Pos(p));
-            out_real_mar(outcells, Kappa(p));
-            out_real_mar(outcells, Size(p));
-            out_int_long(outcells, Nb(p));
-// What is l about?
-//            l[inode] = p;
-            inode++;
-        }
-//E
-#else
-#ifdef DEBUGCELLS
-        icell++;
-        if (icell%cmd->stepNodes == 0 && Nb(p)>= Nc1 && Nb(p)<=Nc2) {
-            nodetab[inode] = p;
-            inode++;
-        }
-#endif
-#endif
-*/
-//E
-
-//B Smooth(ing) section
+        //B Smooth(ing) section
         if (Nb(p)<NbMax)
             cellhistNb[Nb(p)]++;
         if (!gd->flagSmooth) {
@@ -879,7 +834,7 @@ local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, nodept
                     Nbb(q) = Nb(p);
                     Nbb(p) = Nb(p);
 #endif
-                    Weight(q) = Weight(p);
+                    Mass(q) = Mass(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);
                     Selected(p) = TRUE;             // To see the bodies belonging
@@ -887,7 +842,7 @@ local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, nodept
                 }
             }
         }
-//E
+        //E
         ndesc = 0;
         for (i = 0; i < NSUB; i++)
             if (Subp(p)[i] != NULL)
@@ -930,7 +885,7 @@ local void walktree_selected(nodeptr q, real qsize)
 local void walktree_index_scan_lev(nodeptr q, int lev, int ifile, int scanLevel)
 {
     nodeptr p,g,h,l;
-    int i;
+//    int i;
 
     if (scanLevel==2) {
         p = (nodeptr)roottable[ifile];
@@ -969,7 +924,7 @@ local void walktree_index_scan_lev(nodeptr q, int lev, int ifile, int scanLevel)
             ibodyleftout++;
         }
     } else {
-        if ( lev+1 <= scanLevel )
+        if ( lev+1 <= scanLevel ) {
             if (Type(q)==CELL) {
                 for (l = More(q); l != Next(q); l = Next(l)) {
                     if (Type(l)==CELL)
@@ -982,6 +937,7 @@ local void walktree_index_scan_lev(nodeptr q, int lev, int ifile, int scanLevel)
                 inodelev++;
                 ibodyleftout++;
             }
+        }
     }
 }
 
@@ -989,7 +945,7 @@ local void walktree_index_scan_lev_root(struct cmdline_data* cmd, struct  global
                                         nodeptr q, int lev, int ifile)
 {
     nodeptr p,g,h,l;
-    int i;
+//    int i;
 
     if (cmd->scanLevelRoot==2) {
         p = (nodeptr)roottable[ifile];
@@ -1028,7 +984,7 @@ local void walktree_index_scan_lev_root(struct cmdline_data* cmd, struct  global
             ibodyleftout_root++;
         }
     } else {
-        if ( lev+1 <= cmd->scanLevelRoot )
+        if ( lev+1 <= cmd->scanLevelRoot ) {
             if (Type(q)==CELL) {
                 for (l = More(q); l != Next(q); l = Next(l)) {
                     if (Type(l)==CELL)
@@ -1041,6 +997,7 @@ local void walktree_index_scan_lev_root(struct cmdline_data* cmd, struct  global
                 inodelev_root++;
                 ibodyleftout_root++;
             }
+        }
     }
 }
 #endif // ! BALLS
@@ -1099,7 +1056,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
             Id(pn) = in;
             Type(pn) = BODY;
             Update(pn) = TRUE;
-            Weight(pn) = Weight(nodetablescanlev[ifile][in]);
+            Mass(pn) = Mass(nodetablescanlev[ifile][in]);
             Kappa(pn) = Kappa(nodetablescanlev[ifile][in]);
             SETV(Pos(pn),Pos(nodetablescanlev[ifile][in]));
             Nb(pn) = Nb(nodetablescanlev[ifile][in]);
@@ -1111,7 +1068,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
                 out_vector_mar(gd->outbodylev, Pos(pn));
                 out_real_mar(gd->outbodylev, Kappa(pn));
                 out_real_mar(gd->outbodylev, Radius(pn));
-                out_real_mar(gd->outbodylev, Weight(pn));
+                out_real_mar(gd->outbodylev, Mass(pn));
                 out_int_long(gd->outbodylev, Nb(pn));
             }
         }
@@ -1123,7 +1080,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
                 out_vector_mar(gd->outnodelev, Pos(nodetablescanlev[ifile][in]));
                 out_real_mar(gd->outnodelev, Kappa(nodetablescanlev[ifile][in]));
                 out_real_mar(gd->outnodelev, Size(nodetablescanlev[ifile][in]));
-                out_real_mar(gd->outnodelev, Weight(nodetablescanlev[ifile][in]));
+                out_real_mar(gd->outnodelev, Mass(nodetablescanlev[ifile][in]));
                 out_int_long(gd->outnodelev, Nb(nodetablescanlev[ifile][in]));
             }
             nodescount += Nb(nodetablescanlev[ifile][in]);
@@ -1140,7 +1097,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
                 out_vector_mar(gd->outnodelev, Pos(nodetablescanlev[ifile][in]));
                 out_real_mar(gd->outnodelev, Kappa(nodetablescanlev[ifile][in]));
                 out_real_mar(gd->outnodelev, Radius(nodetablescanlev[ifile][in]));
-                out_real_mar(gd->outnodelev, Weight(nodetablescanlev[ifile][in]));
+                out_real_mar(gd->outnodelev, Mass(nodetablescanlev[ifile][in]));
                 out_int_long(gd->outnodelev, Nb(nodetablescanlev[ifile][in]));
             }
             sumbodies += Nb(nodetablescanlev[ifile][in]);
@@ -1221,7 +1178,7 @@ local int save_nodes_root(struct  cmdline_data* cmd, struct  global_data* gd, in
         Id(pn) = in;
         Type(pn) = BODY;
         Update(pn) = TRUE;
-        Weight(pn) = Weight(nodetablescanlev_root[ifile][in]);
+        Mass(pn) = Mass(nodetablescanlev_root[ifile][in]);
         Kappa(pn) = Kappa(nodetablescanlev_root[ifile][in]);
         SETV(Pos(pn),Pos(nodetablescanlev_root[ifile][in]));
 
@@ -1230,7 +1187,7 @@ local int save_nodes_root(struct  cmdline_data* cmd, struct  global_data* gd, in
         out_vector_mar(gd->outbodylev, Pos(pn));
         out_real_mar(gd->outbodylev, Kappa(pn));
         out_real_mar(gd->outbodylev, Radius(pn));
-        out_real_mar(gd->outbodylev, Weight(pn));
+        out_real_mar(gd->outbodylev, Mass(pn));
         out_int_long(gd->outbodylev, Nb(pn));
 
         if (Type(nodetablescanlev_root[ifile][in]) == CELL) {
@@ -1239,7 +1196,7 @@ local int save_nodes_root(struct  cmdline_data* cmd, struct  global_data* gd, in
             out_vector_mar(gd->outnodelev, Pos(nodetablescanlev_root[ifile][in]));
             out_real_mar(gd->outnodelev, Kappa(nodetablescanlev_root[ifile][in]));
             out_real_mar(gd->outnodelev, Size(nodetablescanlev_root[ifile][in]));
-            out_real_mar(gd->outnodelev, Weight(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd->outnodelev, Mass(nodetablescanlev_root[ifile][in]));
             out_int_long(gd->outnodelev, Nb(nodetablescanlev_root[ifile][in]));
             nodescount += Nb(nodetablescanlev_root[ifile][in]);
 //B Smooth(ing) section
@@ -1254,7 +1211,7 @@ local int save_nodes_root(struct  cmdline_data* cmd, struct  global_data* gd, in
             out_vector_mar(gd->outnodelev, Pos(nodetablescanlev_root[ifile][in]));
             out_real_mar(gd->outnodelev, Kappa(nodetablescanlev_root[ifile][in]));
             out_real_mar(gd->outnodelev, Radius(nodetablescanlev_root[ifile][in]));
-            out_real_mar(gd->outnodelev, Weight(nodetablescanlev_root[ifile][in]));
+            out_real_mar(gd->outnodelev, Mass(nodetablescanlev_root[ifile][in]));
             out_int_long(gd->outnodelev, Nb(nodetablescanlev_root[ifile][in]));
             sumbodies += Nb(nodetablescanlev_root[ifile][in]);
             nodescount_thread += Nb(nodetablescanlev_root[ifile][in]);

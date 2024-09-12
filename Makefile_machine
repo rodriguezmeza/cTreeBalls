@@ -162,23 +162,17 @@ endif
 #
 
 #B ADDONS
-# To print/save some useful info to study a process set to 1. Else 0
-#   you must add the programming (to output) lines in the sources...
-#   useful when you try to understand how building/walking a tree works
-STUDYON = 0
-#
-ifeq ($(STUDYON),1)
-STUDY = -DSTUDY
-OPT2 += $(STUDY)
-endif
 #
 # To print some useful debuggin info set to 1. Else 0
 #   acts also as (thoroughly )DIAGNOSTICS flag...
 DEBUGON = 0
+DEBUGCOMPILINGON = 0
 #
+ifeq ($(DEBUGCOMPILINGON),1)
+OPT2 += -Wall
+endif
 ifeq ($(DEBUGON),1)
-DEBUG = -Wall -DDEBUG
-OPT2 += $(DEBUG)
+OPT2 += -DDEBUG
 endif
 #
 ifeq ($(ADDONSON),1)
@@ -187,6 +181,7 @@ OPT2 += -DADDONS
 include $(MACHINES_DIR)/addons/Makefile_addons
 #
 endif
+
 #E ADDONS
 
 #
@@ -255,7 +250,7 @@ ifeq ($(GSLINTERNAL),0)
     CCFLAG += -DNOINTERNALGSL
 endif
 ifeq ($(GSLINTERNAL),1)
-include $(MACHINES_DIR)Makefile_gsl
+include $(MACHINES_DIR)/addons/Makefile_gsl
 endif
 endif # ! GSLON
 endif # ! USEGSL

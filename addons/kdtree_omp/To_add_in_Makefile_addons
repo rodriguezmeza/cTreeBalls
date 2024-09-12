@@ -1,0 +1,22 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# KDTREEOMP
+# For computing 3pcf using kdtree-omp method
+#
+# This line is added to ../Makefile_addons_settings
+#KDTREEOMPON = 1
+ifeq ($(KDTREEOMPON),1)
+include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
+endif
+#
+
+

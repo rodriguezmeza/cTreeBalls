@@ -6,17 +6,16 @@
  Language: C
  Use: '#include "...."
  ==============================================================================*/
-//        1          2          3          4          5          6          7
- 
+//        1          2          3          4        ^ 5          6          7
+
 #ifndef _data_struc_defs_h
 #define _data_struc_defs_h
 
 typedef struct _node {
     short type;
     bool update;
-    REAL weight;                                    // The weight can be other
-                                                    //  scalar field of interest
-    REAL kappa;
+    REAL mass;                                      // to weight counts...
+    REAL kappa;                                     // scalar field of interest
 //B shear
     REAL gamma1;
     REAL gamma2;
@@ -53,7 +52,7 @@ typedef struct _node {
     INTEGER nb;
     REAL radius;
 
-    REAL kapparmin;
+    REAL kapparmin;                                 // Sum_p-in-rmin kappa_p
     INTEGER nbrmin;
     INTEGER nbrmin_overlap;
 //E
@@ -70,7 +69,7 @@ typedef struct _node {
 
 #define Type(x)   (((nodeptr) (x))->type)
 #define Update(x) (((nodeptr) (x))->update)
-#define Weight(x)   (((nodeptr) (x))->weight)
+#define Mass(x)   (((nodeptr) (x))->mass)
 #define Kappa(x)    (((nodeptr) (x))->kappa)
 //B shear
 #define Gamma1(x)    (((nodeptr) (x))->gamma1)
@@ -112,7 +111,7 @@ typedef struct _node {
 #define Radius(x) (((nodeptr) (x))->radius)
 
 
-#define KappaRmin(x)    (((nodeptr) (x))->kapparmin)
+#define KappaRmin(x)   (((nodeptr) (x))->kapparmin) // Sum_p-in-rmin kappa_p
 #define NbRmin(x) (((nodeptr) (x))->nbrmin)
 #define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
 //E
@@ -378,6 +377,7 @@ typedef struct {
         hist->histXithreadsin[m][n] += xisinmphi;                 \
     }}
 #endif
+
 
 #define CHEBYSHEVOMPBALLS                                   \
   {hist->Chebs[1] = 1.0;                                    \

@@ -8,6 +8,10 @@
 #include "cballs_pxd_05.h"
 #endif
 
+#ifdef KDTREEOMP
+#include "cballs_kdtree_omp_05.h"
+#endif
+
 
 /*
  Add your addon item here

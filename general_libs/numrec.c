@@ -10,7 +10,8 @@
 #include "numrec.h"
 #include "mathfns.h"
 
-
+// gaussj not used, in case it is needed look for better option
+/*
 #define SWAP(a,b) {temp=(a);(a)=(b);(b)=temp;}
 void gaussj(double **a, int n, double **b, int m)
 {
@@ -65,12 +66,15 @@ void gaussj(double **a, int n, double **b, int m)
     free_ivector(indxc,1,n);
 }
 #undef SWAP
+*/
 
-
-#define ITMAX 100
-#define EPS 3.0e-8
 #define NR_END 1
 #define FREE_ARG char*
+
+// zbrent and zbrentd not used, in case it is needed look for better options
+/*
+#define ITMAX 100
+#define EPS 3.0e-8
 
 float zbrent(float (*func)(float), float x1, float x2, float tol)
 {
@@ -85,7 +89,9 @@ float zbrent(float (*func)(float), float x1, float x2, float tol)
 		if ((fb > 0.0 && fc > 0.0) || (fb < 0.0 && fc < 0.0)) {
 			c=a;
 			fc=fa;
-			e=d=b-a;
+//            e=d=b-a;
+            e=b-a;
+            d=b-a;
 		}
 		if (fabs(fc) < fabs(fb)) {
 			a=b;
@@ -202,6 +208,7 @@ double zbrentd(double (*func)(double), double x1, double x2, double tol)
 
 #undef ITMAX
 #undef EPS
+*/
 
 void zbrak(float (*fx)(float), float x1, float x2, int n, float xb1[],
 	float xb2[], int *nb)
@@ -628,6 +635,9 @@ float ran3(long *idum)
 #undef MZ
 #undef FAC
 
+
+// ran4 not used, in case it is needed look for better option
+/*
 float ran4(long *idum)
 {
 	void psdes(unsigned long *lword, unsigned long *irword);
@@ -652,6 +662,7 @@ float ran4(long *idum)
 	++(*idum);
 	return (*(float *)&itemp)-1.0;
 }
+*/
 
 #define NITER 4
 

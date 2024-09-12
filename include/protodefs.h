@@ -110,13 +110,15 @@ global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
 //global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist);
 
 //#ifdef OPENMPCODE
-global int search_init_sincos_omp(struct cmdline_data* cmd, struct  global_data* gd,
+global int search_init_sincos_omp(struct cmdline_data* cmd, 
+                                  struct  global_data* gd,
                                   gdhistptr_sincos_omp hist);
 global int search_free_sincos_omp(struct cmdline_data* cmd, struct  global_data* gd,
                                   gdhistptr_sincos_omp hist);
 global int computeBodyProperties_sincos(struct cmdline_data* cmd,
                                             struct  global_data* gd,
-                                            bodyptr, int, gdhistptr_sincos_omp);
+                                            bodyptr, int,
+                                            gdhistptr_sincos_omp);
 //#endif
 
 

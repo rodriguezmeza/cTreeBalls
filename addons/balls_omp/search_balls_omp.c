@@ -1513,7 +1513,7 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
                                  error("walktree (1): active list overflow\n");
                              *nsmoothcountthread += 1;
                              --bptr;
-                             Weight(bptr) = Weight(*ap);
+                             Mass(bptr) = Mass(*ap);
                              Kappa(bptr) = Kappa(*ap);
                              SETV(Pos(bptr), Pos(*ap));
                              Id(bptr) = Id(*ap);
@@ -1531,7 +1531,7 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
                                  if (np - hist->active >= actsafe)
                                      error("walktree (2): active list overflow\n");
                                  if (!scanopt(cmd->options, "no-one-ball")) {
-                                     Weight(cptr) = Weight(*ap);
+                                     Mass(cptr) = Mass(*ap);
                                      Kappa(cptr) = Kappa(*ap);
                                      SETV(Pos(cptr), Pos(*ap));
                                      Id(cptr) = Id(*ap);
@@ -1551,7 +1551,7 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
              } else  // ! == CELL
                  if (*ap != p) {
                      --bptr;
-                     Weight(bptr) = Weight(*ap);
+                     Mass(bptr) = Mass(*ap);
                      Kappa(bptr) = Kappa(*ap);
                      SETV(Pos(bptr), Pos(*ap));
                      Id(bptr) = Id(*ap);
@@ -1577,7 +1577,7 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
 
 #ifdef DEBUG
             pbf = bodytabbf + *ibfcountthread;
-            Weight(pbf) = Weight(p);
+            Mass(pbf) = Mass(p);
             Kappa(pbf) = Kappa(p);
             SETV(Pos(pbf), Pos(p));
             *ibfcountthread += 1;

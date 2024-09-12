@@ -23,7 +23,7 @@ if ((int)gd->columns[5] < 1)
     error("CheckParameters: absurd value for columns[5] (%s)\n",
           cmd->columns);
 if ((int)gd->columns[6] < 1)
-    error("CheckParameters: absurd value for columns[5] (%s)\n",
+    error("CheckParameters: absurd value for columns[6] (%s)\n",
           cmd->columns);
 
 #endif	// ! _startrun_iolib_03_h

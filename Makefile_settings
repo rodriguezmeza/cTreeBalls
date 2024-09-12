@@ -28,9 +28,6 @@ OPENMPMACHINE = 1
 ADDONSON = 1
 #
 
-#   will be deprecated...
-OPT2ADD =
-
 #
 # Machine definitions. Edit this file according to your needs
 MACHINES_DIR = ./

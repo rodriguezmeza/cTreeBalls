@@ -193,7 +193,7 @@ struct global_data{
     real i_deltaR;
 
 #ifdef ADDONS
-#include "globaldefs_include_02.h"
+#include "global_data_include.h"
 #endif
 
     char fnameData_kd[128];

@@ -88,12 +88,22 @@ int InputData(struct cmdline_data* cmd,
 
     gd->cputotalinout += CPUTIME - cpustart;
 
+    // DEBUG WARNING!!
+    //B There is a Segmentation fault: 11 if run as:
+    //  cballs in=./scripts/Abraham/kappa_nres12_zs9NS256r000.txt \
+    //  options=header-info
+    // (and works with 'options=0')
 #ifdef DEBUG
     verb_print(cmd->verbose,
                "\n\tinputdata :: reading time = %f\n",CPUTIME-cpustart);
 #else
+    // but if comment above line and use this... works (?)
     printf("\n\tinputdata :: reading time = %f\n",CPUTIME - cpustart);
 #endif
+    // seems it is associated to the design of
+    //      void verb_print(int verbose, string fmt, ...)
+    // need to check this carefully
+    //E
 
     return SUCCESS;
 }
@@ -106,13 +116,14 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     int ndim;
     bodyptr p;
     char gato[1], firstline[20];
-    real weight=1;
+    real mass=1;
 
     gd->input_comment = "Column form input file";
 
     instr = stropen(filename, "r");
 
     if (scanopt(cmd->options, "header-info")){
+        InputData_check_file(filename);
         fgets(firstline,200,instr);
         verb_print(cmd->verbose, "\n\tinputdata_ascii: header of %s\n", filename);
         verb_print(cmd->verbose, "\t1st line: %s", firstline);
@@ -177,6 +188,8 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
         in_real(instr, &Kappa(p));
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant-one"))
+            Kappa(p) = 1.0;
     }
 
     fclose(instr);
@@ -184,7 +197,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }
@@ -228,7 +241,7 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
     stream instr;
     int ndim;
     bodyptr p;
-    real weight=1;
+    real mass=1;
 
     gd->input_comment = "Binary input file";
 
@@ -308,12 +321,14 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
         in_real_bin(instr, &Kappa(p));
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant-one"))
+            Kappa(p) = 1.0;
     }
     fclose(instr);
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -614,7 +629,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
 {
     long i;
     bodyptr p;
-    real weight = 1.0;
+    real mass = 1.0;
 
     real theta, phi;
     real theta_rot, phi_rot;
@@ -649,10 +664,13 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
 
         if (!scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = conv[i];
-        else
+        else {
             Kappa(p) = 2.0;
+            if (scanopt(cmd->options, "kappa-constant-one"))
+                Kappa(p) = 1.0;
+        }
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+iselect;
 
         *xmin = Pos(p)[0];
@@ -705,7 +723,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
 {
     long i;
     bodyptr p;
-    real weight = 1.0;
+    real mass = 1.0;
 
     real theta, phi;
     real theta_rot, phi_rot;
@@ -742,10 +760,13 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
 
             if (!scanopt(cmd->options, "kappa-constant"))
                 Kappa(p) = conv[i];
-            else
+            else {
                 Kappa(p) = 2.0;
+                if (scanopt(cmd->options, "kappa-constant-one"))
+                    Kappa(p) = 1.0;
+            }
             Type(p) = BODY;
-            Weight(p) = weight;
+            Mass(p) = mass;
             Id(p) = p-bodytabtmp+iselect;
 
             *xmin = Pos(p)[0];
@@ -776,7 +797,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
                     else
                         Kappa(p) = 2.0;
                     Type(p) = BODY;
-                    Weight(p) = weight;
+                    Mass(p) = mass;
                     Id(p) = p-bodytabtmp+iselect;
 
                     *xmin = Pos(p)[0];
@@ -811,7 +832,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
             Pos(p)[2] = Pos(q)[2];
             Kappa(p) = Kappa(q);
             Type(p) = Type(q);
-            Weight(p) = weight;
+            Mass(p) = mass;
             Id(p) = p-bodytable[ifile]+i;
             *xmin = MIN(*xmin,Pos(p)[0]);
             *ymin = MIN(*ymin,Pos(p)[1]);
@@ -855,7 +876,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 {
     long i;
     bodyptr p;
-    real weight = 1;
+    real mass = 1;
 
     real theta, phi;
     real theta_rot, phi_rot;
@@ -899,7 +920,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 
             Kappa(p) = conv[i];
             Type(p) = BODY;
-            Weight(p) = weight;
+            Mass(p) = mass;
             Id(p) = p-bodytabtmp+iselect;
 
             *xmin = Pos(p)[0];
@@ -931,7 +952,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 
                     Kappa(p) = conv[i];
                     Type(p) = BODY;
-                    Weight(p) = weight;
+                    Mass(p) = mass;
                     Id(p) = p-bodytabtmp+iselect;
 
                     *xmin = Pos(p)[0];
@@ -965,7 +986,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
             Pos(p)[1] = Pos(q)[1];
             Kappa(p) = Kappa(q);
             Type(p) = Type(q);
-            Weight(p) = weight;
+            Mass(p) = mass;
             Id(p) = p-bodytable[ifile]+i;
             *xmin = MIN(*xmin,Pos(p)[0]);
             *ymin = MIN(*ymin,Pos(p)[1]);
@@ -1255,8 +1276,10 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
             cmd->rootDir,"histCF",cmd->suffixOutFiles,EXTFILES);
     sprintf(gd->fpfnamehistrBinsFileName,"%s/%s%s%s",
             cmd->rootDir,"rbins",cmd->suffixOutFiles,EXTFILES);
-    sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s%s%s",
-        cmd->rootDir,cmd->histXi2pcfFileName, cmd->suffixOutFiles,EXTFILES);
+//    sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s%s%s",
+//        cmd->rootDir,cmd->histXi2pcfFileName, cmd->suffixOutFiles,EXTFILES);
+    sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s",
+        cmd->rootDir,cmd->histXi2pcfFileName);
     sprintf(gd->fpfnamehistZetaGFileName,"%s/%s%s%s",
             cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
     sprintf(gd->fpfnamehistZetaGmFileName,"%s/%s%s%s",
@@ -1292,6 +1315,7 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 	fclose(gd->outlog);
 
     if (cmd->verbose >= 2) {
+        //B only catalog 0 is consider... modify to include others
         printf("\nrSize \t\t= %lf\n", gd->rSizeTable[0]);
         printf("nbbcalc \t= %ld\n", gd->nbbcalc);
         printf("nbccalc \t= %ld\n", gd->nbccalc);
@@ -1299,7 +1323,9 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
         printf("ncccalc \t= %ld\n", gd->ncccalc);
 //
         printf("tdepth \t\t= %d\n", gd->tdepthTable[0]);
+        // Consider other tree cells, like kdtree
         printf("ncell\t\t= %ld\n", gd->ncellTable[0]);
+        //E
         verb_print_q(3,cmd->verbose,"sameposcount \t= %ld\n",gd->sameposcount);
 #ifdef OPENMPCODE
         printf("cpusearch \t= %lf (be aware of the number of threads)\n", gd->cpusearch*cmd->numthreads);     // in minutes
@@ -1348,6 +1374,10 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 {
 //    int m;
 
+#ifdef ADDONS
+#include "cballsio_include_10.h"
+#endif
+
     if (cmd->computeShearCF) {
         free_dvector(gd->histXitx,1,cmd->sizeHistN);
         free_dvector(gd->histXixx,1,cmd->sizeHistN);
@@ -1383,10 +1413,6 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
     }
 
      free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
-     
-#ifdef ADDONS
-#include "cballsio_include_10.h"
-#endif
      
      free_dvector(gd->histNNN,1,cmd->sizeHistN);
      // 2pcf

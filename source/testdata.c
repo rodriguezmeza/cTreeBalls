@@ -20,7 +20,7 @@ local int Compute_nbody(struct  cmdline_data* cmd, struct  global_data* gd);
 local int Compute_Box_Units(struct  cmdline_data* cmd, struct  global_data* gd);
 
 local vector N;                                     // Needed in testdata_sc
-local real weight;
+local real mass;
 
 #define SIMPLECUBICRANDOM   0
 #define SIMPLECUBIC         1
@@ -121,7 +121,7 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
 {
     bodyptr p;
     real Ekin;
-    real tweight;
+    real tmass;
 	int k;
 
     gd->model_comment = "Random Cubic Box Model";
@@ -133,11 +133,11 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
-    tweight=0.0;
+    tmass=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
 		Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         DO_COORD(k) {
             Pos(p)[k] = xrandom(0.0, gd->Box[k]);   // Box lower edge is (0,0,0)
 //            Pos(p)[k] = xrandom(-0.5*gd->Box[k], 0.5*gd->Box[k]);
@@ -152,7 +152,7 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
             Kappa(p) = 1.0 + rcos(2.0*PI*Pos(p)[0]/(gd->Box[0]/20.0))
                             * rsin(2.0*PI*Pos(p)[1]/(gd->Box[1]/20.0));
 
-		tweight += Weight(p);
+		tmass += Mass(p);
     }
     
     verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
@@ -163,7 +163,7 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
 local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     bodyptr p;
-    real tweight;
+    real tmass;
 	int k, i,j,l;
 	vector delta, c;
 	real f, os;
@@ -217,17 +217,17 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
 
     verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
 
-    tweight=0.0;
+    tmass=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
 		Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;
         else
             Kappa(p) = 1.0 + rcos(2.0*PI*Pos(p)[0]/(gd->Box[0]/20.0))
                             * rsin(2.0*PI*Pos(p)[1]/(gd->Box[1]/20.0));
-        tweight += Weight(p);
+        tmass += Mass(p);
     }
 
     return SUCCESS;
@@ -238,7 +238,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
                                       struct  global_data* gd)
 {
     bodyptr p;
-    real tweight;
+    real tmass;
     real phi, theta;
     real ra, dec;
 
@@ -252,8 +252,8 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
-    weight = 1.0;
-    tweight=0.0;
+    mass = 1.0;
+    tmass=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         phi    = 2.0 * PI_D * xrandom(0.0, 1.0);
         theta    = racos(1.0 - 2.0 * xrandom(0.0, 1.0));
@@ -273,7 +273,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
         }
         Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;                         // use kapp-constant
         else {
@@ -283,7 +283,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
             Kappa(p) = grandom(2.936728e-08, 6.528639e-03);
 //            Kappa(p) = grandom(1.0, 0.25);
         }
-        tweight += Weight(p);
+        tmass += Mass(p);
     }
     
     verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
@@ -310,7 +310,7 @@ local int Compute_nbody(struct  cmdline_data* cmd, struct  global_data* gd)
 
 local int Compute_Box_Units(struct  cmdline_data* cmd, struct  global_data* gd)
 {
-    weight = 1.0;                                   // Units system
+    mass = 1.0;                                     // Units system
     if (NDIM == 3) {                                // Size of box side x
         gd->Box[0] = cmd->lengthBox;
         gd->Box[1] = gd->Box[0]; gd->Box[2] = gd->Box[0];

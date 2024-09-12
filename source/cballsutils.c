@@ -85,7 +85,7 @@ global int search_init_sincos_omp(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-global int search_free_sincos_omp(struct  cmdline_data* cmd, 
+global int search_free_sincos_omp(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                   gdhistptr_sincos_omp hist)
 {
@@ -129,8 +129,7 @@ global int search_free_sincos_omp(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-
-global int computeBodyProperties_sincos(struct  cmdline_data* cmd, 
+global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
                                             struct  global_data* gd,
                                             bodyptr p, int nbody,
                                             gdhistptr_sincos_omp hist)
@@ -139,32 +138,61 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     int m;
     real xi, xi_2p;
 
+#ifdef NONORMHIST
+    if (Type(p) == BODY) {
+        xi = Kappa(p);
+        xi_2p = Kappa(p);
+        //B kappa Avg Rmin
+        if (scanopt(cmd->options, "smooth-pivot")) {
+            xi_2p = KappaRmin(p);
+            xi = NbRmin(p)*xi_2p;
+        }
+        //E
+    } else if (Type(p) == BODY3) {
+#ifdef BODY3ON
+        xi = Nbb(p)*Kappa(p);
+        xi_2p = Nbb(p)*Kappa(p);
+#endif
+    }
+#else // ! NONORMHIST
+    //B Normalization of histograms
     if (Type(p) == BODY) {
         xi = Kappa(p)/nbody;
         xi_2p = Kappa(p);
-//B kappa Avg Rmin
+        //B kappa Avg Rmin
         if (scanopt(cmd->options, "smooth-pivot")) {
             xi_2p = KappaRmin(p);
             xi = NbRmin(p)*xi_2p/nbody;
         }
-//E
+        //E
     } else if (Type(p) == BODY3) {
 #ifdef BODY3ON
         xi = Nbb(p)*Kappa(p)/nbody;
         xi_2p = Nbb(p)*Kappa(p);
 #endif
     }
-//
+    //E Normalization of histograms
+#endif // ! NONORMHIST
 
     if (cmd->computeTPCF) {
         for (m=1; m<=cmd->mChebyshev+1; m++)
+#ifdef NONORMHIST
+            //B Normalization of histograms
+            for (n=1; n<=cmd->sizeHistN; n++) {
+                hist->histXithreadcos[m][n] /= 1.0;
+                hist->histXithreadsin[m][n] /= 1.0;
+            }
+            //E
+#else
+            //B Normalization of histograms
             for (n=1; n<=cmd->sizeHistN; n++) {
                 hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
                 hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
             }
-        
+            //E
+#endif
         for (m=1; m<=cmd->mChebyshev+1; m++){
-            OUTVP_ext(hist->xiOUTVPcos, 
+            OUTVP_ext(hist->xiOUTVPcos,
                       hist->histXithreadcos[m], hist->histXithreadcos[m], cmd->sizeHistN);
             OUTVP_ext(hist->xiOUTVPsin,
                       hist->histXithreadsin[m], hist->histXithreadsin[m],cmd->sizeHistN);

@@ -490,6 +490,84 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
 //    fprintf(stdout,"\n... done.\n");
 }
 
+void InputData_check_file(string filename)
+{
+    stream instr;
+    int ncol, nrow;
+    int c, nl, nw, nc, state, salto, nwxc, i;
+//    ip;
+    short int *lineQ;
+    
+    instr = stropen(filename, "r");
+
+    state = OUT;
+    nl = nw = nc = 0;
+    while ((c = getc(instr)) != EOF) {
+        ++nc;
+        if (c=='\n')
+            ++nl;
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else if (state == OUT) {
+            state = IN;
+            ++nw;
+        }
+    }
+    printf("\n\tFile info: number of lines, words, and characters : %d %d %d\n",
+           nl, nw, nc);
+    
+    rewind(instr);
+    
+    lineQ = (short int *) allocate(nl * sizeof(short int));
+    for (i=0; i<nl; i++) lineQ[i]=FALSE;
+    
+    nw = nrow = ncol = nwxc = 0;
+    state = OUT;
+    salto = NO;
+    
+    i=0;
+    
+    while ((c = getc(instr)) != EOF) {
+        
+        if(c=='%' || c=='#') {
+            while ((c = getc(instr)) != EOF)
+                if (c=='\n') break;
+            ++i;
+            continue;
+        }
+        
+        if (c=='\n' && nw > 0) {
+            if (salto==NO) {
+                ++nrow;
+                salto=SI;
+                if (ncol != nwxc && nrow>1) {
+                    printf("\nvalores diferentes : ");
+                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                          nrow, ncol, nwxc);
+                }
+                ncol = nwxc;
+                lineQ[i]=TRUE;
+                ++i;
+                nwxc=0;
+            } else {
+                ++i;
+            }
+        }
+        
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else
+            if (state == OUT) {
+                state = IN;
+                ++nw; ++nwxc;
+                salto=NO;
+            }
+    }
+    printf("\tFile info: nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
+    
+    fclose(instr);
+}
+
 void InputData_2c(string filename, int col1, int col2, int *npts)
 {
     stream instr;

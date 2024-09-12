@@ -135,7 +135,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd, struct  global_data
                                string filename, int ifile, fitsfile *fptr)
 {
     bodyptr p;
-    real weight=1;
+    real mass=1;
 
     int datatype;
     int colnum;
@@ -209,7 +209,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd, struct  global_data
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -218,7 +218,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd, struct  global_data
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }
@@ -262,7 +262,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd, struct  global_data* g
                                string filename, int ifile, fitsfile *fptr)
 {
     bodyptr p;
-    real weight=1;
+    real mass=1;
 
     int datatype;
     int colnum;
@@ -351,7 +351,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd, struct  global_data* g
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -360,7 +360,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd, struct  global_data* g
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }

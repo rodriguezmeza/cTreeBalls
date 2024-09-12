@@ -50,5 +50,10 @@ $(info ) To compile with PXD needs CLASSLIBON = 1, deactivating...
 PXDON = 0
 endif
 
+# KDTREEOMP
+# For computing 3pcf using kdtree-omp method
+KDTREEOMPON = 1
+
+
 #E
 

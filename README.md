@@ -93,8 +93,11 @@ The list of available command line parameters can be consulted using the `-h` or
 
     ../cballs --help
 
-See also the man page as explained above.
+See also the man page as explained above. If you execute:
 
+    ../cballs --clue
+
+you will receive in response how **cBalls** should be executed using command line parameters. Just pick up the parameteres you need and, if necessary, modify their values according to your needs.
 
 ## Python
 

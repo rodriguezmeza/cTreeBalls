@@ -17,6 +17,14 @@
 #include "cballs_print_shear_direct_simple.h"
 #endif
 
+#ifdef KDTREEOMP
+#include "cballs_print_kdtree_omp.h"
+#endif
+
+#ifdef BALLTREEEXP
+#include "cballs_print_balltree_exp.h"
+#endif
+
 /*
  Add your addon item here
  */

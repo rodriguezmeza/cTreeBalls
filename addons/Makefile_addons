@@ -59,6 +59,13 @@ include $(MACHINES_DIR)/addons/pxd/Makefile_pxd
 endif
 #
 
+# KDTREEOMP
+# For computing 3pcf using kdtree-omp method
+ifeq ($(KDTREEOMPON),1)
+include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
+endif
+#
+
 #E
 
 #

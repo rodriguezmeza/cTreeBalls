@@ -1,0 +1,33 @@
+# ----- MAKE FILE machine definitions (kdtree_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(KDTREEOMPON),1)
+OPT2 += -DKDTREEOMP
+KDTREEOMP = ../addons/kdtree_omp/
+vpath %.c ./addons/kdtree_omp/
+INCLUDES += -I$(KDTREEOMP)
+HEADERFILES = $(wildcard $(KDTREEOMP)/*.h)
+EXTERNAL += kdtree.o search_kdtree_omp.o
+
+# NMultipoles switch
+NMultipolesON = 1
+ifeq ($(NMultipolesON),1)
+OPT2 += -DNMultipoles
+endif
+#
+
+# NONORMHIST switch
+NONORMHISTON = 0
+ifeq ($(NONORMHISTON),1)
+OPT2 += -DNONORMHIST
+endif
+#
+
+
+endif
+#
+#E

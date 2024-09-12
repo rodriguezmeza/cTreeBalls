@@ -16,6 +16,13 @@
 #include "cballs_shear_direct_simple.h"
 #endif
 
+#ifdef KDTREEOMP
+#include "cballs_kdtree_omp.h"
+#endif
+
+#ifdef BALLTREEEXP
+#include "cballs_balltree_exp.h"
+#endif
 
 
 /*

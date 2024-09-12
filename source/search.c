@@ -75,6 +75,8 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
     if (!cmd->computeTPCF)
         verb_print(cmd->verbose, "computing only 2pcf... \n");
+    if (scanopt(cmd->options, "kappa-constant-one"))
+        verb_print(cmd->verbose, "kappa constant = 1... \n");
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
@@ -311,10 +313,11 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         }
 //E
         computeBodyProperties_sincos(cmd, gd, p, nbody[cat1], &hist);
-//B kappa Avg Rmin
+
+        //B kappa Avg Rmin
         icountNbRminthread += NbRmin(p);
         icountNbRminOverlapthread += NbRminOverlap(p);
-//E
+        //E
         INTEGER ip;
         ip = p - btable[cat1] + 1;
         if (ip%cmd->stepState == 0) {

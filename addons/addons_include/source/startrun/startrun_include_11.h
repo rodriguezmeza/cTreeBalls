@@ -25,6 +25,13 @@
 #include "startrun_shear_direct_simple.h"       // 100
 #endif
 
+#ifdef KDTREEOMP
+#include "startrun_kdtree_omp_11.h"             // 59
+#endif
+
+#ifdef BALLTREEEXP
+#include "startrun_balltree_exp.h"             // 52
+#endif
 
 /*
  Add your addon item here

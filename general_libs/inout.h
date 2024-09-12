@@ -103,6 +103,7 @@ size_t gdgt_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream);
 void ReadInString(stream, char *);
 void ReadInLineString(stream, char *);
 
+void InputData_check_file(string filename);
 
 //B InputData's (like the one used by nplot2d)
 void inout_InputData(string, int, int, int *);

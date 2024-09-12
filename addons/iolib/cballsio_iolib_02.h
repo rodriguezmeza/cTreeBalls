@@ -2,6 +2,7 @@
 #ifndef _cballsio_iolib_02_h
 #define _cballsio_iolib_02_h
 
+// infileformat: columns-ascii-pos
 local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
@@ -9,7 +10,7 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     int ndim;
     bodyptr p;
     char gato[1], firstline[20];
-    real weight=1;
+    real mass=1;
 
     gd->input_comment = "Column position input file";
 
@@ -64,7 +65,7 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Kappa(p) = 2.0;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
@@ -96,6 +97,7 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
 }
 
 #if NDIM == 3
+// infileformat: columns-ascii-2d-to-3d
 local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data* gd,
                                     string filename, int ifile)
 {
@@ -103,7 +105,7 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
     int ndim;
     bodyptr p;
     char gato[1], firstline[20];
-    real weight=1;
+    real mass=1;
 
     gd->input_comment = "Column form input file (2d-to-3d)";
 
@@ -116,6 +118,8 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
     in_int(instr, &ndim);
     if (ndim != 2)
         error("inputdata: ndim = %d; expected 2\n", ndim);
+
+    gd->nbodyTable[ifile] = cmd->nbody;
 
 // Check the center of the box!!!
     real Lx, Ly;
@@ -197,7 +201,7 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -205,13 +209,14 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
 }
 #endif // ! NDIM == 3
 
+// infileformat: multi-columns-ascii
 local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
     stream instr;
     int ndim;
     bodyptr p;
-    real weight=1;
+    real mass=1;
 
     gd->input_comment = "Multi-column position input file";
 //
@@ -365,7 +370,7 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
-        Weight(p) = weight;
+        Mass(p) = mass;
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;
         kavg += Kappa(p);

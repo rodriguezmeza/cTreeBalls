@@ -155,8 +155,8 @@ local void CheckHelp(param *pvec, string argv1)
 
 local void CheckVersion(param *pvec, string argv1)
 {
-    param *pp;
-    char buf[128];
+//    param *pp;
+//    char buf[128];
 
     if (argv1 != NULL && streq(argv1, "--version")) {
         printf("Version = %s\n", getversion());

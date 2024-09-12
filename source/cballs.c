@@ -102,7 +102,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
             in++;
         }
         verb_print(cmd->verbose,"%ld %d %ld %lg %ld %lg\n",
-                   in,Type(p-1),Id(p-1),Weight(p-1),Nb(p-1),Kappa(p-1));
+                   in,Type(p-1),Id(p-1),Mass(p-1),Nb(p-1),Kappa(p-1));
 //E
         verb_print(cmd->verbose,
                    "smoothCellMin: %ld particles in nodetable\n", in);
@@ -137,7 +137,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 #ifdef BODY3ON
             Nbb(p) = Nbb(q);
 #endif
-            Weight(p) = Weight(q);
+            Mass(p) = Mass(q);
             Kappa(p) = Kappa(q);
             Id(p) = p-bodytable[ifile]+1;
             Update(p) = TRUE;
@@ -178,7 +178,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 #ifdef BODY3ON
             Nbb(p) = Nbb(q);
 #endif
-            Weight(p) = Weight(q);
+            Mass(p) = Mass(q);
             Kappa(p) = Kappa(q);
             Id(p) = p-bodytable[ifile]+1;
             Update(p) = TRUE;
@@ -459,7 +459,8 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
             if (cmd->rminHist==0) {
-                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD 
+                            + rlog10(cmd->rangeN);
             } else {
                 rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
             }
@@ -480,11 +481,16 @@ local int PrintHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     real rBin, rbinlog;
     int n;
     stream outstr;
+    char namebuf[256];
 
-    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
+//    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
+//    verb_print_q(2, cmd->verbose,
+//               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
 
-    verb_print_q(2, cmd->verbose,
-               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
+    sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
+            cmd->suffixOutFiles, EXTFILES);
+    verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+    outstr = stropen(namebuf, "w!");
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
@@ -645,6 +651,11 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
 #define MHISTZETA \
 "%16.8e %16.8e %16.8e %16.8e %16.8e %16.8e\n"
 
+#define MHISTZETAHEADER \
+"# [1] rBins; [2] diagonal; [3] theta2=Nbins/4.0; [4] theta2=2.0*Nbins/4.0; \
+[5] theta2=3.0*Nbins/4.0; [6] theta2=4.0*Nbins/4.0 - 1.0\n"
+
+
 /*
 // Seems obsolete. Delete. Only appears in balls_method addon
 local int PrintHistZeta_theta2_fix(struct  cmdline_data* cmd,
@@ -722,6 +733,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                 "_cos", m, EXTFILES);
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -749,6 +761,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                 "_sin", m, EXTFILES);
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -776,6 +789,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                 "_sincos", m, EXTFILES);
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -804,6 +818,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                 "_cossin", m, EXTFILES);
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
         outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -1095,7 +1110,6 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-#undef MHISTZETA
 
 
 
@@ -1103,3 +1117,6 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 #include "cballs_include_05.h"
 #endif
 
+
+#undef MHISTZETAHEADER
+#undef MHISTZETA

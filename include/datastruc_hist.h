@@ -120,6 +120,10 @@ typedef struct {
     int nblist;
 } gdhist_sincos_omp_3pcfbf, *gdhistptr_sincos_omp_3pcfbf;
 
+#ifdef ADDONS
+#include "datastruc_hist_include.h"
+#endif
+
 //
 //E Structure definitions for histograms
 

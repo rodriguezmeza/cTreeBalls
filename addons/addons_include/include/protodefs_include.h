@@ -20,6 +20,14 @@
 #include "protodefs_shear_direct_simple.h"
 #endif
 
+#ifdef KDTREEOMP
+#include "protodefs_kdtree_omp.h"
+#endif
+
+#ifdef BALLTREEEXP
+#include "protodefs_balltree_exp.h"
+#endif
+
 /*
  Add your addon item here
  */

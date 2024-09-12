@@ -2,6 +2,9 @@
 # Mario A. Rodriguez-Meza, Ciudad de Mexico, 27.04.2023
 #
 #
+#   will be deprecated...
+OPT2ADD =
+
 # Select one set of settings...
 
 #SEARCHMETHOD = BALLSSINCOS

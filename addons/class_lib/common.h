@@ -1,4 +1,5 @@
-/** @file common.h Generic libraries, parameters and functions used in the whole code. */
+//=============================================================================
+//        1          2          3          4        ^ 5          6          7
 
 #include "stdio.h"
 #include "stdlib.h"
@@ -98,156 +99,156 @@ int string_begins_with(char* thestring, char beginchar);
 
 /* general CLASS macros */
 
-#define class_build_error_string(dest,tmpl,...) {                                                                \
-  ErrorMsg FMsg;                                                                                                 \
-  class_protect_sprintf(FMsg,tmpl,__VA_ARGS__);                                                                  \
-  class_protect_sprintf(dest,"%s(L:%d) :%s",__func__,__LINE__,FMsg);                                             \
+#define class_build_error_string(dest,tmpl,...) {                               \
+  ErrorMsg FMsg;                                                                \
+  class_protect_sprintf(FMsg,tmpl,__VA_ARGS__);                                 \
+  class_protect_sprintf(dest,"%s(L:%d) :%s",__func__,__LINE__,FMsg);            \
 }
 
 // Error reporting macros
 
 // Call
-#define class_call_message(err_out,extra,err_mess)   \
+#define class_call_message(err_out,extra,err_mess)                              \
   class_build_error_string(err_out,"error in %s;\n=>%s",extra,err_mess);
 
 /* macro for calling function and returning error if it failed */
-#define class_call_except(function, error_message_from_function, error_message_output,list_of_commands) {        \
-  if (function == FAILURE) {                                                                                   \
-    class_call_message(error_message_output,#function,error_message_from_function);                              \
-    list_of_commands;                                                                                            \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+#define class_call_except(function, error_message_from_function, error_message_output,list_of_commands) { \
+  if (function == FAILURE) {                                                        \
+    class_call_message(error_message_output,#function,error_message_from_function); \
+    list_of_commands;                                                               \
+    return FAILURE;                                                                 \
+  }                                                                                 \
 }
 
 /* macro for trying to call function */
 #define class_call_try(function, error_message_from_function, error_message_output,list_of_commands) { \
-  if (function == FAILURE) {                                                                                   \
-    class_call_message(error_message_output,#function,error_message_from_function);                              \
-    list_of_commands;                                                                                            \
-  }                                                                                                              \
+  if (function == FAILURE) {                                                         \
+    class_call_message(error_message_output,#function,error_message_from_function);  \
+    list_of_commands;                                                                \
+  }                                                                                  \
 }
 
 /* macro for calling function and returning error if it failed */
-#define class_call(function, error_message_from_function, error_message_output)                                  \
+#define class_call(function, error_message_from_function, error_message_output)      \
   class_call_except(function, error_message_from_function,error_message_output,)
 
 /* same in parallel region */
-#define class_call_parallel(function, error_message_from_function, error_message_output) {                       \
-  if (abort == FALSE) {                                                                                        \
-    if (function == FAILURE) {                                                                                 \
-      class_call_message(error_message_output,#function,error_message_from_function);                            \
-      abort=TRUE;                                                                                              \
-    }                                                                                                            \
-  }                                                                                                              \
+#define class_call_parallel(function, error_message_from_function, error_message_output) { \
+  if (abort == FALSE) {                                                                    \
+    if (function == FAILURE) {                                                             \
+      class_call_message(error_message_output,#function,error_message_from_function);      \
+      abort=TRUE;                                                                          \
+    }                                                                                      \
+  }                                                                                        \
 }
 
 
 
 
 // Alloc
-#define class_alloc_message(err_out,extra,sz)                                                                    \
+#define class_alloc_message(err_out,extra,sz)                                       \
   class_build_error_string(err_out,"could not allocate %s with size %d",extra,sz);
 
 /* macro for allocating memory and returning error if it failed */
-#define class_alloc(pointer, size, error_message_output)  {                                                      \
-  pointer=malloc(size);                                                                                          \
-  if (pointer == NULL) {                                                                                         \
-    int size_int;                                                                                                \
-    size_int = size;                                                                                             \
-    class_alloc_message(error_message_output,#pointer, size_int);                                                \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+#define class_alloc(pointer, size, error_message_output)  {                         \
+  pointer=malloc(size);                                                             \
+  if (pointer == NULL) {                                                            \
+    int size_int;                                                                   \
+    size_int = size;                                                                \
+    class_alloc_message(error_message_output,#pointer, size_int);                   \
+    return FAILURE;                                                                 \
+  }                                                                                 \
 }
 
 /* same inside parallel structure */
-#define class_alloc_parallel(pointer, size, error_message_output)  {                                             \
-  pointer=NULL;                                                                                                  \
-  if (abort == FALSE) {                                                                                        \
-    pointer=malloc(size);                                                                                        \
-    if (pointer == NULL) {                                                                                       \
-      int size_int;                                                                                              \
-      size_int = size;                                                                                           \
-      class_alloc_message(error_message_output,#pointer, size_int);                                              \
-      abort=TRUE;                                                                                              \
-    }                                                                                                            \
-  }                                                                                                              \
+#define class_alloc_parallel(pointer, size, error_message_output)  {                \
+  pointer=NULL;                                                                     \
+  if (abort == FALSE) {                                                             \
+    pointer=malloc(size);                                                           \
+    if (pointer == NULL) {                                                          \
+      int size_int;                                                                 \
+      size_int = size;                                                              \
+      class_alloc_message(error_message_output,#pointer, size_int);                 \
+      abort=TRUE;                                                                   \
+    }                                                                               \
+  }                                                                                 \
 }
 
 /* macro for allocating memory, initializing it with zeros/ and returning error if it failed */
-#define class_calloc(pointer, init,size, error_message_output)  {                                                \
-  pointer=calloc(init,size);                                                                                     \
-  if (pointer == NULL) {                                                                                         \
-    int size_int;                                                                                                \
-    size_int = size;                                                                                             \
-    class_alloc_message(error_message_output,#pointer, size_int);                                                \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+#define class_calloc(pointer, init,size, error_message_output)  {                   \
+  pointer=calloc(init,size);                                                        \
+  if (pointer == NULL) {                                                            \
+    int size_int;                                                                   \
+    size_int = size;                                                                \
+    class_alloc_message(error_message_output,#pointer, size_int);                   \
+    return FAILURE;                                                                 \
+  }                                                                                 \
 }
 
 /* macro for re-allocating memory, returning error if it failed */
-#define class_realloc(pointer, newname, size, error_message_output)  {                                          \
-    pointer=realloc(newname,size);                                                                               \
-  if (pointer == NULL) {                                                                                         \
-    int size_int;                                                                                                \
-    size_int = size;                                                                                             \
-    class_alloc_message(error_message_output,#pointer, size_int);                                                \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+#define class_realloc(pointer, newname, size, error_message_output)  {              \
+    pointer=realloc(newname,size);                                                  \
+  if (pointer == NULL) {                                                            \
+    int size_int;                                                                   \
+    size_int = size;                                                                \
+    class_alloc_message(error_message_output,#pointer, size_int);                   \
+    return FAILURE;                                                                 \
+  }                                                                                 \
 }
 
 // Testing
 
-#define class_test_message(err_out,extra,args...) {                                                              \
-  ErrorMsg Optional_arguments;                                                                                   \
-  class_protect_sprintf(Optional_arguments,args);                                                                \
-  class_build_error_string(err_out,"condition (%s) is true; %s",extra,Optional_arguments);                       \
+#define class_test_message(err_out,extra,args...) {                                 \
+  ErrorMsg Optional_arguments;                                                      \
+  class_protect_sprintf(Optional_arguments,args);                                   \
+  class_build_error_string(err_out,"condition (%s) is true; %s",extra,Optional_arguments); \
 }
 
 /* macro for testing condition and returning error if condition is true;
    args is a variable list of optional arguments, e.g.: args="x=%d",x
    args cannot be empty, if there is nothing to pass use args="" */
-#define class_test_except(condition, error_message_output,list_of_commands, args...) {                           \
-  if (condition) {                                                                                               \
-    class_test_message(error_message_output,#condition, args);                                                   \
-    list_of_commands;                                                                                            \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+#define class_test_except(condition, error_message_output,list_of_commands, args...) { \
+  if (condition) {                                                                     \
+    class_test_message(error_message_output,#condition, args);                         \
+    list_of_commands;                                                                  \
+    return FAILURE;                                                                    \
+  }                                                                                    \
 }
 
-#define class_test(condition, error_message_output, args...) {                                                   \
-  if (condition) {                                                                                               \
-    class_test_message(error_message_output,#condition, args);                                                   \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+#define class_test(condition, error_message_output, args...) {                         \
+  if (condition) {                                                                     \
+    class_test_message(error_message_output,#condition, args);                         \
+    return FAILURE;                                                                    \
+  }                                                                                    \
 }
 
-#define class_test_parallel(condition, error_message_output, args...) {                                          \
-  if (abort == FALSE) {                                                                                        \
-    if (condition) {                                                                                             \
-      class_test_message(error_message_output,#condition, args);                                                 \
-      abort=TRUE;                                                                                              \
-    }                                                                                                            \
+#define class_test_parallel(condition, error_message_output, args...) {                \
+  if (abort == FALSE) {                                                                \
+    if (condition) {                                                                   \
+      class_test_message(error_message_output,#condition, args);                       \
+      abort=TRUE;                                                                      \
+    }                                                                                  \
   }                                                                     \
 }
 
 /* macro for returning error message;
    args is a variable list of optional arguments, e.g.: args="x=%d",x
    args cannot be empty, if there is nothing to pass use args="" */
-#define class_stop(error_message_output,args...) {                                                               \
-  ErrorMsg Optional_arguments;                                                                                   \
-  class_protect_sprintf(Optional_arguments,args);                                                                \
-  class_build_error_string(error_message_output,"error; %s",Optional_arguments);                                 \
-  return FAILURE;                                                                                              \
+#define class_stop(error_message_output,args...) {                                      \
+  ErrorMsg Optional_arguments;                                                          \
+  class_protect_sprintf(Optional_arguments,args);                                       \
+  class_build_error_string(error_message_output,"error; %s",Optional_arguments);        \
+  return FAILURE;                                                                       \
 }
 
 // IO
 /* macro for opening file and returning error if it failed */
-#define class_open(pointer, filename,	mode, error_output) {                                                      \
-  pointer=fopen(filename,mode);                                                                                  \
-  if (pointer == NULL) {                                                                                         \
+#define class_open(pointer, filename,	mode, error_output) {                           \
+  pointer=fopen(filename,mode);                                                         \
+  if (pointer == NULL) {                                                                \
     class_build_error_string(error_output,"could not open %s with name %s and mode %s",#pointer,filename,#mode); \
-    return FAILURE;                                                                                            \
-  }                                                                                                              \
+    return FAILURE;                                                                     \
+  }                                                                                     \
 }
 
 /* macro for defining indices (usually one, sometimes a block) */
@@ -265,7 +266,7 @@ int string_begins_with(char* thestring, char beginchar);
 #define class_fprintf_double(file,                                      \
                              output,                                    \
                              condition){                                \
-    if (condition == TRUE)                                            \
+    if (condition == TRUE)                                              \
       fprintf(file,"%*.*e ",_COLUMNWIDTH_,_OUTPUTPRECISION_,output);    \
   }
 
@@ -273,26 +274,26 @@ int string_begins_with(char* thestring, char beginchar);
                                         output,                         \
                                         condition,                      \
                                         defaultvalue){                  \
-    if (condition == TRUE)                                            \
+    if (condition == TRUE)                                              \
       fprintf(file,"%*.*e ",_COLUMNWIDTH_,_OUTPUTPRECISION_,output);    \
     else                                                                \
-      fprintf(file,"%*.*e ",_COLUMNWIDTH_,_OUTPUTPRECISION_,defaultvalue);    \
+      fprintf(file,"%*.*e ",_COLUMNWIDTH_,_OUTPUTPRECISION_,defaultvalue); \
 }
 
 #define class_fprintf_int(file,                                         \
                           output,                                       \
                           condition){                                   \
-    if (condition == TRUE)                                            \
+    if (condition == TRUE)                                              \
       fprintf(file,"%*d%*s ",                                           \
               MAX(0,_COLUMNWIDTH_-_OUTPUTPRECISION_-5),                 \
-              output, _OUTPUTPRECISION_+5," ");                          \
+              output, _OUTPUTPRECISION_+5," ");                         \
   }
 
 #define class_fprintf_columntitle(file,                                 \
                                   title,                                \
                                   condition,                            \
                                   colnum){                              \
-    if (condition == TRUE)                                            \
+    if (condition == TRUE)                                              \
       fprintf(file,"%*s%2d:%-*s ",                                      \
               MAX(0,MIN(_COLUMNWIDTH_-_OUTPUTPRECISION_-6-3,_COLUMNWIDTH_-((int) strlen(title))-3)), \
               "",colnum++,_OUTPUTPRECISION_+6,title);                   \
@@ -326,16 +327,6 @@ int string_begins_with(char* thestring, char beginchar);
     else                                                                \
       storage[dataindex++] = defaultvalue;                              \
 }
-
-//The name for this macro can be at most 30 characters total
-//#define class_print_species(name,type) \
-//printf("-> %-30s Omega = %-15g , omega = %-15g\n",name,pba->Omega0_##type,pba->Omega0_##type*pba->h*pba->h);
-
-/**
- * Different ways to present output files
- */
-
-enum file_format {class_format,camb_format};
 
 
 #endif

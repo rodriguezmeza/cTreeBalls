@@ -4,7 +4,7 @@
 #ifndef _NR_UTILS_H_
 #define _NR_UTILS_H_
 
-
+/*
 static float sqrarg;
 #define SQR(a) ((sqrarg=(a)) == 0.0 ? 0.0 : sqrarg*sqrarg)
 
@@ -26,7 +26,11 @@ static float maxarg1,maxarg2;
 static float minarg1,minarg2;
 #define FMIN(a,b) (minarg1=(a),minarg2=(b),(minarg1) < (minarg2) ?\
 (minarg1) : (minarg2))
+*/
 
+//B DEBUG WARNING!!
+//  CHECK IF THESE MACROS NEVER USE, IF DO, MODIFY THEM...
+/*
 static long lmaxarg1,lmaxarg2;
 #define LMAX(a,b) (lmaxarg1=(a),lmaxarg2=(b),(lmaxarg1) > (lmaxarg2) ?\
 (lmaxarg1) : (lmaxarg2))
@@ -42,17 +46,20 @@ static int imaxarg1,imaxarg2;
 static int iminarg1,iminarg2;
 #define IMIN(a,b) (iminarg1=(a),iminarg2=(b),(iminarg1) < (iminarg2) ?\
 (iminarg1) : (iminarg2))
+*/
 
 #define SIGNNR(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
 
-void gaussj(double **a, int n, double **b, int m);
+// gaussj not used, in case it is needed look for better option
+// void gaussj(double **a, int n, double **b, int m);
 
 void zbrak(float (*fx)(float), float x1, float x2, int n, float xb1[],
     float xb2[], int *nb);
-float zbrent(float (*func)(float), float x1, float x2, float tol);
 void zbrakd(double (*fx)(double), double x1, double x2, int n, double xb1[],
     double xb2[], int *nb);
-double zbrentd(double (*func)(double), double x1, double x2, double tol);
+// zbrent and zbrentd not used, in case it is needed look for better options
+//float zbrent(float (*func)(float), float x1, float x2, float tol);
+//double zbrentd(double (*func)(double), double x1, double x2, double tol);
 
 float merff(float x);							
 												
@@ -64,7 +71,8 @@ float fran1(long *idum);
 double ran1(long *idum);
 float ran2(long *idum);
 float ran3(long *idum);
-float ran4(long *idum);
+// ran4 not used, in case it is needed look for better option
+//float ran4(long *idum);
 float fgasdev(long *idum);
 double gasdev(long *idum);
 

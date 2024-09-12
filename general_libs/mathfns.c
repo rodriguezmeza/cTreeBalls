@@ -69,6 +69,7 @@ double xrandom(double xl, double xh)
 //    return ( xl + (xh - xl) * ((double) ran1(&idum)) ); // idum < 0
 // Random generator by D. Knuth:
 //    return ( xl + (xh - xl) * ((double) ran3(&idum)) ); // idum < 0
+// ran4 not used, in case it is needed look for better option
 //    return ( xl + (xh - xl) * ((double) ran4(&idum)) ); // idum >< 0
 }
 #endif
