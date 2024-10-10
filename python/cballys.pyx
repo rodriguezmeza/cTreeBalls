@@ -18,6 +18,8 @@ from libc.string cimport *
 import cython
 cimport cython
 
+#from numpy cimport ndarray
+
 import sys
 def viewdictitems(d):
     if sys.version_info >= (3,0):
@@ -27,6 +29,8 @@ def viewdictitems(d):
 
 ctypedef np.float_t DTYPE_t
 ctypedef np.int_t DTYPE_i
+#ctypedef np.float DTYPE_t
+#ctypedef np.int DTYPE_i
 
 from ccballys cimport *
 
@@ -347,6 +351,8 @@ cdef class cballs:
             raise cBallsSevereErrorDummy()
 
         cdef np.ndarray[DTYPE_t, ndim=1] out_rBins = np.zeros(sizeHistN,'float64')
+#        cdef np.ndarray[float, ndim=1] out_rBins = np.zeros(sizeHistN,'float64')
+#        cdef ndarray[DTYPE_t, ndim=1] out_rBins = np.zeros(sizeHistN,'float64')
 
         if get_rBins(&self.cmd, &self.gd)==FAILURE:
             raise cBallsSevereErrorDummy()
@@ -368,6 +374,7 @@ cdef class cballs:
         sizesqr = sizeHistN*sizeHistN
 
         cdef np.ndarray[DTYPE_t, ndim=1] out_ZM = np.zeros(sizesqr,'float64')
+#        cdef ndarray[DTYPE_t, ndim=1] out_ZM = np.zeros(sizesqr,'float64')
 
         if get_HistZetaM_sincos(&self.cmd, &self.gd, m, type, errmsg)==FAILURE:
             raise cBallsSevereError(errmsg)

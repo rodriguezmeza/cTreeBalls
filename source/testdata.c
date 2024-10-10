@@ -21,6 +21,7 @@ local int Compute_Box_Units(struct  cmdline_data* cmd, struct  global_data* gd);
 
 local vector N;                                     // Needed in testdata_sc
 local real mass;
+local real weight;
 
 #define SIMPLECUBICRANDOM   0
 #define SIMPLECUBIC         1
@@ -133,11 +134,14 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
+    mass = 1.0;
+    weight = 1.0;
     tmass=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
 		Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         DO_COORD(k) {
             Pos(p)[k] = xrandom(0.0, gd->Box[k]);   // Box lower edge is (0,0,0)
 //            Pos(p)[k] = xrandom(-0.5*gd->Box[k], 0.5*gd->Box[k]);
@@ -173,6 +177,9 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
     int ifile=0;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+
+    mass = 1.0;
+    weight = 1.0;
 
     Compute_nbody(cmd, gd);
     Compute_Box_Units(cmd, gd);
@@ -222,6 +229,7 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
 		Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;
         else
@@ -253,6 +261,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
     mass = 1.0;
+    weight = 1.0;
     tmass=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         phi    = 2.0 * PI_D * xrandom(0.0, 1.0);
@@ -274,6 +283,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
         Id(p) = p-bodytable[ifile]+1;
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;                         // use kapp-constant
         else {

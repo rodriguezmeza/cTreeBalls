@@ -90,7 +90,8 @@ local INTEGER ihit;
 local int imiss;
 
 // search=balls-omp
-global void searchcalc_balls_omp(struct cmdline_data* cmd, struct  global_data* gd,
+global void searchcalc_balls_omp(struct cmdline_data* cmd,
+                                 struct  global_data* gd,
                                  bodyptr *btable,
                                  INTEGER *nbody, INTEGER ipmin, INTEGER *ipmax,
                                  int cat1, int cat2)
@@ -159,7 +160,10 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd, struct  global_data* 
         "\ncat1, cat2, nbody[cat1], nbody[cat2], ipmin, imax[cat1], ipmax[cat1]:\
         %d %d %ld %ld %ld %ld %ld\n\n",
         cat1,cat2,nbody[cat1],nbody[cat2],ipmin,ipmax[cat1],ipmax[cat2]);
+
+#if defined(OPENMPCODE)
     ThreadCount(cmd, gd, nbody[cat1], cat1);
+#endif
 
 // Here we clear: histZetaM, histXi, histN, histNNSubXi2pcf, histXi2pcf...
 //    search_init_gd_hist();
@@ -359,7 +363,10 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd, struct  global_data* 
             else
                 p = nodetablescanlev[cat1][i];
 #endif
+
+#ifdef TREENODEALLBODIES
             hist.ipcount = 0;
+#endif
 
 #ifndef PIVOTEXTERNAL
 //B (2)
@@ -690,14 +697,17 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd, struct  global_data* 
 #ifdef TREENODEALLBODIES
 #ifdef SINCOS
                 computeBodyProperties_balls_omp_cc_sincos(cmd, gd,
-                                                          (bodyptr)p, nbody[cat1], &histsincos);
+                                        (bodyptr)p, nbody[cat1], &histsincos);
 #else
                 computeBodyProperties_balls_omp_cc(cmd, gd,
-                                                   (bodyptr)p, nbody[cat1], &histcc);
-#endif
+                                        (bodyptr)p, nbody[cat1], &histcc);
+#endif // ! SINCOS
+#else // ! TREENODEALLBODIES
+                computeBodyProperties_balls_omp_cc_sincos(cmd, gd,
+                                        (bodyptr)p, nbody[cat1], &histsincos);
 #endif // ! TREENODEALLBODIES
                 //E
-#endif
+#endif // ! PIVOTEXTERNAL
 //#endif
             }
 
@@ -1015,60 +1025,83 @@ local void walktree_balls_omp(struct cmdline_data* cmd, struct  global_data* gd,
                            || (Nb(p)<=gd->nsmooth[0] && Nb(q)<=gd->nsmooth[0]) )
                          && (dr1 > gd->rminCell[1]) ) {
                          *nsmoothcountthread += 1;
-                         sumnodes_bb_omp(p, q, &dr1, dr, hist, histcc, histccsincos,
-                                  nbbcalcthread, nbccalcthread, ncccalcthread);
+                         sumnodes_bb_omp(cmd, gd, p, q, &dr1, dr,
+                                         hist, histcc, histccsincos,
+                                         nbbcalcthread, nbccalcthread,
+                                         ncccalcthread);
                      } else {
-                     if (nodes_condition_balls(p, q, &dr1, dr)) {
-                        if ( (Size(p)<=gd->rminCell[0] && Size(q)<=gd->rminCell[0])
+                     if (nodes_condition_balls(cmd, gd, p, q, &dr1, dr)) {
+                        if ( (Size(p)<=gd->rminCell[0]
+                              && Size(q)<=gd->rminCell[0])
                                  && (Nb(p)<=gd->nsmooth[0]
                                      && Nb(q)<=gd->nsmooth[0]) ) {
                              *nsmoothcountthread += 1;
-                             sumnodes_bb_omp(p, q, &dr1, dr, hist, histcc,
+                             sumnodes_bb_omp(cmd, gd, p, q, &dr1, dr,
+                                             hist, histcc,
                                              histccsincos, nbbcalcthread,
                                              nbccalcthread, ncccalcthread);
                         } else
-                             sumnodes_cc_omp(p, q, &dr1, dr, hist, histcc,
+                             sumnodes_cc_omp(cmd, gd, p, q, &dr1, dr,
+                                             hist, histcc,
                                              histccsincos, nbbcalcthread,
                                              nbccalcthread, ncccalcthread);
                      } else // ! nodes_condition
                          for (h = More(p); h != Next(p); h = Next(h))
                          for (l = More(q); l != Next(q); l = Next(l))
-                             walktree_balls_omp(h, l, hist, histcc, histccsincos,
-                              nsmoothcountthread, nbbcalcthread, nbccalcthread, ncccalcthread);
+                             walktree_balls_omp(cmd, gd, h, l,
+                                                hist, histcc, histccsincos,
+                                                nsmoothcountthread,
+                                                nbbcalcthread, nbccalcthread,
+                                                ncccalcthread);
 
                      }
                  } else // ! no-two-ball
                      for (h = More(p); h != Next(p); h = Next(h))
                      for (l = More(q); l != Next(q); l = Next(l))
-                             walktree_balls_omp(h, l, hist, histcc, histccsincos, nsmoothcountthread,
-                                     nbbcalcthread, nbccalcthread, ncccalcthread);
+                             walktree_balls_omp(cmd, gd, h, l,
+                                                hist, histcc, histccsincos,
+                                                nsmoothcountthread,
+                                                nbbcalcthread, nbccalcthread,
+                                                ncccalcthread);
                 break;
             case CELLBODY:
                 if (!scanopt(cmd->options, "no-one-ball")) {
                     if ( ((Nb(p)<=gd->nsmooth[0]) || (Size(p)<=gd->rminCell[0]))
                         && (dr1 > gd->rminCell[1]) ) {
                         *nsmoothcountthread += 1;
-                        sumnodes_bb_omp(p, q, &dr1, dr, hist, histcc, histccsincos,
-                                 nbbcalcthread, nbccalcthread, ncccalcthread);
+                        sumnodes_bb_omp(cmd, gd, p, q, &dr1, dr,
+                                        hist, histcc, histccsincos,
+                                        nbbcalcthread, nbccalcthread,
+                                        ncccalcthread);
                     } else {
 
-                    if (nodes_condition_balls(p, q, &dr1, dr)) {
+                    if (nodes_condition_balls(cmd, gd, p, q, &dr1, dr)) {
                         if (Size(p)<=gd->rminCell[0] || Nb(p)<=gd->nsmooth[0]) {
                             *nsmoothcountthread += 1;
-                            sumnodes_bb_omp(p, q, &dr1, dr, hist, histcc, histccsincos,
-                                     nbbcalcthread, nbccalcthread, ncccalcthread);
+                            sumnodes_bb_omp(cmd, gd, p, q, &dr1, dr,
+                                            hist, histcc, histccsincos,
+                                            nbbcalcthread, nbccalcthread,
+                                            ncccalcthread);
                         } else
-                            sumnodes_cb_omp(p, q, &dr1, dr, hist, histcc, histccsincos,
-                                         nbbcalcthread, nbccalcthread, ncccalcthread);
+                            sumnodes_cb_omp(cmd, gd, p, q, &dr1, dr,
+                                            hist, histcc, histccsincos,
+                                            nbbcalcthread, nbccalcthread,
+                                            ncccalcthread);
                     } else // ! nodes_condition
                         for (l = More(p); l != Next(p); l = Next(l))
-                            walktree_balls_omp(l, q, hist, histcc, histccsincos,
-                             nsmoothcountthread, nbbcalcthread, nbccalcthread, ncccalcthread);
+                            walktree_balls_omp(cmd, gd, l, q,
+                                               hist, histcc, histccsincos,
+                                               nsmoothcountthread,
+                                               nbbcalcthread, nbccalcthread,
+                                               ncccalcthread);
                     }
                 } else // ! no-one-ball
                     for (l = More(p); l != Next(p); l = Next(l)) {
-                            walktree_balls_omp(l, q, hist, histcc, histccsincos, nsmoothcountthread,
-                                    nbbcalcthread, nbccalcthread, ncccalcthread);
+                            walktree_balls_omp(cmd, gd, l, q,
+                                               hist, histcc, histccsincos,
+                                               nsmoothcountthread,
+                                               nbbcalcthread, nbccalcthread,
+                                               ncccalcthread);
                     }
                 break;
             case BODYCELL:
@@ -1076,30 +1109,38 @@ local void walktree_balls_omp(struct cmdline_data* cmd, struct  global_data* gd,
                     if ( ((Nb(q)<=gd->nsmooth[0]) || (Size(q)<=gd->rminCell[0]))
                         && (dr1 > gd->rminCell[1]) ) {
                         *nsmoothcountthread += 1;
-                        sumnodes_bc_omp(p, q, &dr1, dr, hist, histcc, histccsincos,
-                                     nbbcalcthread, nbccalcthread, ncccalcthread);
+                        sumnodes_bc_omp(cmd, gd, p, q, &dr1, dr,
+                                        hist, histcc, histccsincos,
+                                        nbbcalcthread, nbccalcthread,
+                                        ncccalcthread);
                     } else {
 
-                    if (nodes_condition_balls(p, q, &dr1, dr)) {
+                    if (nodes_condition_balls(cmd, gd, p, q, &dr1, dr)) {
                         if (Size(q)<=gd->rminCell[0] || Nb(q)<=gd->nsmooth[0]) {
                             *nsmoothcountthread += 1;
-                            sumnodes_bc_omp(p, q, &dr1, dr, hist, histcc,
+                            sumnodes_bc_omp(cmd, gd, p, q, &dr1, dr,
+                                            hist, histcc,
                                             histccsincos, nbbcalcthread,
                                             nbccalcthread, ncccalcthread);
                         } else
-                            sumnodes_bc_omp(p, q, &dr1, dr, hist, histcc,
+                            sumnodes_bc_omp(cmd, gd, p, q, &dr1, dr,
+                                            hist, histcc,
                                             histccsincos, nbbcalcthread,
                                             nbccalcthread, ncccalcthread);
                     } else // ! nodes_condition
                         for (l = More(q); l != Next(q); l = Next(l))
-                            walktree_balls_omp(p,l,hist, histcc, histccsincos,
+                            walktree_balls_omp(cmd, gd, p, l,
+                                               hist, histcc, histccsincos,
                                                nsmoothcountthread, nbbcalcthread,
                                                nbccalcthread, ncccalcthread);
                     }
                 } else // ! no-one-ball
                     for (l = More(q); l != Next(q); l = Next(l)) {
-                            walktree_balls_omp(p,l,hist, histcc, histccsincos, nsmoothcountthread,
-                                    nbbcalcthread, nbccalcthread, ncccalcthread);
+                            walktree_balls_omp(cmd, gd, p, l,
+                                               hist, histcc, histccsincos,
+                                               nsmoothcountthread,
+                                               nbbcalcthread, nbccalcthread,
+                                               ncccalcthread);
                     }
                 break;
             case BODYBODY: // Found BODYBODY
@@ -1107,8 +1148,9 @@ local void walktree_balls_omp(struct cmdline_data* cmd, struct  global_data* gd,
                 HIT(p) = TRUE;
                 HIT(q) = TRUE;
 #endif
-                sumnodes_bb_omp(p, q, &dr1, dr, hist, histcc, histccsincos,
-                                    nbbcalcthread, nbccalcthread, ncccalcthread);
+                sumnodes_bb_omp(cmd, gd, p, q, &dr1, dr,
+                                hist, histcc, histccsincos,
+                                nbbcalcthread, nbccalcthread, ncccalcthread);
                 break;
         } // ! switch
     } // ! reject_cell
@@ -1188,7 +1230,7 @@ local void sumnodes_bb_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif // ! SINCOS
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenodes_bb: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenodes_bb_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 #ifdef SINCOS
             CHEBYSHEVTUOMP
 #else
@@ -1207,7 +1249,7 @@ local void sumnodes_bb_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenode_bb_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
             CHEBYSHEVOMPBALLSCC;
 //#endif // ! TPCF
         }
@@ -1276,7 +1318,7 @@ local void sumnodes_bc_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif // ! SINCOS
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenodes_bb: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenodes_bc_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 #ifdef SINCOS
             CHEBYSHEVTUOMP
 #else
@@ -1295,7 +1337,7 @@ local void sumnodes_bc_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenode_bc_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
             CHEBYSHEVOMPBALLSCC;
 //#endif // ! TPCF
         }
@@ -1363,7 +1405,7 @@ local void sumnodes_cb_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif // ! SINCOS
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenodes_bb: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenodes_cb_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 #ifdef SINCOS
             CHEBYSHEVTUOMP
 #else
@@ -1382,7 +1424,7 @@ local void sumnodes_cb_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenode_cb_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
             CHEBYSHEVOMPBALLSCC;
 //#endif // ! TPCF
         }
@@ -1452,7 +1494,7 @@ local void sumnodes_cc_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif // ! SINCOS
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenodes_bb: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenodes_cc_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
 #ifdef SINCOS
             CHEBYSHEVTUOMP
 #else
@@ -1471,7 +1513,7 @@ local void sumnodes_cc_omp(struct cmdline_data* cmd, struct  global_data* gd,
 #endif
             if (rabs(cosphi)>1.0)
                 verb_log_print(cmd->verbose, gd->outlog,
-                               "sumenode: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
+                               "sumenode_cc_omp: Warning!... cossphi must be in (-1,1): %g\n",cosphi);
             CHEBYSHEVOMPBALLSCC;
 //#endif // ! TPCF
         }
@@ -1506,7 +1548,7 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
  //B for ap
          for (ap = aptr; ap < nptr; ap++) {
              if (Type(*ap) == CELL) {
-                 if (!reject_cell_balls(p, *ap, &dr1, dr)) {
+                 if (!reject_cell_balls(cmd, gd, p, *ap, &dr1, dr)) {
                      if ( ((Nb(*ap)<=gd->nsmooth[0]) || (Size(*ap)<=gd->rminCell[0]))
                          && (dr1 > gd->rminCell[1]) ) {
                              if (np - hist->active >= actsafe)
@@ -1520,10 +1562,10 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
                              Type(bptr) = Type(*ap);
                              Nb(bptr) = Nb(*ap);
                      } else { // ! bucket condition
-                         if (nodes_condition_balls(p, *ap, &dr1, dr)) {
+                         if (nodes_condition_balls(cmd, gd, p, *ap, &dr1, dr)) {
                              if (!scanopt(cmd->options, "no-two-balls")
                                  && Type(p) == CELL ) {
-                                 sumcellcell_balls6_omp((cellptr)(*ap),
+                                 sumcellcell_balls6_omp(cmd, gd, (cellptr)(*ap),
                                     (cellptr)*ap+1, p,
                                     nbbcalcthread, nbccalcthread, ncccalcthread,
                                     histcc, histsincos);
@@ -1563,14 +1605,14 @@ local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd
 
         gd->actmax = MAX(gd->actmax, np - hist->active);
         if (np != nptr)
-            walksub6_omp(nptr, np, cptr, bptr, p, psize, pmid,
+            walksub6_omp(cmd, gd, nptr, np, cptr, bptr, p, psize, pmid,
                         nbbcalcthread, nbccalcthread, ncccalcthread,
                             hist, histcc, histsincos, ibfcountthread, nsmoothcountthread, nbody);
         else {
             if (Type(p) != BODY)
                 error("walktree: recursion terminated with cell\n");
 
-            sum_balls6_omp(cptr, bptr, (bodyptr) p,
+            sum_balls6_omp(cmd, gd, cptr, bptr, (bodyptr) p,
                            nbbcalcthread, nbccalcthread, ncccalcthread,
                            hist, histsincos, nbody);
             Update(p) = FALSE;
@@ -1605,14 +1647,14 @@ local void walksub6_omp(struct cmdline_data* cmd, struct  global_data* gd,
         for (q = More(p); q != Next(p); q = Next(q)) {
             for (k = 0; k < NDIM; k++)
                 nmid[k] = pmid[k] + (Pos(q)[k] < pmid[k] ? - poff : poff);
-            walktree_balls6_omp(nptr, np, cptr, bptr, q, psize / 2, nmid,
+            walktree_balls6_omp(cmd, gd, nptr, np, cptr, bptr, q, psize / 2, nmid,
                     nbbcalcthread, nbccalcthread, ncccalcthread, hist, histcc,
                     histsincos, ibfcountthread, nsmoothcountthread, nbody);
         }
     } else {
         for (k = 0; k < NDIM; k++)
             nmid[k] = pmid[k] + (Pos(p)[k] < pmid[k] ? - poff : poff);
-        walktree_balls6_omp(nptr, np, cptr, bptr, p, psize / 2, nmid,
+        walktree_balls6_omp(cmd, gd, nptr, np, cptr, bptr, p, psize / 2, nmid,
                     nbbcalcthread, nbccalcthread, ncccalcthread, hist, histcc,
                     histsincos, ibfcountthread, nsmoothcountthread, nbody);
     }
@@ -1629,8 +1671,8 @@ local void sum_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
     gdhist_omp_balls6 hist1;
     gdhist_sincos_omp_balls6 hist1sincos;
 
-    search_init_omp_balls6_cc(&hist1);
-    search_init_sincos_omp_balls6(&hist1sincos);
+    search_init_omp_balls6_cc(cmd, gd, &hist1);
+    search_init_sincos_omp_balls6(cmd, gd, &hist1sincos);
 //B
     for (n = 1; n <= cmd->sizeHistN; n++) {
         hist1.histNNSubthread[n] = 0.0;
@@ -1683,9 +1725,10 @@ local void sum_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
     }
 //E
     if (!scanopt(cmd->options, "no-one-ball"))
-        sumcell_balls6_omp(hist->interact, cptr, (bodyptr) p0,
+        sumcell_balls6_omp(cmd, gd, hist->interact, cptr, (bodyptr) p0,
                 nbbcalcthread, nbccalcthread, ncccalcthread, &hist1, &hist1sincos);
-    sumnode_balls6_omp(bptr, hist->interact + hist->actlen, (bodyptr) p0,
+    sumnode_balls6_omp(cmd, gd, bptr, hist->interact + hist->actlen,
+                       (bodyptr) p0,
                 nbbcalcthread, nbccalcthread, ncccalcthread, &hist1, &hist1sincos);
 
 //B Section of type: computeBodyProperties_omp_balls6(p0, cmd->nbody, hist)
@@ -1825,7 +1868,7 @@ local void sumnode_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
 
     for (p = start; p < finish; p++) {
         pb = ((nodeptr) p);
-        if (accept_body(p0, pb, &dr1, dr)) {
+        if (accept_body(cmd, gd, p0, pb, &dr1, dr)) {
             if(dr1>cmd->rminHist) {
                 ibodycount++;
                 if (cmd->rminHist==0)
@@ -1915,7 +1958,7 @@ local void sumcell_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
 
     for (p = start; p < finish; p++) {
         pb = ((nodeptr) p);
-        if (accept_body(p0, pb, &dr1, dr)) {
+        if (accept_body(cmd, gd, p0, pb, &dr1, dr)) {
             if(dr1>cmd->rminHist) {
                 ibodycount++;
                 if (cmd->rminHist==0)
@@ -2008,7 +2051,7 @@ local void sumcellcell_balls6_omp(struct cmdline_data* cmd, struct  global_data*
 
     for (p = start; p < finish; p++) {
         pb = ((nodeptr) p);
-        if (accept_body((bodyptr)p0, pb, &dr1, dr)) {
+        if (accept_body(cmd, gd, (bodyptr)p0, pb, &dr1, dr)) {
             if(dr1>cmd->rminHist) {
                 ibodycount++;
                 if (cmd->rminHist==0)

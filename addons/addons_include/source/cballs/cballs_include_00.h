@@ -8,6 +8,18 @@
 #include "cballs_kdtree_omp_00.h"
 #endif
 
+#ifdef OCTREEKKKOMP
+#include "cballs_octree_kkk_omp_00.h"
+#endif
+
+#ifdef OCTREEKKKBALLSOMP
+#include "cballs_octree_kkk_balls_omp_00.h"
+#endif
+
+#ifdef OCTREEKKKBALLS4OMP
+#include "cballs_octree_kkk_balls4_omp_00.h"
+#endif
+
 /*
  Add your addon item here
  */

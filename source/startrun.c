@@ -776,7 +776,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
      gd->deltaTheta = TWOPI/cmd->sizeHistTheta;
      // Nyquist frecuency = 1/(2 deltaTheta)
      verb_log_print(cmd->verbose_log, gd->outlog,
-                    "Nyquist frequency in phi bins = %g\n",0.5/gd->deltaTheta);
+                    "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaTheta);
 
     return SUCCESS;
 }

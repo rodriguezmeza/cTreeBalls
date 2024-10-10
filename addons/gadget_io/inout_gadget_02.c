@@ -92,6 +92,7 @@ global int inputdata_gadget(struct cmdline_data* cmd,
     INTEGER ip;
     int k;
     real mass=1.0;
+    real weight=1.0;
 
     gd->input_comment = "Gadget input file";
 
@@ -135,6 +136,7 @@ global int inputdata_gadget(struct cmdline_data* cmd,
             Kappa(p) = 2.0;
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+1;
     }
 

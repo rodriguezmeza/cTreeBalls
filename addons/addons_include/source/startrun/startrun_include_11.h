@@ -30,7 +30,23 @@
 #endif
 
 #ifdef BALLTREEEXP
-#include "startrun_balltree_exp.h"             // 52
+#include "startrun_balltree_exp.h"              // 52
+#endif
+
+#ifdef TC3PCFDIRECTOMP
+#include "startrun_tc_3pcf_direct_omp_11.h"     // 60
+#endif
+
+#ifdef OCTREEKKKOMP
+#include "startrun_octree_kkk_omp_11.h"             // 61
+#endif
+
+#ifdef OCTREEKKKBALLSOMP
+#include "startrun_octree_kkk_balls_omp_11.h"             // 62
+#endif
+
+#ifdef OCTREEKKKBALLS4OMP
+#include "startrun_octree_kkk_balls4_omp_11.h"             // 63
 #endif
 
 /*

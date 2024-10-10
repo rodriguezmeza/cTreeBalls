@@ -12,22 +12,6 @@ vpath %.c ./addons/kdtree_omp/
 INCLUDES += -I$(KDTREEOMP)
 HEADERFILES = $(wildcard $(KDTREEOMP)/*.h)
 EXTERNAL += kdtree.o search_kdtree_omp.o
-
-# NMultipoles switch
-NMultipolesON = 1
-ifeq ($(NMultipolesON),1)
-OPT2 += -DNMultipoles
-endif
-#
-
-# NONORMHIST switch
-NONORMHISTON = 0
-ifeq ($(NONORMHISTON),1)
-OPT2 += -DNONORMHIST
-endif
-#
-
-
 endif
 #
 #E

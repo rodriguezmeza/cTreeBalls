@@ -16,26 +16,26 @@
 #include "globaldefs.h"
 #include "kdtree.h"
 
-local void set_radius(struct cmdline_data*, kdnode *, bodyptr *, int, int);
-local void set_cofm(kdnode *, bodyptr *, int, int);
+local void set_radius(struct cmdline_data*, ballnode *, bodyptr *, int, int);
+local void set_cofm(ballnode *, bodyptr *, int, int);
 local void set_bounds(bound *, bodyptr *, INTEGER, INTEGER);
 local INTEGER  median_index(bodyptr *, int, INTEGER, INTEGER);
 local void combine_nodes(struct cmdline_data*,
-                         kdnode *, bodyptr *, kdnode *, kdnode *);
-local void upward_pass(struct cmdline_data*, kdxptr, int);
+                         ballnode *, bodyptr *, ballnode *, ballnode *);
+local void upward_pass(struct cmdline_data*, ballxptr, int);
 
 // Alloc ball tree memory, set bounds for root
 //  check that kd->bptr will consume additional
 //  memory to btab->Pos...
 //  in such a case change kd-bptr[i] -> Pos(p)
-kdxptr init_kdtree(struct cmdline_data* cmd,
+ballxptr init_kdtree(struct cmdline_data* cmd,
                    struct  global_data* gd,
                    bodyptr btab, INTEGER nbody)
 {
-    kdxptr kd;
+    ballxptr kd;
     INTEGER i, j;
 
-    kd = (kdxptr) allocate(sizeof(kdcontext));
+    kd = (ballxptr) allocate(sizeof(ballcontext));
     kd->npoint = nbody;
     kd->bptr = (bodyptr *) allocate(nbody * sizeof(bodyptr));
     gd->bytes_tot += nbody*sizeof(bodyptr);
@@ -52,7 +52,7 @@ kdxptr init_kdtree(struct cmdline_data* cmd,
 }
 
 // Free kd tree memory
-void finish_kdtree(kdxptr kd)
+void finish_kdtree(ballxptr kd)
 {
     free(kd->bptr);
     free(kd->ntab);
@@ -64,11 +64,11 @@ void finish_kdtree(kdxptr kd)
 //  alloc memory for ball tree nodes and set the main tree walking loop
 void build_kdtree(struct cmdline_data* cmd,
                   struct  global_data* gd,
-                  kdxptr kd, int nbucket)
+                  ballxptr kd, int nbucket)
 {
     INTEGER n, m;
     int k, i, d, ct;
-    kdnode *ntab;
+    ballnode *ntab;
 
     //B Find number of nodes and number of times to split
     n = kd->npoint;
@@ -81,14 +81,14 @@ void build_kdtree(struct cmdline_data* cmd,
     kd->nsplit = k;
     //E
 
-    ntab = kd->ntab = (kdnode *) allocate(kd->nnode * sizeof(kdnode));
-    gd->bytes_tot += kd->nnode*sizeof(kdnode);
+    ntab = kd->ntab = (ballnode *) allocate(kd->nnode * sizeof(ballnode));
+    gd->bytes_tot += kd->nnode*sizeof(ballnode);
     verb_print(cmd->verbose,
                "Number of nbodies, nodes, and nsplit: %d %d %d\n",
                kd->npoint, kd->nnode, kd->nsplit);
     verb_print(cmd->verbose,
                "Allocated %g MByte for particle storage in kd node tab.\n\n",
-               kd->nnode*sizeof(kdnode)*INMB);
+               kd->nnode*sizeof(ballnode)*INMB);
 
     //B Initialize root node
     ntab[KDROOT].first = 0;			                // index of first body in root
@@ -141,7 +141,7 @@ void build_kdtree(struct cmdline_data* cmd,
 
 //  Compute cell radius
 local void set_radius(struct cmdline_data* cmd,
-                      kdnode *kd, bodyptr *bptr, int lo, int hi)
+                      ballnode *kd, bodyptr *bptr, int lo, int hi)
 {
     int i, k;
     real d, dmax;
@@ -163,7 +163,7 @@ local void set_radius(struct cmdline_data* cmd,
 }
 
 //  Compute cell inertia tensor and deformation factor
-local void set_inertia(kdnode *kd, bodyptr *bptr, int lo, int hi)
+local void set_inertia(ballnode *kd, bodyptr *bptr, int lo, int hi)
 {
     int i, k;
     int l;
@@ -207,7 +207,7 @@ local void set_inertia(kdnode *kd, bodyptr *bptr, int lo, int hi)
 }
 
 //  Computes cell center of mass and averages scalar fields
-local void set_cofm(kdnode *kd, bodyptr *bptr, int lo, int hi)
+local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
 {
     vector tmpv;
     int i;
@@ -292,9 +292,9 @@ local INTEGER median_index(bodyptr *p, int d, INTEGER lo, INTEGER hi)
 
 
 //  Adjust bounds of each node to fit bodies exactly
-local void upward_pass(struct cmdline_data* cmd, kdxptr kd, int cell)
+local void upward_pass(struct cmdline_data* cmd, ballxptr kd, int cell)
 {
-    kdnode *ntab = kd->ntab;
+    ballnode *ntab = kd->ntab;
 //    int d;
 //    int k;
 //    real radius;
@@ -319,8 +319,8 @@ local void upward_pass(struct cmdline_data* cmd, kdxptr kd, int cell)
 
 //  Combine two nodes: bounding, center of mass pos, and radius
 local void combine_nodes(struct cmdline_data* cmd,
-                         kdnode *pout, bodyptr *bptr,
-                         kdnode *p1, kdnode *p2)
+                         ballnode *pout, bodyptr *bptr,
+                         ballnode *p1, ballnode *p2)
 {
     int k;
 

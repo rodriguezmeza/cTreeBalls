@@ -20,6 +20,7 @@ typedef struct _node {
     REAL gamma1;
     REAL gamma2;
 //E
+    REAL weight;                                    // to weight fields...
     vector pos;
     struct _node *next;
 #ifdef bhistON
@@ -75,6 +76,7 @@ typedef struct _node {
 #define Gamma1(x)    (((nodeptr) (x))->gamma1)
 #define Gamma2(x)    (((nodeptr) (x))->gamma2)
 //E
+#define Weight(x)   (((nodeptr) (x))->weight)
 
 #ifdef KappaAvgON
 #define KappaAvg(x)    (((nodeptr) (x))->kappaavg)

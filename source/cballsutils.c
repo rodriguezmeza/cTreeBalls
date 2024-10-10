@@ -437,7 +437,9 @@ global bool reject_cell(struct  cmdline_data* cmd, struct  global_data* gd, node
 }
 
 //B 2023.11.22
-global bool reject_balls(struct  cmdline_data* cmd, struct  global_data* gd, nodeptr p, nodeptr q, real *drpq, vector dr)
+global bool reject_balls(struct  cmdline_data* cmd,
+                         struct  global_data* gd, nodeptr p, nodeptr q,
+                         real *drpq, vector dr)
 {
     real drpq2;
 
@@ -455,7 +457,9 @@ global bool reject_balls(struct  cmdline_data* cmd, struct  global_data* gd, nod
 }
 //E
 
-global bool reject_cell_balls(struct  cmdline_data* cmd, struct  global_data* gd, nodeptr p, nodeptr q, real *drpq, vector dr)
+global bool reject_cell_balls(struct  cmdline_data* cmd,
+                              struct  global_data* gd, nodeptr p, nodeptr q,
+                              real *drpq, vector dr)
 {
     real drpq2;
 

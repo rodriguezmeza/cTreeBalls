@@ -11,6 +11,7 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     bodyptr p;
     char gato[1], firstline[20];
     real mass=1;
+    real weight=1;
 
     gd->input_comment = "Column position input file";
 
@@ -66,6 +67,7 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         Kappa(p) = 2.0;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
@@ -106,6 +108,7 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
     bodyptr p;
     char gato[1], firstline[20];
     real mass=1;
+    real weight=1;
 
     gd->input_comment = "Column form input file (2d-to-3d)";
 
@@ -202,6 +205,7 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -217,6 +221,7 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     int ndim;
     bodyptr p;
     real mass=1;
+    real weight=1;
 
     gd->input_comment = "Multi-column position input file";
 //
@@ -371,6 +376,7 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         if (scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = 2.0;
         kavg += Kappa(p);

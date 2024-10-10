@@ -117,6 +117,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     bodyptr p;
     char gato[1], firstline[20];
     real mass=1;
+    real weight=1;
 
     gd->input_comment = "Column form input file";
 
@@ -198,6 +199,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }
@@ -242,6 +244,7 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
     int ndim;
     bodyptr p;
     real mass=1;
+    real weight=1;
 
     gd->input_comment = "Binary input file";
 
@@ -329,6 +332,7 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -630,6 +634,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
     long i;
     bodyptr p;
     real mass = 1.0;
+    real weight = 1.0;
 
     real theta, phi;
     real theta_rot, phi_rot;
@@ -671,6 +676,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
         }
         Type(p) = BODY;
         Mass(p) = mass;
+        Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+iselect;
 
         *xmin = Pos(p)[0];
@@ -724,6 +730,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
     long i;
     bodyptr p;
     real mass = 1.0;
+    real weight = 1.0;
 
     real theta, phi;
     real theta_rot, phi_rot;
@@ -767,6 +774,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
             }
             Type(p) = BODY;
             Mass(p) = mass;
+            Weight(p) = weight;
             Id(p) = p-bodytabtmp+iselect;
 
             *xmin = Pos(p)[0];
@@ -798,6 +806,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
                         Kappa(p) = 2.0;
                     Type(p) = BODY;
                     Mass(p) = mass;
+                    Weight(p) = weight;
                     Id(p) = p-bodytabtmp+iselect;
 
                     *xmin = Pos(p)[0];
@@ -833,6 +842,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
             Kappa(p) = Kappa(q);
             Type(p) = Type(q);
             Mass(p) = mass;
+            Weight(p) = weight;
             Id(p) = p-bodytable[ifile]+i;
             *xmin = MIN(*xmin,Pos(p)[0]);
             *ymin = MIN(*ymin,Pos(p)[1]);
@@ -877,6 +887,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
     long i;
     bodyptr p;
     real mass = 1;
+    real weight = 1;
 
     real theta, phi;
     real theta_rot, phi_rot;
@@ -921,6 +932,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
             Kappa(p) = conv[i];
             Type(p) = BODY;
             Mass(p) = mass;
+            Weight(p) = weight;
             Id(p) = p-bodytabtmp+iselect;
 
             *xmin = Pos(p)[0];
@@ -953,6 +965,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
                     Kappa(p) = conv[i];
                     Type(p) = BODY;
                     Mass(p) = mass;
+                    Weight(p) = weight;
                     Id(p) = p-bodytabtmp+iselect;
 
                     *xmin = Pos(p)[0];
@@ -987,6 +1000,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
             Kappa(p) = Kappa(q);
             Type(p) = Type(q);
             Mass(p) = mass;
+            Weight(p) = weight;
             Id(p) = p-bodytable[ifile]+i;
             *xmin = MIN(*xmin,Pos(p)[0]);
             *ymin = MIN(*ymin,Pos(p)[1]);
@@ -1362,7 +1376,7 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
         printf(" %s\n\n", PRNUNITOFTIMEUSED);                          // Only work this way
     }
 
-    EndRun_FreeMemory(cmd, gd);
+//    EndRun_FreeMemory(cmd, gd);
 
     return SUCCESS;
 }
@@ -1412,18 +1426,21 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
         free_dmatrix(gd->histXi,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     }
 
-     free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
+    free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
      
-     free_dvector(gd->histNNN,1,cmd->sizeHistN);
-     // 2pcf
-     //B kappa Avg Rmin
-     free_dvector(gd->histNNSubXi2pcftotal,1,cmd->sizeHistN);
-     //E
-     free_dvector(gd->histNNSubXi2pcf,1,cmd->sizeHistN);
-     //
-     free_dvector(gd->histNNSub,1,cmd->sizeHistN);
-     free_dvector(gd->histCF,1,cmd->sizeHistN);
-     free_dvector(gd->histNN,1,cmd->sizeHistN);
+    free_dvector(gd->histNNN,1,cmd->sizeHistN);
+    // 2pcf
+    //B kappa Avg Rmin
+    free_dvector(gd->histNNSubXi2pcftotal,1,cmd->sizeHistN);
+    //E
+    free_dvector(gd->histNNSubXi2pcf,1,cmd->sizeHistN);
+    //
+    free_dvector(gd->histNNSub,1,cmd->sizeHistN);
+    free_dvector(gd->histCF,1,cmd->sizeHistN);
+    free_dvector(gd->histNN,1,cmd->sizeHistN);
+
+    free_dvector(gd->histZetaMFlatten,1,cmd->sizeHistN*cmd->sizeHistN);
+    free_dvector(gd->rBins,1,cmd->sizeHistN);
 
 //B Set gsl uniform random :: If not needed globally this line have to go to testdata
 #ifdef USEGSL

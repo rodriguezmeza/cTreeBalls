@@ -76,7 +76,7 @@ Control tree search parameter, can be used to increase speed. It has the effect 
 [a: infmt]  gives format of file to input the data to analyse. Common options are: 'columns-ascii', 'binary', 'takahasi'. First one is a file with a header and all the data point info is in column form: positions and convergence field. The binary format is a \fBcballs\fR binary format. Whereas takahasi format is for reading Takahasi simulations data. Other file formats are in the addons. Gadget format is ones of them. Other is 'multi-columns-ascii' which can be used in combinations with 'columns' option in order to read files that are Rockstar output. Also, \fBcballs\fR can read fits files. You have to activate this options and recompile the code. Note that in this case you need to edit Makefile_machine to set cfitsio path. Note: you need to set properly the format of the point catalog that you are pretending to analyze, because if you mistakenly set wrong format or positions or fields columns, you will obtain wrong results or get a 'segmentation fault' error and the code will stop. Please follow the examples given in the tests folder.
 
 .IP "\fBiCatalog\fR" 12
-[a: icats] gives the indexes of point catalogs to analyse. Usefult to read several point catalogs to do cross-correlations.
+[a: icats] gives the indexes of point catalogs to analyse. Useful to read several point catalogs to do cross-correlations.
 
 .IP "\fBrootDir\fR" 12
 [a: root] gives output dir, where output files will be written.

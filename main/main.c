@@ -20,6 +20,7 @@
 
 #define global
 
+#include <stdio.h>
 #include "globaldefs.h"
 #include "cmdline_defs.h"
 

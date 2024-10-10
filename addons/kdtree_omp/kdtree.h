@@ -22,7 +22,7 @@ typedef struct {
     real radius;                                    // radius of bounding box
 } bound;
 
-//  Structure representing a node of a kd-tree
+//  Structure representing a node of a ball-tree
 typedef struct {
     bound bnd;                                      // min, max bnd of ball-cell
     int dim;                                        // splitting dimension
@@ -38,7 +38,7 @@ typedef struct {
     real etaxz;                                     // deformation factor xz
     real etayz;                                     // deformation factor yz
 #endif
-} kdnode;
+} ballnode;
 
 // Macros for indicies into kd tree
 #define KDROOT		1
@@ -61,15 +61,15 @@ typedef struct {
     bound bnd;
     int nnode;
     int nsplit;
-    kdnode *ntab;
-} kdcontext, *kdxptr;
+    ballnode *ntab;
+} ballcontext, *ballxptr;
 
-kdxptr init_kdtree(struct cmdline_data* cmd,
+ballxptr init_kdtree(struct cmdline_data* cmd,
                    struct  global_data* gd,
                    bodyptr, INTEGER);
 void build_kdtree(struct cmdline_data* cmd,
                   struct  global_data* gd,
-                  kdxptr, int);
-void finish_kdtree(kdxptr);
+                  ballxptr, int);
+void finish_kdtree(ballxptr);
 
 #endif  /* ! _kdtree_h */

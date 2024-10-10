@@ -190,6 +190,21 @@ void d1Rotation3D(real vec[], real alpha)
         vec[i] = vecp[i];
 }
 
+// Cross vector product: vec2-vec1 vs vec3-vec1
+bool crossVecProdSign(real vec1[], real vec2[], real vec3[])
+{
+    vector vec21, vec31, vec;
+    real s;
+    SUBV(vec21,vec2,vec1);
+    SUBV(vec31,vec3,vec1);
+    CROSSVP(vec,vec21,vec31);
+    DOTVP(s,vec,vec1);
+    if (s<0.0)
+        return TRUE;
+    else
+        return FALSE;
+}
+
 real radian(real degree)
 {
 	return(degree * PI_D / ((real) 180.0) );

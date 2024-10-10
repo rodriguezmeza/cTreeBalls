@@ -54,6 +54,30 @@ endif
 # For computing 3pcf using kdtree-omp method
 KDTREEOMPON = 1
 
+# OCTREEKKKOMP
+# For computing 3pcf using octree-kkk-omp
+OCTREEKKKOMPON = 1
 
 #E
 
+
+############################
+#B Special behavior settings
+# In some searching methods
+#   it will be possible to set the following flags
+
+# NMultipoles switch (multipoles for counting)
+NMultipolesON = 0
+
+# NONORMHIST switch (do not use normalization of histograms)
+NONORMHISTON = 0
+
+# POLARAXIS switch (set north pole as the axis of reference...)
+#   this is for pixel catalogs on the unit sphere: (0,0,1)
+POLARAXISON = 0
+
+# No Limber aproximation
+NOLIMBERON = 0
+
+#E
+############################

@@ -572,7 +572,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
             if (scanopt(cmd->options, "smooth-pivot"))
                 if (dr1<=gd->rsmooth[0]) {
 //B kappa Avg Rmin
-                    if (Update(q)=TRUE) {
+                    if (Update(q)==TRUE) {
                         Update(q) = FALSE;
                         NbRmin(p) += 1;
                         KappaRmin(p) += Kappa(q);

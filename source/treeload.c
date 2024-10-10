@@ -252,6 +252,7 @@ local int smoothBodies(struct  cmdline_data* cmd,
                 Nbb(q) = Nbb(p);
 #endif
                 Mass(q) = Mass(p);
+                Weight(q) = Weight(p);
                 SETV(Pos(q), Pos(p));
                 Kappa(q) = Kappa(p);
                 q++;
@@ -267,6 +268,7 @@ local int smoothBodies(struct  cmdline_data* cmd,
                     Nbb(q) = 1;
 #endif
                     Mass(q) = Mass(p);
+                    Weight(q) = Weight(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);
                     q++;
@@ -435,7 +437,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
             gd->rminCell[0] =
             gd->Rcell[gd->tdepthTable[ifile]+gd->scanLevelMin[0]];
     }
-    
+
     verb_print(cmd->verbose,
                "Cell size at scanLevelMin (%d) and scale factor: %e %e\n",
                gd->scanLevelMin[0], gd->rminCell[0], gd->rminCell[1]);
@@ -464,6 +466,9 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
             verb_print(cmd->verbose,
                        "Warning! rminCell[1] is greatear than rangeN\n");
     }
+    verb_print(cmd->verbose,
+        "Cell size at scanLevelMin (%d) and scale factor (Modified values): %e %e\n",
+        gd->scanLevelMin[0], gd->rminCell[0], gd->rminCell[1]);
     //E Root nodes
     
     if (gd->infilefmt_int == INTAKAHASI)
@@ -482,17 +487,31 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 #endif // ! BALLS
 
     if (strnull(cmd->rsmooth)) {
-        if (scanopt(cmd->options, "default-rsmooth")) {
-            gd->rsmooth[0] = gd->Rcell[gd->irsmooth-1];
-        } else {
-            gd->rsmooth[0] = gd->Rcell[gd->tdepthTable[ifile]-1];
-            verb_print(cmd->verbose, "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+        if (scanopt(cmd->options, "fix-rsmooth")) {
+//            gd->rsmooth[0] = 0.0083333333;        // (0.50 arcmin)/60
+            gd->rsmooth[0] = 0.00416666665;         // (0.25 arcmin)/60
+            verb_print(cmd->verbose, "\trsmooth is set to: %g\n", gd->rsmooth[0]);
             if (gd->rsmooth[0]>0.1*cmd->rangeN) {
                 verb_print(cmd->verbose,
                     "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
                     gd->rsmooth[0],0.1*cmd->rangeN);
                 gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
                 verb_print(cmd->verbose, "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+            }
+        } else {
+            if (scanopt(cmd->options, "default-rsmooth")) {
+                gd->rsmooth[0] = gd->Rcell[gd->irsmooth-1];
+            } else {
+                gd->rsmooth[0] = gd->Rcell[gd->tdepthTable[ifile]-1];
+                verb_print(cmd->verbose, "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+                if (gd->rsmooth[0]>0.1*cmd->rangeN) {
+                    verb_print(cmd->verbose,
+                    "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
+                               gd->rsmooth[0],0.1*cmd->rangeN);
+                    gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
+                    verb_print(cmd->verbose,
+                               "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+                }
             }
         }
     } else {
@@ -699,6 +718,7 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
     cellhist[lev]++;
     Level(p) = lev;                                 // To set scanLevel
     Mass(p) = 0.0;
+    Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
 #ifdef KappaAvgON
@@ -715,6 +735,7 @@ local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd,
                                                     //  to a cell
             Update(p) |= Update(q);
             Mass(p) += Mass(q);
+            Weight(p) += Weight(q);
             if ( Type(q) == CELL) {
                 Nb(p) += Nb(q);
                 Kappa(p) += Mass(q)*Kappa(q);
@@ -835,6 +856,7 @@ local void threadtree(struct  cmdline_data* cmd,
                     Nbb(p) = Nb(p);
 #endif
                     Mass(q) = Mass(p);
+                    Weight(q) = Weight(p);
                     SETV(Pos(q), Pos(p));
                     Kappa(q) = Kappa(p);
                     Selected(p) = TRUE;             // To see the bodies belonging
@@ -1057,6 +1079,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
             Type(pn) = BODY;
             Update(pn) = TRUE;
             Mass(pn) = Mass(nodetablescanlev[ifile][in]);
+            Weight(pn) = Weight(nodetablescanlev[ifile][in]);
             Kappa(pn) = Kappa(nodetablescanlev[ifile][in]);
             SETV(Pos(pn),Pos(nodetablescanlev[ifile][in]));
             Nb(pn) = Nb(nodetablescanlev[ifile][in]);
@@ -1179,6 +1202,7 @@ local int save_nodes_root(struct  cmdline_data* cmd, struct  global_data* gd, in
         Type(pn) = BODY;
         Update(pn) = TRUE;
         Mass(pn) = Mass(nodetablescanlev_root[ifile][in]);
+        Weight(pn) = Weight(nodetablescanlev_root[ifile][in]);
         Kappa(pn) = Kappa(nodetablescanlev_root[ifile][in]);
         SETV(Pos(pn),Pos(nodetablescanlev_root[ifile][in]));
 

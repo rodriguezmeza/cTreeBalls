@@ -82,22 +82,22 @@
 
 #ifdef NMultipoles
 local void sumnode_sincos_N(struct  cmdline_data*, struct  global_data*,
-                          bodyptr, kdnode, bodyptr *,
+                          bodyptr, ballnode, bodyptr *,
                           INTEGER *, INTEGER *,
                           gdhistptr_sincos_omp, gdhistNptr_sincos_omp);
 local void sumnode_sincos_cell_N(struct  cmdline_data*,
                                struct  global_data*, bodyptr,
-                               kdnode, bodyptr *,
+                               ballnode, bodyptr *,
                                INTEGER *, INTEGER *,
                                gdhistptr_sincos_omp, gdhistNptr_sincos_omp);
 #endif
 local void sumnode_sincos(struct  cmdline_data*, struct  global_data*,
-                          bodyptr, kdnode, bodyptr *,
+                          bodyptr, ballnode, bodyptr *,
                           INTEGER *, INTEGER *,
                           gdhistptr_sincos_omp);
 local void sumnode_sincos_cell(struct  cmdline_data*,
                                struct  global_data*, bodyptr,
-                               kdnode, bodyptr *,
+                               ballnode, bodyptr *,
                                INTEGER *, INTEGER *,
                                gdhistptr_sincos_omp);
 
@@ -111,7 +111,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     bodyptr p;
     int n;
     double cpustart;
-    kdxptr kd;
+    ballxptr kd;
     int nbucket;
     real cpu_build_kdtree;
 
@@ -200,7 +200,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         INTEGER icountNbRminOverlapthread;
         icountNbRminOverlapthread=0;
 //E
-        kdnode *ntab = kd->ntab;
+        ballnode *ntab = kd->ntab;
         bodyptr *bptr = kd->bptr;
         INTEGER cp;
 
@@ -674,7 +674,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #ifdef NMultipoles
 local void sumnode_sincos_N(struct  cmdline_data* cmd,
                           struct  global_data* gd, bodyptr p,
-                          kdnode ntab, bodyptr *bptr,
+                          ballnode ntab, bodyptr *bptr,
                           INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                           gdhistptr_sincos_omp hist,
                           gdhistNptr_sincos_omp histN)
@@ -849,7 +849,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 
 local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                                struct  global_data* gd, bodyptr p,
-                               kdnode ntab, bodyptr *bptr,
+                               ballnode ntab, bodyptr *bptr,
                                INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                                gdhistptr_sincos_omp hist,
                                gdhistNptr_sincos_omp histN)
@@ -1006,7 +1006,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 
 local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd, bodyptr p,
-                          kdnode ntab, bodyptr *bptr,
+                          ballnode ntab, bodyptr *bptr,
                           INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                           gdhistptr_sincos_omp hist)
 {
@@ -1141,7 +1141,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
 local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                struct  global_data* gd, bodyptr p,
-                               kdnode ntab, bodyptr *bptr,
+                               ballnode ntab, bodyptr *bptr,
                                INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                                gdhistptr_sincos_omp hist)
 {

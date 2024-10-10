@@ -24,6 +24,9 @@ GSLINTERNAL = 0
 OPENMPMACHINE = 1
 #
 #
+# To remove overcounting pairs:
+OVERCOUNTINGON = 0
+#
 # If you have at least one addon then set to 1:
 ADDONSON = 1
 #

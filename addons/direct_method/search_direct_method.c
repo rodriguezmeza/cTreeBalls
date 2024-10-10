@@ -171,7 +171,7 @@ global int searchcalc_direct_simple_sincos(struct cmdline_data* cmd,
 #endif // ! NDIM
                                     if (rabs(cosphi)>1.0)
                                         verb_log_print(cmd->verbose, gd->outlog,
-                                        "Warning!... cossphi must be in (-1,1): %g\n",
+                                    "Warning!... cossphi must be in (-1,1): %g\n",
                                         cosphi);
                                     CHEBYSHEVTUSINCOS;
                                 }

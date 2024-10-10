@@ -5,6 +5,8 @@
 #include "stdinc.h"
 
 
+bool crossVecProdSign(real vec1[], real vec2[], real vec3[]);
+
 void RotationVecAWRtoVecB(real *, real *, real *, real);
 void Rotation3D(real *, real, real, real);
 #ifdef SINGLEP

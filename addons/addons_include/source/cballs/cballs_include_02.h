@@ -24,6 +24,21 @@
 #include "cballs_balltree_exp.h"
 #endif
 
+#ifdef OCTREEKKKOMP
+#include "cballs_octree_kkk_omp.h"
+#endif
+
+#ifdef OCTREEKKKBALLSOMP
+#include "cballs_octree_kkk_balls_omp.h"
+#endif
+
+#ifdef OCTREEKKKBALLS4OMP
+#include "cballs_octree_kkk_balls4_omp.h"
+#endif
+
+#ifdef TC3PCFDIRECTOMP
+#include "cballs_tc_3pcf_direct_omp.h"
+#endif
 
 /*
  Add your addon item here

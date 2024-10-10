@@ -41,3 +41,12 @@ endif
 #endif
 #
 #E
+
+ifeq ($(TREENODEALLBODIESON),0)
+ifeq ($(TREENODEBALLS4ON),0)
+PIVOTEXTERNALON = 1
+ifeq ($(PIVOTEXTERNALON),1)
+OPT2 += -DPIVOTEXTERNAL
+endif
+endif
+endif

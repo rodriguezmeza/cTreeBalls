@@ -66,6 +66,13 @@ include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
 endif
 #
 
+# OCTREEKKKOMP
+# For computing 3pcf using octree-kkk-omp
+ifeq ($(OCTREEKKKOMPON),1)
+include $(MACHINES_DIR)/addons/octree_kkk_omp/Makefile_octree_kkk_omp
+endif
+#
+
 #E
 
 #
@@ -109,3 +116,35 @@ HEADERFILES = $(wildcard $(ADDONSDIR)/addons_include/source/cballsutils/*.h)
 endif
 #
 #E
+
+
+############################
+#B Special behavior settings
+# In some searching methods
+#   it will be possible to set the following flags
+
+# No Limber aproximation
+ifeq ($(NOLIMBERON),1)
+OPT2 += -DNOLIMBER
+endif
+
+# NMultipoles switch (multipoles for counting)
+ifeq ($(NMultipolesON),1)
+OPT2 += -DNMultipoles
+endif
+#
+
+# NONORMHIST switch (do not use normalization of histograms)
+ifeq ($(NONORMHISTON),1)
+OPT2 += -DNONORMHIST
+endif
+#
+
+# POLARAXIS switch (set north pole as the axis of reference...)
+#   this is for pixel catalogs on the unit sphere: (0,0,1)
+ifeq ($(POLARAXISON),1)
+OPT2 += -DPOLARAXIS
+endif
+#
+#E
+############################

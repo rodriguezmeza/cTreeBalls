@@ -1,0 +1,19 @@
+# ----- MAKE FILE module definitions (octree_kkk_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# OCTREEKKKOMP
+ifeq ($(OCTREEKKKOMPON),1)
+OPT2 += -DOCTREEKKKOMP
+OCTREEKKKOMP = ../addons/octree_kkk_omp/
+vpath %.c ./addons/octree_kkk_omp/
+INCLUDES += -I$(OCTREEKKKOMP)
+HEADERFILES += $(wildcard $(OCTREEKKKOMP)/*.h)
+EXTERNAL += search_octree_kkk_omp.o
+#
+endif
+
+#E
