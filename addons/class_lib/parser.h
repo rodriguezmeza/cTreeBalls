@@ -3,21 +3,29 @@
 
 #include "common.h"
 
-#define _LINE_LENGTH_MAX_ 1024 /**< size of the string read in each line of the file (extra characters not taken into account) */
-#define _ARGUMENT_LENGTH_MAX_ 1024 /**< maximum size of each argument (name or value), including the final null character */
+// size of the string read in each line of the file
+//  (extra characters not taken into account)
+#define _LINE_LENGTH_MAX_ 1024
+//
+// maximum size of each argument (name or value),
+//  including the final null character
+#define _ARGUMENT_LENGTH_MAX_ 1024
+//
 
 typedef char FileArg[_ARGUMENT_LENGTH_MAX_];
 
-/* after reading a given file, all relevant information stored in this structure, in view of being processed later*/
+// after reading a given file,
+//  all relevant information stored in this structure,
+//  in view of being processed later
 struct file_content {
   char * filename;
   int size;
-  FileArg * name;      /**< list of (size) names */
-  FileArg * value;     /**< list of (size) values */
-  short * read;        /**< set to _TRUE_ if this parameter is effectively read */
+  FileArg * name;                           // list of (size) names
+  FileArg * value;                          // list of (size) values
+  short * read;                             // set to _TRUE_ if this
+                                            //  parameter is effectively read
 };
 
-/**************************************************************/
 
 /*
  * Boilerplate for C++

@@ -95,7 +95,7 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
     verb_print(cmd->verbose,
-               "\nStartRun: Total allocated %g MByte storage so far.",
+               "\nStartRun: Total allocated %g MByte storage so far.\n",
                gd->bytes_tot*INMB);
 
 //B If uncommented there will be a warning in the setup.py process
@@ -104,8 +104,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 //#endif
 //E
     gd->cputotalinout += CPUTIME - cpustart;
-    verb_print(cmd->verbose, "\nStartRun: elapsed time: %g\n\n",
-               CPUTIME - cpustart);
+    verb_print(cmd->verbose, "\nStartRun CPU time: %g %s\n",
+               CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 
     return SUCCESS;
 }
@@ -168,7 +168,7 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
     verb_print(cmd->verbose,
-               "\nStartRun: Total allocated %g MByte storage so far.",
+               "\nStartRun: Total allocated %g MByte storage so far.\n",
                gd->bytes_tot*INMB);
 
 #ifdef OPENMPCODE
@@ -176,8 +176,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #endif
 
     gd->cputotalinout += CPUTIME - cpustart;
-    verb_print(cmd->verbose, "\nStartRun: elapsed time: %g\n\n",
-               CPUTIME - cpustart);
+    verb_print(cmd->verbose, "\nStartRun CPU time: %g %s\n",
+               CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 
     return SUCCESS;
 }
@@ -419,7 +419,9 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
     char buf5[MAXCHARBUF];
 
 //B
+#ifndef _LINE_LENGTH_MAX_
 #define _LINE_LENGTH_MAX_ 1024
+#endif
 #define _ARGUMENT_LENGTH_MAX_ 1024
         char line[_LINE_LENGTH_MAX_];
         char name[_ARGUMENT_LENGTH_MAX_];
@@ -639,7 +641,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
             gd->bytes_tot += gd->nbodyTable[ifile]*sizeof(body);
             verb_print(cmd->verbose,
-                "\n\nAllocated %g MByte for particle storage (file %d).\n",
+                "\nAllocated %g MByte for particle storage (file %d).\n\n",
                        gd->nbodyTable[ifile]*sizeof(body)*INMB, ifile);
         }
 
@@ -658,8 +660,9 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
             expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
             free(root);
             if (cmd->rangeN > gd->rSizeTable[ifile])
-                verb_print(cmd->verbose, "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
-                cmd->rangeN, gd->rSizeTable[ifile]);
+                verb_print(cmd->verbose,
+                           "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
+                           cmd->rangeN, gd->rSizeTable[ifile]);
         }
 
 //B Tree search:
@@ -753,6 +756,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "Unit sphere (Takahasi): (S/N)^(1/2): %g\n\n",
                    rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0));
+#define RADTOARCMIN   3437.74677
     real rSizeTmp;
     int i, idepth=64;
     rSizeTmp = gd->rSizeTable[gd->iCatalogs[0]];
@@ -764,11 +768,16 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                            "Cell size threshold = %d\n",i);
             gd->irsmooth = i;
             verb_print(cmd->verbose,
-            "startrun_Common: i threshold, cell size and rsmooth = %d %e %e\n",
+            "\nstartrun_Common: i threshold, cell size and rsmooth = %d %e %e\n",
                        gd->irsmooth, rSizeTmp, gd->rsmooth[0]);
+            verb_print(cmd->verbose,
+                       "\t\t same in arcmin (useful for unit sphere)= %d %e %e\n",
+                       gd->irsmooth, rSizeTmp*RADTOARCMIN,
+                       gd->rsmooth[0]*RADTOARCMIN);
             break;
         }
     }
+#undef RADTOARCMIN
 
 #ifdef ADDONS
 #include "startrun_include_05.h"
@@ -999,8 +1008,8 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
 #ifdef OPENMPCODE
         fprintf(fdout,FMTI,"numberThreads",cmd->numthreads);
 #endif
-        if (cmd->verbose>=2)
-            verb_print(cmd->verbose, "PrintParamterFile: script: %s\n", cmd->script);
+        if (cmd->verbose>=VERBOSEDEBUGINFO)
+            verb_print(cmd->verbose, "\nPrintParamterFile: script: %s\n", cmd->script);
         fprintf(fdout,FMTT,"options",cmd->options);
         //E
 
@@ -1046,7 +1055,8 @@ local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int se
     idum = (long)seed;
     saveidum=idum;
     if (cmd->verbose>=3)
-        verb_print(cmd->verbose, "\nrandom_init: idum and seed = %d %d\n",idum, seed);
+        verb_print(cmd->verbose, "\nrandom_init: idum and seed = %d %d\n",
+                   idum, seed);
     xsrandom(idum);
     if (cmd->verbose>=3)
         verb_print(cmd->verbose, "\nrandom_init: idum = %d\n",idum);
@@ -1059,6 +1069,8 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
                                      struct  global_data* gd)
 {
     // Free allocated memory in reverse order as were allocated
+    //  First is allocated above gsl structure gd->r
+
     INTEGER bytes_tot_local=0;
     //B PXD functions
     gd->rBins = dvector(1,cmd->sizeHistN);
@@ -1133,7 +1145,7 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
 
     gd->bytes_tot += bytes_tot_local;
     verb_print(cmd->verbose,
-    "\n\nstartrun_memoryAllocation: Allocated %g MByte for histograms storage.\n",
+    "\nstartrun_memoryAllocation: Allocated %g MByte for histograms storage.\n",
     bytes_tot_local*INMB);
 
     return SUCCESS;

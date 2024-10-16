@@ -74,7 +74,7 @@ int input_set_root(char* input_file,
 
   FileArg outfname;
 
-  char tmp_file[_ARGUMENT_LENGTH_MAX_+26];          // 26 is enough to extend
+//  char tmp_file[_ARGUMENT_LENGTH_MAX_+26];          // 26 is enough to extend
                                                     //  the file name [...] with
                                                     //  the characters
                                                 // "output/[...]%02d_parameters.ini"
@@ -85,9 +85,9 @@ int input_set_root(char* input_file,
   FileArg string1;                                  //Is ignored
 
 //B Dummy so far...
-  int n_extensions = 7;                             // Keep this as the length
+//  int n_extensions = 7;                             // Keep this as the length
                                                     //  of the below list
-  char* output_extensions[7] = {"cl.dat","pk.dat","tk.dat","parameters.ini","background.dat","thermodynamics.dat","perturbations_k0.dat"};
+//  char* output_extensions[7] = {"cl.dat","pk.dat","tk.dat","parameters.ini","background.dat","thermodynamics.dat","perturbations_k0.dat"};
 //E
 
   struct file_content * pfc = *ppfc_input;
@@ -117,7 +117,7 @@ int input_set_root(char* input_file,
             }
         }
     }
-
+/*
     if(overwrite_root == FALSE) {                   // Segment no use so far...
         found_filenum = TRUE;
         for (filenum = 0; filenum < _N_FILEROOT_ && found_filenum; filenum++){
@@ -148,7 +148,7 @@ int input_set_root(char* input_file,
             sprintf(pfc->value[index_root_in_fc_input],"%s%02d_",outfname,filenum);
             (*ppfc_input) = pfc;
         }
-    } else { // ! overwrite_root
+    } else { // ! overwrite_root */
         if(flag1 == FALSE){
             class_call(parser_init(&fc_root, 1, pfc->filename, errmsg),
                        errmsg,errmsg);
@@ -167,7 +167,7 @@ int input_set_root(char* input_file,
             sprintf(pfc->value[index_root_in_fc_input],"%s",outfname);
             (*ppfc_input) = pfc;
         }
-    }  // ! overwrite_root
+//    }  // ! overwrite_root
 
   return SUCCESS;
 }
@@ -179,7 +179,7 @@ int input_read_from_file(struct cmdline_data *cmd, struct file_content * pfc,
     int input_verbose = 0;
 
     class_read_int("verbose",input_verbose);
-    verb_print(input_verbose, "Reading input parameters...\n");
+    verb_print(input_verbose, "\nReading input parameters...\n");
 
     class_call(input_read_parameters(cmd, pfc, errmsg),errmsg,errmsg);
 
@@ -207,15 +207,16 @@ int input_read_parameters_general_free(struct file_content * pfc,
 }
 
 int input_read_parameters_general(struct cmdline_data *cmd,
-                                  struct file_content * pfc, ErrorMsg errmsg){
+                                  struct file_content * pfc, ErrorMsg errmsg)
+{
 
     int flag;
     int flag1,flag2;
     int param;
     int index;
     size_t slen;
-  double param1,param2;
-  char string1[_ARGUMENT_LENGTH_MAX_];
+    double param1,param2;
+    char string1[_ARGUMENT_LENGTH_MAX_];
 
 // All malloc have to be freed at the end of the run (EndRun)
 
@@ -557,29 +558,20 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"options") == 0){
-              slen = strlen(pfc->value[index]);
-              cmd->options = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->options,pfc->value[index],slen+1);
+//B The use of memcpy to copy gives bad string on string options
+//      when we use parser_free(&fc) in StartRun
+//      memcpy is faster than strcpy...
+//              slen = strlen(pfc->value[index]);
+//              cmd->options = (char*) malloc(slen*sizeof(char));
+//              memcpy(cmd->options,pfc->value[index],slen+1);
+              cmd->options = (char*) malloc(MAXLENGTHOFSTRSCMD);
+              strcpy(cmd->options,pfc->value[index]);
+//E
             break;
           }
         }
     }
     //E
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #ifdef ADDONS
 #include "class_lib_include_01.h"

@@ -162,10 +162,12 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     ip = 0;
     threadtree(cmd, gd, (nodeptr) roottable[ifile], NULL);
-    verb_print(cmd->verbose,
-        "threadtree: number ip of selected cells = %ld\n",ip);
-    verb_print(cmd->verbose,
-        "%d real node (range of nodes to search: >nc1 && <nc2)\n",inode);
+    if (cmd->verbose>=VERBOSEDEBUGINFO) {
+        verb_print(cmd->verbose,
+                   "threadtree: number ip of selected cells = %ld\n",ip);
+        verb_print(cmd->verbose,
+                   "%d real node (range of nodes to search: >nc1 && <nc2)\n",inode);
+    }
     gd->rnnode = inode;
 
     walktree_selected((nodeptr) roottable[ifile],   // Smooth(ing) section
@@ -177,12 +179,13 @@ global int MakeTree(struct  cmdline_data* cmd,
         else
             inosel++;
     }
-    verb_print(cmd->verbose,
-        "\nSelected vs NotSelected and total: %ld %ld %ld\n\n",
-        isel, inosel, isel + inosel);
-
-    verb_print(cmd->verbose,
-        "tdepth = %d\n\n",gd->tdepthTable[ifile]);
+    if (cmd->verbose>=VERBOSEDEBUGINFO) {
+        verb_print(cmd->verbose,
+                   "\nSelected vs NotSelected and total: %ld %ld %ld\n\n",
+                   isel, inosel, isel + inosel);
+        verb_print(cmd->verbose,
+                   "tdepth = %d\n\n",gd->tdepthTable[ifile]);
+    }
 
     scanLevel(cmd, gd, ifile);                      // Scan pivot and root trees
     smoothBodies(cmd, gd, btab, nbody);             // Smooth cells
@@ -196,12 +199,14 @@ global int MakeTree(struct  cmdline_data* cmd,
     verb_log_print(cmd->verbose_log,gd->outlog,"\n");
 //E
     gd->bytes_tot += gd->bytes_tot_cells;
-    verb_print(cmd->verbose,
-        "Allocated %g MByte for (%d) cells storage.\n",
-        gd->bytes_tot_cells*INMB, gd->ncellTable[ifile]);
-    verb_print(cmd->verbose,
-        "\nmaketree : root number of bodies = %ld\n",
-        Nb(roottable[ifile]));
+    if (cmd->verbose>=VERBOSENORMALINFO) {
+        verb_print(cmd->verbose,
+                   "\nAllocated %g MByte for (%d) cells storage.\n",
+                   gd->bytes_tot_cells*INMB, gd->ncellTable[ifile]);
+        verb_print(cmd->verbose,
+                   "\nmaketree: root number of bodies = %ld\n",
+                   Nb(roottable[ifile]));
+    }
 
 #ifdef DEBUG
     fclose(outcells);                               // Close file to debug cells
@@ -216,7 +221,8 @@ global int MakeTree(struct  cmdline_data* cmd,
 //E
 
     gd->cputree = CPUTIME - cpustart;
-    verb_print(cmd->verbose, "\nCPU tree time : %lf\n", gd->cputree);
+    verb_print(cmd->verbose, "\nmaking tree CPU time : %lf %s\n\n",
+               gd->cputree, PRNUNITOFTIMEUSED);
 
     return SUCCESS;
 }
@@ -313,13 +319,15 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
     }
     
     if (cmd->useLogHist) { // ! rminHist = 0 not allowed when useLogHist is true
-        verb_print(cmd->verbose,
-                   "(Only in log-scale) deltaR is %g and root size at scanLevel is %g.\n",
-                   gd->deltaR, gd->rSizeTable[ifile]/rpow(2.0,cmd->scanLevel));
+        if (cmd->verbose >= VERBOSENORMALINFO) {
+            verb_print(cmd->verbose,
+            "\n(Only in log-scale) deltaR is %g and root size at scanLevel is %g.\n",
+            gd->deltaR, gd->rSizeTable[ifile]/rpow(2.0,cmd->scanLevel));
+        }
         i = 0;
         while (gd->deltaR < gd->rSizeTable[ifile]/rpow(2.0,i)) i++;
         verb_print(cmd->verbose,
-                   "\t\t\tSuggested scanLevel is %d, where root size is %g.\n\n",
+                   "\t\t\tSuggested scanLevel is %d, where root size is %g.\n",
                    i, gd->rSizeTable[ifile]/rpow(2.0,i));
     }
     inodelev = 0;
@@ -328,7 +336,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
         gd->nnodescanlevTable[ifile] = 0;
         gd->bytes_tot += gd->nnodescanlevTable[ifile]*sizeof(nodeptr);
         verb_print(cmd->verbose,
-                   "Allocated %g MByte for (%d) scan nodetab storage.\n",
+                   "\nAllocated %g MByte for (%d) scan nodetab storage.\n",
                    INMB*gd->nnodescanlevTable[ifile]*sizeof(nodeptr),
                    gd->nnodescanlevTable[ifile]);
         gd->nnodescanlev = 1;
@@ -340,7 +348,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
         //
         gd->bytes_tot += gd->nnodescanlevTable[ifile]*sizeof(nodeptr);
         verb_print(cmd->verbose,
-                   "Allocated %g MByte for (%d) scan nodetab storage.\n",
+                   "\nAllocated %g MByte for (%d) scan nodetab storage.\n",
                    INMB*gd->nnodescanlevTable[ifile]*sizeof(nodeptr),
                    gd->nnodescanlevTable[ifile]);
         
@@ -362,10 +370,12 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
             walktree_index_scan_lev((nodeptr)roottable[ifile], 0,
                                     ifile, cmd->scanLevel);
         }
-        
-        verb_print(cmd->verbose,
-                   "Found %d nodes to scan at level %d.\n",
-                   inodelev, cmd->scanLevel);
+
+        if (cmd->verbose > VERBOSENORMALINFO) {
+            verb_print(cmd->verbose,
+                       "\nFound %d nodes to scan at level %d.\n",
+                       inodelev, cmd->scanLevel);
+        }
         // Freeing some segment of memory will be necessary
         gd->nnodescanlevTable[ifile] = inodelev;
         save_nodes(cmd, gd, ifile);
@@ -383,7 +393,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
         gd->nnodescanlev_rootTable[ifile] = 0;
         gd->bytes_tot += gd->nnodescanlev_rootTable[ifile]*sizeof(nodeptr);
         verb_print(cmd->verbose,
-                   "Allocated %g MByte for (%d) scan root nodetab storage.\n",
+                   "\nAllocated %g MByte for (%d) scan root nodetab storage.\n",
                    INMB*gd->nnodescanlev_rootTable[ifile]*sizeof(nodeptr),gd->nnodescanlev_rootTable[ifile]);
     } else {
         gd->nnodescanlev_rootTable[ifile] =
@@ -393,16 +403,18 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                              * sizeof(nodeptr));
         gd->bytes_tot += gd->nnodescanlev_rootTable[ifile]*sizeof(nodeptr);
         verb_print(cmd->verbose,
-                   "Allocated %g MByte for (%d) scan root nodetab storage (%ld cells).\n",
+                   "\nAllocated %g MByte for (%d) scan root nodetab storage (%ld cells).\n",
                    INMB*gd->nnodescanlev_rootTable[ifile]*sizeof(nodeptr),
                    gd->nnodescanlev_rootTable[ifile],gd->ncellTable[ifile]);
         walktree_index_scan_lev_root(cmd, gd, (nodeptr)roottable[ifile], 0, ifile);
-        verb_print(cmd->verbose,
-                   "Found %d root nodes to scan at level %d.\n",
-                   inodelev_root, cmd->scanLevelRoot);
-        verb_print(cmd->verbose,
-                   "%ld particles were left out at root level.\n",
-                   ibodyleftout_root);
+        if (cmd->verbose >= VERBOSENORMALINFO) {
+            verb_print(cmd->verbose,
+                       "\nFound %d root nodes to scan at level %d.\n",
+                       inodelev_root, cmd->scanLevelRoot);
+            verb_print(cmd->verbose,
+                       "%ld particles were left out at root level.\n",
+                       ibodyleftout_root);
+        }
         gd->nnodescanlev_rootTable[ifile] = inodelev_root;
         if (cmd->verbose==3)
             save_nodes_root(cmd, gd, ifile);
@@ -453,7 +465,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
         if (gd->rminCell[0] < gd->ddeltaRV[i])
             break;
     verb_print(cmd->verbose,
-               "rminCell, ddeltaRV and deltaRV (at n = %d): %g %g %g\n\n",
+               "rminCell, ddeltaRV and deltaRV (at n = %d): %g %g %g\n",
                i+1, gd->rminCell[0], gd->ddeltaRV[i], gd->deltaRV[i+1]);
     
     if (gd->scanLevelMin[0] == 0) {
@@ -486,17 +498,29 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
     }
 #endif // ! BALLS
 
+//B Some useful conversion info:
+// rad = (pi/(180*60)) arc minutes
+// (pi/(180*60)) = 0.000290888208666
+// ((180*60)/pi) = 3437.74677
+//
+// 1 arcmin = 0.000290888208666 rad
+// 1 rad = 3437.74677 arcmin
+// 1 degree = 60 arcmin = 60*0.000290888208666 rad = 0.004072434921324 rad
+//
+// rsmooth must be given in radians.
+// plots will be given in arcmin.
+//E
+// For unit sphere rsmooth are given in arcmin. Here we transform to radians
+#define ARCMINTORAD   0.000290888208666
     if (strnull(cmd->rsmooth)) {
         if (scanopt(cmd->options, "fix-rsmooth")) {
-//            gd->rsmooth[0] = 0.0083333333;        // (0.50 arcmin)/60
-            gd->rsmooth[0] = 0.00416666665;         // (0.25 arcmin)/60
-            verb_print(cmd->verbose, "\trsmooth is set to: %g\n", gd->rsmooth[0]);
+            gd->rsmooth[0] = 0.05*cmd->rangeN;      // 5% of rangeN
+                                                    //  200*0.05 -> 0.00316602 rad
+            verb_print(cmd->verbose, "\n\trsmooth is set to: %g\n", gd->rsmooth[0]);
             if (gd->rsmooth[0]>0.1*cmd->rangeN) {
                 verb_print(cmd->verbose,
                     "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
                     gd->rsmooth[0],0.1*cmd->rangeN);
-                gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
-                verb_print(cmd->verbose, "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
             }
         } else {
             if (scanopt(cmd->options, "default-rsmooth")) {
@@ -515,6 +539,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
             }
         }
     } else {
+        gd->rsmooth[0] *= ARCMINTORAD;
         if (gd->rsmooth[0]>0.1*cmd->rangeN) {
             verb_print(cmd->verbose,
                 "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
@@ -525,6 +550,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
             verb_print(cmd->verbose, "\trsmooth is set to: %g\n", gd->rsmooth[0]);
         }
     }
+#undef ARCMINTORAD
 
     return SUCCESS;
 }
@@ -552,15 +578,17 @@ global int findRootCenter(struct  cmdline_data* cmd,
 
     DO_COORD(k) {
         Pos(root)[k] = (xmax[k]+xmin[k])/2;
-        verb_print(cmd->verbose,
-                   "findRootCenter: Pos(root) = %lf\n", Pos(root)[k]);
+        if (cmd->verbose>=2)
+            verb_print(cmd->verbose,
+                       "findRootCenter: Pos(root) = %lf\n", Pos(root)[k]);
     }
 
     for(k=0, len=xmax[0]-xmin[0]; k<NDIM; k++)
         if((xmax[k]-xmin[k])>len)
             len=xmax[k]-xmin[k];
 
-    verb_print(cmd->verbose, "findRootCenter: len = %lf\n", len);
+    if (cmd->verbose>=2)
+        verb_print(cmd->verbose, "findRootCenter: len = %lf\n", len);
 
     return SUCCESS;
 }
@@ -621,8 +649,9 @@ global int expandbox(struct  cmdline_data* cmd,
     while (gd->rSizeTable[ifile] < 2 * dmax)
         gd->rSizeTable[ifile] = 2 * gd->rSizeTable[ifile];
 
-    verb_print(cmd->verbose, "treeload expandbox: rSize = %lf\n", 
-               gd->rSizeTable[ifile]);
+    if (cmd->verbose>=VERBOSENORMALINFO)
+        verb_print(cmd->verbose, "treeload expandbox: rSize = %lf\n",
+                   gd->rSizeTable[ifile]);
 
     return SUCCESS;
 }
@@ -1045,7 +1074,7 @@ local void walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd,
 
 local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifile)
 {
-    if (cmd->verbose==3) {
+    if (cmd->verbose==VERBOSEDEBUGINFO) {
         sprintf(gd->nodesfilePath,"%s/nodes%s.txt",gd->tmpDir,cmd->suffixOutFiles);
         if(!(gd->outnodelev=fopen(gd->nodesfilePath, "w")))
             error("\nstart_Common: error opening file '%s' \n",gd->nodesfilePath);
@@ -1085,7 +1114,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
             Nb(pn) = Nb(nodetablescanlev[ifile][in]);
             Size(pn) = 0.;
             Radius(pn) = 0.;
-            if (cmd->verbose==3) {
+            if (cmd->verbose==VERBOSEDEBUGINFO) {
                 out_int_mar(gd->outbodylev, Id(pn));
                 out_int_mar(gd->outbodylev, Type(pn));
                 out_vector_mar(gd->outbodylev, Pos(pn));
@@ -1097,7 +1126,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
         }
 //E
         if (Type(nodetablescanlev[ifile][in]) == CELL) {
-            if (cmd->verbose==3) {
+            if (cmd->verbose==VERBOSEDEBUGINFO) {
                 out_int_mar(gd->outnodelev, IDXSCAN(nodetablescanlev[ifile][in]));
                 out_int_mar(gd->outnodelev, Type(nodetablescanlev[ifile][in]));
                 out_vector_mar(gd->outnodelev, Pos(nodetablescanlev[ifile][in]));
@@ -1114,7 +1143,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
             sumcells += 1;
             nodescount_thread += Nb(nodetablescanlev[ifile][in]);
         } else {
-            if (cmd->verbose==3) {
+            if (cmd->verbose==VERBOSEDEBUGINFO) {
                 out_int_mar(gd->outnodelev, IDXSCAN(nodetablescanlev[ifile][in]));
                 out_int_mar(gd->outnodelev, Type(nodetablescanlev[ifile][in]));
                 out_vector_mar(gd->outnodelev, Pos(nodetablescanlev[ifile][in]));
@@ -1128,7 +1157,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
         }
 
 #ifdef OPENMPCODE
-        if (cmd->verbose_log>=3)
+        if (cmd->verbose_log>=VERBOSEDEBUGINFO)
         if (in%cmd->numthreads == 0) {
             verb_log_print(cmd->verbose_log, gd->outlog, " -(%ld) Chunk: %ld\n", in, nodescount_thread);
             nodescount_thread_total += nodescount_thread;
@@ -1136,7 +1165,7 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
         }
 #else
         int numthreads=1;
-        if (cmd->verbose_log>=3)
+        if (cmd->verbose_log>=VERBOSEDEBUGINFO)
         if (in%numthreads == 0) {
             verb_log_print(cmd->verbose_log, gd->outlog, " -(%ld) Chunk: %ld\n", in, nodescount_thread);
             nodescount_thread_total += nodescount_thread;
@@ -1145,34 +1174,37 @@ local int save_nodes(struct  cmdline_data* cmd, struct  global_data* gd, int ifi
 #endif
     } // ! loop in
 
-    if (cmd->verbose_log>=3)
+    if (cmd->verbose_log>=VERBOSEDEBUGINFO)
     verb_log_print(cmd->verbose_log, gd->outlog, " -Total Chunk: %ld\n", nodescount_thread_total);
 
-    verb_print(cmd->verbose,
-        "Found %ld particles in %ld nodes... vs number of total cells %ld\n",
-        nodescount, gd->nnodescanlevTable[ifile], gd->ncellTable[ifile]);
-    verb_print(cmd->verbose,
-        "...%ld cells at scan level...\n",
-        sumcells);
-    verb_print(cmd->verbose,
-        "...and %ld bodies. Bodies in upper levels: %ld\n",
-        sumbodies, cmd->nbody-sumbodies);
-    verb_print(cmd->verbose,
-        "%ld particles were left out of cells at scan level.\n",
-        ibodyleftout);
-//B Smooth(ing) section
-    verb_print(cmd->verbose,
-        "%ld cells were with at much %d particles in them.\n",
-        nodescount_smooth,gd->nsmooth[0]);
-//E
-    verb_print(cmd->verbose,
-        "Checking sums (bodyleftout+nodescount): %ld.\n",
-        ibodyleftout+nodescount);
-    if (cmd->verbose==3)
+    if (cmd->verbose >= VERBOSENORMALINFO) {
+        verb_print(cmd->verbose,
+                   "Found %ld particles in %ld nodes... vs number of total cells %ld\n",
+                   nodescount, gd->nnodescanlevTable[ifile], gd->ncellTable[ifile]);
+        verb_print(cmd->verbose,
+                   "...%ld cells at scan level...\n",
+                   sumcells);
+        verb_print(cmd->verbose,
+                   "...and %ld bodies. Bodies in upper levels: %ld\n",
+                   sumbodies, cmd->nbody-sumbodies);
+        verb_print(cmd->verbose,
+                   "%ld particles were left out of cells at scan level.\n",
+                   ibodyleftout);
+        //B Smooth(ing) section
+        verb_print(cmd->verbose,
+                   "%ld cells were with at much %d particles in them.\n",
+                   nodescount_smooth,gd->nsmooth[0]);
+        //E
+        verb_print(cmd->verbose,
+                   "Checking sums (bodyleftout+nodescount): %ld.\n",
+                   ibodyleftout+nodescount);
+    }
+
+    if (cmd->verbose==VERBOSEDEBUGINFO)
         fclose(gd->outnodelev);
 //B
     if (!gd->flagSmoothCellMin && scanopt(cmd->options, "smooth-min-cell") )
-        if (cmd->verbose==3)
+        if (cmd->verbose==VERBOSEDEBUGINFO)
             fclose(gd->outbodylev);
 //E
     return SUCCESS;

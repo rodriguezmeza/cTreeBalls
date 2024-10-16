@@ -8,7 +8,7 @@
 
 case 61:                   // search=octree-kkk-omp
     verb_print(cmd->verbose,
-    "\n\tevalHist: with tc method (octree-kkk-omp)\n\n");
+    "\n\tevalHist: with octree-kkk-omp method\n\n");
     for (ifile=0; ifile<gd->ninfiles; ifile++) {
         DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
         Update(p) = TRUE;

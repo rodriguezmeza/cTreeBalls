@@ -23,10 +23,6 @@ GSLINTERNAL = 0
 # Set following line to 1 for OPENMP parallel version, or 0 to switch it off
 OPENMPMACHINE = 1
 #
-#
-# To remove overcounting pairs:
-OVERCOUNTINGON = 0
-#
 # If you have at least one addon then set to 1:
 ADDONSON = 1
 #

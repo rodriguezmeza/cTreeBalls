@@ -5,6 +5,8 @@
 #define _startrun_octree_kkk_omp_10_h
 
 #ifdef NMultipoles
+//B Already allocated in startrun_kdtree_omp_10.h
+#ifndef KDTREEOMP
     gd->NhistNNSub = dvector(1,cmd->sizeHistN);
     bytes_tot_local += cmd->sizeHistN*sizeof(real);
 
@@ -34,6 +36,8 @@
                 dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
             2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+#endif
+//E
 #endif // ! NMultipoles
 
 #endif	// ! _startrun_octree_kkk_omp_10_h

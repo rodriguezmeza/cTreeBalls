@@ -13,11 +13,9 @@
 #define _common_defs_h
 
 //B Usefule MACROS and other constants:
-//#define CPUTIME         (cputime())
-#define CPUTIME         (second()/60.0)             // Gives cputime in minutes
-#define REALTIME        (gettimeofday(&gd.current_time, NULL)) // Gives time of
-                                                    //  the day in minutes
-#define PRNUNITOFTIMEUSED   "min."
+#define CPUTIME         (second())                  // Gives cputime in seconds
+
+#define PRNUNITOFTIMEUSED   "sec."
 #define MAXLENGTHOFSTRSCMD     1024
 #define EXTFILES            ".txt"
 #define INMB                9.536743116E-7          // 1/(1024*1024)
@@ -26,6 +24,10 @@
 #define MAXITEMS    100
 #define MAXLENGTHOFFILES       1024
 
+#define VERBOSENOINFO           0
+#define VERBOSEMININFO          1
+#define VERBOSENORMALINFO       2
+#define VERBOSEDEBUGINFO        3
 
 
 #endif // ! _common_defs_h

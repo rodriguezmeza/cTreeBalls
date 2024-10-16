@@ -5,6 +5,8 @@
 #define _cballsio_octree_kkk_omp_10_h
 
 #ifdef NMultipoles
+//B Already freed in cballsio_kdtree_omp_10.h
+#ifndef KDTREEOMP
     free_dmatrix3D(gd->NhistZetaGmIm,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gd->NhistZetaGmRe,
@@ -25,6 +27,8 @@
     free_dmatrix(gd->NhistXi,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
 
     free_dvector(gd->NhistNNSub,1,cmd->sizeHistN);
+#endif
+//E
 #endif
 
 #endif	// ! _cballsio_octree_kkk_omp_10_h

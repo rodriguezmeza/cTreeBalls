@@ -24,7 +24,6 @@ struct global_data{
     //E
 
     real cpuinit;
-    struct timeval current_time;
     long cpurealinit;                               // get time of the day
 
 	string headline0;
@@ -33,8 +32,6 @@ struct global_data{
 	string headline3;
 
     FILE *outlog;
-// Is it used? (delete)
-    FILE *outstr_sols;
 
 	char mode[2];
 
@@ -60,8 +57,6 @@ struct global_data{
     int tdepthTable[MAXITEMS];
     INTEGER nnodescanlevTable[MAXITEMS];
     INTEGER nnodescanlev_rootTable[MAXITEMS];
-
-//    cellptr root;
 //E
 
     real cputree;
@@ -98,7 +93,6 @@ struct global_data{
 // 2pcf
     realptr histNNSubXi2pcf;
 //B kappa Avg Rmin
-//    realptr histNNSubXi2pcfRmin;
     realptr histNNSubXi2pcftotal;
 //E
     real *histXi2pcf;
@@ -215,11 +209,8 @@ struct global_data{
     int nsmooth[MAXITEMS];
     INTEGER nnode;
     INTEGER rnnode;
-    //E
-//#ifdef BALLS
-//    real scanLevelMin[MAXITEMS];
+
     int scanLevelMin[MAXITEMS];
-//    int ncritical[MAXITEMS];
 
     char nodesfilePath[MAXLENGTHOFFILES];
     int nnodescanlev;
@@ -230,7 +221,6 @@ struct global_data{
 #undef MAXLEVEL
 //
     char bodiesfilePath[MAXLENGTHOFFILES];
-//#endif
 
     bool flagSmoothCellMin;
     bool flagSmooth;

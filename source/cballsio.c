@@ -98,7 +98,8 @@ int InputData(struct cmdline_data* cmd,
                "\n\tinputdata :: reading time = %f\n",CPUTIME-cpustart);
 #else
     // but if comment above line and use this... works (?)
-    printf("\n\tinputdata :: reading time = %f\n",CPUTIME - cpustart);
+    verb_print(cmd->verbose, "\n\tinputdata :: reading time = %f %s\n",
+               CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 #endif
     // seems it is associated to the design of
     //      void verb_print(int verbose, string fmt, ...)
@@ -421,7 +422,8 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
     float(*rotat);    // rotation
     rotat=(float *)malloc(sizeof(float)*npix);
 
-    verb_print(cmd->verbose, "\nAllocated %g MByte for pixel storage.\n",
+    verb_print(cmd->verbose,
+               "\nAllocated %g MByte for pixel storage.\n",
                sizeof(float)*npix*4/(1024.0*1024.0));
 
     for(j=0;j<npix;j++){
@@ -449,7 +451,8 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
 
     fclose(fp);             // Close Takahasi file.
 
-    verb_print(cmd->verbose, "\n\tinputdata_takahasi: total read points = %ld\n",npix);
+    verb_print(cmd->verbose,
+               "\n\tinputdata_takahasi: total read points = %ld\n",npix);
 
 //E End reading Takahasi file
 
@@ -486,8 +489,12 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         phi_min = MIN(phi_min,phi);
         phi_max = MAX(phi_max,phi);
     }
-    verb_print(cmd->verbose, "\n\tinputdata_takahasi: min and max of theta = %f %f\n",theta_min, theta_max);
-    verb_print(cmd->verbose, "\tinputdata_takahasi: min and max of phi = %f %f\n",phi_min, phi_max);
+    verb_print(cmd->verbose,
+               "\tinputdata_takahasi: min and max of theta = %f %f\n",
+               theta_min, theta_max);
+    verb_print(cmd->verbose,
+               "\tinputdata_takahasi: min and max of phi = %f %f\n",
+               phi_min, phi_max);
 //E
 
 //B Selection of a region: the (center) lower edge is random... or not
@@ -497,7 +504,8 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         rphi    = 2.0 * PI * xrandom(0.0, 1.0);
         rtheta    = racos(1.0 - 2.0 * xrandom(0.0, 1.0));
         verb_print(cmd->verbose,
-                   "\n\tinputdata_takahasi: random theta and phi = %f %f\n",rtheta, rphi);
+                   "\tinputdata_takahasi: random theta and phi = %f %f\n",
+                   rtheta, rphi);
     } else {
 // The radius of the region is:
 //        rsqrt(rsqr(0.5*(thetaR - thetaL)) + rsqr(0.5*(phiR - phiL)))
@@ -505,7 +513,8 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         rphi = 0.5*(cmd->phiR + cmd->phiL);
         rtheta = 0.5*(cmd->thetaR + cmd->thetaL);
         verb_print(cmd->verbose,
-                   "\n\tinputdata_takahasi: fix theta and phi = %f %f\n",rtheta, rphi);
+                   "\tinputdata_takahasi: fix theta and phi = %f %f\n",
+                   rtheta, rphi);
     }
 //E
 
@@ -713,7 +722,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
         iselect, cmd->nbody);
 
     verb_print(cmd->verbose, 
-               "inputdata_takahasi: average of kappa (%ld particles) = %le\n",
+               "\tinputdata_takahasi: average of kappa (%ld particles) = %le\n",
                cmd->nbody, kavg/((real)cmd->nbody) );
 
     return SUCCESS;
@@ -739,7 +748,8 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
     bodyptr bodytabtmp;
     cmd->nbody = npix;
     bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
-    verb_print(cmd->verbose, "\nAllocated %g MByte for particle (%ld) storage.\n",
+    verb_print(cmd->verbose,
+               "\nAllocated %g MByte for particle (%ld) storage.\n",
                cmd->nbody*sizeof(body)/(1024.0*1024.0),cmd->nbody);
 
     *xmin=0., *ymin=0., *zmin=0.;
@@ -827,7 +837,6 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
-//    bodytab = (bodyptr) allocate(cmd->nbody * sizeof(body));
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
     real kavg = 0;
@@ -921,7 +930,6 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
                 phi_rot = phi;
             }
 
-//            spherical_to_cartesians(theta_rot, phi_rot, Pos(p));
 // Better use theta, phi as x, y
 
             ra = phi_rot;
@@ -1070,8 +1078,9 @@ int StartOutput(struct cmdline_data *cmd)
 {
     outfilefmt_string_to_int(cmd->outfilefmt, &outfilefmt_int);
 
-    if (! strnull(cmd->options))
-        verb_print(cmd->verbose, "\n\toptions: %s\n", cmd->options);
+    if (cmd->verbose>=VERBOSENORMALINFO)
+        if (! strnull(cmd->options))
+            verb_print(cmd->verbose, "\n\toptions: %s\n", cmd->options);
 
     return SUCCESS;
 }
@@ -1285,13 +1294,10 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
             cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES);
     sprintf(gd->fpfnamehistNNFileName,"%s/%s%s%s",
             cmd->rootDir,cmd->histNNFileName,cmd->suffixOutFiles,EXTFILES);
-// Will be gd->histNNFileName. Set it in gd structure
     sprintf(gd->fpfnamehistCFFileName,"%s/%s%s%s",
             cmd->rootDir,"histCF",cmd->suffixOutFiles,EXTFILES);
     sprintf(gd->fpfnamehistrBinsFileName,"%s/%s%s%s",
             cmd->rootDir,"rbins",cmd->suffixOutFiles,EXTFILES);
-//    sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s%s%s",
-//        cmd->rootDir,cmd->histXi2pcfFileName, cmd->suffixOutFiles,EXTFILES);
     sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s",
         cmd->rootDir,cmd->histXi2pcfFileName);
     sprintf(gd->fpfnamehistZetaGFileName,"%s/%s%s%s",
@@ -1328,7 +1334,7 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 
 	fclose(gd->outlog);
 
-    if (cmd->verbose >= 2) {
+    if (cmd->verbose >= VERBOSENORMALINFO) {
         //B only catalog 0 is consider... modify to include others
         printf("\nrSize \t\t= %lf\n", gd->rSizeTable[0]);
         printf("nbbcalc \t= %ld\n", gd->nbbcalc);
@@ -1342,41 +1348,32 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
         //E
         verb_print_q(3,cmd->verbose,"sameposcount \t= %ld\n",gd->sameposcount);
 #ifdef OPENMPCODE
-        printf("cpusearch \t= %lf (be aware of the number of threads)\n", gd->cpusearch*cmd->numthreads);     // in minutes
+        printf("cpusearch \t= %lf %s\n",
+               gd->cpusearch, PRNUNITOFTIMEUSED);
 #else
-        printf("cpusearch \t= %lf\n", gd->cpusearch);     // in minutes
+        printf("cpusearch \t= %lf %s\n",
+               gd->cpusearch, PRNUNITOFTIMEUSED);
 #endif
-        printf("cputotalinout \t= %lf\n", gd->cputotalinout);
+        printf("cputotalinout \t= %lf %s\n",
+               gd->cputotalinout, PRNUNITOFTIMEUSED);
     }
 
-    if (cmd->verbose > 2) {
-#ifdef OPENMPCODE
-        real cpuTotal = gd->cpusearch*cmd->numthreads;
-#else
-        real cpuTotal = gd->cpusearch;
-#endif
-        real m1, m2, m3, m4;
-        m1 =1.0;
-        m2 =1.0e-5;
-        m3 =1.0e-9;
-        m4 =1.0e-12;
-        outstr = stropen(gd->fpfnameCPUFileName, "a");
-        fprintf(outstr,"%12.4e %12.4e %12.4e %12.4e %12.4e %12.4e\n",
-                (double) cmd->nbody, cpuTotal,
-                            m1*(double) cmd->nbody,
-                            m2*((double) cmd->nbody)*rlog10((double) cmd->nbody),
-                            m3*rsqr((double) cmd->nbody),
-                            m4*rpow(((double) cmd->nbody), 3.0));
-        fclose(outstr);
+    if (cmd->verbose > VERBOSENOINFO) {
+        real cpuTotal = CPUTIME - gd->cpuinit;
+        printf("\nFinal CPU time : %lf %s\n",
+               cpuTotal, PRNUNITOFTIMEUSED);
+        if (scanopt(cmd->options, "measure-cputime")) {
+                outstr = stropen(gd->fpfnameCPUFileName, "a");
+                fprintf(outstr,"%12.4e %12.4e %12.4e\n",
+                        (double) cmd->nbody, cpuTotal, gd->cpusearch);
+                fclose(outstr);
+        }
+        printf("Final real time: %ld",
+               (rcpu_time()-gd->cpurealinit));
+        printf(" %s\n\n", PRNUNITOFTIMEUSED);       // Only work this way
     }
 
-    if (cmd->verbose > 0) {
-        printf("\nFinal CPU time : %lf %s\n", CPUTIME - gd->cpuinit,PRNUNITOFTIMEUSED);// in minutes
-        printf("Final real time: %ld", (rcpu_time()-gd->cpurealinit)); // in minutes
-        printf(" %s\n\n", PRNUNITOFTIMEUSED);                          // Only work this way
-    }
-
-//    EndRun_FreeMemory(cmd, gd);
+    EndRun_FreeMemory(cmd, gd);
 
     return SUCCESS;
 }
@@ -1386,8 +1383,6 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 //
 local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 {
-//    int m;
-
 #ifdef ADDONS
 #include "cballsio_include_10.h"
 #endif
@@ -1442,7 +1437,8 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
     free_dvector(gd->histZetaMFlatten,1,cmd->sizeHistN*cmd->sizeHistN);
     free_dvector(gd->rBins,1,cmd->sizeHistN);
 
-//B Set gsl uniform random :: If not needed globally this line have to go to testdata
+//B Set gsl uniform random :: If not needed globally
+//      this line have to go to testdata
 #ifdef USEGSL
     gsl_rng_free (gd->r);
 #endif

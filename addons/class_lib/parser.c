@@ -205,9 +205,6 @@ int parser_read_int(struct file_content * pfc,
       if (strcmp(pfc->name[i],name) == 0) {
           error("multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
       }
-//    class_test(strcmp(pfc->name[i],name) == 0,
-//               errmsg,
-//               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
   }
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
@@ -258,9 +255,6 @@ int parser_read_double(struct file_content * pfc,
       if (strcmp(pfc->name[i],name) == 0) {
           error("multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
       }
-//    class_test(strcmp(pfc->name[i],name) == 0,
-//               errmsg,
-//               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
   }
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
@@ -355,10 +349,6 @@ int parser_read_string(struct file_content * pfc,
           error("multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
       }
 //E
-
-//    class_test(strcmp(pfc->name[i],name) == 0,
-//               errmsg,
-//               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
   }
 
 // if everything proceeded normally, return with 'found' flag equal to true

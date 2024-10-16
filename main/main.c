@@ -30,7 +30,7 @@ int main(int argc, string argv[])
     struct global_data gd;                          // share global parameters
 
     gd.cpuinit = CPUTIME;                           // init register of cpu time
-    gd.cpurealinit = rcpu_time();
+    gd.cpurealinit = rcpu_time();                   // init register of real time
 
 #ifdef GETPARAM
     InitParam(argv, defv);                          // init command parameters

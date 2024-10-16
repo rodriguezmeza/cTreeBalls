@@ -302,7 +302,7 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
 #endif
 
 /*
- Search routine using tree brute force direct method:
+ Search routine using octree method:
 
  To be called using: search=octree-kkk-omp
 
@@ -357,8 +357,9 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
         "\nsearchcalc_tc_kkk_omp: Total allocated %g MByte storage so far.\n",
         gd->bytes_tot/(1024.0*1024.0));
 
-    if (cmd->verbose >= 2)
-        verb_print(cmd->verbose, " - Completed pivot node:\n");
+    if (cmd->verbose >= VERBOSENORMALINFO)
+        verb_print(cmd->verbose,
+                   "\nRunning...\n - Completed pivot node:\n");
 
 #pragma omp parallel default(none)                      \
     shared(cmd,gd,btable,nbody,roottable,               \
@@ -462,10 +463,8 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
           icountNbRminOverlapthread += NbRminOverlap(p);
           //E
           ip = p - btable[cat1] + 1;
-          if (cmd->verbose >= 2) {
+          if (cmd->verbose >= VERBOSENORMALINFO) {
               if (ip%cmd->stepState == 0) {
-                  //                  verb_log_print(cmd->verbose_log, gd->outlog,
-                  //                                 " - Completed pivot: %ld\n", ip);
                   verb_print(cmd->verbose, "%d ", ip);
               }
           } else
@@ -516,8 +515,8 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     //E
   } // end pragma omp parallel
 
-    if (cmd->verbose >= 2)
-        verb_print(cmd->verbose, "\n");             // end of completed pivot
+    if (cmd->verbose >= VERBOSENORMALINFO)
+        verb_print(cmd->verbose, "\n\n");             // end of completed pivot
 
     //B kappa Avg Rmin
     real xi, den, num;
@@ -530,9 +529,10 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #else
         xi = num/den;
 #endif
-        verb_print(cmd->verbose,
-                   "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
-                   ipfalse, num, den, xi);
+        if (cmd->verbose>=VERBOSENORMALINFO)
+            verb_print(cmd->verbose,
+                       "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
+                       ipfalse, num, den, xi);
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
             MULMS_ext(gd->histZetaMcos[mm],
                       gd->histZetaMcos[mm],xi,cmd->sizeHistN);
@@ -546,16 +546,16 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     }
 #ifdef NMultipoles
     if (scanopt(cmd->options, "smooth-pivot")) {
-        num = (real)nbody[cat1];
-        den = (real)(nbody[cat1]-ipfalse);
+//        num = (real)nbody[cat1];
+//        den = (real)(nbody[cat1]-ipfalse);
 #ifdef NONORMHIST
-        xi = 1.0;
+//        xi = 1.0;
 #else
-        xi = num/den;
+//        xi = num/den;
 #endif
-        verb_print(cmd->verbose,
-                   "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
-                   ipfalse, num, den, xi);
+//        verb_print(cmd->verbose,
+//                   "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
+//                   ipfalse, num, den, xi);
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
             MULMS_ext(gd->NhistZetaMcos[mm],
                       gd->NhistZetaMcos[mm],xi,cmd->sizeHistN);
@@ -570,12 +570,17 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #endif
     //E
 
-    verb_print(cmd->verbose, "tree-omp-sincos: p falses found = %ld\n",ipfalse);
-//B kappa Avg Rmin
-    verb_print(cmd->verbose,
-               "tree-omp-sincos: count NbRmin found = %ld\n",icountNbRmin);
-    verb_print(cmd->verbose,
-               "tree-omp-sincos: count overlap found = %ld\n",icountNbRminOverlap);
+    if (cmd->verbose>=VERBOSENORMALINFO) {
+        verb_print(cmd->verbose,
+                   "octree-kkk-omp: p falses found = %ld\n",ipfalse);
+        //B kappa Avg Rmin
+        verb_print(cmd->verbose,
+                   "octree-kkk-omp: count NbRmin found = %ld\n",
+                   icountNbRmin);
+        verb_print(cmd->verbose,
+                   "octree-kkk-omp: count overlap found = %ld\n",
+                   icountNbRminOverlap);
+    }
 
     bodyptr pp;
     INTEGER ifalsecount;
@@ -589,15 +594,18 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
             itruecount++;
         }
     }
-    verb_print(cmd->verbose, "octree-kkk-omp: p falses found = %ld\n",
-               ifalsecount);
-    verb_print(cmd->verbose, "octree-kkk-omp: p true found = %ld\n",itruecount);
-    verb_print(cmd->verbose, "octree-kkk-omp: total = %ld\n",
-               itruecount+ifalsecount);
+    if (cmd->verbose>=VERBOSENORMALINFO) {
+        verb_print(cmd->verbose, "octree-kkk-omp: p falses found = %ld\n",
+                   ifalsecount);
+        verb_print(cmd->verbose, "octree-kkk-omp: p true found = %ld\n",itruecount);
+        verb_print(cmd->verbose, "octree-kkk-omp: total = %ld\n",
+                   itruecount+ifalsecount);
+    }
 //E
 
     gd->cpusearch = CPUTIME - cpustart;
-    verb_print(cmd->verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);
+    verb_print(cmd->verbose, "\nGoing out: CPU time = %lf %s\n",
+               CPUTIME-cpustart, PRNUNITOFTIMEUSED);
 
     return SUCCESS;
 }
@@ -614,7 +622,6 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
     if ( ((nodeptr) p) != q ) {
         if (Type(q) == CELL) {
             if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-//                if (scanopt(cmd->options, "behavior-ball")) {
                 if (!scanopt(cmd->options, "no-one-ball")) {
                     accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
                     if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
@@ -689,7 +696,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
                     sinphi = 0.0;
                 if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
                     sinphi *= -1.0;
-#else
+#else // ! POLARAXIS
                 REAL s, sy;
                 vector pr0;
                 DOTVP(s, dr, hist->dr0);
@@ -702,15 +709,16 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
                     verb_log_print(cmd->verbose, gd->outlog,
                     "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                         cosphi);
-#endif
+#endif // ! POLARAXIS
                 CHEBYSHEVTUOMP;
                 hist->nbbcalcthread += 1;
-            }
-        }
+            } // ! 1 < n < sizeHistN
+        } // ! dr1>cmd->rminHist
     } // ! accept_body
 }
 
-local void sumnode_sincos_cell(struct  cmdline_data* cmd, struct  global_data* gd,
+local void sumnode_sincos_cell(struct  cmdline_data* cmd,
+                               struct  global_data* gd,
                                bodyptr p, cellptr start, cellptr finish,
                                gdhistptr_sincos_omp_kkk hist)
 {
@@ -720,8 +728,6 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd, struct  global_data* g
     int n;
     real xi;
     REAL cosphi,sinphi;
-    REAL s, sy;
-    vector pr0;
 
     q = start;
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
@@ -734,6 +740,28 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd, struct  global_data* g
             if (n<=cmd->sizeHistN && n>=1) {
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
                 xi = Kappa(q);
+#ifdef POLARAXIS
+                real a, c, c2;
+                vector vc;
+                DOTPSUBV(c2, vc, Pos(q), hist->q0);
+#ifdef NOLIMBER
+                a = 2.0*rasin(dr1/2.0);
+#else
+                a = dr1;
+#endif
+                real cosc;
+                cosc = Pos(q)[2];
+                cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)
+                        /(a*hist->sinb);
+                if (rabs(cosphi) <= 1.0)
+                    sinphi = rsqrt(1.0 - rsqr(cosphi));
+                else
+                    sinphi = 0.0;
+                if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
+                    sinphi *= -1.0;
+#else
+                REAL s, sy;
+                vector pr0;
                 DOTVP(s, dr, hist->dr0);
                 cosphi = s/(dr1*hist->drpq);
                 CROSSVP(pr0,hist->dr0,Pos(p));
@@ -744,10 +772,11 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd, struct  global_data* g
                     verb_log_print(cmd->verbose, gd->outlog,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                            cosphi);
+#endif
                 CHEBYSHEVTUOMP;
                 hist->nbccalcthread += 1;
-            }
-        }
+            } // ! 1 < n < sizeHistN
+        } // ! dr1 > rminHist
     } // ! accept_body
 }
 
@@ -765,7 +794,6 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
     if ( ((nodeptr) p) != q ) {
         if (Type(q) == CELL) {
             if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-//                if (scanopt(cmd->options, "behavior-ball")) {
                 if (!scanopt(cmd->options, "no-one-ball")) {
                     accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
                     if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
@@ -847,7 +875,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
                     sinphi = 0.0;
                 if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
                     sinphi *= -1.0;
-#else
+#else // ! POLARAXIS
                 REAL s, sy;
                 vector pr0;
                 DOTVP(s, dr, hist->dr0);
@@ -860,7 +888,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
                     verb_log_print(cmd->verbose, gd->outlog,
                     "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                     cosphi);
-#endif
+#endif // ! POLARAXIS
                 CHEBYSHEVTUOMPN;
                 CHEBYSHEVTUOMP;
                 hist->nbbcalcthread += 1;
@@ -914,7 +942,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd, struct  global_data*
                     sinphi = 0.0;
                 if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
                     sinphi *= -1.0;
-#else
+#else // ! POLARAXIS
                 REAL s, sy;
                 vector pr0;
                 DOTVP(s, dr, hist->dr0);
@@ -927,7 +955,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd, struct  global_data*
                     verb_log_print(cmd->verbose, gd->outlog,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                            cosphi);
-#endif
+#endif // ! POLARAXIS
                 CHEBYSHEVTUOMPN;
                 CHEBYSHEVTUOMP;
                 hist->nbccalcthread += 1;
@@ -936,6 +964,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd, struct  global_data*
     } // ! accept_body
 }
 #endif
+
 
 //B Routines as in cballsutils
 
@@ -1257,7 +1286,7 @@ local int print_info(struct cmdline_data* cmd,
                                   struct  global_data* gd)
 {
     verb_print(cmd->verbose,
-               "searchcalc_normal: Running octree-kkk ... (tree-omp) \n");
+               "searchcalc: Using octree-kkk-omp... \n");
 
     if (cmd->usePeriodic==TRUE)
         error("CheckParameters: can´t have periodic boundaries and TCKKKOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
