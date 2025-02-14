@@ -41,6 +41,10 @@
 #include "startrun_octree_kkk_omp_11.h"             // 61
 #endif
 
+#ifdef OCTREEKKKCEXPOMP
+#include "startrun_octree_kkk_cexp_omp_11.h"             // 64
+#endif
+
 #ifdef OCTREEKKKBALLSOMP
 #include "startrun_octree_kkk_balls_omp_11.h"             // 62
 #endif

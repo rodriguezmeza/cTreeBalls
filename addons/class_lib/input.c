@@ -173,8 +173,10 @@ int input_set_root(char* input_file,
 }
 
 
-int input_read_from_file(struct cmdline_data *cmd, struct file_content * pfc,
-                         ErrorMsg errmsg) {
+int input_read_from_file(struct cmdline_data *cmd,
+                         struct file_content * pfc,
+                         ErrorMsg errmsg)
+{
 
     int input_verbose = 0;
 
@@ -190,14 +192,13 @@ int input_read_from_file(struct cmdline_data *cmd, struct file_content * pfc,
 int input_read_parameters(struct cmdline_data *cmd, struct file_content * pfc,
                           ErrorMsg errmsg)
 {
-  int input_verbose=0;
+    int input_verbose=0;
 
-  class_call(input_default_params(cmd),errmsg,errmsg);
+    class_call(input_default_params(cmd),errmsg,errmsg);
+    class_read_int("input_verbose",input_verbose);
+    class_call(input_read_parameters_general(cmd, pfc,errmsg),errmsg,errmsg);
 
-  class_read_int("input_verbose",input_verbose);
-  class_call(input_read_parameters_general(cmd, pfc,errmsg),errmsg,errmsg);
-
-  return SUCCESS;
+    return SUCCESS;
 }
 
 
@@ -609,7 +610,7 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->infilefmt = "columns-ascii";
     cmd->iCatalogs = "1";
     // Output parameters
-    cmd->rootDir = "output";
+    cmd->rootDir = "Output";
     cmd->outfile = "";
     cmd->outfilefmt = "columns-ascii";
     // Parameters to set a region in the sky, for example for Takahasi data set

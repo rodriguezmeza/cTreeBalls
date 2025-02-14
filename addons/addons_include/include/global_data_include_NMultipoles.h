@@ -22,8 +22,10 @@
 #endif
 
 //B To save total 3pcf
+//B look for where these definitions are used...
     real **NhistZetaGcos;
     real **NhistZetaGsin;
+//E
     real ***NhistZetaGmRe;
     real ***NhistZetaGmIm;
 //E
@@ -41,19 +43,19 @@ realptr NhistCF;
     realptr NhistNNSubXi2pcftotal;
 //E
     real *NhistXi2pcf;
-//B TPCF
 
 real *NhistNNN;
 real ***NhistNNNSub;
 real *NhistXi2pcf_omp;
 real ***NhistXi3pcf;
+//E
+
+
 
 //B To save total 3pcf shear
     real *NhistXitt;
     real *NhistXixx;
     real *NhistXitx;
-//E
-
 //E
 
 #endif // ! NMultipoles

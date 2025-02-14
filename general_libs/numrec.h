@@ -96,4 +96,7 @@ void dfour1(double data[], unsigned long nn, int isign);
 void drealft(double data[], unsigned long n, int isign);
 
 
+void moment(double data[], int n, double *ave, double *adev, double *sdev,
+            double *var, double *skew, double *curt);
+
 #endif /* _NR_UTILS_H_ */

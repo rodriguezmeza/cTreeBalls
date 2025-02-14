@@ -12,6 +12,10 @@
 #include "cmdline_defs_iolib.h"
 #endif
 
+#ifdef SAVERESTORE
+#include "cmdline_defs_save_restore.h"
+#endif
+
 /*
  Add your addon item here
  */

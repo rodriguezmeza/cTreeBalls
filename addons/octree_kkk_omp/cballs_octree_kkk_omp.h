@@ -14,9 +14,33 @@ case 61:                   // search=octree-kkk-omp
         Update(p) = TRUE;
         MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
     }
-    searchcalc_octree_kkk_omp(cmd, gd, bodytable, gd->nbodyTable, 1,
-                              gd->nbodyTable,
-                              gd->iCatalogs[0], gd->iCatalogs[1]);
+    switch(correlation_int) {
+        case KKKCORRELATION:
+            searchcalc_octree_kkk_omp(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                      gd->nbodyTable,
+                                      gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+        case KKCORRELATION:
+            searchcalc_octree_kk_omp(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                     gd->nbodyTable,
+                                     gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+        case NNCORRELATION:
+            searchcalc_octree_nn_omp(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                     gd->nbodyTable,
+                                     gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+        case NNEstimator:
+            nncorrelation_octree_nn_omp(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                     gd->nbodyTable,
+                                     gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+        default:
+            searchcalc_octree_kkk_omp(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                     gd->nbodyTable,
+                                     gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+    }
     break;
 
 #endif	// ! _cballs_octree_kkk_omp_h

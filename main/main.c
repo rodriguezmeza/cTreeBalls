@@ -8,7 +8,7 @@
  ===============================================================================
  Use: cballs --help
  Input: 	Command line parameters, Parameters file, data catalogs
- Output: several histograms containg 2pcf, 3pcf,...
+ Output: several histograms containing 2pcf, 3pcf,...
  Units:
  History:
  Comments and notes: (palimsesto)... coding based on references below.
@@ -50,7 +50,6 @@ int main(int argc, string argv[])
                                                     //  and do other useful 
                                                     //  process, like param check,
                                                     //  read data points to analyze
-
 	MainLoop(&cmd, &gd);                            // make tree and search data
 	EndRun(&cmd, &gd);                              // close streams and free mem
 

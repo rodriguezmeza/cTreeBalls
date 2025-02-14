@@ -28,6 +28,10 @@
 #include "cballs_print_octree_kkk_omp.h"
 #endif
 
+#ifdef OCTREEKKKCEXPOMP
+#include "cballs_print_octree_kkk_cexp_omp.h"
+#endif
+
 #ifdef OCTREEKKKBALLSOMP
 #include "cballs_print_octree_kkk_balls_omp.h"
 #endif

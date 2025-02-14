@@ -28,7 +28,7 @@ CLASSLIBON = 1
 IOLIBON = 1
 
 # CFITSIO
-# To IO fit format
+# To IO fits format
 # This addon requires IOLIBON = 1, check it...
 ifeq ($(IOLIBON),1)
 # default is OFF.
@@ -58,6 +58,7 @@ KDTREEOMPON = 1
 # For computing 3pcf using octree-kkk-omp
 OCTREEKKKOMPON = 1
 
+
 #E
 
 
@@ -66,11 +67,15 @@ OCTREEKKKOMPON = 1
 # In some searching methods
 #   it will be possible to set the following flags
 
-# NMultipoles switch (multipoles for counting)
-NMultipolesON = 0
+# NMultipoles switch (multipoles for counting).
+# Default is 1
+NMultipolesON = 1
 
-# NONORMHIST switch (do not use normalization of histograms)
-NONORMHISTON = 0
+# NONORMHIST switch (do not use normalization of histograms).
+#   If activated histograms can be saved
+#   normalizing with monopole of N.
+# Default is 1
+NONORMHISTON = 1
 
 # POLARAXIS switch (set north pole as the axis of reference...)
 #   this is for pixel catalogs on the unit sphere: (0,0,1)
@@ -78,6 +83,16 @@ POLARAXISON = 0
 
 # No Limber aproximation
 NOLIMBERON = 0
+
+# Compute and add pivot neighbours
+ADDPIVOTNEIGHBOURSON = 0
+
+# To remove overcounting pairs:
+OVERCOUNTINGON = 0
+
+# SAVERESTORE
+# For save/restore options
+SAVERESTOREON = 1
 
 #E
 ############################

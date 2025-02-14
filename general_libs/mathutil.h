@@ -50,6 +50,8 @@ void HeapSortIntDescend (int *, int *, int); // Ordena un arreglo de enteros (De
 void FftComplex (Cmplx *, int);		// Fast Fourier Transform of complex array data
 real Integrate (real *, int);
 
-#endif  
+void covarianceMatrix(double *x, double *y, int n, double **cvm);
+
+#endif // ! _mathutil_h_
 
 

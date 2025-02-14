@@ -12,7 +12,7 @@
 #endif
 
 #ifdef OCTREEKKKOMP
-//#include "global_data_octree_kkk_omp.h"
+#include "global_data_octree_kkk_omp.h"
 #endif
 
 #ifdef OCTREEKKKBALLSOMP

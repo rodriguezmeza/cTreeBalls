@@ -126,6 +126,7 @@ global nodeptr *nodetabscanlev;
 global nodeptr *nodetabscanlev_root;
 //
 
+// check this... it is repeated in global_data struct
 global real *histXi2pcf_omp;                        // Auxiliary array.
                                                     //  Used in OMP segments
 

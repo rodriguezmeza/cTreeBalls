@@ -11,7 +11,7 @@
 //        1          2          3          4        ^ 5          6          7
 
 //
-// We must check the order of memory allocation and dealocation!!!
+// We must check the order of memory allocation and deallocation!!!
 // Here and in EndRun in cballsio.c
 //
 
@@ -38,6 +38,11 @@ local int scanrOption(struct  cmdline_data*, struct  global_data*,
 #ifndef USEGSL
 local long saveidum;
 #endif
+
+#ifdef ADDONS
+#include "startrun_include_00.h"
+#endif
+
 
 /*
  StartRun routine:
@@ -89,8 +94,6 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #else
     startrun_parameterfile(cmd, gd);
 #endif
-
-    class_call_cballs(StartOutput(cmd), errmsg, errmsg);
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
@@ -145,8 +148,10 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
                           errmsg, errmsg);
         class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
-    } else
+    } else {
         startrun_cmdline(cmd, gd);
+    }
+
 #else
     class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg), 
                       errmsg, errmsg);
@@ -154,7 +159,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     class_call_cballs(parser_free(&fc), errmsg, errmsg);
 #endif
 
-    class_call_cballs(StartRun_Common(cmd, gd), errmsg, errmsg);
+    if (!strnull(cmd->paramfile))
+        class_call_cballs(StartRun_Common(cmd, gd), errmsg, errmsg);
 
 #ifdef GETPARAM
     if (!strnull(cmd->paramfile))
@@ -162,8 +168,6 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #else
     PrintParameterFile(cmd, cmd->ParameterFile);
 #endif
-
-    class_call_cballs(StartOutput(cmd), errmsg, errmsg);
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
@@ -593,6 +597,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #include "startrun_include_04.h"
 #endif
 
+    class_call_cballs(StartOutput(cmd, gd), errmsg, errmsg);
+
     setFilesDirs(cmd, gd);
     setFilesDirs_log(cmd, gd);
     strcpy(gd->mode,"w");
@@ -606,123 +612,143 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
      class_call_cballs(startrun_memoryAllocation(cmd, gd), errmsg, errmsg);
 
 //B Pre-processing necessary for reading data files:
-        double cpustart;
-        char buf[200];
-        if (scanopt(cmd->options, "pre-processing")) {
-            cpustart = CPUTIME;
-            sprintf(buf,"%s",cmd->script);
-            verb_print(cmd->verbose,
-                       "\npre-processing: executing %s...",cmd->script);
-            system(buf);
-            verb_print(cmd->verbose, " done.\n");
-            gd->cputotalinout += CPUTIME - cpustart;
-            verb_print(cmd->verbose, "cpu time expended in this script %g\n\n",
-                       CPUTIME - cpustart);
-            if (scanopt(cmd->options, "stop")) {
-                verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
-                exit(1);
-            }
+    double cpustart;
+    char buf[200];
+    if (scanopt(cmd->options, "pre-processing")) {
+        cpustart = CPUTIME;
+        sprintf(buf,"%s",cmd->script);
+        verb_print(cmd->verbose,
+                   "\npre-processing: executing %s...",cmd->script);
+        system(buf);
+        verb_print(cmd->verbose, " done.\n");
+        gd->cputotalinout += CPUTIME - cpustart;
+        verb_print(cmd->verbose, "cpu time expended in this script %g\n\n",
+                   CPUTIME - cpustart);
+        if (scanopt(cmd->options, "stop")) {
+            verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
+            exit(1);
         }
+    }
+    if (scanopt(cmd->options, "statistics-histograms")) {
+        statHistogram(cmd, gd);
+        verb_print(cmd->verbose, "\n\tpre-processing: stopping...\n\n");
+        exit(1);
+    }
 //E
 
 //B In this section update computation of rSize and center-of-mass if necessary
 //      so we have a common root size and c-of-m
-        for (ifile=0; ifile<gd->ninfiles; ifile++) {
-            if (!strnull(cmd->infile)) {
-                class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
-                                &gd->infilefmt_int), errmsg, errmsg);
-                class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
-                                  errmsg, errmsg);
-            } else {
-                TestData(cmd, gd);
-            }
+    for (ifile=0; ifile<gd->ninfiles; ifile++) {
+        if (!strnull(cmd->infile)) {
+            class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
+                            &gd->infilefmt_int), errmsg, errmsg);
+            class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
+                            errmsg, errmsg);
+            gd->model_comment = "input data file";
+        } else {
+            verb_print(cmd->verbose,"\nNo data catalog was given...");
+            verb_print(cmd->verbose,"creating a test model...\n");
+            TestData(cmd, gd);
+            gd->input_comment = "no data file given";
         }
+    }
 //E
-        for (ifile=0; ifile<gd->ninfiles; ifile++) {
-            gd->bytes_tot += gd->nbodyTable[ifile]*sizeof(body);
-            verb_print(cmd->verbose,
-                "\nAllocated %g MByte for particle storage (file %d).\n\n",
-                       gd->nbodyTable[ifile]*sizeof(body)*INMB, ifile);
-        }
+    for (ifile=0; ifile<gd->ninfiles; ifile++) {
+        gd->bytes_tot += gd->nbodyTable[ifile]*sizeof(body);
+        verb_print(cmd->verbose,
+                   "\nAllocated %g MByte for particle storage (file %d).\n\n",
+                   gd->nbodyTable[ifile]*sizeof(body)*INMB, ifile);
+    }
 
-        search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
-        for (ifile=0; ifile<gd->ninfiles; ifile++) {
+    search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
+    for (ifile=0; ifile<gd->ninfiles; ifile++) {
 //B
-            cellptr root;                           // Set it up a temporal root
-            root = (cellptr) allocate(1 * sizeof(body));
-            findRootCenter(cmd, gd, 
-                           bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-            centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-            findRootCenter(cmd, gd, 
+        cellptr root;                           // Set it up a temporal root
+        root = (cellptr) allocate(1 * sizeof(body));
+        findRootCenter(cmd, gd,
+                       bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+        centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+        findRootCenter(cmd, gd,
                            bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
 //E
-            gd->rSizeTable[ifile] = 1.0;
-            expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-            free(root);
-            if (cmd->rangeN > gd->rSizeTable[ifile])
-                verb_print(cmd->verbose,
-                           "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
-                           cmd->rangeN, gd->rSizeTable[ifile]);
-        }
+        gd->rSizeTable[ifile] = 1.0;
+        expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+        free(root);
+        if (cmd->rangeN > gd->rSizeTable[ifile])
+            verb_print(cmd->verbose,
+                       "\nstartrun_Common: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
+                        cmd->rangeN, gd->rSizeTable[ifile]);
+    }
+
+    //B set output comment
+    if (! strnull(cmd->outfile)) {
+        gd->output_comment = "output data file was given";
+    } else {
+        gd->output_comment = "no output data file was given";
+    }
+    //E
 
 //B Tree search:
-        gd->Rcut = cmd->rangeN;                     // Maximum search radius
-        gd->RcutSq = gd->Rcut*gd->Rcut;
+    gd->Rcut = cmd->rangeN;                     // Maximum search radius
+    gd->RcutSq = gd->Rcut*gd->Rcut;
 //E
-     if (cmd->useLogHist) {
-         real rBin, rbinlog;
-         if (cmd->rminHist==0) { 
-//B ! rminHist = 0 not allowed when useLogHist is true
-//  therefore this segment does not ocurr...
-             gd->deltaRV = dvector(1,cmd->sizeHistN);
-             verb_log_print(cmd->verbose_log, gd->outlog, "\ndeltaRV:\n");
-             int n;
-             for (n=1; n<=cmd->sizeHistN; n++) {
-                 gd->deltaRV[n] =
-                 cmd->rangeN*rpow( 10.0, 
-                                  ( (real)(n-cmd->sizeHistN) )/cmd->logHistBinsPD );
-                 verb_log_print(cmd->verbose_log, gd->outlog,
-                                " %d %lg\n",n,gd->deltaRV[n]);
-             }
-//E
-         } else {
-             gd->deltaR = rlog10(cmd->rangeN/cmd->rminHist)/cmd->sizeHistN;
-             gd->deltaRV = dvector(1,cmd->sizeHistN);
-             gd->ddeltaRV = dvector(1,cmd->sizeHistN-1);
-             verb_log_print(cmd->verbose_log, gd->outlog,
-                            "deltaRV (deltaR=%lf logscale):\n", gd->deltaR);
-             int n;
-             rbinlog = rlog10(cmd->rminHist) + ((real)(1))*gd->deltaR;
-             rBin=rpow(10.0,rbinlog);
-             gd->deltaRV[1] = rBin;
-             verb_log_print(cmd->verbose_log, gd->outlog,
-                            " %d %lg\n",n,gd->deltaRV[1]);
-             gd->deltaRmin=rBin;
-             gd->deltaRmax=rBin;
-             for (n=2; n<=cmd->sizeHistN; n++) {
-                 rbinlog = rlog10(cmd->rminHist) + ((real)(n))*gd->deltaR;
-                 rBin=rpow(10.0,rbinlog);
-                 gd->deltaRV[n] = rBin;
-                 verb_log_print(cmd->verbose_log, gd->outlog,
-                                " %d %lg %lg\n",
-                                n,gd->deltaRV[n],gd->deltaRV[n]-gd->deltaRV[n-1]);
-                 //B Not working MIN and MAX macros... Test these macros
-                 gd->ddeltaRV[n-1] = gd->deltaRV[n]-gd->deltaRV[n-1];
-                 if (gd->deltaRmax < gd->deltaRV[n]-gd->deltaRV[n-1])
-                     gd->deltaRmax = gd->deltaRV[n]-gd->deltaRV[n-1];
-                 if (gd->deltaRmin > gd->deltaRV[n]-gd->deltaRV[n-1])
-                     gd->deltaRmin = gd->deltaRV[n]-gd->deltaRV[n-1];
-                 //E
-             }
-             verb_log_print(cmd->verbose_log, gd->outlog,
+    if (cmd->useLogHist) {
+        real rBin, rbinlog;
+        if (cmd->rminHist==0) {
+            //B rminHist = 0 not allowed when useLogHist is true
+            //  therefore this segment does not ocurr...
+            gd->deltaRV = dvector(1,cmd->sizeHistN);
+            verb_log_print(cmd->verbose_log, gd->outlog, "\ndeltaRV:\n");
+            int n;
+            for (n=1; n<=cmd->sizeHistN; n++) {
+                gd->deltaRV[n] =
+                cmd->rangeN*rpow( 10.0,
+                                ( (real)(n-cmd->sizeHistN) )/cmd->logHistBinsPD );
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                            " %d %lg\n",n,gd->deltaRV[n]);
+            }
+            //E
+        } else {
+            gd->deltaR = rlog10(cmd->rangeN/cmd->rminHist)/cmd->sizeHistN;
+            //B allocated after startrun_memoryAllocation
+            //  deallocate before deallocate arrays in startrun_memoryAllocation
+            gd->deltaRV = dvector(1,cmd->sizeHistN);
+            gd->ddeltaRV = dvector(1,cmd->sizeHistN-1);
+            //E
+            verb_log_print(cmd->verbose_log, gd->outlog,
+                           "deltaRV (deltaR=%lf logscale):\n", gd->deltaR);
+            int n;
+            rbinlog = rlog10(cmd->rminHist) + ((real)(1))*gd->deltaR;
+            rBin=rpow(10.0,rbinlog);
+            gd->deltaRV[1] = rBin;
+            verb_log_print(cmd->verbose_log, gd->outlog,
+                           " %d %lg\n",n,gd->deltaRV[1]);
+            gd->deltaRmin=rBin;
+            gd->deltaRmax=rBin;
+            for (n=2; n<=cmd->sizeHistN; n++) {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n))*gd->deltaR;
+                rBin=rpow(10.0,rbinlog);
+                gd->deltaRV[n] = rBin;
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               " %d %lg %lg\n",
+                               n,gd->deltaRV[n],gd->deltaRV[n]-gd->deltaRV[n-1]);
+                //B Not working MIN and MAX macros... Test these macros
+                gd->ddeltaRV[n-1] = gd->deltaRV[n]-gd->deltaRV[n-1];
+                if (gd->deltaRmax < gd->deltaRV[n]-gd->deltaRV[n-1])
+                    gd->deltaRmax = gd->deltaRV[n]-gd->deltaRV[n-1];
+                if (gd->deltaRmin > gd->deltaRV[n]-gd->deltaRV[n-1])
+                    gd->deltaRmin = gd->deltaRV[n]-gd->deltaRV[n-1];
+                //E
+            }
+            verb_log_print(cmd->verbose_log, gd->outlog,
                             "deltaRV min and max: %lg %lg\n",
                             gd->deltaRmin, gd->deltaRmax);
          }
-     } else { // ! useLogHist
+    } else { // ! useLogHist
          gd->deltaR = (cmd->rangeN-cmd->rminHist)/cmd->sizeHistN;
          verb_log_print(cmd->verbose_log, gd->outlog,
                         "deltaR=%lf normal scale):\n",gd->deltaR);
-     } // ! useLogHist
+    } // ! useLogHist
 
 #ifdef CELLMETHOD
         MULVS(gd->cells, gd->Box, 1.0/gd->Rcut);    // Only needed for cellmethod
@@ -753,10 +779,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         verb_log_print(cmd->verbose_log, gd->outlog, "Box volume = %e\n",Vol);
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd->nbody,1.0/3.0));
+    real avgDistance = rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0);
     verb_log_print(cmd->verbose_log, gd->outlog,
-                   "Unit sphere (Takahasi): (S/N)^(1/2): %g\n\n",
-                   rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0));
+                   "Unit sphere (Takahasi): (S/N)^(1/2): %g\n",
+                   avgDistance);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "and Nsmooth (Takahasi): (N*rs^2)/4: %g\n\n",
+                   gd->nbodyTable[gd->iCatalogs[0]]*rpow(avgDistance,2.0)*0.25);
+
+
 #define RADTOARCMIN   3437.74677
+    //B cell size threshold computed for gd->iCatalogs[0] only...
     real rSizeTmp;
     int i, idepth=64;
     rSizeTmp = gd->rSizeTable[gd->iCatalogs[0]];
@@ -777,15 +810,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
             break;
         }
     }
+    //E
 #undef RADTOARCMIN
+
+    gd->deltaTheta = TWOPI/cmd->sizeHistTheta;
+    // Nyquist frecuency = 1/(2 deltaTheta)
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaTheta);
 
 #ifdef ADDONS
 #include "startrun_include_05.h"
 #endif
-     gd->deltaTheta = TWOPI/cmd->sizeHistTheta;
-     // Nyquist frecuency = 1/(2 deltaTheta)
-     verb_log_print(cmd->verbose_log, gd->outlog,
-                    "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaTheta);
 
     return SUCCESS;
 }
@@ -797,11 +832,6 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 {
 // If it is necessary: an item in cmdline_defs.h must have an item here::
-
-
-//    if (!strnull(cmd->restorefile) && !strnull(cmd->infile))
-//        fprintf(stdout,"\nCheckParameters: Warning! : %s\n\n",
-//            "You are using options restorefile and infile at the same time");
 
     //B Parameters related to the searching method
     if (cmd->useLogHist==FALSE && (strcmp(cmd->searchMethod,"balls-omp") == 0))

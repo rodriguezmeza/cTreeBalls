@@ -15,6 +15,10 @@
 #ifdef TREE3PCFDIRECTOMP
 #endif
 
+#ifdef SAVERESTORE
+#include "input_save_restore_02.h"
+#endif
+
 /*
  Add your addon item here
  */

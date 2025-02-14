@@ -931,3 +931,39 @@ void dfour1(double data[], unsigned long nn, int isign)
     }
 }
 #undef SWAP
+
+
+//B use as:
+//  moment(data,i,&ave,&adev,&sdev,&vrnce,&skew,&curt);
+//  Given an array of data[1..n], this routine returns
+//  its mean ave, average deviation adev,
+//  standard deviation sdev, variance var,
+//  skewness skew, and kurtosis curt.
+//E
+void moment(double data[], int n, double *ave, double *adev, double *sdev,
+    double *var, double *skew, double *curt)
+{
+    void nrerror(char error_text[]);
+    int j;
+    double ep=0.0,s,p;
+
+    if (n <= 1) error("n must be at least 2 in moment");
+    s=0.0;
+    for (j=1;j<=n;j++) s += data[j];
+    *ave=s/n;
+    *adev=(*var)=(*skew)=(*curt)=0.0;
+    for (j=1;j<=n;j++) {
+        *adev += fabs(s=data[j]-(*ave));
+        ep += s;
+        *var += (p=s*s);
+        *skew += (p *= s);
+        *curt += (p *= s);
+    }
+    *adev /= n;
+    *var=(*var-ep*ep/n)/(n-1);
+    *sdev=sqrt(*var);
+    if (*var) {
+        *skew /= (n*(*var)*(*sdev));
+        *curt=(*curt)/(n*(*var)*(*var))-3.0;
+    } else error("No skew/kurtosis when variance = 0 (in moment)");
+}

@@ -4,10 +4,6 @@
 #ifndef _cballs_include_00_h
 #define _cballs_include_00_h
 
-#ifdef KDTREEOMP
-#include "cballs_kdtree_omp_00.h"
-#endif
-
 #ifdef OCTREEKKKOMP
 #include "cballs_octree_kkk_omp_00.h"
 #endif

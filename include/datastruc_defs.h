@@ -53,9 +53,12 @@ typedef struct _node {
     INTEGER nb;
     REAL radius;
 
+    //B kappa Avg Rmin
     REAL kapparmin;                                 // Sum_p-in-rmin kappa_p
+    REAL weightrmin;                                // to weight fields...
     INTEGER nbrmin;
     INTEGER nbrmin_overlap;
+    //E
 //E
 
 #ifdef KappaAvgON
@@ -112,8 +115,8 @@ typedef struct _node {
 #define Nb(x) (((nodeptr) (x))->nb)
 #define Radius(x) (((nodeptr) (x))->radius)
 
-
 #define KappaRmin(x)   (((nodeptr) (x))->kapparmin) // Sum_p-in-rmin kappa_p
+#define WeightRmin(x)  (((nodeptr) (x))->weightrmin)// Sum_p-in-rmin weight_p
 #define NbRmin(x) (((nodeptr) (x))->nbrmin)
 #define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
 //E

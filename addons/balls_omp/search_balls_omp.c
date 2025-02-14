@@ -802,9 +802,9 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd,
 #ifdef TREENODEALLBODIES
 //        ipfalse += ipfalsethreads;
         //B kappa Avg Rmin
-                ipfalse += ipfalsethreads;
-                icountNbRmin += icountNbRminthread;
-                icountNbRminOverlap += icountNbRminOverlapthread;
+        ipfalse += ipfalsethreads;
+        icountNbRmin += icountNbRminthread;
+        icountNbRminOverlap += icountNbRminOverlapthread;
         //E
 #endif
     } // end pragma omp critical
@@ -845,8 +845,8 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd,
 //          den = nbody[cat1];                            // Lower than expected
           xi = num/den;
           verb_print(cmd->verbose,
-                "balls-omp: p falses found (false, num, den, xi) = %ld %e %e %e\n",
-                ipfalse, num, den, xi);
+            "balls-omp: p falses found (false, num, den, xi) = %ld %e %e %e\n",
+            ipfalse, num, den, xi);
 //#ifdef TPCF
           if (cmd->computeTPCF) {
 #ifdef SINCOS
@@ -901,16 +901,17 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "balls: imiss = %d\n",imiss);
 
 #ifdef TREENODEALLBODIES
-      verb_print(cmd->verbose, "balls: p falses found = %ld\n",ipfalse);
-      //B kappa Avg Rmin
+      if (scanopt(cmd->options, "smooth-pivot")) {
+          verb_print(cmd->verbose, "balls: p falses found = %ld\n",ipfalse);
+          //B kappa Avg Rmin
           verb_print(cmd->verbose,
-                     "tree-omp-sincos: count NbRmin found = %ld\n",
+                     "balls: count NbRmin found = %ld\n",
                      icountNbRmin);
           verb_print(cmd->verbose,
-                     "tree-omp-sincos: count overlap found = %ld\n",
+                     "balls: count overlap found = %ld\n",
                      icountNbRminOverlap);
-
-//          bodyptr p;
+          
+          //          bodyptr p;
           INTEGER ifalsecount;
           ifalsecount = 0;
           INTEGER itruecount;
@@ -922,13 +923,14 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd,
                   itruecount++;
               }
           }
-          verb_print(cmd->verbose, "tree-omp-sincos: p falses found = %ld\n",
+          verb_print(cmd->verbose, "balls: p falses found = %ld\n",
                      ifalsecount);
-          verb_print(cmd->verbose, "tree-omp-sincos: p true found = %ld\n",
+          verb_print(cmd->verbose, "balls: p true found = %ld\n",
                      itruecount);
-          verb_print(cmd->verbose, "tree-omp-sincos: total = %ld\n",
+          verb_print(cmd->verbose, "balls: total = %ld\n",
                      itruecount+ifalsecount);
-      //E
+          //E
+      }
 #endif
 
     gd->cpusearch = CPUTIME - cpustart;

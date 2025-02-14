@@ -245,16 +245,20 @@ typedef struct {
 
 local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
+                                  bodyptr *btable, int cat2,
                                   bodyptr, nodeptr, real,
-                                  gdhistptr_sincos_omp_kkk);
+                                  gdhistptr_sincos_omp_kkk, int *, int *);
 local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd,
+                          bodyptr *btable, int cat2,
                           bodyptr, cellptr, cellptr,
-                          gdhistptr_sincos_omp_kkk);
+                          gdhistptr_sincos_omp_kkk, int *, int *);
 local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                struct  global_data* gd,
+                               bodyptr *btable, int cat2,
                                bodyptr p, cellptr start, cellptr finish,
-                               gdhistptr_sincos_omp_kkk hist);
+                               gdhistptr_sincos_omp_kkk hist,
+                               int *nbList, int *intList);
 
 local int search_init_gd_sincos_omp_kkk(struct  cmdline_data* cmd,
                                         struct  global_data* gd);
@@ -274,19 +278,23 @@ local int print_info(struct cmdline_data* cmd,
 #ifdef NMultipoles
 local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     struct  global_data* gd,
+                                    bodyptr *btable, int cat2,
                                     bodyptr, nodeptr, real,
                                     gdhistptr_sincos_omp_kkk,
-                                    gdhistptr_sincos_omp_kkk_N);
+                                    gdhistptr_sincos_omp_kkk_N,  int *, int *);
 local void sumnode_sincos_N(struct  cmdline_data* cmd,
                             struct  global_data* gd,
+                            bodyptr *btable, int cat2,
                             bodyptr, cellptr, cellptr,
                             gdhistptr_sincos_omp_kkk,
-                            gdhistptr_sincos_omp_kkk_N);
+                            gdhistptr_sincos_omp_kkk_N, int *, int *);
 local void sumnode_sincos_cell_N(struct  cmdline_data*,
                                  struct  global_data*,
+                                 bodyptr *btable, int cat2,
                                  bodyptr, cellptr, cellptr,
                                  gdhistptr_sincos_omp_kkk,
-                                 gdhistptr_sincos_omp_kkk_N);
+                                 gdhistptr_sincos_omp_kkk_N,
+                                 int *nbList, int *intList);
 local int search_init_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
                                         struct  global_data* gd);
 local int search_init_sincos_omp_kkk_N(struct  cmdline_data* cmd,
@@ -300,6 +308,34 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
                                             bodyptr p, int nbody,
                                        gdhistptr_sincos_omp_kkk_N);
 #endif
+
+//B kappa Avg Rmin
+#ifdef DEBUG
+local char pivotsfilePath[MAXLENGTHOFFILES];
+local FILE *outpivots;
+#endif
+
+#ifdef ADDPIVOTNEIGHBOURS
+#define FACTIVENB  10
+#define FACTIVEINT  10
+ 
+local int actlenNb;
+local int *activeNb;
+
+local int actlenInt;
+local int *activeInt;
+
+local void sumnode_nblist_omp(struct cmdline_data* cmd,
+                              struct  global_data* gd,
+                              bodyptr *btable,
+                              INTEGER ipmin, INTEGER *ipmax,
+                              int cat1, int cat2,
+                              bodyptr p,
+                              gdhistptr_sincos_omp_kkk hist, int);
+
+#endif
+
+//E
 
 /*
  Search routine using octree method:
@@ -335,11 +371,21 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     cpustart = CPUTIME;
     print_info(cmd, gd);
 
+//B kappa Avg Rmin
+#ifdef DEBUG
+    sprintf(pivotsfilePath,"%s/pivot_info%s.txt",gd->tmpDir,cmd->suffixOutFiles);
+    if(!(outpivots=fopen(pivotsfilePath, "w")))
+        error("\nsearchcalc_tc_kkk_omp: error opening file '%s' \n",
+              pivotsfilePath);
+#endif
+//E
+
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
 #endif
 
     search_init_gd_sincos_omp_kkk(cmd, gd);
+//    verb_print_debug(1, "\nAqui voy (1)\n");
 #ifdef NMultipoles
     search_init_gd_sincos_omp_kkk_N(cmd, gd);
 #endif
@@ -351,6 +397,31 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     icountNbRmin=0;
     INTEGER icountNbRminOverlap;
     icountNbRminOverlap=0;
+
+#ifdef ADDPIVOTNEIGHBOURS
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        //B Alloc memory for neighbour lists
+        int Nrsmooth;
+        Nrsmooth = 0.25*nbody[cat2]*rsqr(gd->rsmooth[0]);
+        actlenNb = FACTIVENB * Nrsmooth;
+        verb_print(cmd->verbose, "\n- Nrsmooth and actlenNb: %d %d\n",
+                   Nrsmooth, actlenNb);
+        verb_log_print(cmd->verbose,gd->outlog,
+                       "searchcalc: actlenNb = %ld\n",actlenNb);
+        activeNb = (int *) allocate(actlenNb * sizeof(int));
+        //E
+        //B Alloc memory for intercation lists
+        int NrangeN;
+        NrangeN = 0.25*nbody[cat2]*rsqr(cmd->rangeN);
+        actlenInt = FACTIVEINT * NrangeN;
+        verb_print(cmd->verbose, "- NrangeN and actlenInt: %d %d\n",
+                   NrangeN, actlenInt);
+        verb_log_print(cmd->verbose,gd->outlog,
+                       "searchcalc: actlenInt = %ld\n",actlenInt);
+        activeInt = (int *) allocate(actlenInt * sizeof(int));
+        //E
+    }
+#endif
     //E
 
     verb_print(cmd->verbose,
@@ -361,12 +432,34 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "\nRunning...\n - Completed pivot node:\n");
 
-#pragma omp parallel default(none)                      \
-    shared(cmd,gd,btable,nbody,roottable,               \
+#ifdef DEBUG
+#ifdef ADDPIVOTNEIGHBOURS
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
+           actlenNb,activeNb,actlenInt,activeInt,                           \
            ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
+#else
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
+#endif
+#else
+#ifdef ADDPIVOTNEIGHBOURS
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,                         \
+           actlenNb,activeNb,actlenInt,activeInt,                           \
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
+#else
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,                         \
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
+#endif
+#endif
   {
     bodyptr p;
+    bodyptr q;
     int n, m, ip;
+    int i;
 
     //B init:
     gdhist_sincos_omp_kkk hist;
@@ -384,6 +477,11 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     icountNbRminthread=0;
     INTEGER icountNbRminOverlapthread;
     icountNbRminOverlapthread=0;
+
+//#ifdef ADDPIVOTNEIGHBOURS
+    int nbList;
+    int intList;
+//#endif
     //E
 
 #pragma omp for nowait schedule(dynamic)
@@ -392,6 +490,10 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
           NbRmin(p) = 1;
           NbRminOverlap(p) = 0;
           KappaRmin(p) = Kappa(p);
+//#ifdef ADDPIVOTNEIGHBOURS
+          nbList=0;
+          intList=0;
+//#endif
           if (scanopt(cmd->options, "smooth-pivot")) {
               if (Update(p) == FALSE) {
                   ipfalsethreads++;
@@ -399,6 +501,8 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
               }
           }
           //E
+
+//B segment to be included below...
           //B Set histograms to zero for the pivot
           for (n = 1; n <= cmd->sizeHistN; n++)
               hist.histNNSubthread[n] = 0.0;
@@ -432,47 +536,153 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
           hist.drpq = rsqrt(hist.drpq2);
 #endif
           //E
+//E
+
 #ifdef NMultipoles
-          normal_walktree_sincos_N(cmd, gd, p, ((nodeptr) roottable[cat2]),
-                      gd->rSizeTable[cat2], &hist, &histN);
-          //B kappa Avg Rmin
-          if (scanopt(cmd->options, "smooth-pivot")) {
-              for (n = 1; n <= cmd->sizeHistN; n++) {
-                  hist.histNNSubthread[n] =
-                                ((real)NbRmin(p))*hist.histNNSubthread[n];
-              }
-          }
-          //E
+          normal_walktree_sincos_N(cmd, gd, btable, cat2,
+                                   p, ((nodeptr) roottable[cat2]),
+                                   gd->rSizeTable[cat2], &hist, &histN,
+                                   &nbList, &intList);
           computeBodyProperties_sincos_kkk(cmd, gd, p, nbody[cat1], &hist);
           computeBodyProperties_sincos_kkk_N(cmd, gd, p, nbody[cat1], &histN);
-#else
-          normal_walktree_sincos(cmd, gd, p, ((nodeptr) roottable[cat2]),
-                      gd->rSizeTable[cat2], &hist);
-          //B kappa Avg Rmin
+
+#ifdef ADDPIVOTNEIGHBOURS
           if (scanopt(cmd->options, "smooth-pivot")) {
-              for (n = 1; n <= cmd->sizeHistN; n++) {
-                  hist.histNNSubthread[n] =
-                                ((real)NbRmin(p))*hist.histNNSubthread[n];
-              }
-          }
-          //E
-          computeBodyProperties_sincos_kkk(cmd, gd, p, nbody[cat1], &hist);
+              if (cmd->verbose_log>=3)
+                  verb_log_print(cmd->verbose_log, gd->outlog,
+                                 " - Summing nbList: %ld\n", nbList);
+              for (i = 0; i < nbList; i++) {        // loop over neighbours
+                  if (cmd->verbose_log>=3)
+                      verb_log_print(cmd->verbose_log, gd->outlog,
+                                     " - Summing intList: %ld\n", intList);
+                  q = btable[cat1] + activeNb[i];
+                  //B Set histograms to zero for the pivot
+                  for (n = 1; n <= cmd->sizeHistN; n++)
+                      hist.histNNSubthread[n] = 0.0;
+                  CLRM_ext_ext(hist.histXithreadcos,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+                  CLRM_ext_ext(hist.histXithreadsin,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+#ifdef NMultipoles
+                  for (n = 1; n <= cmd->sizeHistN; n++)
+                      histN.histNNSubthread[n] = 0.0;
+                  CLRM_ext_ext(histN.histXithreadcos,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+                  CLRM_ext_ext(histN.histXithreadsin,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
 #endif
+                  //E
+//B Set reference axis...
+#ifdef POLARAXIS
+                  hist.q0[0] = 0.0;
+                  hist.q0[1] = 0.0;
+                  hist.q0[2] = 1.0;
+                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
+                  hist.drpq = rsqrt(hist.drpq2);
+                  real b = 2.0*rasin(hist.drpq/2.0);
+                  hist.cosb = rcos(b);
+                  hist.sinb = rsin(b);
+                  if (hist.drpq2==0) continue;
+#else
+                  dRotation3D(Pos(q), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
+                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
+                  hist.drpq = rsqrt(hist.drpq2);
+#endif
+//E
+                  sumnode_nblist_omp(cmd, gd, btable, ipmin, ipmax, cat1, cat2,
+                                     q, &hist, intList);
+                  computeBodyProperties_sincos_kkk(cmd, gd, q,
+                                                   ipmax[cat1]-ipmin+1, &hist);
+                  computeBodyProperties_sincos_kkk_N(cmd, gd, q,
+                                                     ipmax[cat1]-ipmin+1, &histN);
+              } // ! end i loop
+          } // ! scanoption smooth-pivot
+#endif // ! ADDPIVOTNEIGHBOURS
+
+
+#else // ! NMultipoles
+          normal_walktree_sincos(cmd, gd, btable, cat2,
+                                 p, ((nodeptr) roottable[cat2]),
+                                 gd->rSizeTable[cat2], &hist, &nbList, &intList);
+          computeBodyProperties_sincos_kkk(cmd, gd, p,
+                                           ipmax[cat1]-ipmin+1, &hist);
+#ifdef ADDPIVOTNEIGHBOURS
+          if (scanopt(cmd->options, "smooth-pivot")) {
+              if (cmd->verbose_log>=3)
+                  verb_log_print(cmd->verbose_log, gd->outlog,
+                                 " - Summing nbList: %ld\n", nbList);
+              for (i = 0; i < nbList; i++) {        // loop over neighbours
+                  if (cmd->verbose_log>=3)
+                      verb_log_print(cmd->verbose_log, gd->outlog,
+                                     " - Summing intList: %ld\n", intList);
+                  q = btable[cat1] + activeNb[i];
+                  //B Set histograms to zero for the pivot
+                  for (n = 1; n <= cmd->sizeHistN; n++)
+                      hist.histNNSubthread[n] = 0.0;
+                  CLRM_ext_ext(hist.histXithreadcos,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+                  CLRM_ext_ext(hist.histXithreadsin,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+#ifdef NMultipoles
+                  for (n = 1; n <= cmd->sizeHistN; n++)
+                      histN.histNNSubthread[n] = 0.0;
+                  CLRM_ext_ext(histN.histXithreadcos,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+                  CLRM_ext_ext(histN.histXithreadsin,
+                               cmd->mChebyshev+1, cmd->sizeHistN);
+#endif
+                  //E
+//B Set reference axis...
+#ifdef POLARAXIS
+                  hist.q0[0] = 0.0;
+                  hist.q0[1] = 0.0;
+                  hist.q0[2] = 1.0;
+                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
+                  hist.drpq = rsqrt(hist.drpq2);
+                  real b = 2.0*rasin(hist.drpq/2.0);
+                  hist.cosb = rcos(b);
+                  hist.sinb = rsin(b);
+                  if (hist.drpq2==0) continue;
+#else
+                  dRotation3D(Pos(q), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
+                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
+                  hist.drpq = rsqrt(hist.drpq2);
+#endif
+//E
+                  sumnode_nblist_omp(cmd, gd, btable, ipmin, ipmax, cat1, cat2,
+                                     q, &hist, intList);
+                  computeBodyProperties_sincos_kkk(cmd, gd, q,
+                                                   ipmax[cat1]-ipmin+1, &hist);
+              } // ! end i loop
+          } // ! scanoption smooth-pivot
+#endif // ! ADDPIVOTNEIGHBOURS
+#endif // ! NMultipoles
+
+          ip = p - btable[cat1] + 1;
           //B kappa Avg Rmin
           icountNbRminthread += NbRmin(p);
           icountNbRminOverlapthread += NbRminOverlap(p);
+#ifdef DEBUG
+#ifdef ADDPIVOTNEIGHBOURS
+          fprintf(outpivots,"%ld \t%ld \t%ld \t%ld \t\t%g\n",
+                  ip, NbRmin(p), NbRminOverlap(p), intList,
+                  KappaRmin(p)/NbRmin(p));
+#else
+          fprintf(outpivots,"%ld \t%ld \t%ld \t\t%g\n",
+                  ip, NbRmin(p), NbRminOverlap(p),
+                  KappaRmin(p)/NbRmin(p));
+#endif
+#endif
           //E
-          ip = p - btable[cat1] + 1;
           if (cmd->verbose >= VERBOSENORMALINFO) {
               if (ip%cmd->stepState == 0) {
-                  verb_print(cmd->verbose, "%d ", ip);
+                  verb_print(cmd->verbose, "%d\n", ip);
               }
           } else
               if (ip%cmd->stepState == 0) {
                   verb_log_print(cmd->verbose_log, gd->outlog,
                                  " - Completed pivot: %ld\n", ip);
               }
-
       } // end do body p
 
 #pragma omp critical
@@ -501,18 +711,17 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
                      histN.histZetaMthreadcossin[m],cmd->sizeHistN);
         }
 #endif
-    }
+        //B kappa Avg Rmin
+        ipfalse += ipfalsethreads;
+        icountNbRmin += icountNbRminthread;
+        icountNbRminOverlap += icountNbRminOverlapthread;
+        //E
+    } // ! critical
 
 #ifdef NMultipoles
     search_free_sincos_omp_kkk_N(cmd, gd, &histN);  // free memory
 #endif
     search_free_sincos_omp_kkk(cmd, gd, &hist);     // free memory
-
-    //B kappa Avg Rmin
-    ipfalse += ipfalsethreads;
-    icountNbRmin += icountNbRminthread;
-    icountNbRminOverlap += icountNbRminOverlapthread;
-    //E
   } // end pragma omp parallel
 
     if (cmd->verbose >= VERBOSENORMALINFO)
@@ -527,7 +736,11 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #ifdef NONORMHIST
         xi = 1.0;
 #else
+#ifdef ADDPIVOTNEIGHBOURS
+        xi = 1.0;
+#else
         xi = num/den;
+#endif
 #endif
         if (cmd->verbose>=VERBOSENORMALINFO)
             verb_print(cmd->verbose,
@@ -546,16 +759,6 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     }
 #ifdef NMultipoles
     if (scanopt(cmd->options, "smooth-pivot")) {
-//        num = (real)nbody[cat1];
-//        den = (real)(nbody[cat1]-ipfalse);
-#ifdef NONORMHIST
-//        xi = 1.0;
-#else
-//        xi = num/den;
-#endif
-//        verb_print(cmd->verbose,
-//                   "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
-//                   ipfalse, num, den, xi);
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
             MULMS_ext(gd->NhistZetaMcos[mm],
                       gd->NhistZetaMcos[mm],xi,cmd->sizeHistN);
@@ -570,38 +773,44 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #endif
     //E
 
-    if (cmd->verbose>=VERBOSENORMALINFO) {
-        verb_print(cmd->verbose,
-                   "octree-kkk-omp: p falses found = %ld\n",ipfalse);
-        //B kappa Avg Rmin
-        verb_print(cmd->verbose,
-                   "octree-kkk-omp: count NbRmin found = %ld\n",
-                   icountNbRmin);
-        verb_print(cmd->verbose,
-                   "octree-kkk-omp: count overlap found = %ld\n",
-                   icountNbRminOverlap);
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        if (cmd->verbose>=VERBOSENORMALINFO) {
+            verb_print(cmd->verbose,
+                       "octree-kkk-omp: p falses found = %ld\n",ipfalse);
+            //B kappa Avg Rmin
+            verb_print(cmd->verbose,
+                       "octree-kkk-omp: count NbRmin found = %ld\n",
+                       icountNbRmin);
+            verb_print(cmd->verbose,
+                       "octree-kkk-omp: count overlap found = %ld\n",
+                       icountNbRminOverlap);
+        }
+        
+        bodyptr pp;
+        INTEGER ifalsecount;
+        ifalsecount = 0;
+        INTEGER itruecount;
+        itruecount = 0;
+        for (pp = btable[cat1] + ipmin -1; pp < btable[cat1] + ipmax[cat1]; pp++) {
+            if (Update(pp) == FALSE) {
+                ifalsecount++;
+            } else {
+                itruecount++;
+            }
+        }
+        if (cmd->verbose>=VERBOSENORMALINFO) {
+            verb_print(cmd->verbose, "octree-kkk-omp: p falses found = %ld\n",
+                       ifalsecount);
+            verb_print(cmd->verbose, "octree-kkk-omp: p true found = %ld\n",itruecount);
+            verb_print(cmd->verbose, "octree-kkk-omp: total = %ld\n",
+                       itruecount+ifalsecount);
+        }
+        //E
     }
 
-    bodyptr pp;
-    INTEGER ifalsecount;
-    ifalsecount = 0;
-    INTEGER itruecount;
-    itruecount = 0;
-    for (pp = btable[cat1] + ipmin -1; pp < btable[cat1] + ipmax[cat1]; pp++) {
-        if (Update(pp) == FALSE) {
-            ifalsecount++;
-        } else {
-            itruecount++;
-        }
-    }
-    if (cmd->verbose>=VERBOSENORMALINFO) {
-        verb_print(cmd->verbose, "octree-kkk-omp: p falses found = %ld\n",
-                   ifalsecount);
-        verb_print(cmd->verbose, "octree-kkk-omp: p true found = %ld\n",itruecount);
-        verb_print(cmd->verbose, "octree-kkk-omp: total = %ld\n",
-                   itruecount+ifalsecount);
-    }
-//E
+#ifdef DEBUG
+    fclose(outpivots);                              // Close file to debug pivots
+#endif
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print(cmd->verbose, "\nGoing out: CPU time = %lf %s\n",
@@ -612,38 +821,106 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 
 local void normal_walktree_sincos(struct  cmdline_data* cmd, 
                                   struct  global_data* gd,
+                                  bodyptr *btable, int cat2,
                                   bodyptr p, nodeptr q, real qsize,
-                                  gdhistptr_sincos_omp_kkk hist)
+                                  gdhistptr_sincos_omp_kkk hist,
+                                  int *nbList, int *intList)
 {
     nodeptr l;
     real dr1;
     vector dr;
 
-    if ( ((nodeptr) p) != q ) {
-        if (Type(q) == CELL) {
-            if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-                if (!scanopt(cmd->options, "no-one-ball")) {
-                    accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
-                    if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
-                        sumnode_sincos_cell(cmd, gd, p, ((cellptr) q),
-                                            ((cellptr) q+1), hist);
-                    else
+    if (Update(p)) {
+        if ( ((nodeptr) p) != q ) {
+            if (Type(q) == CELL) {
+                if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
+                    if (!scanopt(cmd->options, "no-one-ball")) {
+                        accept_body(cmd, gd,
+                                    p, (nodeptr)q, &dr1, dr);
+                        if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
+                            sumnode_sincos_cell(cmd, gd, btable, cat2, p,
+                                                ((cellptr) q),
+                                                ((cellptr) q+1), hist,
+                                                nbList, intList);
+                        else
+                            for (l = More(q); l != Next(q); l = Next(l))
+                                normal_walktree_sincos(cmd, gd, btable, cat2,
+                                                       p,l,qsize/2, hist,
+                                                       nbList, intList);
+                    } else {
                         for (l = More(q); l != Next(q); l = Next(l))
-                            normal_walktree_sincos(cmd, gd, p,l,qsize/2, hist);
-                } else {
-                    for (l = More(q); l != Next(q); l = Next(l))
-                        normal_walktree_sincos(cmd, gd, p,l,qsize/2, hist);
+                            normal_walktree_sincos(cmd, gd, btable, cat2,
+                                                   p,l,qsize/2, hist,
+                                                   nbList, intList);
+                    }
                 }
-            }
-        } else { // ! Type(q) == CELL
-            sumnode_sincos(cmd, gd, p, ((cellptr)q), ((cellptr)q+1), hist);
-        } // ! Type(q) == CELL
-    } // ! p != q
+            } else { // ! Type(q) == CELL
+                sumnode_sincos(cmd, gd, btable, cat2,
+                               p, ((cellptr)q), ((cellptr)q+1), hist,
+                               nbList, intList);
+            } // ! Type(q) == CELL
+        } // ! p != q
+    }
 }
 
-local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
+#ifdef ADDPIVOTNEIGHBOURS
+//B kappa Avg Rmin
+local void sumnode_nblist_omp(struct cmdline_data* cmd,
+                              struct  global_data* gd,
+                              bodyptr *btable,
+                              INTEGER ipmin, INTEGER *ipmax,
+                              int cat1, int cat2,
+                              bodyptr p,
+                              gdhistptr_sincos_omp_kkk hist, int intList)
+{
+    bodyptr q;
+    real dr1;
+    vector dr;
+    int i;
+    int n;
+    real xi;
+    REAL cosphi,sinphi;
+
+    REAL s, sy;
+    vector pr0;
+
+    for (i = 0; i < intList; i++) {
+        q = btable[cat2] + activeInt[i];
+        accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
+        if(dr1>cmd->rminHist) {
+            if (cmd->rminHist==0)
+                n = (int)(cmd->logHistBinsPD*(rlog10(dr1) - rlog10(cmd->rangeN))
+                                  + cmd->sizeHistN) + 1;
+            else
+                n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
+            if (n<=cmd->sizeHistN && n>=1) {
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+                xi = Kappa(q);
+                DOTVP(s, dr, hist->dr0);
+                cosphi = s/(dr1*hist->drpq);
+                CROSSVP(pr0,hist->dr0,Pos(p));
+                DOTVP(sy, dr, pr0);
+                sinphi = rsqrt(1.0 - rsqr(cosphi));
+                if (sy < 0) sinphi *= -1.0;
+                if (rabs(cosphi)>1.0)
+                    verb_log_print(cmd->verbose, gd->outlog,
+                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
+                        cosphi);
+                CHEBYSHEVTUOMP;
+                hist->nbccalcthread += 1;
+            } // ! 1 < n < sizeHistN
+        } // ! dr1 > rminHist
+    } // ! end loop i
+}
+//E
+#endif
+
+local void sumnode_sincos(struct  cmdline_data* cmd,
+                          struct  global_data* gd,
+                          bodyptr *btable, int cat2,
                           bodyptr p, cellptr start, cellptr finish,
-                          gdhistptr_sincos_omp_kkk hist)
+                          gdhistptr_sincos_omp_kkk hist,
+                          int *nbList, int *intList)
 {
     cellptr q;
     real dr1;
@@ -651,6 +928,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
     int n;
     real xi;
     REAL cosphi,sinphi;
+    int iq;
 
     q = start;
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
@@ -658,9 +936,17 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
         if (scanopt(cmd->options, "smooth-pivot")) {
             if (dr1<=gd->rsmooth[0]) {
                 if (Update(q)==TRUE) {
+#ifdef ADDPIVOTNEIGHBOURS
+                    iq = (bodyptr)q-btable[cat2];
+                    activeNb[*nbList]=iq;
+                    *nbList +=1;
+                    if (*nbList > actlenNb)
+                        error("nbList: too many neighbors, %d %d\n",
+                              *nbList, actlenNb);
+#endif
                     Update(q) = FALSE;
                     NbRmin(p) += 1;
-                    KappaRmin(p) += Kappa(q);
+                    KappaRmin(p) += Weight(q)*Kappa(q);
                 } else {
                     NbRminOverlap(p) += 1;
                 }
@@ -668,10 +954,18 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
         }
         //E
         if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            if (scanopt(cmd->options, "smooth-pivot")) {
+                iq = (bodyptr)q-btable[cat2];
+                activeInt[*intList]=iq;
+                *intList +=1;
+                if (*intList > actlenInt)
+                    error("intList: too many neighbors\n");
+            }
+#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
-                    - rlog10(cmd->rangeN))
-                    + cmd->sizeHistN) + 1;
+                    - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
             else
                 n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
@@ -719,8 +1013,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
 
 local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                struct  global_data* gd,
+                               bodyptr *btable, int cat2,
                                bodyptr p, cellptr start, cellptr finish,
-                               gdhistptr_sincos_omp_kkk hist)
+                               gdhistptr_sincos_omp_kkk hist,
+                               int *nbList, int *intList)
 {
     cellptr q;
     real dr1;
@@ -732,9 +1028,17 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
     q = start;
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
         if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            INTEGER iq;
+            iq = (bodyptr)q-btable[cat2];
+            activeInt[*intList]=iq;
+            *intList +=1;
+            if (*intList > actlenInt)
+                error("intList: too many neighbors\n");
+#endif
             if (cmd->rminHist==0)
-                n = (int)(cmd->logHistBinsPD*(rlog10(dr1) - rlog10(cmd->rangeN))
-                                  + cmd->sizeHistN) + 1;
+                n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
+                    - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
             else
                 n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
@@ -783,43 +1087,57 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #ifdef NMultipoles
 local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     struct  global_data* gd,
+                                    bodyptr *btable, int cat2,
                                     bodyptr p, nodeptr q, real qsize,
                                     gdhistptr_sincos_omp_kkk hist,
-                                    gdhistptr_sincos_omp_kkk_N histN)
+                                    gdhistptr_sincos_omp_kkk_N histN,
+                                    int *nbList, int *intList)
 {
     nodeptr l;
     real dr1;
     vector dr;
 
-    if ( ((nodeptr) p) != q ) {
-        if (Type(q) == CELL) {
-            if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-                if (!scanopt(cmd->options, "no-one-ball")) {
-                    accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
-                    if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
-                        sumnode_sincos_cell_N(cmd, gd, p, ((cellptr) q),
-                                            ((cellptr) q+1), hist, histN);
-                    else
+    if (Update(p)) {
+        if ( ((nodeptr) p) != q ) {
+            if (Type(q) == CELL) {
+                if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
+                    if (!scanopt(cmd->options, "no-one-ball")) {
+                        accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
+                        if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
+                            sumnode_sincos_cell_N(cmd, gd, btable, cat2,
+                                                  p, ((cellptr) q),
+                                                  ((cellptr) q+1), hist, histN,
+                                                  nbList, intList);
+                        else
+                            for (l = More(q); l != Next(q); l = Next(l))
+                                normal_walktree_sincos_N(cmd, gd, btable, cat2,
+                                                         p,l,qsize/2,
+                                                         hist, histN,
+                                                         nbList, intList);
+                    } else {
                         for (l = More(q); l != Next(q); l = Next(l))
-                            normal_walktree_sincos_N(cmd, gd, p,l,qsize/2,
-                                                     hist, histN);
-                } else {
-                    for (l = More(q); l != Next(q); l = Next(l))
-                        normal_walktree_sincos_N(cmd, gd, p,l,qsize/2,
-                                                 hist, histN);
+                            normal_walktree_sincos_N(cmd, gd, btable, cat2,
+                                                     p,l,qsize/2,
+                                                     hist, histN,
+                                                     nbList, intList);
+                    }
                 }
-            }
-        } else { // ! Type(q) == CELL
-            sumnode_sincos_N(cmd, gd, p, ((cellptr)q), ((cellptr)q+1),
-                             hist, histN);
-        } // ! Type(q) == CELL
-    } // ! p != q
+            } else { // ! Type(q) == CELL
+                sumnode_sincos_N(cmd, gd, btable, cat2,
+                                 p, ((cellptr)q), ((cellptr)q+1),
+                                 hist, histN, nbList, intList);
+            } // ! Type(q) == CELL
+        } // ! p != q
+    } // ! Update
 }
 
-local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
+local void sumnode_sincos_N(struct  cmdline_data* cmd,
+                            struct  global_data* gd,
+                            bodyptr *btable, int cat2,
                             bodyptr p, cellptr start, cellptr finish,
                             gdhistptr_sincos_omp_kkk hist,
-                            gdhistptr_sincos_omp_kkk_N histN)
+                            gdhistptr_sincos_omp_kkk_N histN,
+                            int *nbList, int *intList)
 {
     cellptr q;
     real dr1;
@@ -828,6 +1146,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
     real xi;
     real xiN;
     REAL cosphi,sinphi;
+    int iq;
 
     q = start;
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
@@ -835,6 +1154,14 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
         if (scanopt(cmd->options, "smooth-pivot")) {
             if (dr1<=gd->rsmooth[0]) {
                 if (Update(q)==TRUE) {
+#ifdef ADDPIVOTNEIGHBOURS
+                    iq = (bodyptr)q-btable[cat2];
+                    activeNb[*nbList]=iq;
+                    *nbList +=1;
+                    if (*nbList > actlenNb)
+                        error("nbList: too many neighbors, %d %d\n",
+                              *nbList, actlenNb);
+#endif
                     Update(q) = FALSE;
                     NbRmin(p) += 1;
                     KappaRmin(p) += Kappa(q);
@@ -845,6 +1172,13 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
         }
         //E
         if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            iq = (bodyptr)q-btable[cat2];
+            activeInt[*intList]=iq;
+            *intList +=1;
+            if (*intList > actlenInt)
+                error("intList: too many neighbors\n");
+#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
                     - rlog10(cmd->rangeN))
@@ -897,10 +1231,13 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd, struct  global_data* gd,
     } // ! accept_body
 }
 
-local void sumnode_sincos_cell_N(struct  cmdline_data* cmd, struct  global_data* gd,
+local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
+                                 struct  global_data* gd,
+                                 bodyptr *btable, int cat2,
                                  bodyptr p, cellptr start, cellptr finish,
                                  gdhistptr_sincos_omp_kkk hist,
-                                 gdhistptr_sincos_omp_kkk_N histN)
+                                 gdhistptr_sincos_omp_kkk_N histN,
+                                 int *nbList, int *intList)
 {
     cellptr q;
     real dr1;
@@ -913,6 +1250,14 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd, struct  global_data*
     q = start;
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
         if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            INTEGER iq;
+            iq = (bodyptr)q-btable[cat2];
+            activeInt[*intList]=iq;
+            *intList +=1;
+            if (*intList > actlenInt)
+                error("intList: too many neighbors\n");
+#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1) - rlog10(cmd->rangeN))
                                   + cmd->sizeHistN) + 1;
@@ -1070,15 +1415,23 @@ local int computeBodyProperties_sincos_kkk(struct  cmdline_data* cmd,
     int m;
     real xi;
 
+// check Weight factor... must be an average of Weights
 #ifdef NONORMHIST
     xi = Weight(p)*Kappa(p);
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        xi = KappaRmin(p)/NbRmin(p);
+    }
+#else
+#ifdef ADDPIVOTNEIGHBOURS
+    xi = Weight(p)*Kappa(p)/nbody;
 #else
     xi = Weight(p)*Kappa(p)/nbody;
     //B kappa Avg Rmin
     if (scanopt(cmd->options, "smooth-pivot")) {
-        xi = NbRmin(p)*Weight(p)*KappaRmin(p)/nbody;
+        xi = (KappaRmin(p)/NbRmin(p))/nbody;
     }
     //E
+#endif
 #endif
 
     for (m=1; m<=cmd->mChebyshev+1; m++)
@@ -1132,8 +1485,10 @@ local int search_init_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
     int n;
     int m;
 
+//    verb_print_debug(1, "\nAqui voy (0)\n");
     for (n = 1; n <= cmd->sizeHistN; n++)
         gd->NhistNNSub[n] = 0.0;
+//    verb_print_debug(1, "\nAqui voy (1)\n");
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         CLRM_ext(gd->NhistZetaMcos[m], cmd->sizeHistN);
         CLRM_ext(gd->NhistZetaMsin[m], cmd->sizeHistN);
@@ -1141,6 +1496,7 @@ local int search_init_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
         CLRM_ext(gd->NhistZetaMcossin[m], cmd->sizeHistN);
         gd->NhistXi[m][n] = 0.0;
     }
+//    verb_print_debug(1, "\nAqui voy (2)\n");
 
     return SUCCESS;
 }
@@ -1228,11 +1584,6 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
     xi = 1.0;
 #else
     xi = 1.0/nbody;
-    //B kappa Avg Rmin
-    if (scanopt(cmd->options, "smooth-pivot")) {
-        xi = NbRmin(p)*1.0/nbody;
-    }
-    //E
 #endif
 
     for (m=1; m<=cmd->mChebyshev+1; m++)
@@ -1289,16 +1640,16 @@ local int print_info(struct cmdline_data* cmd,
                "searchcalc: Using octree-kkk-omp... \n");
 
     if (cmd->usePeriodic==TRUE)
-        error("CheckParameters: can´t have periodic boundaries and TCKKKOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
+        error("CheckParameters: can´t have periodic boundaries and OCTREEKKKOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
             cmd->usePeriodic);
     if (cmd->useLogHist==FALSE)
-        error("CheckParameters: can´t have normal scale hist and TCKKKOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
+        error("CheckParameters: can´t have normal scale hist and OCTREEKKKOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
             cmd->useLogHist);
     if (cmd->computeTPCF==FALSE)
-        error("CheckParameters: can´t have computeTPCF=false and TCKKKOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
+        error("CheckParameters: can´t have computeTPCF=false and OCTREEKKKOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
             cmd->computeTPCF);
 #if NDIM == 2
-    error("CheckParameters: TCKKKOMP definition works only in a 3D unit sphere")
+error("CheckParameters: OCTREEKKKOMP definition works only in a 3D unit sphere")
 #endif
 #ifdef NMultipoles
     verb_print(cmd->verbose, "with NMultipoles... \n");
@@ -1307,16 +1658,18 @@ local int print_info(struct cmdline_data* cmd,
 #endif
 #ifdef NONORMHIST
     verb_print(cmd->verbose, "with NONORMHIST... \n");
-    if (scanopt(cmd->options, "normalize-HistZeta"))
-        verb_print(cmd->verbose, "with option normalize-HistZeta...\n");
+    if (scanopt(cmd->options, "no-normalize-HistZeta"))
+        verb_print(cmd->verbose, "with option no-normalize-HistZeta...\n");
 #else
     verb_print(cmd->verbose, "without NONORMHIST... \n");
 #endif
 #ifdef POLARAXIS
     verb_print(cmd->verbose, "with POLARAXIS... \n");
 #endif
-//    if (scanopt(cmd->options, "behavior-ball"))
-//        verb_print(cmd->verbose, "with option behavior-ball... \n");
+#ifdef ADDPIVOTNEIGHBOURS
+    if (scanopt(cmd->options, "smooth-pivot"))
+        verb_print(cmd->verbose, "with ADDPIVOTNEIGHBOURS... \n");
+#endif
     if (scanopt(cmd->options, "no-one-ball"))
         verb_print(cmd->verbose, "with option no-one-ball... \n");
     if (scanopt(cmd->options, "smooth-pivot"))
@@ -1329,3 +1682,9 @@ local int print_info(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
+
+
+#ifdef ADDPIVOTNEIGHBOURS
+#undef FACTIVENB
+#undef FACTIVEINT
+#endif

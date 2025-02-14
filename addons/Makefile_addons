@@ -73,6 +73,7 @@ include $(MACHINES_DIR)/addons/octree_kkk_omp/Makefile_octree_kkk_omp
 endif
 #
 
+
 #E
 
 #
@@ -146,5 +147,22 @@ ifeq ($(POLARAXISON),1)
 OPT2 += -DPOLARAXIS
 endif
 #
+
+# Compute and add pivot neighbours
+ifeq ($(ADDPIVOTNEIGHBOURSON),1)
+OPT2 += -DADDPIVOTNEIGHBOURS
+endif
+
+# To remove overcounting pairs:
+ifeq ($(OVERCOUNTINGON),1)
+OPT2 += -DOVERCOUNTING
+endif
+
+# SAVERESTORE
+# For save/restore options
+ifeq ($(SAVERESTOREON),1)
+include $(MACHINES_DIR)/addons/save_restore/Makefile_save_restore
+endif
+
 #E
 ############################

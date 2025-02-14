@@ -5,8 +5,9 @@
 #define _startrun_octree_kkk_omp_10_h
 
 #ifdef NMultipoles
+// NMultipoles Deactivated in KDTREEOMP
 //B Already allocated in startrun_kdtree_omp_10.h
-#ifndef KDTREEOMP
+//#ifndef KDTREEOMP
     gd->NhistNNSub = dvector(1,cmd->sizeHistN);
     bytes_tot_local += cmd->sizeHistN*sizeof(real);
 
@@ -36,8 +37,17 @@
                 dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
             2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-#endif
+//#endif // NMultipoles Deactivated in KDTREEOMP
 //E
 #endif // ! NMultipoles
+
+// 2pcf
+gd->histNNSubN2pcf = dvector(1,cmd->sizeHistN);
+//B kappa Avg Rmin
+gd->histNNSubN2pcftotal = dvector(1,cmd->sizeHistN);
+//E
+//
+gd->histN2pcf = dvector(1,cmd->sizeHistN);
+
 
 #endif	// ! _startrun_octree_kkk_omp_10_h

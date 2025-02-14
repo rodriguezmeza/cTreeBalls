@@ -15,7 +15,7 @@
 
 local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int);
 local cellptr makecell(struct  cmdline_data* cmd, struct  global_data* gd, int);
-local int loadbody(struct  cmdline_data* cmd, struct  global_data* gd, bodyptr, int);
+local int loadbody(struct  cmdline_data*, struct  global_data*, bodyptr, int);
 local int subindex(bodyptr, cellptr);
 local void hackCellProp(struct  cmdline_data* cmd, struct  global_data* gd, 
                         cellptr, real, int, int);
@@ -79,7 +79,8 @@ local char cellsfilePath[MAXLENGTHOFFILES];
 local FILE *outcells;
 
 global int MakeTree(struct  cmdline_data* cmd, 
-                    struct  global_data* gd, bodyptr btab, INTEGER nbody, int ifile)
+                    struct  global_data* gd,
+                    bodyptr btab, INTEGER nbody, int ifile)
 {
     double cpustart;
     bodyptr p;
@@ -233,8 +234,6 @@ local int smoothBodies(struct  cmdline_data* cmd,
                        struct  global_data* gd, bodyptr btab, INTEGER nbody)
 {
     bodyptr p;
-//    bodyptr q;
-//    int i;
 
     if (!gd->flagSmooth || !gd->flagSetNbNoSel) {
         if ( (scanopt(cmd->options, "smooth")
@@ -455,12 +454,12 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                gd->scanLevelMin[0], gd->rminCell[0], gd->rminCell[1]);
     if (gd->rminCell[0] > gd->deltaRmax)
         verb_print(cmd->verbose,
-                   "Warning! Cell size at scanLevelMin is greatear than deltaRmax: %e %e\n",
-                   gd->rminCell[0], gd->deltaRmax);
+        "Warning! Cell size at scanLevelMin is greatear than deltaRmax: %e %e\n",
+        gd->rminCell[0], gd->deltaRmax);
     if (gd->rminCell[0] > gd->deltaRmin)
         verb_print(cmd->verbose,
-                   "Warning! Cell size at scanLevelMin is greatear than deltaRmin: %e %e\n",
-                   gd->rminCell[0], gd->deltaRmin);
+        "Warning! Cell size at scanLevelMin is greatear than deltaRmin: %e %e\n",
+        gd->rminCell[0], gd->deltaRmin);
     for (i=1; i<=cmd->sizeHistN-1; i++)
         if (gd->rminCell[0] < gd->ddeltaRV[i])
             break;
@@ -470,17 +469,19 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
     
     if (gd->scanLevelMin[0] == 0) {
         gd->rminCell[1] = cmd->rangeN;
-        verb_print(cmd->verbose, "\tfixing rminCell[1] to: %g\n", gd->rminCell[1]);
+        verb_print(cmd->verbose,
+                   "\tfixing rminCell[1] to: %g\n", gd->rminCell[1]);
     } else {
         gd->rminCell[1] = gd->deltaRV[i+1];
-        verb_print(cmd->verbose, "\tfixing rminCell[1] to: %g\n", gd->rminCell[1]);
+        verb_print(cmd->verbose,
+                   "\tfixing rminCell[1] to: %g\n", gd->rminCell[1]);
         if (gd->rminCell[1]>cmd->rangeN)
             verb_print(cmd->verbose,
                        "Warning! rminCell[1] is greatear than rangeN\n");
     }
     verb_print(cmd->verbose,
-        "Cell size at scanLevelMin (%d) and scale factor (Modified values): %e %e\n",
-        gd->scanLevelMin[0], gd->rminCell[0], gd->rminCell[1]);
+    "Cell size at scanLevelMin (%d) and scale factor (Modified values): %e %e\n",
+    gd->scanLevelMin[0], gd->rminCell[0], gd->rminCell[1]);
     //E Root nodes
     
     if (gd->infilefmt_int == INTAKAHASI)
@@ -498,6 +499,17 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
     }
 #endif // ! BALLS
 
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        if (cmd->useLogHist) {
+            verb_print(cmd->verbose,
+                       "deltaRV min and max: %lg %lg\n",
+                       gd->deltaRmin, gd->deltaRmax);
+        } else {
+            verb_print(cmd->verbose,
+                       "deltaR=%lf normal scale):\n",gd->deltaR);
+        }
+    }
+
 //B Some useful conversion info:
 // rad = (pi/(180*60)) arc minutes
 // (pi/(180*60)) = 0.000290888208666
@@ -511,46 +523,63 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 // plots will be given in arcmin.
 //E
 // For unit sphere rsmooth are given in arcmin. Here we transform to radians
+    if (scanopt(cmd->options, "smooth-pivot")) {
 #define ARCMINTORAD   0.000290888208666
-    if (strnull(cmd->rsmooth)) {
-        if (scanopt(cmd->options, "fix-rsmooth")) {
-            gd->rsmooth[0] = 0.05*cmd->rangeN;      // 5% of rangeN
-                                                    //  200*0.05 -> 0.00316602 rad
-            verb_print(cmd->verbose, "\n\trsmooth is set to: %g\n", gd->rsmooth[0]);
-            if (gd->rsmooth[0]>0.1*cmd->rangeN) {
+        if (strnull(cmd->rsmooth)) {
+            if (scanopt(cmd->options, "fix-rsmooth")) {
+                //B Leave it as a refereence: green line
+//            gd->rsmooth[0] = 0.00416666665;           // (0.25 arcmin)/60
+                //E
+                gd->rsmooth[0] = 0.01*cmd->rangeN;  // 1% of rangeN
+                                                    // 200*0.01 -> 0.00058178 rad
                 verb_print(cmd->verbose,
-                    "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
-                    gd->rsmooth[0],0.1*cmd->rangeN);
-            }
-        } else {
-            if (scanopt(cmd->options, "default-rsmooth")) {
-                gd->rsmooth[0] = gd->Rcell[gd->irsmooth-1];
-            } else {
-                gd->rsmooth[0] = gd->Rcell[gd->tdepthTable[ifile]-1];
-                verb_print(cmd->verbose, "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
-                if (gd->rsmooth[0]>0.1*cmd->rangeN) {
+                           "\n\trsmooth is set to: %g\n", gd->rsmooth[0]);
+                if (gd->rsmooth[0]>0.05*cmd->rangeN) {
                     verb_print(cmd->verbose,
-                    "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
-                               gd->rsmooth[0],0.1*cmd->rangeN);
-                    gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
+            "Warning! rsmooth is greatear than 0.05*rangeN (%g %g)... fixing\n",
+                               gd->rsmooth[0],0.05*cmd->rangeN);
+                }
+            } else {
+                if (scanopt(cmd->options, "default-rsmooth")) {
+                    gd->rsmooth[0] = gd->Rcell[gd->irsmooth-1];
+                } else {
+                    gd->rsmooth[0] = gd->Rcell[gd->tdepthTable[ifile]-1];
                     verb_print(cmd->verbose,
                                "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+                    if (gd->rsmooth[0]>0.05*cmd->rangeN) {
+                        verb_print(cmd->verbose,
+            "Warning! rsmooth is greatear than 0.05*rangeN (%g %g)... fixing\n",
+                                   gd->rsmooth[0],0.05*cmd->rangeN);
+                        gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
+                        verb_print(cmd->verbose,
+                                   "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+                    }
                 }
             }
-        }
-    } else {
-        gd->rsmooth[0] *= ARCMINTORAD;
-        if (gd->rsmooth[0]>0.1*cmd->rangeN) {
-            verb_print(cmd->verbose,
-                "Warning! rsmooth is greatear than 0.1*rangeN (%g %g)... fixing\n",
-                gd->rsmooth[0],0.1*cmd->rangeN);
-            gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
-            verb_print(cmd->verbose, "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
         } else {
-            verb_print(cmd->verbose, "\trsmooth is set to: %g\n", gd->rsmooth[0]);
+            // For Takahasi Nside 4096, rsmooth = 3 arcmin is still a good value
+            gd->rsmooth[0] *= ARCMINTORAD;
+            if (gd->rsmooth[0]>0.05*cmd->rangeN) {
+                verb_print(cmd->verbose,
+            "Warning! rsmooth is greatear than 0.05*rangeN (%g %g)... fixing\n",
+                           gd->rsmooth[0],0.05*cmd->rangeN);
+                gd->rsmooth[0] = 0.75*gd->Rcell[gd->tdepthTable[ifile]-1];
+                verb_print(cmd->verbose,
+                           "\tfixing rsmooth to: %g\n", gd->rsmooth[0]);
+            } else {
+                verb_print(cmd->verbose,
+                           "\trsmooth is set to: %g\n", gd->rsmooth[0]);
+            }
         }
-    }
 #undef ARCMINTORAD
+    } else // ! smooth-pivot
+        gd->rsmooth[0] = 0;                         // setting a safe value
+
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        verb_print(cmd->verbose,
+                   "rsmooth and rminHist %% of rangeN: %lg %lg\n",
+                   100*gd->rsmooth[0]/cmd->rangeN, 100*cmd->rminHist/cmd->rangeN);
+    }
 
     return SUCCESS;
 }

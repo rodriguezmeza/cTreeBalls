@@ -1,0 +1,19 @@
+# ----- MAKE FILE module definitions (save_restore) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(SAVERESTOREON),1)
+OPT2 += -DSAVERESTORE
+SAVERESTORE = ../addons/save_restore/
+vpath %.c ./addons/save_restore/
+#CCFLAG += -DSAVERESTORE
+#LDFLAGS += -DSAVERESTORE
+INCLUDES += -I$(SAVERESTORE)
+HEADERFILES = $(wildcard $(SAVERESTORE)/*.h)
+EXTERNAL +=
+endif
+#
+#E

@@ -19,4 +19,7 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
 #endif
 #endif // ! NMultipoles
 
+local int PrintHistN2pcf(struct  cmdline_data* cmd, struct  global_data* gd);
+
+
 #endif	// ! _cballs_octree_kkk_omp_00_h

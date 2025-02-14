@@ -224,14 +224,14 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
             }
             gd->nbbcalc += nbbcalcthread;
             gd->nbccalc += nbccalcthread;
+            //B kappa Avg Rmin
+            ipfalse += ipfalsethreads;
+            icountNbRmin += icountNbRminthread;
+            icountNbRminOverlap += icountNbRminOverlapthread;
+            //E
         }
         search_free_sincos_omp(cmd, gd, &hist);
 
-//B kappa Avg Rmin
-        ipfalse += ipfalsethreads;
-        icountNbRmin += icountNbRminthread;
-        icountNbRminOverlap += icountNbRminOverlapthread;
-//E
     } // end pragma omp parallel
 
 
@@ -424,29 +424,31 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         }
     }
 
-    verb_print(cmd->verbose, "tree-omp-sincos: p falses found = %ld\n",ipfalse);
-//B kappa Avg Rmin
-    verb_print(cmd->verbose,
-               "tree-omp-sincos: count NbRmin found = %ld\n",icountNbRmin);
-    verb_print(cmd->verbose,
-               "tree-omp-sincos: count overlap found = %ld\n",icountNbRminOverlap);
-
-    bodyptr pp;
-    INTEGER ifalsecount;
-    ifalsecount = 0;
-    INTEGER itruecount;
-    itruecount = 0;
-    for (pp = btable[cat1] + ipmin -1; pp < btable[cat1] + ipmax[cat1]; pp++) {
-        if (Update(pp) == FALSE) {
-            ifalsecount++;
-        } else {
-            itruecount++;
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        verb_print(cmd->verbose, "tree-omp-sincos: p falses found = %ld\n",ipfalse);
+        //B kappa Avg Rmin
+        verb_print(cmd->verbose,
+                   "tree-omp-sincos: count NbRmin found = %ld\n",icountNbRmin);
+        verb_print(cmd->verbose,
+                   "tree-omp-sincos: count overlap found = %ld\n",icountNbRminOverlap);
+        
+        bodyptr pp;
+        INTEGER ifalsecount;
+        ifalsecount = 0;
+        INTEGER itruecount;
+        itruecount = 0;
+        for (pp = btable[cat1] + ipmin -1; pp < btable[cat1] + ipmax[cat1]; pp++) {
+            if (Update(pp) == FALSE) {
+                ifalsecount++;
+            } else {
+                itruecount++;
+            }
         }
+        verb_print(cmd->verbose, "tree-omp-sincos: p falses found = %ld\n",ifalsecount);
+        verb_print(cmd->verbose, "tree-omp-sincos: p true found = %ld\n",itruecount);
+        verb_print(cmd->verbose, "tree-omp-sincos: total = %ld\n",itruecount+ifalsecount);
+        //E
     }
-    verb_print(cmd->verbose, "tree-omp-sincos: p falses found = %ld\n",ifalsecount);
-    verb_print(cmd->verbose, "tree-omp-sincos: p true found = %ld\n",itruecount);
-    verb_print(cmd->verbose, "tree-omp-sincos: total = %ld\n",itruecount+ifalsecount);
-//E
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print(cmd->verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);

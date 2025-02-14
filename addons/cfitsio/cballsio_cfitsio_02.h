@@ -7,10 +7,12 @@
 
 #include "fitsio.h"
 
-local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd, struct  global_data* gd,
-                            string filename, int ifile, fitsfile *fptr);
-local int inputdata_cfitsio_xyz(struct cmdline_data* cmd, struct  global_data* gd,
-                            string filename, int ifile, fitsfile *fptr);
+local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
+                                   struct  global_data* gd,
+                                   string filename, int ifile, fitsfile *fptr);
+local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
+                                struct  global_data* gd,
+                                string filename, int ifile, fitsfile *fptr);
 
 local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
@@ -58,13 +60,14 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
             fits_read_record(fptr, ii, card, &status); // read keyword
             printf("%s\n", card);
         }
-        printf("END\n\n");                          // terminate listing with END */
+        printf("END\n\n");                          // terminate listing
+                                                    //  with END
         fits_get_num_rows(fptr, &cmd->nbody, &status);
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
-                   cmd->nbody, ncols);
+            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
+            cmd->nbody, ncols);
         if (cmd->nbody < 1)
             error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
 
@@ -95,7 +98,7 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
             }
         }
         verb_print(cmd->verbose,"\n");
-    } else { // ! fits-header-info
+    } else { // ! header-info
         for (ii = 1; ii <= nkeys; ii++) {
             fits_read_record(fptr, ii, card, &status); // read keyword
         }

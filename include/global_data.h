@@ -35,7 +35,6 @@ struct global_data{
 
 	char mode[2];
 
-    int searchmethod_int;
 //B Tree
     INTEGER ncell;
     int tdepth;
@@ -133,7 +132,6 @@ struct global_data{
 //E Histograms arrays
 // -----------------------------------
 
-    real rCutSq;
     int searchMethod_int;
 
     real deltaR;
@@ -142,7 +140,6 @@ struct global_data{
     real *deltaRV;
     real *ddeltaRV;
 
-    real rrRange;
     real deltaTheta;
 
 //B File pointers:
@@ -168,8 +165,10 @@ struct global_data{
     string input_comment;
     string output_comment;
 
+//B save-restore
     int stopflag;
     INTEGER ip;
+//E
     real cputotalinout;
     real cputotal;
 
@@ -217,7 +216,7 @@ struct global_data{
 // Root nodes:
     int nnodescanlev_root;
 #define MAXLEVEL  32
-    real Rcell[MAXLEVEL];
+    real Rcell[MAXLEVEL];           // used only in treeload's scanLevel routine
 #undef MAXLEVEL
 //
     char bodiesfilePath[MAXLENGTHOFFILES];
@@ -226,7 +225,11 @@ struct global_data{
     bool flagSmooth;
     bool flagSetNbNoSel;
 //B BUCKET
-    real rminCell[2];
+    real rminCell[2];               // used only in treeload's scanLevel routine
+                                    //  and in search_balls_omp;
+                                    //      search_balls_kk_omp;
+                                    //      search_octree_kk_balls4_omp;
+                                    //      search_octree_kkk_balls4_omp;
 //E
 
     real rsmooth[MAXITEMS];

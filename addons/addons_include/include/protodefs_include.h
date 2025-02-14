@@ -32,6 +32,10 @@
 #include "protodefs_octree_kkk_omp.h"
 #endif
 
+#ifdef OCTREEKKKCEXPOMP
+#include "protodefs_octree_kkk_cexp_omp.h"
+#endif
+
 #ifdef OCTREEKKKBALLSOMP
 #include "protodefs_octree_kkk_balls_omp.h"
 #endif
@@ -42,6 +46,10 @@
 
 #ifdef TC3PCFDIRECTOMP
 #include "protodefs_tc_3pcf_direct_omp.h"
+#endif
+
+#ifdef SAVERESTORE
+#include "protodefs_save_restore.h"
 #endif
 
 /*

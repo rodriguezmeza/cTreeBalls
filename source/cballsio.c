@@ -1074,8 +1074,18 @@ void pix2ang(long pix, int nside, double *theta, double *phi)
 //E End:: Reading Takahasi simulations
 
 
-int StartOutput(struct cmdline_data *cmd)
+int StartOutput(struct cmdline_data *cmd, struct  global_data* gd)
 {
+    //B clear some char arrays
+    gd->logfilePath[0] = '\0';
+    gd->fpfnameOutputFileName[0] = '\0';
+    gd->nodesfilePath[0] = '\0';
+    gd->bodiesfilePath[0] = '\0';
+
+    gd->fnameData_kd[0] = '\0';
+    gd->fnameOut_kd[0] = '\0';
+    //E
+
     outfilefmt_string_to_int(cmd->outfilefmt, &outfilefmt_int);
 
     if (cmd->verbose>=VERBOSENORMALINFO)
@@ -1253,18 +1263,24 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     double cpustart = CPUTIME;
 
     int ndefault = 0;
-    int ipos;
+    int *ipos;
     char *dp1, *dp2;
     int lenDir = strlen(cmd->rootDir);
-    for (int i; i< lenDir; i++) {
+    int i;
+    
+    int nslashs = 3;
+    ipos = (int*) malloc((nslashs)*sizeof(int));
+
+    for (i=0; i< lenDir; i++) {
         if(cmd->rootDir[i] == '/') {
-            ipos = i+1;
+            ipos[ndefault] = i+1;
             ndefault++;
         }
     }
-    if (ndefault>1)
-        error("setFilesDirs: more '/' than 1 in 'rootDir=%s'. Use only 1 or none\n",
-              cmd->rootDir);
+    if (ndefault>nslashs)
+        error(
+        "setFilesDirs: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
+        nslashs, cmd->rootDir, nslashs);
 
     if (ndefault == 0) {
         sprintf(gd->outputDir,cmd->rootDir);
@@ -1272,13 +1288,14 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
         verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
         system(buf);
     } else {
-        dp1 = (char*) malloc((ipos-1)*sizeof(char));
-        strncpy(dp1, cmd->rootDir, ipos-1);
-        dp2 = (char*) malloc((lenDir-ipos)*sizeof(char));
-        strncpy(dp2, cmd->rootDir + ipos, lenDir-ipos);
+        for (i=0; i<ndefault; i++) {
+        dp1 = (char*) malloc((ipos[i]-1)*sizeof(char));
+        strncpy(dp1, cmd->rootDir, ipos[i]-1);
+        dp2 = (char*) malloc((lenDir-ipos[i])*sizeof(char));
+        strncpy(dp2, cmd->rootDir + ipos[i], lenDir-ipos[i]);
         verb_print_q(2,cmd->verbose,
                     "setFilesDirs: '/' counts %d pos %d and %s %s\n",
-                    ndefault, ipos, dp1, dp2);
+                    ndefault, ipos[i], dp1, dp2);
 
         sprintf(gd->outputDir,cmd->rootDir);
         sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",dp1,dp1);
@@ -1287,11 +1304,18 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
         sprintf(buf,"if [ ! -d %s ]; then mkdir %s/%s; fi",gd->outputDir,dp1,dp2);
         verb_print_q(3,cmd->verbose_log,"\nsystem: %s\n",buf);
         system(buf);
+        }
     }
     gd->cputotalinout += CPUTIME - cpustart;
 
-    sprintf(gd->fpfnameOutputFileName,"%s/%s%s%s",
-            cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES);
+
+//B    fpfnameOutputFileName               = Output/.txt
+    if (!strnull(gd->fpfnameOutputFileName)) {
+        sprintf(gd->fpfnameOutputFileName,"%s/%s%s%s",
+                cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES);
+    }
+//E
+
     sprintf(gd->fpfnamehistNNFileName,"%s/%s%s%s",
             cmd->rootDir,cmd->histNNFileName,cmd->suffixOutFiles,EXTFILES);
     sprintf(gd->fpfnamehistCFFileName,"%s/%s%s%s",
@@ -1310,6 +1334,13 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
             cmd->rootDir,"m",cmd->histZetaFileName,"M",cmd->suffixOutFiles);
     sprintf(gd->fpfnameCPUFileName,"%s/cputime%s%s",
             cmd->rootDir,cmd->suffixOutFiles,EXTFILES);
+    
+    free(ipos);
+
+#ifdef ADDONS
+#include "cballsio_include_09b.h"
+#endif
+
 }
 
 
@@ -1364,8 +1395,8 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
                cpuTotal, PRNUNITOFTIMEUSED);
         if (scanopt(cmd->options, "measure-cputime")) {
                 outstr = stropen(gd->fpfnameCPUFileName, "a");
-                fprintf(outstr,"%12.4e %12.4e %12.4e\n",
-                        (double) cmd->nbody, cpuTotal, gd->cpusearch);
+            fprintf(outstr,"%g %g %g\n",
+                    (double) cmd->nbody, cpuTotal, gd->cpusearch);
                 fclose(outstr);
         }
         printf("Final real time: %ld",

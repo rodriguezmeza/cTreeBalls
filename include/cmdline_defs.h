@@ -44,7 +44,11 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
+#ifdef ADDONS
+#include "cmdline_defs_include_00.h"
+#else
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
+#endif
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
     "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
@@ -87,7 +91,8 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 
     //B Set of parameters needed to construct a test model
     "seed=123",                         ";Random number seed to test run or useful to change a random region in Takahasi simulations",
-    "testmodel=simple-cubic-random",    ";Test model name to analyse", ":tstmodel",
+//    "testmodel=simple-cubic-random",    ";Test model name to analyse", ":tstmodel",
+    "testmodel=",                       ";Test model name to analyse: simple-cubic-random, unit-sphere-random,...", ":tstmodel",
     "nbody=16384",                      ";Number of points to test",
     "lengthBox=10000",                  ";Length of the box to test", ":lbox",
     //E

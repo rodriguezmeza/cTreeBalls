@@ -33,11 +33,11 @@ int SetNumberThreads(struct cmdline_data *cmd);
 //#endif
 //E
 
-int StartOutput(struct cmdline_data *);
-global void checkstop(void);
+int StartOutput(struct cmdline_data *, struct  global_data*);
+//global void checkstop(void);
 int EndRun(struct cmdline_data* cmd, struct  global_data* gd);
-global void savestate(string);
-global int restorestate(string);
+//global void savestate(string);
+//global int restorestate(string);
 global int startrun_memoryAllocation(struct cmdline_data* cmd, struct  global_data* gd);
 
 int TestData(struct cmdline_data* cmd, struct  global_data* gd);
@@ -134,6 +134,9 @@ global int ThreadCount(struct cmdline_data* cmd, struct  global_data* gd, INTEGE
 global int spherical_to_cartesians(struct cmdline_data* cmd, struct  global_data* gd,
                                    real, real, vector);
 global int spherical_periodic_condition(real *, real *, real *, real *);
+
+
+global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd);
 //E
 
 

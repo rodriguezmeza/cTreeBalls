@@ -43,16 +43,19 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
     model_string_to_int(cmd, gd, cmd->testmodel, &model_int);
     switch (model_int){
         case SIMPLECUBIC:
-            verb_print(cmd->verbose, "\nUsing simple cubic test model");
+            verb_print(cmd->verbose, "\nUsing simple cubic test model\n");
+            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
             testdata_sc(cmd, gd);
             break;
         case SIMPLECUBICRANDOM:
             verb_print(cmd->verbose, "\nUsing simple cubic random test model");
+            verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
             testdata_sc_random(cmd, gd);
             break;
 #if defined(THREEDIM)
         case UNITSPHERE:
-            verb_print(cmd->verbose, "\nUsing unit sphere random test model");
+            verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
+            verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
 #ifdef NR3
             testdata_unit_sphere_random_nr3(cmd, gd);
 #else
@@ -62,24 +65,65 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
         case NULLMODEL:
             verb_print(cmd->verbose, 
-                       "\nNull test model. Using simple cubic random test model");
-            testdata_sc_random(cmd, gd);
+                       "\nNull test model. Using default test model");
+            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
+//            testdata_sc_random(cmd, gd);
+            if (cmd->usePeriodic==TRUE) {
+                verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
+                testdata_sc_random(cmd, gd);
+            } else {
+                if (cmd->computeTPCF==TRUE) {
+                    verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
+                    testdata_unit_sphere_random(cmd, gd);
+                } else {
+                    verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
+                    testdata_sc_random(cmd, gd);
+                }
+            }
             break;
         case UNKNOWN:
-            verb_print(cmd->verbose, "\nUnknown test model. Using simple cubic random test model");
-            testdata_sc_random(cmd, gd);
+            verb_print(cmd->verbose,
+                       "\nUnknown test model. Using default test model");
+            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
+//            testdata_sc_random(cmd, gd);
+            verb_print(cmd->verbose, "\nDefault test model type %s", cmd->testmodel);
+            if (cmd->usePeriodic==TRUE) {
+                verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
+                testdata_sc_random(cmd, gd);
+            } else {
+                if (cmd->computeTPCF==TRUE) {
+                    verb_print(cmd->verbose, "\nUsing unit sphere random test model");
+                    verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
+                    testdata_unit_sphere_random(cmd, gd);
+                } else {
+                    verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
+                    testdata_sc_random(cmd, gd);
+                }
+            }
             break;
         default:
-            verb_print(cmd->verbose, "\nUnknown test model type %s", cmd->testmodel);
-            verb_print(cmd->verbose, "\nUsing simple cubic random test model");
-            testdata_sc_random(cmd, gd);
+            verb_print(cmd->verbose, "\nDefault test model type %s", cmd->testmodel);
+            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
+            if (cmd->usePeriodic==TRUE) {
+                verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
+                testdata_sc_random(cmd, gd);
+            } else {
+                if (cmd->computeTPCF==TRUE) {
+                    verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
+                    testdata_unit_sphere_random(cmd, gd);
+                } else {
+                    verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
+                    testdata_sc_random(cmd, gd);
+                }
+            }
     }
 
     return SUCCESS;
 }
 
-local int model_string_to_int(struct  cmdline_data* cmd, struct  global_data* gd,
-                               string model_str,int *model_int)
+local int model_string_to_int(struct  cmdline_data* cmd,
+                              struct  global_data* gd,
+                              string model_str, int *model_int)
 {
     *model_int = -1;
     if (strcmp(model_str,"simple-cubic") == 0)          *model_int=SIMPLECUBIC;
@@ -97,13 +141,16 @@ local int model_string_to_int(struct  cmdline_data* cmd, struct  global_data* gd
         "\n\tmodel_string_to_int: default test model (simple-cubic-random)...\n");
     }
     if (*model_int == -1) {
-        *model_int=SIMPLECUBICRANDOM;
+        *model_int=UNKNOWN;
         gd->model_comment =
-           "Unknown test model ... running deafult (simple-cubic-random)";
+        "Unknown test model ... running deafult model";
+//        "Unknown test model ... running deafult (simple-cubic-random)";
         verb_log_print(cmd->verbose_log, gd->outlog,
             "\n\nmodel_string_to_int: Unknown test model... %s",cmd->testmodel);
+//        verb_log_print(cmd->verbose_log, gd->outlog,
+//            "\n\trunning default test model (simple-cubic-random)...\n");
         verb_log_print(cmd->verbose_log, gd->outlog,
-            "\n\trunning default test model (simple-cubic-random)...\n");
+            "\n\trunning default test model...\n");
     }
 
     return SUCCESS;
@@ -245,6 +292,11 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
 local int testdata_unit_sphere_random(struct  cmdline_data* cmd, 
                                       struct  global_data* gd)
 {
+// Set of standard parameters to define histogram bins for a unit-sphere
+//  rangeN =    0.0633205   # 8 arcmin aprox
+//  rminHist =  0.00213811  # 200 arcmin aprox
+//  sizeHistN = 20
+//
     bodyptr p;
     real tmass;
     real phi, theta;
@@ -255,6 +307,16 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
     gd->Box[0] = 2.0;
     gd->Box[1] = 2.0;
     gd->Box[2] = 2.0;
+    
+    cmd->sizeHistN =    20;
+    cmd->rangeN =       0.0633205;
+    cmd->rminHist =     0.00213811;
+    verb_print(cmd->verbose,
+               "fixing sizeHistN, rangeN and rminHist for a unit-sphere to:");
+    verb_print(cmd->verbose,
+               "%d %g %g\n",
+               cmd->sizeHistN, cmd->rangeN, cmd->rminHist);
+
 
     int ifile=0;
     gd->nbodyTable[ifile] = cmd->nbody;

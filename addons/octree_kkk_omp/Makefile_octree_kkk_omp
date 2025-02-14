@@ -12,8 +12,10 @@ OCTREEKKKOMP = ../addons/octree_kkk_omp/
 vpath %.c ./addons/octree_kkk_omp/
 INCLUDES += -I$(OCTREEKKKOMP)
 HEADERFILES += $(wildcard $(OCTREEKKKOMP)/*.h)
-EXTERNAL += search_octree_kkk_omp.o
+EXTERNAL += search_octree_kkk_omp.o search_octree_kk_omp.o search_octree_nn_omp.o search_octree_kk_balls4_omp.o
 #
+# search_octree_nn_omp.o
+# search_octree_kk_balls4_omp
 endif
 
 #E

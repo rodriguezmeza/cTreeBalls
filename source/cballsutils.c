@@ -138,23 +138,6 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     int m;
     real xi, xi_2p;
 
-#ifdef NONORMHIST
-    if (Type(p) == BODY) {
-        xi = Kappa(p);
-        xi_2p = Kappa(p);
-        //B kappa Avg Rmin
-        if (scanopt(cmd->options, "smooth-pivot")) {
-            xi_2p = KappaRmin(p);
-            xi = NbRmin(p)*xi_2p;
-        }
-        //E
-    } else if (Type(p) == BODY3) {
-#ifdef BODY3ON
-        xi = Nbb(p)*Kappa(p);
-        xi_2p = Nbb(p)*Kappa(p);
-#endif
-    }
-#else // ! NONORMHIST
     //B Normalization of histograms
     if (Type(p) == BODY) {
         xi = Kappa(p)/nbody;
@@ -172,25 +155,15 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
 #endif
     }
     //E Normalization of histograms
-#endif // ! NONORMHIST
 
     if (cmd->computeTPCF) {
         for (m=1; m<=cmd->mChebyshev+1; m++)
-#ifdef NONORMHIST
-            //B Normalization of histograms
-            for (n=1; n<=cmd->sizeHistN; n++) {
-                hist->histXithreadcos[m][n] /= 1.0;
-                hist->histXithreadsin[m][n] /= 1.0;
-            }
-            //E
-#else
             //B Normalization of histograms
             for (n=1; n<=cmd->sizeHistN; n++) {
                 hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
                 hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
             }
             //E
-#endif
         for (m=1; m<=cmd->mChebyshev+1; m++){
             OUTVP_ext(hist->xiOUTVPcos,
                       hist->histXithreadcos[m], hist->histXithreadcos[m], cmd->sizeHistN);
@@ -256,14 +229,6 @@ global int search_init_gd_hist(struct  cmdline_data* cmd, struct  global_data* g
     }
     
     if (cmd->computeTPCF) {
-/*        for (n1 = 1; n <= cmd->sizeHistN; n++) {
-            for (n2 = 1; m <= cmd->sizeHistN; m++) {
-                for (l = 1; l <= cmd->sizeHistTheta; l++) {
-                    gd->histZetaGt1t2phi[l][n1][n2] = 0.0;
-                }
-            }
-        }
-*/
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
             CLRM_ext(gd->histZetaGmRe[m], cmd->sizeHistN);
             CLRM_ext(gd->histZetaGmIm[m], cmd->sizeHistN);
@@ -298,6 +263,7 @@ global int search_init_gd_hist_sincos(struct  cmdline_data* cmd, struct  global_
         gd->histXi2pcf[n] = 0.0;
         if (cmd->computeTPCF) {
             for (m = 1; m <= cmd->mChebyshev+1; m++)
+                // HERE MUST BE gd->histXicos and gd->histXisin
                 gd->histXi[m][n] = 0.0;
         }
     }
@@ -632,6 +598,42 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, 
 
     return SUCCESS;
 }
+
+//B section of several routines to do pre/post processing
+
+// routine to compute covariance matriz of correlations of Takahashi simulations
+global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
+{
+    char namebuf[256];
+    struct stat buf;
+    stream outstr;
+    char inputfile[MAXLENGTHOFFILES];
+    int nrealization = 0;
+    int status = 1;
+
+    do {
+        //B we use rootDir string to construct input file names
+        sprintf(inputfile,"%s/%s%03d/%s/",
+                cmd->rootDir,"r",nrealization,cmd->suffixOutFiles);
+        sprintf(namebuf, "%s%s%s", inputfile, cmd->outfile, EXTFILES);
+        //E
+        verb_print(cmd->verbose,
+                   "\nstatHistograms: opening file %s...",namebuf);
+        if (stat(namebuf, &buf) == 0)               // no input file exists?
+            outstr = stropen(namebuf, "r");
+        else {
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: Input file does not exist: %s\n",
+                       namebuf);
+            status = 0;
+        }
+        nrealization++;
+    } while (status);
+
+    return SUCCESS;
+}
+
+//E
 
 #ifdef ADDONS
 #include "cballsutils_include_02.h"

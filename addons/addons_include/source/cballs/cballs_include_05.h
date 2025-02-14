@@ -16,8 +16,9 @@
 #endif
 
 #ifdef OCTREEKKKOMP
-//#include "cballs_octree_kkk_omp_05.h"
+#include "cballs_octree_kkk_omp_05.h"
 #endif
+
 
 #ifdef OCTREEKKKBALLSOMP
 //#include "cballs_octree_kkk_balls_omp_05.h"

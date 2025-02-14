@@ -4,6 +4,9 @@
 #ifndef _global_data_octree_kkk_omp_h
 #define _global_data_octree_kkk_omp_h
 
+/*
+// All of these are in addons_include/include/global_data_include_NMultipoles.h
+//  CAN BE DELETED ALL THESE
 #ifdef NMultipoles
 // -----------------------------------
 //B Histogram arrays
@@ -31,5 +34,16 @@
 //E Histograms arrays
 // -----------------------------------
 #endif // ! NMultipoles
+*/
+
+// 2pcf
+    realptr histNNSubN2pcf;
+//B kappa Avg Rmin
+    realptr histNNSubN2pcftotal;
+//E
+    real *histN2pcf;
+
+    char fpfnamehistN2pcfFileName[MAXLENGTHOFFILES];
+
 
 #endif	// ! _global_data_octree_kkk_omp_h

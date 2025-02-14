@@ -21,9 +21,6 @@ local int PrintHistZetaM_exp(struct  cmdline_data* cmd,
                              struct  global_data* gd);
 local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
                                 struct  global_data* gd);
-// Seems obsolete. Delete. Only appears in balls_method addon
-local int PrintHistZeta_theta2_fix(struct  cmdline_data* cmd,
-                                   struct  global_data* gd);
 local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                                struct  global_data* gd);
 local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd);
@@ -34,6 +31,10 @@ local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
                                  struct  global_data* gd);
 local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                       struct  global_data* gd);
+
+local int correlation_string_to_int(struct  cmdline_data* cmd,
+                                    struct  global_data* gd,
+                                    int *correlation_int);
 
 #ifdef ADDONS
 #include "cballs_include_00.h"
@@ -217,7 +218,6 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 #ifdef DEBUG
     if (!strnull(cmd->outfile))
         OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
-//        OutputData(cmd, gd);
 #endif
 
 //B Post-processing:
@@ -239,10 +239,19 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     return SUCCESS;
 }
 
+#define KKKCORRELATION      0
+#define NNCORRELATION       1
+#define KKCORRELATION       2
+#define NNEstimator         3
+
+local int correlation_int;
+
 int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     bodyptr p;
     int ifile;
+
+    correlation_string_to_int(cmd, gd, &correlation_int);
 
     switch(gd->searchMethod_int) {
         case TREEOMPMETHODSINCOS:                   // search=tree-omp-sincos
@@ -260,8 +269,7 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 
 #ifdef ADDONS
 #include "cballs_include_02.h"
-#endif
-
+#else
         case SEARCHNULL:
             verb_print(cmd->verbose, "\n\tEvalHist: null search method.\n");
             verb_print(cmd->verbose,
@@ -286,6 +294,7 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
                         gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
             break;
+#endif
     }
 
     return SUCCESS;
@@ -310,7 +319,6 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
                     PrintHistZetaMZetaGm_sincos(cmd, gd);
                 }
             }
-            
             break;
         case SEARCHNULL:
             verb_print(cmd->verbose,
@@ -354,6 +362,46 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 
     return SUCCESS;
 }
+
+local int correlation_string_to_int(struct  cmdline_data* cmd,
+                                    struct  global_data* gd,
+                                    int *correlation_int)
+{
+    *correlation_int = -1;
+    if (scanopt(cmd->options, "NNCorrelation")) {
+        *correlation_int = NNCORRELATION;
+        return SUCCESS;
+    }
+    if (scanopt(cmd->options, "NNEstimator")) {
+        *correlation_int = NNEstimator;
+        return SUCCESS;
+    }
+    if (scanopt(cmd->options, "KKCorrelation")) {
+        *correlation_int = KKCORRELATION;
+        return SUCCESS;
+    }
+    if (scanopt(cmd->options, "KKKCorrelation")) {
+        *correlation_int = KKKCORRELATION;
+        return SUCCESS;
+    }
+
+    if (*correlation_int == -1) {
+        *correlation_int = KKKCORRELATION;
+        verb_print(cmd->verbose,
+                   "\nNot given a correlation type... running deafult ");
+        verb_print(cmd->verbose,
+                   "KKKCorrelation\n");
+        return SUCCESS;
+    }
+
+    return SUCCESS;
+}
+
+#undef KKKCORRELATION
+#undef NNCORRELATION
+#undef KKCORRELATION
+#undef NNEstimator
+
 
 local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd)
 {
@@ -452,10 +500,6 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     stream outstr;
     char namebuf[256];
 
-//    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
-//    verb_print_q(2, cmd->verbose,
-//               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
-
     sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
             cmd->suffixOutFiles, EXTFILES);
     verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
@@ -465,7 +509,7 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
             if (cmd->rminHist==0) {
-                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD 
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD
                             + rlog10(cmd->rangeN);
             } else {
                 rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
@@ -488,10 +532,6 @@ local int PrintHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     int n;
     stream outstr;
     char namebuf[256];
-
-//    outstr = stropen(gd->fpfnamehistXi2pcfFileName, "w!");
-//    verb_print_q(2, cmd->verbose,
-//               "Printing : to a file %s ...\n",gd->fpfnamehistXi2pcfFileName);
 
     sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
             cmd->suffixOutFiles, EXTFILES);
@@ -661,61 +701,6 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
 "# [1] rBins; [2] diagonal; [3] theta2=Nbins/4.0; [4] theta2=2.0*Nbins/4.0; \
 [5] theta2=3.0*Nbins/4.0; [6] theta2=4.0*Nbins/4.0 - 1.0\n"
 
-
-/*
-// Seems obsolete. Delete. Only appears in balls_method addon
-local int PrintHistZeta_theta2_fix(struct  cmdline_data* cmd,
-                                   struct  global_data* gd)
-{
-    real rBin, rbinlog;
-    int n1, m;
-    stream outstr;
-    real Zeta;
-    real Zeta2;
-    real Zeta3;
-    real Zeta4;
-    real Zeta5;
-    int Nbins;
-    char namebuf[256];
-    Nbins = cmd->sizeHistN;
-#ifdef USEGSL
-    gsl_complex Atmp;                               // Use in cballs_04.h
-#endif
-
-#ifdef ADDONS
-#include "cballs_include_04.h"                      // was cballs_include_05.h
-#endif
-
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s_%d%s", gd->fpfnamemhistZetaMFileName, m, EXTFILES);
-        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
-            if (cmd->useLogHist) {
-                if (cmd->rminHist==0) {
-                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
-                    + rlog10(cmd->rangeN);
-                } else {
-                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
-                }
-                rBin=rpow(10.0,rbinlog);
-            } else {
-                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
-            }
-            Zeta = gd->histZetaM[m][n1][n1];
-            Zeta2 = gd->histZetaM[m][n1][(int)(Nbins/4.0)];
-            Zeta3 = gd->histZetaM[m][n1][(int)(2.0*Nbins/4.0)];
-            Zeta4 = gd->histZetaM[m][n1][(int)(3.0*Nbins/4.0)];
-            Zeta5 = gd->histZetaM[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
-        }
-        fclose(outstr);
-    }
-
-    return SUCCESS;
-}
-//E
-*/
 
 // Saves matrix ZetaM for each m multipole at a set of theta2 angles
 local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
@@ -1126,3 +1111,5 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 
 #undef MHISTZETAHEADER
 #undef MHISTZETA
+
+

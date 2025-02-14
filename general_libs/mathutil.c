@@ -553,3 +553,45 @@ real Integrate (real *f, int nf)
 }
 
 
+void covarianceMatrix(double *x, double *y, int n, double **cvm)
+{
+    int j;
+    real xm;
+    real ym;
+    real s;
+    real covxx;
+    real covxy;
+    real covyx;
+    real covyy;
+
+    if (n <= 1) error("n must be at least 2...");
+
+    s=0.0;
+    for (j=1;j<=n;j++) s += x[j];
+    xm=s/((real)n);
+    s=0.0;
+    for (j=1;j<=n;j++) s += y[j];
+    ym=s/((real)n);
+
+    covxx = 0;
+    for (j=1;j<=n;j++) covxx += (x[j]-xm)*(x[j]-xm);
+    covxx /= (real)(n-1);
+
+    covxy = 0;
+    for (j=1;j<=n;j++) covxy += (x[j]-xm)*(y[j]-ym);
+    covxy /= (real)(n-1);
+
+    covyx = 0;
+    for (j=1;j<=n;j++) covyx += (y[j]-ym)*(x[j]-xm);
+    covyx /= (real)(n-1);
+
+    covyy = 0;
+    for (j=1;j<=n;j++) covyy += (y[j]-ym)*(y[j]-ym);
+    covyy /= (real)(n-1);
+
+    cvm[1][1] = covxx;
+    cvm[1][2] = covxy;
+    cvm[2][1] = covyx;
+    cvm[2][2] = covyy;
+}
+

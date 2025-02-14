@@ -8,8 +8,10 @@
 #include "cballsio_octree_kkk_omp_10.h"
 #endif
 
+
 #ifdef KDTREEOMP
-#include "cballsio_kdtree_omp_10.h"
+// NMultipoles Deactivated in KDTREEOMP
+//#include "cballsio_kdtree_omp_10.h"
 #endif
 
 /*
