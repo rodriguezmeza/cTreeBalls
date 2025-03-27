@@ -81,7 +81,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "sizeHistN=40",                     ";array size for N histogram",
     "rangeN=100.0",                     ";Radial range for N histogram",
     "rminHist=1.0e-3",                  ";Radial minimum value for histograms", ":rmin",
-    "sizeHistTheta=32",                 ";array size for angular histogram",
+    "sizeHistPhi=32",                 ";array size for angular histogram",
     //
     "histNNFileName=histNN",              ";File name (without extension) to save histograms of NN", ":histNNfname",
     "histXi2pcfFileName=histXi2pcf",    ";File name (without extension) to save histograms of Xi2pcf", ":histXi2pcffname",

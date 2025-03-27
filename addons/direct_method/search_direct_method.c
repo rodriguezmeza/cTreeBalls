@@ -46,9 +46,13 @@ typedef struct {
     real **xiOUTVPcos;
     real **xiOUTVPsin;
     real **xiOUTVPsincos;
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    real **xiOUTVPcossin;
     real **histZetaMtmpcos;
     real **histZetaMtmpsin;
     real **histZetaMtmpsincos;
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    real **histZetaMtmpcossin;
     real *ChebsT;
     real *ChebsU;
     real *histXi2pcfsub;
@@ -455,6 +459,8 @@ local int search_init_sincos_gd(struct cmdline_data* cmd,
             CLRM_ext(gd->histZetaMcos[m], cmd->sizeHistN);
             CLRM_ext(gd->histZetaMsin[m], cmd->sizeHistN);
             CLRM_ext(gd->histZetaMsincos[m], cmd->sizeHistN);
+            // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+            CLRM_ext(gd->histZetaMcossin[m], cmd->sizeHistN);
         }
     }
     for (n = 1; n <= cmd->sizeHistN; n++) {
@@ -479,14 +485,19 @@ local int search_init_sincos(struct cmdline_data* cmd,
     if (cmd->computeTPCF) {
         hist->ChebsT = dvector(1,cmd->mChebyshev+1);
         hist->ChebsU = dvector(1,cmd->mChebyshev+1);
+        
+        hist->histXi2pcfsub = dvector(1,cmd->sizeHistN);
+        hist->xiOUTVPcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->xiOUTVPsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        hist->xiOUTVPcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->histZetaMtmpcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+        // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     }
-    hist->histXi2pcfsub = dvector(1,cmd->sizeHistN);
-    hist->xiOUTVPcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
 
     for (n = 1; n <= cmd->sizeHistN; n++) {
         hist->histXi2pcfsub[n] = 0.0;
@@ -499,9 +510,13 @@ local int search_free_sincos(struct cmdline_data* cmd,
                              struct  global_data* gd, gdhistptr_sincos_direct hist)
 {
     if (cmd->computeTPCF) {
+        // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->histZetaMtmpsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->histZetaMtmpcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
+        // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        free_dmatrix(hist->xiOUTVPcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->xiOUTVPsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->xiOUTVPsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->xiOUTVPcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -547,18 +562,28 @@ local int computeBodyProperties_sincos_direct(struct cmdline_data* cmd,
             OUTVP_ext(hist->xiOUTVPsin, gd->histXisin[m], gd->histXisin[m],cmd->sizeHistN);
             OUTVP_ext(hist->xiOUTVPsincos, gd->histXisin[m],
                       gd->histXicos[m],cmd->sizeHistN);
+            // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+            OUTVP_ext(hist->xiOUTVPcossin,
+                      gd->histXicos[m], gd->histXisin[m],cmd->sizeHistN);
             CLRM_ext(hist->histZetaMtmpcos,cmd->sizeHistN);
             CLRM_ext(hist->histZetaMtmpsin,cmd->sizeHistN);
             CLRM_ext(hist->histZetaMtmpsincos,cmd->sizeHistN);
+            // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+            CLRM_ext(hist->histZetaMtmpcossin,cmd->sizeHistN);
             MULMS_ext(hist->histZetaMtmpcos,hist->xiOUTVPcos,xi,cmd->sizeHistN);
             MULMS_ext(hist->histZetaMtmpsin,hist->xiOUTVPsin,xi,cmd->sizeHistN);
             MULMS_ext(hist->histZetaMtmpsincos,hist->xiOUTVPsincos,xi,cmd->sizeHistN);
+            // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+            MULMS_ext(hist->histZetaMtmpcossin,hist->xiOUTVPcossin,xi,cmd->sizeHistN);
             ADDM_ext(gd->histZetaMcos[m],gd->histZetaMcos[m],
                      hist->histZetaMtmpcos,cmd->sizeHistN);
             ADDM_ext(gd->histZetaMsin[m],gd->histZetaMsin[m],
                      hist->histZetaMtmpsin,cmd->sizeHistN);
             ADDM_ext(gd->histZetaMsincos[m],gd->histZetaMsincos[m],
                      hist->histZetaMtmpsincos,cmd->sizeHistN);
+            // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+            ADDM_ext(gd->histZetaMcossin[m],
+                    gd->histZetaMcossin[m],hist->histZetaMtmpcossin,cmd->sizeHistN);
         }
     }
 

@@ -79,6 +79,15 @@ int InputData(struct cmdline_data* cmd,
         default:
             verb_print(cmd->verbose,
                        "\n\tInput: Unknown input format (%s)...",cmd->infilefmt);
+            if (scanopt(cmd->infilefmt, "fits")) {
+                verb_print(cmd->verbose,
+                "\n\tInput: set CFITSIOON = 1 in ");
+                verb_print(cmd->verbose,
+                "addons/Makefile_addons_settings file...");
+                verb_print(cmd->verbose,
+                "\n\t\t and compile again ($ make clean; make).");
+                error("\n\tgoing out...\n");
+            }
             verb_print(cmd->verbose,
                        "\n\tInput in default columns (ascii) format...\n");
             class_call_cballs(inputdata_ascii(cmd, gd, filename, ifile),
@@ -1268,7 +1277,7 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     int lenDir = strlen(cmd->rootDir);
     int i;
     
-    int nslashs = 3;
+    int nslashs = MAXNSLASHS;
     ipos = (int*) malloc((nslashs)*sizeof(int));
 
     for (i=0; i< lenDir; i++) {
@@ -1310,10 +1319,11 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 
 
 //B    fpfnameOutputFileName               = Output/.txt
-    if (!strnull(gd->fpfnameOutputFileName)) {
+// Check thoroughly these lines of code!!!
+//    if (!strnull(gd->fpfnameOutputFileName)) {
         sprintf(gd->fpfnameOutputFileName,"%s/%s%s%s",
                 cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES);
-    }
+//    }
 //E
 
     sprintf(gd->fpfnamehistNNFileName,"%s/%s%s%s",
@@ -1410,7 +1420,7 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 }
 
 //
-// We must check the order of memory allocation and dealocation!!!
+// We must check the order of memory allocation and deallocation!!!
 //
 local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 {
@@ -1430,11 +1440,15 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
         free_dmatrix3D(gd->histZetaGmRe,
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
 #ifdef USEGSL
+        //B Do not use anymore...
+        /*
         int m;
         for (m=1; m<=cmd->mChebyshev+1; m++)
             gsl_matrix_complex_free(histZetaMatrix[m].histZetaM);
         free(histZetaMatrix);
         gsl_matrix_complex_free(gd->histXi_gsl);
+        */
+        //E
 #endif
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
         free_dmatrix3D(gd->histZetaMcossin,

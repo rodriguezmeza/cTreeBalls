@@ -140,7 +140,7 @@ struct global_data{
     real *deltaRV;
     real *ddeltaRV;
 
-    real deltaTheta;
+    real deltaPhi;
 
 //B File pointers:
     char logfilePath[MAXLENGTHOFFILES];

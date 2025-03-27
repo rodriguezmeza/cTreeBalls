@@ -601,37 +601,761 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR, real *phiL, 
 
 //B section of several routines to do pre/post processing
 
-// routine to compute covariance matriz of correlations of Takahashi simulations
-global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
-{
-    char namebuf[256];
-    struct stat buf;
-    stream outstr;
-    char inputfile[MAXLENGTHOFFILES];
-    int nrealization = 0;
-    int status = 1;
+#define IN 1
+#define OUT 0
+#define SI 1
+#define NO 0
 
-    do {
-        //B we use rootDir string to construct input file names
-        sprintf(inputfile,"%s/%s%03d/%s/",
-                cmd->rootDir,"r",nrealization,cmd->suffixOutFiles);
-        sprintf(namebuf, "%s%s%s", inputfile, cmd->outfile, EXTFILES);
-        //E
-        verb_print(cmd->verbose,
-                   "\nstatHistograms: opening file %s...",namebuf);
-        if (stat(namebuf, &buf) == 0)               // no input file exists?
-            outstr = stropen(namebuf, "r");
-        else {
-            verb_print(cmd->verbose,
-                       "\nstatHistograms: Input file does not exist: %s\n",
-                       namebuf);
-            status = 0;
+// Column vector input
+//  offset as NR
+local int inout_InputDataVector(struct cmdline_data*, struct  global_data*,
+                                string, real *, int *);
+
+// Column vector input
+//  offset as NR
+local int inout_InputDataVector(struct cmdline_data* cmd, struct  global_data* gd,
+                                string filename, real *vec, int *npts)
+{
+    stream instr;
+    int ncol, nrow;
+    real *row;
+    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
+    short int *lineQ;
+    int col1=1;
+    
+    instr = stropen(filename, "r");
+
+    if (cmd->verbose_log>=3)
+        verb_log_print(cmd->verbose_log, gd->outlog,
+               "\nReading matrix elements from file %s... ",filename);
+
+    state = OUT;
+    nl = nw = nc = 0;
+    while ((c = getc(instr)) != EOF) {
+        ++nc;
+        if (c=='\n')
+            ++nl;
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else if (state == OUT) {
+            state = IN;
+            ++nw;
         }
-        nrealization++;
-    } while (status);
+    }
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\n\tGeneral statistics : ");
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                   "number of lines, words, and characters : %d %d %d", nl, nw, nc);
+    }
+
+    rewind(instr);
+    
+    lineQ = (short int *) allocate(nl * sizeof(short int));
+    for (i=0; i<nl; i++) lineQ[i]=FALSE;
+    
+    nw = nrow = ncol = nwxc = 0;
+    state = OUT;
+    salto = NO;
+    
+    i=0;
+    
+    while ((c = getc(instr)) != EOF) {
+        
+        if(c=='%' || c=='#') {
+            while ((c = getc(instr)) != EOF)
+                if (c=='\n') break;
+            ++i;
+            continue;
+        }
+        
+        if (c=='\n' && nw > 0) {
+            if (salto==NO) {
+                ++nrow;
+                salto=SI;
+                if (ncol != nwxc && nrow>1) {
+                    printf("\nvalores diferentes : ");
+                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                          nrow, ncol, nwxc);
+                }
+                ncol = nwxc;
+                lineQ[i]=TRUE;
+                ++i;
+                nwxc=0;
+            } else {
+                ++i;
+            }
+        }
+        
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else
+            if (state == OUT) {
+                state = IN;
+                ++nw; ++nwxc;
+                salto=NO;
+            }
+    }
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,"\n\tValid numbers statistics : ");
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                       "nrow, ncol, nvalues : %d %d %d", nrow, ncol, nw);
+    }
+
+    rewind(instr);
+    
+    npoint=nrow;
+    row = (realptr) allocate(ncol*sizeof(real));
+
+    *npts = npoint;
+    
+    ip = 1;
+    for (i=0; i<nl; i++) {
+        if (lineQ[i]) {
+            in_vector_ndim(instr, row, ncol);
+            vec[ip] = row[col1-1];
+            ++ip;
+        } else {
+            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
+                if (c=='\n') break;
+        }
+    }
+    fclose(instr);
+
+    if (cmd->verbose_log>=3)
+        verb_log_print(cmd->verbose_log, gd->outlog,"\n\t... done.\n");
 
     return SUCCESS;
 }
+
+local int inout_InputDataMatrix(struct cmdline_data*, struct  global_data*,
+                                string, real **, int *);
+
+local int inout_InputDataMatrix(struct cmdline_data* cmd, struct  global_data* gd,
+                                string filename, real **mat, int *npts)
+{
+    stream instr;
+    int ncol, nrow;
+    real *row;
+    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
+    short int *lineQ;
+    int col1=1;
+    int col2=2;
+    
+    instr = stropen(filename, "r");
+
+    if (cmd->verbose_log>=3)
+        verb_log_print(cmd->verbose_log, gd->outlog,
+               "\nReading matrix elements from file %s... ",filename);
+
+    state = OUT;
+    nl = nw = nc = 0;
+    while ((c = getc(instr)) != EOF) {
+        ++nc;
+        if (c=='\n')
+            ++nl;
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else if (state == OUT) {
+            state = IN;
+            ++nw;
+        }
+    }
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\n\tGeneral statistics : ");
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                   "number of lines, words, and characters : %d %d %d", nl, nw, nc);
+    }
+
+    rewind(instr);
+    
+    lineQ = (short int *) allocate(nl * sizeof(short int));
+    for (i=0; i<nl; i++) lineQ[i]=FALSE;
+    
+    nw = nrow = ncol = nwxc = 0;
+    state = OUT;
+    salto = NO;
+    
+    i=0;
+    
+    while ((c = getc(instr)) != EOF) {
+        
+        if(c=='%' || c=='#') {
+            while ((c = getc(instr)) != EOF)
+                if (c=='\n') break;
+            ++i;
+            continue;
+        }
+        
+        if (c=='\n' && nw > 0) {
+            if (salto==NO) {
+                ++nrow;
+                salto=SI;
+                if (ncol != nwxc && nrow>1) {
+                    printf("\nvalores diferentes : ");
+                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                          nrow, ncol, nwxc);
+                }
+                ncol = nwxc;
+                lineQ[i]=TRUE;
+                ++i;
+                nwxc=0;
+            } else {
+                ++i;
+            }
+        }
+        
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else
+            if (state == OUT) {
+                state = IN;
+                ++nw; ++nwxc;
+                salto=NO;
+            }
+    }
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,"\n\tValid numbers statistics : ");
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                       "nrow, ncol, nvalues : %d %d %d", nrow, ncol, nw);
+    }
+
+    rewind(instr);
+    
+    npoint=nrow;
+    row = (realptr) allocate(ncol*sizeof(real));
+
+    *npts = npoint;
+    
+    ip = 1;
+    for (i=0; i<nl; i++) {
+        if (lineQ[i]) {
+            in_vector_ndim(instr, row, ncol);
+            for (int j=0; j<ncol; j++) {
+                mat[ip][j+1] = row[j];
+            }
+            ++ip;
+        } else {
+            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
+                if (c=='\n') break;
+        }
+    }
+    fclose(instr);
+
+    if (cmd->verbose_log>=3)
+        verb_log_print(cmd->verbose_log, gd->outlog,"\n\t... done.\n");
+
+    return SUCCESS;
+}
+
+#undef IN
+#undef OUT
+#undef SI
+#undef NO
+
+#define MHISTZETA \
+"%16.8e %16.8e %16.8e %16.8e %16.8e %16.8e\n"
+
+#define MHISTZETASTDDEV \
+"%16.8e %16.8e %16.8e %16.8e %16.8e %16.8e %16.8e %16.8e %16.8e %16.8e %16.8e\n"
+
+#define MHISTZETAHEADER \
+"# [1] rBins; [2] diagonal; [3] theta2=Nbins/4.0; [4] theta2=2.0*Nbins/4.0; \
+[5] theta2=3.0*Nbins/4.0; [6] theta2=4.0*Nbins/4.0 - 1.0\n"
+
+#define MHISTZETAHEADERSTDDEV \
+"# [1] rBins; [2] diagonal &SD; [3] theta2=Nbins/4.0 &SD; [4] theta2=2.0*Nbins/4.0 &SD; \
+[5] theta2=3.0*Nbins/4.0 &SD; [6] theta2=4.0*Nbins/4.0 - 1.0 &SD\n"
+
+// routine to compute covariance matriz of correlations of Takahashi simulations
+//  test were done on:
+//  run/Cosma/Takahasi_nres12_balls-omp/zs9_balls-omp/rxxx/Output files
+global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
+{
+    char namebuf1[256];
+    char namebuf2[256];
+    char namebuf3[256];
+    char namebuf4[256];
+    char namebuf5[256];
+    char namebuf6[256];
+    struct stat buf;
+    stream instr1;
+    stream instr2;
+    stream instr3;
+    stream outstr1;
+    stream outstr2;
+    char rootDirPath[MAXLENGTHOFFILES];
+    int nrealization = 0;
+    int status1 = 1;
+    int status2 = 1;
+    int status3 = 1;
+    int ifile = 0;
+    int m;
+    int n1;
+    int n2;
+    int npts1;
+    int npts2;
+    int npts3;
+    real matElement;
+    real matElementIm;
+    real **mat1;
+    real **mat2;
+    real ***mat3;
+    real ***matAvg;
+    real ***matStdDev;
+    int sizeHistN;
+    real Zeta;
+    real Zeta2;
+    real Zeta3;
+    real Zeta4;
+    real Zeta5;
+    real ZetaStdDev;
+    real Zeta2StdDev;
+    real Zeta3StdDev;
+    real Zeta4StdDev;
+    real Zeta5StdDev;
+    int Nbins;
+    real *rBin;
+
+    sizeHistN = cmd->sizeHistN;
+    mat1 = dmatrix(1,sizeHistN,1,sizeHistN);
+    mat2 = dmatrix(1,sizeHistN,1,sizeHistN);
+
+//B read one file to got needed info to go...
+    verb_print(cmd->verbose,
+               "\nstatHistograms: first read two file to get some needed info:");
+    //B we use rootDir string to construct input/output file names
+    sprintf(rootDirPath,"%s/%s%03d/%s/",
+            cmd->rootDir,"r",nrealization,cmd->suffixOutFiles);
+    //E
+    m=1;
+    //B file 1
+    sprintf(namebuf1,"%s%s_%d%s",
+            rootDirPath, gd->infilenames[ifile], m, EXTFILES);
+    verb_print(cmd->verbose,
+                "\nstatHistograms: opening file %s...",namebuf1);
+    if (stat(namebuf1, &buf) == 0)               // no input file exists?
+        instr1 = stropen(namebuf1, "r");
+    else {
+        verb_print(cmd->verbose,
+                   "\nstatHistograms: Input file does not exist: %s\n",
+                    namebuf1);
+        status1 = 0;
+    }
+    //E file 1
+    //B file 2
+    sprintf(namebuf2,"%s%s_%d%s",
+            rootDirPath, gd->infilenames[ifile+1], m, EXTFILES);
+    verb_print(cmd->verbose,
+               "\nstatHistograms: opening file %s...",namebuf2);
+    if (stat(namebuf2, &buf) == 0)               // no input file exists?
+        instr2 = stropen(namebuf2, "r");
+    else {
+        verb_print(cmd->verbose,
+                   "\nstatHistograms: Input file does not exist: %s\n",
+                    namebuf2);
+        status2 = 0;
+    }
+    //E file 2
+
+    if (status1 == 0 || status2 == 0) {
+        if (status1 != 0) fclose(instr1);
+        if (status2 != 0) fclose(instr2);
+        error("\nstatHistogram: one of the input file does not exist: %s %s",
+              namebuf1, namebuf2);
+    } else {
+        //B processing input files
+        inout_InputDataMatrix(cmd, gd, namebuf1, mat1, &npts1);
+        inout_InputDataMatrix(cmd, gd, namebuf2, mat2, &npts2);
+        if (npts1 != npts2) {
+            error("\nstatHistogram: in realization r%03d: %s %d %d",
+                  nrealization, "npts are different:", npts1,npts2);
+        }
+        cmd->sizeHistN = npts1;
+        fclose(instr1);
+        fclose(instr2);
+        //E
+    } // ! status
+    verb_print(cmd->verbose,
+               "\nstatHistograms: mChebyshev and sizeHistN: %d %d\n",
+               cmd->mChebyshev, cmd->sizeHistN);
+    free_dmatrix(mat2,1,sizeHistN,1,sizeHistN);
+    free_dmatrix(mat1,1,sizeHistN,1,sizeHistN);
+//E read one file
+
+//B read rBin file
+    rBin = dvector(1,sizeHistN);
+    //B file 3
+    verb_print(cmd->verbose,
+               "\nstatHistograms: reading rbins...",
+               cmd->mChebyshev, cmd->sizeHistN);
+    sprintf(namebuf5,"%s%s%s",
+            rootDirPath, "rbins", EXTFILES);
+    verb_print(cmd->verbose,
+               "\nstatHistograms: opening file %s...",namebuf5);
+    if (stat(namebuf5, &buf) == 0)               // no input file exists?
+        instr3 = stropen(namebuf5, "r");
+    else {
+        verb_print(cmd->verbose,
+                   "\nstatHistograms: Input file does not exist: %s\n",
+                    namebuf5);
+        status3 = 0;
+    }
+    //E file 3
+    if (status3 == 0) {
+        error("\nstatHistogram: the input file does not exist: %s",
+              namebuf5);
+    } else {
+        //B processing input file
+        inout_InputDataVector(cmd, gd, namebuf5, rBin, &npts3);
+        if (npts3 != cmd->sizeHistN) {
+            error("\nstatHistogram: in realization r%03d: %s %d %d",
+                  nrealization, "npts is not equal to sizeHistN:",
+                  npts3,cmd->sizeHistN);
+        }
+        fclose(instr3);
+        //E
+    } // ! status3
+    verb_print(cmd->verbose, "\ndone.\n");
+//B read rBin file
+
+    Nbins = cmd->sizeHistN;
+
+    mat1 = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+    mat2 = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+    mat3 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    matAvg =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    matStdDev =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+
+    CLRM_ext(mat1, cmd->sizeHistN);
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        CLRM_ext(mat3[m], cmd->sizeHistN);
+        CLRM_ext(matAvg[m], cmd->sizeHistN);
+        CLRM_ext(matStdDev[m], cmd->sizeHistN);
+    }
+
+//B read realization files and compute mean values
+    verb_print(cmd->verbose,
+               "\nstatHistograms: mean value computation:");
+    do {
+        //B we use rootDir string to construct input/output file names
+        sprintf(rootDirPath,"%s/%s%03d/%s/",
+                cmd->rootDir,"r",nrealization,cmd->suffixOutFiles);
+        //E
+        for (m=1; m<=cmd->mChebyshev+1; m++) {
+            //B file 1
+            sprintf(namebuf1,"%s%s_%d%s",
+                    rootDirPath, gd->infilenames[ifile], m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s...",namebuf1);
+            if (stat(namebuf1, &buf) == 0)               // no input file exists?
+                instr1 = stropen(namebuf1, "r");
+            else {
+                verb_print(cmd->verbose,
+                           "\nstatHistograms: Input file does not exist: %s\n",
+                           namebuf1);
+                status1 = 0;
+            }
+            //E file 1
+            //B file 2
+            sprintf(namebuf2,"%s%s_%d%s",
+                    rootDirPath, gd->infilenames[ifile+1], m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s...",namebuf2);
+            if (stat(namebuf2, &buf) == 0)               // no input file exists?
+                instr2 = stropen(namebuf2, "r");
+            else {
+                verb_print(cmd->verbose,
+                           "\nstatHistograms: Input file does not exist: %s\n",
+                           namebuf2);
+                status2 = 0;
+            }
+            //E file 2
+            
+            if (status1 == 0 || status2 == 0) {
+                if (status1 != 0) fclose(instr1);
+                if (status2 != 0) fclose(instr2);
+                break;
+            } else {
+                //B output file 1
+                sprintf(namebuf3, "%s%s_%d%s", rootDirPath, cmd->outfile, m, EXTFILES);
+                verb_print(cmd->verbose,
+                           "\nstatHistograms: opening file %s... to save statistics",
+                           namebuf3);
+                outstr1 = stropen(namebuf3, "w!");
+                //E output file 1
+                //B output file 2
+                sprintf(namebuf4, "%s%s%s_%d%s",
+                        rootDirPath, "m", cmd->outfile, m, EXTFILES);
+                verb_print(cmd->verbose,
+                           "\nstatHistograms: opening file %s... to save statistics",
+                           namebuf4);
+                outstr2 = stropen(namebuf4, "w!");
+                //E output file 2
+
+                //B processing input files
+                inout_InputDataMatrix(cmd, gd, namebuf1, mat1, &npts1);
+                inout_InputDataMatrix(cmd, gd, namebuf2, mat2, &npts2);
+                if (npts1 != npts2) {
+                error("\nstatHistogram: in realization r%03d: %s %d %d",
+                          nrealization, "npts are different:", npts1,npts2);
+                }
+
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        matElement = mat1[n1][n2]+mat2[n1][n2];
+                        mat3[m][n1][n2] = matElement;
+                        matAvg[m][n1][n2] += matElement;
+                        fprintf(outstr1,"%16.8e ",matElement);
+                    }
+                    fprintf(outstr1,"\n");
+                }
+
+                fprintf(outstr2,MHISTZETAHEADER);
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    Zeta = mat3[m][n1][n1];
+                    Zeta2 = mat3[m][n1][(int)(Nbins/4.0)];
+                    Zeta3 = mat3[m][n1][(int)(2.0*Nbins/4.0)];
+                    Zeta4 = mat3[m][n1][(int)(3.0*Nbins/4.0)];
+                    Zeta5 = mat3[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                    fprintf(outstr2,MHISTZETA,rBin[n1],Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+                }
+
+                fclose(instr1);
+                fclose(instr2);
+                fclose(outstr1);
+                fclose(outstr2);
+                //E
+            } // ! status
+        } // ! end m loop
+        nrealization++;
+    } while (status1 || status2);
+
+    verb_print(cmd->verbose,
+               "\nstatHistograms: number of realization analyzed: %d\n",nrealization-1);
+
+    if (nrealization-1 > 2) {
+        //B we use rootDir string to construct input/output file names
+        sprintf(rootDirPath,"%s/", cmd->rootDir);
+        //E
+        for (m=1; m<=cmd->mChebyshev+1; m++) {
+            //B output file 1
+            sprintf(namebuf3, "%s%s_%s_%d%s",
+                    rootDirPath, cmd->outfile, "Avg", m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s... to save statistics",
+                       namebuf3);
+            outstr1 = stropen(namebuf3, "w!");
+            //E output file 1
+            for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                    matAvg[m][n1][n2] /= (nrealization-1);
+                    fprintf(outstr1,"%16.8e ",matAvg[m][n1][n2]);
+                }
+                fprintf(outstr1,"\n");
+            }
+            fclose(outstr1);
+
+            //B output file 2
+            sprintf(namebuf6, "%s%s%s_%s_%d%s",
+                    rootDirPath, "m", cmd->outfile, "Avg", m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s... to save statistics",
+                       namebuf6);
+            outstr2 = stropen(namebuf6, "w!");
+            //E output file 2
+            fprintf(outstr2,MHISTZETAHEADER);
+            for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                Zeta = matAvg[m][n1][n1];
+                Zeta2 = matAvg[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = matAvg[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = matAvg[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = matAvg[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                fprintf(outstr2,MHISTZETA,rBin[n1],Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            }
+            fclose(outstr2);
+
+        } // ! end m loop
+    } // ! nrealization > 3
+//E read realization files and compute mean values
+
+
+//
+//B read realization files and compute std values
+//
+    status1 = 1;
+    status2 = 1;
+    nrealization = 0;
+
+    verb_print(cmd->verbose,
+               "\n\nstatHistograms: standard deviation computation:");
+    do {
+        //B we use rootDir string to construct input/output file names
+        sprintf(rootDirPath,"%s/%s%03d/%s/",
+                cmd->rootDir,"r",nrealization,cmd->suffixOutFiles);
+        //E
+        for (m=1; m<=cmd->mChebyshev+1; m++) {
+            //B file 1
+            sprintf(namebuf1,"%s%s_%d%s",
+                    rootDirPath, gd->infilenames[ifile], m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s...",namebuf1);
+            if (stat(namebuf1, &buf) != 0)               // input file exists?
+//                instr1 = stropen(namebuf1, "r");
+//            else
+            {
+                verb_print(cmd->verbose,
+                           "\nstatHistograms: Input file does not exist: %s\n",
+                           namebuf1);
+                status1 = 0;
+            }
+            //E file 1
+            //B file 2
+            sprintf(namebuf2,"%s%s_%d%s",
+                    rootDirPath, gd->infilenames[ifile+1], m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s...",namebuf2);
+            if (stat(namebuf2, &buf) != 0)               // input file exists?
+//                instr2 = stropen(namebuf2, "r");
+//            else
+            {
+                verb_print(cmd->verbose,
+                           "\nstatHistograms: Input file does not exist: %s\n",
+                           namebuf2);
+                status2 = 0;
+            }
+            //E file 2
+            
+            if (status1 == 0 || status2 == 0) {
+//                if (status1 != 0) fclose(instr1);
+//                if (status2 != 0) fclose(instr2);
+                break;
+            } else {
+                //B processing input files
+                inout_InputDataMatrix(cmd, gd, namebuf1, mat1, &npts1);
+                inout_InputDataMatrix(cmd, gd, namebuf2, mat2, &npts2);
+                if (npts1 != npts2) {
+                error("\nstatHistogram: in realization r%03d: %s %d %d",
+                          nrealization, "npts are different:", npts1,npts2);
+                }
+
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        matElement = rabs(
+                                           mat1[n1][n2]+mat2[n1][n2]
+                                           -matAvg[m][n1][n2]
+                                           );
+//                        mat3[m][n1][n2] = matElement;
+                        matStdDev[m][n1][n2] += matElement;
+//                        fprintf(outstr1,"%16.8e ",matElement);
+                    }
+//                    fprintf(outstr1,"\n");
+                }
+/*
+                fprintf(outstr2,MHISTZETAHEADER);
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    Zeta = mat3[m][n1][n1];
+                    Zeta2 = mat3[m][n1][(int)(Nbins/4.0)];
+                    Zeta3 = mat3[m][n1][(int)(2.0*Nbins/4.0)];
+                    Zeta4 = mat3[m][n1][(int)(3.0*Nbins/4.0)];
+                    Zeta5 = mat3[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                    fprintf(outstr2,MHISTZETA,rBin[n1],Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+                }
+*/
+//                fclose(instr1);
+//                fclose(instr2);
+//                fclose(outstr1);
+//                fclose(outstr2);
+                //E
+            } // ! status
+        } // ! end m loop
+        nrealization++;
+    } while (status1 || status2);
+
+    verb_print(cmd->verbose,
+               "\nstatHistograms: number of realization analyzed: %d\n",nrealization-1);
+
+    if (nrealization-1 > 2) {
+        //B we use rootDir string to construct input/output file names
+        sprintf(rootDirPath,"%s/", cmd->rootDir);
+        //E
+        for (m=1; m<=cmd->mChebyshev+1; m++) {
+            //B output file 1
+            sprintf(namebuf3, "%s%s_%s_%d%s",
+                    rootDirPath, cmd->outfile, "StdDev", m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s... to save statistics",
+                       namebuf3);
+            outstr1 = stropen(namebuf3, "w!");
+            //E output file 1
+            for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                    matStdDev[m][n1][n2] /= (nrealization-1);
+                    fprintf(outstr1,"%16.8e ",matStdDev[m][n1][n2]);
+                }
+                fprintf(outstr1,"\n");
+            }
+            fclose(outstr1);
+
+            //B output file 2
+            sprintf(namebuf6, "%s%s%s_%s_%d%s",
+                    rootDirPath, "m", cmd->outfile, "StdDev", m, EXTFILES);
+            verb_print(cmd->verbose,
+                       "\nstatHistograms: opening file %s... to save statistics",
+                       namebuf6);
+            outstr2 = stropen(namebuf6, "w!");
+            //E output file 2
+            fprintf(outstr2,MHISTZETAHEADERSTDDEV);
+            for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                Zeta = matAvg[m][n1][n1];
+                ZetaStdDev = matStdDev[m][n1][n1];
+                Zeta2 = matAvg[m][n1][(int)(Nbins/4.0)];
+                Zeta2StdDev = matStdDev[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = matAvg[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta3StdDev = matStdDev[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = matAvg[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta4StdDev = matStdDev[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = matAvg[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                Zeta5StdDev = matStdDev[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                fprintf(outstr2,MHISTZETASTDDEV,
+                        rBin[n1],Zeta,ZetaStdDev,
+                        Zeta2,Zeta2StdDev,
+                        Zeta3,Zeta3StdDev,
+                        Zeta4,Zeta4StdDev,
+                        Zeta5,Zeta5StdDev
+                        );
+            }
+            fclose(outstr2);
+
+        } // ! end m loop
+    } // ! nrealization > 3
+
+//
+//E read realization files and compute std values
+//
+
+
+    free_dmatrix3D(matStdDev,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(matAvg,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(mat3,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix(mat2,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix(mat1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dvector(rBin,1,cmd->sizeHistN);
+
+    return SUCCESS;
+}
+
+#undef MHISTZETAHEADER
+#undef MHISTZETA
+#undef MHISTZETAHEADERSTDDEV
+#undef MHISTZETASTDDEV
 
 //E
 

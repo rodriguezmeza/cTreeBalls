@@ -431,10 +431,10 @@ int input_read_parameters_general(struct cmdline_data *cmd,
       cmd->rminHist = param1;
     }
 
-    class_call(parser_read_int(pfc,"sizeHistTheta",
+    class_call(parser_read_int(pfc,"sizeHistPhi",
                                &param,&flag,errmsg),errmsg,errmsg);
     if (flag == TRUE)
-      cmd->sizeHistTheta = param;
+      cmd->sizeHistPhi = param;
     //
     class_call(parser_read_string(pfc,"histNNFileName",&string1,&flag1,
                                   errmsg),
@@ -578,10 +578,10 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 #include "class_lib_include_01.h"
 #endif
 
-    class_call(parser_read_int(pfc,"sizeHistTheta",
+    class_call(parser_read_int(pfc,"sizeHistPhi",
                                &param,&flag,errmsg),errmsg,errmsg);
     if (flag == TRUE)
-      cmd->sizeHistTheta = param;
+      cmd->sizeHistPhi = param;
 
 
   return SUCCESS;
@@ -627,7 +627,7 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->sizeHistN = 40;
     cmd->rangeN = 100.0;
     cmd->rminHist = 1.0e-3;
-    cmd->sizeHistTheta = 32;
+    cmd->sizeHistPhi = 32;
     //
     cmd->histNNFileName = "histNN";
     cmd->histXi2pcfFileName = "histXi2pcf";

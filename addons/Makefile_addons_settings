@@ -21,6 +21,7 @@ DIRECTMETHODON = 1
 
 # CLASSLIB
 # Several I/O routines from CLASS
+#   collision with GSL library. Set it off
 CLASSLIBON = 1
 
 # IOLIB
@@ -32,12 +33,14 @@ IOLIBON = 1
 # This addon requires IOLIBON = 1, check it...
 ifeq ($(IOLIBON),1)
 # default is OFF.
-# When user knows where cfitsio lives,
+# When user knows where cfitsio lib/include directories live,
 #   make respective changes in Makefile_machine file
 #   and then set it ON
+# there are collision with python interface, default is OFF,
+#   turn it ON if necessary
 CFITSIOON = 0
 else
-$(info ) To compile with CFITSIO needs IOLIBON = 1, deactivating...
+$(info To compile with CFITSIO needs IOLIBON = 1, deactivating...)
 CFITSIOON = 0
 endif
 
@@ -46,7 +49,7 @@ endif
 ifeq ($(CLASSLIBON),1)
 PXDON = 1
 else
-$(info ) To compile with PXD needs CLASSLIBON = 1, deactivating...
+$(info To compile with PXD needs CLASSLIBON = 1, deactivating...)
 PXDON = 0
 endif
 
@@ -58,8 +61,31 @@ KDTREEOMPON = 1
 # For computing 3pcf using octree-kkk-omp
 OCTREEKKKOMPON = 1
 
+# For complex math use only one: USEGSL or COMPLEXLIB
+# COMPLEXLIB
+# Library for complex computation
+ifeq ($(USEGSL),0)
+# default is OFF, turn it ON if necessary (OCTREEGGGOMP)
+COMPLEXLIBON = 0
+else
+$(info Use only one: USEGSL or COMPLEXLIB, deactivating...)
+COMPLEXLIBON = 0
+endif
 
-#E
+# OCTREEGGGOMP
+# For computing 3pcf using octree-ggg-omp
+ifeq ($(USEGSL),1)
+OCTREEGGGOMPON = 1
+else
+ifeq ($(COMPLEXLIBON),1)
+OCTREEGGGOMPON = 1
+else
+$(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+OCTREEGGGOMPON = 0
+endif
+endif
+
+#E Set of settings
 
 
 ############################

@@ -9,10 +9,6 @@
 #endif
 
 
-#ifdef KDTREEOMP
-// NMultipoles Deactivated in KDTREEOMP
-//#include "cballsio_kdtree_omp_10.h"
-#endif
 
 /*
  Add your addon item here

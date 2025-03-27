@@ -21,40 +21,23 @@
 #include "startrun_direct_method.h"             // 19
 #endif
 
-#ifdef SHEARDIRECTSIMPLE
-#include "startrun_shear_direct_simple.h"       // 100
-#endif
-
 #ifdef KDTREEOMP
 #include "startrun_kdtree_omp_11.h"             // 59
-#endif
-
-#ifdef BALLTREEEXP
-#include "startrun_balltree_exp.h"              // 52
-#endif
-
-#ifdef TC3PCFDIRECTOMP
-#include "startrun_tc_3pcf_direct_omp_11.h"     // 60
 #endif
 
 #ifdef OCTREEKKKOMP
 #include "startrun_octree_kkk_omp_11.h"             // 61
 #endif
 
-#ifdef OCTREEKKKCEXPOMP
-#include "startrun_octree_kkk_cexp_omp_11.h"             // 64
-#endif
-
-#ifdef OCTREEKKKBALLSOMP
-#include "startrun_octree_kkk_balls_omp_11.h"             // 62
-#endif
-
-#ifdef OCTREEKKKBALLS4OMP
-#include "startrun_octree_kkk_balls4_omp_11.h"             // 63
+#ifdef OCTREEGGGOMP
+#include "startrun_octree_ggg_omp_11.h"             // 66
 #endif
 
 /*
  Add your addon item here
  */
+
+// it is recommended to use tag numbers above 100...
+
 
 #endif	// ! _startrun_include_11_h

@@ -73,8 +73,21 @@ include $(MACHINES_DIR)/addons/octree_kkk_omp/Makefile_octree_kkk_omp
 endif
 #
 
+# COMPLEXLIB
+# Library for complex computation
+ifeq ($(COMPLEXLIBON),1)
+include $(MACHINES_DIR)/addons/complex_lib/Makefile_complex_lib
+endif
+#
 
-#E
+# OCTREEGGGOMP
+# For computing 3pcf using octree-ggg-omp
+ifeq ($(OCTREEGGGOMPON),1)
+include $(MACHINES_DIR)/addons/octree_ggg_omp/Makefile_octree_ggg_omp
+endif
+#
+
+#E Set of settings
 
 #
 # ------------------------

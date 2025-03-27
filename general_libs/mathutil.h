@@ -52,6 +52,19 @@ real Integrate (real *, int);
 
 void covarianceMatrix(double *x, double *y, int n, double **cvm);
 
+
+//B Routines below are from NR
+//  Brought here to avoid issues when GSLON = 1
+
+void moment(double data[], int n, double *ave, double *adev, double *sdev,
+            double *var, double *skew, double *curt);
+
+void gaussj(double **a, int n, double **b, int m);
+void lubksb(double **a, int n, int *indx, double b[]);
+void ludcmp(double **a, int n, int *indx, double *d);
+
+//E Routines below are from NR
+
 #endif // ! _mathutil_h_
 
 

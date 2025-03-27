@@ -147,7 +147,7 @@ global void savestate(struct cmdline_data* cmd,
     safewrite(&cmd->sizeHistN, sizeof(int), str);
     safewrite(&cmd->rangeN, sizeof(real), str);
     safewrite(&cmd->rminHist, sizeof(real), str);
-    safewrite(&cmd->sizeHistTheta, sizeof(int), str);
+    safewrite(&cmd->sizeHistPhi, sizeof(int), str);
     //
     nchars = strlen(cmd->histNNFileName) + 1;
     safewrite(&nchars, sizeof(int), str);
@@ -352,7 +352,7 @@ global void savestate(struct cmdline_data* cmd,
         }
     }
 
-    safewrite(&gd->deltaTheta, sizeof(real), str);
+    safewrite(&gd->deltaPhi, sizeof(real), str);
 
     //B File pointers:
     nchars = strlen(gd->logfilePath) + 1;
@@ -783,7 +783,7 @@ global int restorestate(struct cmdline_data* cmd,
     saferead(&cmd->sizeHistN, sizeof(int), str);
     saferead(&cmd->rangeN, sizeof(real), str);
     saferead(&cmd->rminHist, sizeof(real), str);
-    saferead(&cmd->sizeHistTheta, sizeof(int), str);
+    saferead(&cmd->sizeHistPhi, sizeof(int), str);
     //
     saferead(&nchars, sizeof(int), str);
     cmd->histNNFileName = (string) allocate(nchars * sizeof(char));
@@ -994,7 +994,7 @@ global int restorestate(struct cmdline_data* cmd,
         }
     }
 
-    saferead(&gd->deltaTheta, sizeof(real), str);
+    saferead(&gd->deltaPhi, sizeof(real), str);
 
     //B File pointers:
     saferead(&nchars, sizeof(int), str);
@@ -1453,7 +1453,7 @@ global int PrintState(struct  cmdline_data *cmd,
         fprintf(fdout,FMTI,"sizeHistN",cmd->sizeHistN);
         fprintf(fdout,FMTR,"rangeN",cmd->rangeN);
         fprintf(fdout,FMTR,"rminHist",cmd->rminHist);
-        fprintf(fdout,FMTI,"sizeHistTheta",cmd->sizeHistTheta);
+        fprintf(fdout,FMTI,"sizeHistPhi",cmd->sizeHistPhi);
         //
         fprintf(fdout,FMTT,"histNNFileName",cmd->histNNFileName);
         fprintf(fdout,FMTT,"histXi2pcfFileName",cmd->histXi2pcfFileName);
@@ -1599,7 +1599,7 @@ global int PrintState(struct  cmdline_data *cmd,
             }
         }
 
-        fprintf(fdout,FMTR,"deltaTheta",gd->deltaTheta);
+        fprintf(fdout,FMTR,"deltaPhi",gd->deltaPhi);
 
         //B File pointers:
         fprintf(fdout,FMTT,"logfilePath",gd->logfilePath);

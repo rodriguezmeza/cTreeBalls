@@ -137,6 +137,7 @@ global int spherical_periodic_condition(real *, real *, real *, real *);
 
 
 global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd);
+
 //E
 
 

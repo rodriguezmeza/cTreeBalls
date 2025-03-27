@@ -247,6 +247,7 @@ typedef struct {
 //B Macros useful to compute chebyshev polynomials
 //#ifdef TPCF
 
+/*
 //B BALLS4
 #define CHEBYSHEVOMPCC                                      \
 {real xicosmphi; int m;                                               \
@@ -280,10 +281,10 @@ typedef struct {
        xicosmphi = xj * xi * hist->Chebs[m];                \
        hist->histXithread[m][n] += xicosmphi;               \
    }}
-
 //E
+*/
 
-
+/*
 #define CHEBYSHEVMPIOMP                                     \
   {hist_omp.Chebs[1] = 1.0;                                 \
    xicosmphi = xi * hist_omp.Chebs[1];                      \
@@ -299,9 +300,10 @@ typedef struct {
        xicosmphi = xi * hist_omp.Chebs[m];                  \
        hist_omp.histXithread[m][n] += xicosmphi;            \
    }}
-
+*/
 
 // Same as above but to use in search=tree-omp-sincos only
+//B What if mChebyshev is less than 7... correct!
 #ifdef MANUALCHEBYSHEV
 #define CHEBYSHEVTUOMPSINCOS                                      \
 {REAL xicosmphi,xisinmphi; int m;                                 \
@@ -383,6 +385,26 @@ typedef struct {
     }}
 #endif
 
+//B Macro for any posible value of mChebyshev
+#define CHEBYSHEVTUOMPSINCOSANY                                   \
+{real xicosmphi,xisinmphi; int m;                                 \
+    hist->ChebsT[1] = 1.0;                                        \
+    xicosmphi = xi * hist->ChebsT[1];                             \
+    hist->histXithreadcos[1][n] += xicosmphi;                     \
+    hist->ChebsU[1] = 0.0;                                        \
+    xisinmphi = xi * hist->ChebsU[1] * sinphi;                    \
+    hist->histXithreadsin[1][n] += xisinmphi;                     \
+    for (m=2; m<=cmd->mChebyshev+1; m++){                         \
+        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
+        xicosmphi = xi * hist->ChebsT[m];                         \
+        hist->histXithreadcos[m][n] += xicosmphi;                 \
+        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
+        xisinmphi = xi * hist->ChebsU[m] * sinphi;                \
+        hist->histXithreadsin[m][n] += xisinmphi;                 \
+    }}
+//E
+
+/*
 
 #define CHEBYSHEVOMPBALLS                                   \
   {hist->Chebs[1] = 1.0;                                    \
@@ -504,6 +526,8 @@ typedef struct {
           xicosmphi = xi * Chebs[m];                        \
           histXithread[m][n] += xicosmphi;                  \
    }}
+
+*/
 
 //#endif // ! TPCF
 //E End chebyshev definitions

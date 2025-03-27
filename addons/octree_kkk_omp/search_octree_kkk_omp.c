@@ -15,6 +15,7 @@
 
 #include "globaldefs.h"
 
+//B What if mChebyshev is less than 7... correct!
 #ifdef MANUALCHEBYSHEV
 #define CHEBYSHEVTUOMP                                            \
 {REAL xicosmphi,xisinmphi; int m;                                 \
@@ -177,7 +178,43 @@
         histN->histXithreadsin[m][n] += xisinmphi;                \
     }}
 #endif
+//B Macro for any posible value of mChebyshev
+#define CHEBYSHEVTUOMPNANY                                        \
+{real xicosmphi,xisinmphi; int m;                                 \
+    histN->ChebsT[1] = 1.0;                                       \
+    xicosmphi = xiN * histN->ChebsT[1];                           \
+    histN->histXithreadcos[1][n] += xicosmphi;                    \
+    histN->ChebsU[1] = 0.0;                                       \
+    xisinmphi = xiN * histN->ChebsU[1] * sinphi;                  \
+    histN->histXithreadsin[1][n] += xisinmphi;                    \
+    for (m=2; m<=cmd->mChebyshev+1; m++){                         \
+        histN->ChebsT[m] = 2.0*(cosphi)*histN->ChebsT[m-1]-histN->ChebsT[m-2]; \
+        xicosmphi = xiN * histN->ChebsT[m];                       \
+        histN->histXithreadcos[m][n] += xicosmphi;                \
+        histN->ChebsU[m] = 2.0*(cosphi)*histN->ChebsU[m-1]-histN->ChebsU[m-2]; \
+        xisinmphi = xiN * histN->ChebsU[m] * sinphi;              \
+        histN->histXithreadsin[m][n] += xisinmphi;                \
+    }}
+//E
 #endif
+
+//B Define structures:
+typedef struct {
+    realptr histNNSub;
+    //B TPCF
+    real ***histZetaMcos;
+    real ***histZetaMsin;
+    real ***histZetaMsincos;
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    real ***histZetaMcossin;
+    //E
+    //B Used to compute ZetaG using FFT
+    real ***histZetaGmRe;
+    real ***histZetaGmIm;
+    real ***histXi3pcf;
+    //E
+    real ***histZetaM;
+} gdl_sincos_omp_kkk, *gdlptr_sincos_omp_kkk;
 
 typedef struct {
     real **xiOUTVPcos;
@@ -213,6 +250,17 @@ typedef struct {
 
 #ifdef NMultipoles
 typedef struct {
+    realptr histNNSub;
+    //B TPCF
+    real ***histZetaMcos;
+    real ***histZetaMsin;
+    real ***histZetaMsincos;
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    real ***histZetaMcossin;
+    //E
+} gdl_sincos_omp_kkk_N, *gdlptr_sincos_omp_kkk_N;
+
+typedef struct {
     real **xiOUTVPcos;
     real **xiOUTVPsin;
     real **xiOUTVPsincos;
@@ -242,6 +290,7 @@ typedef struct {
     vector dr0;
 } gdhist_sincos_omp_kkk_N, *gdhistptr_sincos_omp_kkk_N;
 #endif
+//E
 
 local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
@@ -261,7 +310,11 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                int *nbList, int *intList);
 
 local int search_init_gd_sincos_omp_kkk(struct  cmdline_data* cmd,
-                                        struct  global_data* gd);
+                                        struct  global_data* gd,
+                                        gdlptr_sincos_omp_kkk);
+local int search_free_gd_sincos_omp_kkk(struct  cmdline_data* cmd,
+                                         struct  global_data* gd,
+                                        gdlptr_sincos_omp_kkk);
 local int search_init_sincos_omp_kkk(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                      gdhistptr_sincos_omp_kkk hist);
@@ -296,7 +349,11 @@ local void sumnode_sincos_cell_N(struct  cmdline_data*,
                                  gdhistptr_sincos_omp_kkk_N,
                                  int *nbList, int *intList);
 local int search_init_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
-                                        struct  global_data* gd);
+                                          struct  global_data* gd,
+                                          gdlptr_sincos_omp_kkk_N);
+local int search_free_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
+                                         struct  global_data* gd,
+                                          gdlptr_sincos_omp_kkk_N);
 local int search_init_sincos_omp_kkk_N(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                      gdhistptr_sincos_omp_kkk_N hist);
@@ -308,6 +365,61 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
                                             bodyptr p, int nbody,
                                        gdhistptr_sincos_omp_kkk_N);
 #endif
+
+#ifdef USEGSL
+local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
+                    gdlptr_sincos_omp_kkk, gdlptr_sincos_omp_kkk_N,
+                    int, int);
+#else
+local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
+                    gdlptr_sincos_omp_kkk, gdlptr_sincos_omp_kkk_N,
+                    int, int);
+#endif
+
+//B Saving histograms section: case KKKCORRELATION:
+local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd);
+local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
+                                struct  global_data* gd,
+                                gdlptr_sincos_omp_kkk);
+local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
+                               struct  global_data* gd,
+                                 gdlptr_sincos_omp_kkk);
+local int PrintHistZetaG(struct  cmdline_data* cmd,
+                         struct  global_data* gd,
+                         gdlptr_sincos_omp_kkk);
+local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
+                                 struct  global_data* gd,
+                                 gdlptr_sincos_omp_kkk);
+local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
+                                      struct  global_data* gd,
+                                      gdlptr_sincos_omp_kkk);
+
+#ifdef NMultipoles
+local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
+                                struct  global_data* gd,
+                                  gdlptr_sincos_omp_kkk_N);
+local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
+                               struct  global_data* gd,
+                                   gdlptr_sincos_omp_kkk_N);
+#ifdef NONORMHIST
+// Saves matrix ZetaM for each m multipole
+local int PrintHistZetaM_sincos_normalized(struct  cmdline_data* cmd,
+                                           struct  global_data* gd,
+                                           gdlptr_sincos_omp_kkk,
+                                           gdlptr_sincos_omp_kkk_N);
+// Saves matrix ZetaM for each m multipole at a set of theta2 angles
+local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
+                                            struct  global_data* gd,
+                                            gdlptr_sincos_omp_kkk,
+                                            gdlptr_sincos_omp_kkk_N);
+// edge effects:
+local int PrintHistZetaMm_sincos_edge_effects(struct  cmdline_data* cmd,
+                                              struct  global_data* gd,
+                                              gdlptr_sincos_omp_kkk,
+                                              gdlptr_sincos_omp_kkk_N);
+#endif
+#endif // ! NMultipoles
+//E
 
 //B kappa Avg Rmin
 #ifdef DEBUG
@@ -367,6 +479,8 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
                                              int cat1, int cat2)
 {
     double cpustart;
+    gdl_sincos_omp_kkk gdl;
+    gdl_sincos_omp_kkk_N gdlN;
 
     cpustart = CPUTIME;
     print_info(cmd, gd);
@@ -384,10 +498,9 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     ThreadCount(cmd, gd, nbody[cat1], cat1);
 #endif
 
-    search_init_gd_sincos_omp_kkk(cmd, gd);
-//    verb_print_debug(1, "\nAqui voy (1)\n");
+    search_init_gd_sincos_omp_kkk(cmd, gd, &gdl);
 #ifdef NMultipoles
-    search_init_gd_sincos_omp_kkk_N(cmd, gd);
+    search_init_gd_sincos_omp_kkk_N(cmd, gd, &gdlN);
 #endif
 
     //B kappa Avg Rmin
@@ -437,24 +550,36 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
            actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
-#else
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap, gdl)
+#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
-           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
-#endif
-#else
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap, gdl)
+#endif // ! ADDPIVOTNEIGHBOURS
+
+#else // ! DEBUG
+
 #ifdef ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                         \
            actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
-#else
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap, gdl)
+#else // ! ADDPIVOTNEIGHBOURS
+
+#ifdef NMultipoles
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,                                   \
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap,  \
+           gdl, gdlN)
+#else // ! NMultipoles
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                         \
-           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap)
-#endif
-#endif
+           ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap,gdl)
+#endif // ! NMultipoles
+
+#endif // ! ADDPIVOTNEIGHBOURS
+
+#endif // ! DEBUG
   {
     bodyptr p;
     bodyptr q;
@@ -688,26 +813,26 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #pragma omp critical
     {
         for (m=1; m<=cmd->mChebyshev+1; m++) {
-            ADDM_ext(gd->histZetaMcos[m],gd->histZetaMcos[m],
+            ADDM_ext(gdl.histZetaMcos[m],gdl.histZetaMcos[m],
                      hist.histZetaMthreadcos[m],cmd->sizeHistN);
-            ADDM_ext(gd->histZetaMsin[m],gd->histZetaMsin[m],
+            ADDM_ext(gdl.histZetaMsin[m],gdl.histZetaMsin[m],
                      hist.histZetaMthreadsin[m],cmd->sizeHistN);
-            ADDM_ext(gd->histZetaMsincos[m],gd->histZetaMsincos[m],
+            ADDM_ext(gdl.histZetaMsincos[m],gdl.histZetaMsincos[m],
                      hist.histZetaMthreadsincos[m],cmd->sizeHistN);
-            ADDM_ext(gd->histZetaMcossin[m],gd->histZetaMcossin[m],
+            ADDM_ext(gdl.histZetaMcossin[m],gdl.histZetaMcossin[m],
                      hist.histZetaMthreadcossin[m],cmd->sizeHistN);
         }
         gd->nbbcalc += hist.nbbcalcthread;
         gd->nbccalc += hist.nbccalcthread;
 #ifdef NMultipoles
         for (m=1; m<=cmd->mChebyshev+1; m++) {
-            ADDM_ext(gd->NhistZetaMcos[m],gd->NhistZetaMcos[m],
+            ADDM_ext(gdlN.histZetaMcos[m],gdlN.histZetaMcos[m],
                      histN.histZetaMthreadcos[m],cmd->sizeHistN);
-            ADDM_ext(gd->NhistZetaMsin[m],gd->NhistZetaMsin[m],
+            ADDM_ext(gdlN.histZetaMsin[m],gdlN.histZetaMsin[m],
                      histN.histZetaMthreadsin[m],cmd->sizeHistN);
-            ADDM_ext(gd->NhistZetaMsincos[m],gd->NhistZetaMsincos[m],
+            ADDM_ext(gdlN.histZetaMsincos[m],gdlN.histZetaMsincos[m],
                      histN.histZetaMthreadsincos[m],cmd->sizeHistN);
-            ADDM_ext(gd->NhistZetaMcossin[m],gd->NhistZetaMcossin[m],
+            ADDM_ext(gdlN.histZetaMcossin[m],gdlN.histZetaMcossin[m],
                      histN.histZetaMthreadcossin[m],cmd->sizeHistN);
         }
 #endif
@@ -747,27 +872,27 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
                        "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
                        ipfalse, num, den, xi);
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
-            MULMS_ext(gd->histZetaMcos[mm],
-                      gd->histZetaMcos[mm],xi,cmd->sizeHistN);
-            MULMS_ext(gd->histZetaMsin[mm],
-                      gd->histZetaMsin[mm],xi,cmd->sizeHistN);
-            MULMS_ext(gd->histZetaMsincos[mm],
-                      gd->histZetaMsincos[mm],xi,cmd->sizeHistN);
-            MULMS_ext(gd->histZetaMcossin[mm],
-                      gd->histZetaMcossin[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdl.histZetaMcos[mm],
+                      gdl.histZetaMcos[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdl.histZetaMsin[mm],
+                      gdl.histZetaMsin[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdl.histZetaMsincos[mm],
+                      gdl.histZetaMsincos[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdl.histZetaMcossin[mm],
+                      gdl.histZetaMcossin[mm],xi,cmd->sizeHistN);
         }
     }
 #ifdef NMultipoles
     if (scanopt(cmd->options, "smooth-pivot")) {
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
-            MULMS_ext(gd->NhistZetaMcos[mm],
-                      gd->NhistZetaMcos[mm],xi,cmd->sizeHistN);
-            MULMS_ext(gd->NhistZetaMsin[mm],
-                      gd->NhistZetaMsin[mm],xi,cmd->sizeHistN);
-            MULMS_ext(gd->NhistZetaMsincos[mm],
-                      gd->NhistZetaMsincos[mm],xi,cmd->sizeHistN);
-            MULMS_ext(gd->NhistZetaMcossin[mm],
-                      gd->NhistZetaMcossin[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdlN.histZetaMcos[mm],
+                      gdlN.histZetaMcos[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdlN.histZetaMsin[mm],
+                      gdlN.histZetaMsin[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdlN.histZetaMsincos[mm],
+                      gdlN.histZetaMsincos[mm],xi,cmd->sizeHistN);
+            MULMS_ext(gdlN.histZetaMcossin[mm],
+                      gdlN.histZetaMcossin[mm],xi,cmd->sizeHistN);
         }
     }
 #endif
@@ -811,6 +936,64 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #ifdef DEBUG
     fclose(outpivots);                              // Close file to debug pivots
 #endif
+
+//B Saving histograms section: case KKKCORRELATION:
+    verb_print(cmd->verbose,
+        "\n\tsearch_octree_kkk_omp: printing octree-kkk-omp method...\n\n");
+    PrintHistrBins(cmd, gd);
+#ifdef NONORMHIST
+        if (scanopt(cmd->options, "no-normalize-HistZeta"))
+            PrintHistZetaM_sincos(cmd, gd, &gdl);
+        else
+            PrintHistZetaM_sincos_normalized(cmd, gd, &gdl, &gdlN);
+#else
+        PrintHistZetaM_sincos(cmd, gd, &gdl);
+#endif
+#ifdef NMultipoles
+        PrintHistZetaM_sincos_N(cmd, gd, &gdlN);
+#endif
+
+        if (scanopt(cmd->options, "out-m-HistZeta")) {
+#ifdef NONORMHIST
+            if (scanopt(cmd->options, "no-normalize-HistZeta"))
+                PrintHistZetaMm_sincos(cmd, gd, &gdl);
+            else
+                PrintHistZetaMm_sincos_normalized(cmd, gd, &gdl, &gdlN);
+#else
+            PrintHistZetaMm_sincos(cmd, gd, &gdl);
+#endif // ! NONORMHIST
+#ifdef NMultipoles
+            PrintHistZetaMm_sincos_N(cmd, gd, &gdlN);
+#endif
+        }
+
+        if (scanopt(cmd->options, "out-HistZetaG")) {
+            PrintHistZetaGm_sincos(cmd, gd, &gdl);
+            PrintHistZetaG(cmd, gd, &gdl);
+            PrintHistZetaMZetaGm_sincos(cmd, gd, &gdl);
+        }
+
+#ifdef NMultipoles
+#ifdef NONORMHIST
+        if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+            if (scanopt(cmd->options, "edge-corrections")) {
+#ifdef USEGSL
+                matrixClm(cmd, gd, &gdl, &gdlN, 4, 3);
+#else
+                matrixClm(cmd, gd, &gdl, &gdlN, 4, 3);
+#endif
+                PrintHistZetaMm_sincos_edge_effects(cmd, gd, &gdl, &gdlN);
+            }
+        }
+#endif // ! NONORMHIST
+#endif // ! NMultipoles
+//E Saving histograms section: case KKKCORRELATION
+
+
+#ifdef NMultipoles
+    search_free_gd_sincos_omp_kkk_N(cmd, gd, &gdlN);// free memory
+#endif
+    search_free_gd_sincos_omp_kkk(cmd, gd, &gdl); // free memory
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print(cmd->verbose, "\nGoing out: CPU time = %lf %s\n",
@@ -906,7 +1089,11 @@ local void sumnode_nblist_omp(struct cmdline_data* cmd,
                     verb_log_print(cmd->verbose, gd->outlog,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                         cosphi);
-                CHEBYSHEVTUOMP;
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMP;
+                }
                 hist->nbccalcthread += 1;
             } // ! 1 < n < sizeHistN
         } // ! dr1 > rminHist
@@ -1004,7 +1191,11 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                     "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                         cosphi);
 #endif // ! POLARAXIS
-                CHEBYSHEVTUOMP;
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMP;
+                }
                 hist->nbbcalcthread += 1;
             } // ! 1 < n < sizeHistN
         } // ! dr1>cmd->rminHist
@@ -1077,7 +1268,11 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                            cosphi);
 #endif
-                CHEBYSHEVTUOMP;
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMP;
+                }
                 hist->nbccalcthread += 1;
             } // ! 1 < n < sizeHistN
         } // ! dr1 > rminHist
@@ -1223,8 +1418,13 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                     "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                     cosphi);
 #endif // ! POLARAXIS
-                CHEBYSHEVTUOMPN;
-                CHEBYSHEVTUOMP;
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPNANY;
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMPN;
+                    CHEBYSHEVTUOMP;
+                }
                 hist->nbbcalcthread += 1;
             }
         }
@@ -1301,8 +1501,13 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                            cosphi);
 #endif // ! POLARAXIS
-                CHEBYSHEVTUOMPN;
-                CHEBYSHEVTUOMP;
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPNANY;
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMPN;
+                    CHEBYSHEVTUOMP;
+                }
                 hist->nbccalcthread += 1;
             }
         }
@@ -1314,21 +1519,84 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 //B Routines as in cballsutils
 
 local int search_init_gd_sincos_omp_kkk(struct  cmdline_data* cmd,
-                                        struct  global_data* gd)
+                                        struct  global_data* gd,
+                                        gdlptr_sincos_omp_kkk gdl)
 {
     int n;
     int m;
+    INTEGER bytes_tot_local=0;
+
+    gdl->histNNSub = dvector(1,cmd->sizeHistN);
+    bytes_tot_local += 1*cmd->sizeHistN*sizeof(real);
+
+    gdl->histZetaMcos =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMsin =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMsincos =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    gdl->histZetaMcossin =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaM =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local +=
+            5*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+
+    gdl->histZetaGmRe =
+                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaGmIm =
+                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local +=
+            2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+    gdl->histXi3pcf = dmatrix3D(1,cmd->sizeHistPhi,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local +=
+                (cmd->sizeHistN*cmd->sizeHistN*cmd->sizeHistPhi)*sizeof(real);
+
+    gd->bytes_tot += bytes_tot_local;
+    verb_print(cmd->verbose,
+    "\nsearch_init_gd_octree_kkk: Allocated %g MByte for histograms storage.\n",
+    bytes_tot_local*INMB);
 
     for (n = 1; n <= cmd->sizeHistN; n++)
-        gd->histNNSub[n] = 0.0;
+        gdl->histNNSub[n] = 0.0;
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        CLRM_ext(gd->histZetaMcos[m], cmd->sizeHistN);
-        CLRM_ext(gd->histZetaMsin[m], cmd->sizeHistN);
-        CLRM_ext(gd->histZetaMsincos[m], cmd->sizeHistN);
-        CLRM_ext(gd->histZetaMcossin[m], cmd->sizeHistN);
-        gd->histXi[m][n] = 0.0;
+        CLRM_ext(gdl->histZetaMcos[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaMsin[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaMsincos[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaMcossin[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaM[m], cmd->sizeHistN);
     }
+    
     gd->nbbcalc = gd->nbccalc = gd->ncccalc = 0;
+
+    return SUCCESS;
+}
+
+local int search_free_gd_sincos_omp_kkk(struct  cmdline_data* cmd,
+                                         struct  global_data* gd,
+                                        gdlptr_sincos_omp_kkk gdl)
+{
+    free_dmatrix3D(gdl->histXi3pcf,1,cmd->sizeHistPhi,
+                   1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaGmIm,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaGmRe,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+    free_dmatrix3D(gdl->histZetaM,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    free_dmatrix3D(gdl->histZetaMcossin,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaMsincos,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaMsin,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaMcos,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+    free_dvector(gdl->histNNSub,1,cmd->sizeHistN);
 
     return SUCCESS;
 }
@@ -1480,23 +1748,61 @@ local int computeBodyProperties_sincos_kkk(struct  cmdline_data* cmd,
 
 #ifdef NMultipoles
 local int search_init_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
-                                        struct  global_data* gd)
+                                        struct  global_data* gd,
+                                          gdlptr_sincos_omp_kkk_N gdl)
 {
     int n;
     int m;
 
-//    verb_print_debug(1, "\nAqui voy (0)\n");
+    INTEGER bytes_tot_local=0;
+
+    gdl->histNNSub = dvector(1,cmd->sizeHistN);
+    bytes_tot_local += 1*cmd->sizeHistN*sizeof(real);
+
+    gdl->histZetaMcos =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMsin =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMsincos =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    gdl->histZetaMcossin =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local +=
+            4*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+
+    gd->bytes_tot += bytes_tot_local;
+    verb_print(cmd->verbose,
+    "\nsearch_init_gd_octree_kkk: Allocated %g MByte for histograms storage.\n",
+    bytes_tot_local*INMB);
+
     for (n = 1; n <= cmd->sizeHistN; n++)
-        gd->NhistNNSub[n] = 0.0;
-//    verb_print_debug(1, "\nAqui voy (1)\n");
+        gdl->histNNSub[n] = 0.0;
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        CLRM_ext(gd->NhistZetaMcos[m], cmd->sizeHistN);
-        CLRM_ext(gd->NhistZetaMsin[m], cmd->sizeHistN);
-        CLRM_ext(gd->NhistZetaMsincos[m], cmd->sizeHistN);
-        CLRM_ext(gd->NhistZetaMcossin[m], cmd->sizeHistN);
-        gd->NhistXi[m][n] = 0.0;
+        CLRM_ext(gdl->histZetaMcos[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaMsin[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaMsincos[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaMcossin[m], cmd->sizeHistN);
     }
-//    verb_print_debug(1, "\nAqui voy (2)\n");
+
+    return SUCCESS;
+}
+
+local int search_free_gd_sincos_omp_kkk_N(struct  cmdline_data* cmd,
+                                         struct  global_data* gd,
+                                        gdlptr_sincos_omp_kkk_N gdl)
+{
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    free_dmatrix3D(gdl->histZetaMcossin,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaMsincos,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaMsin,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(gdl->histZetaMcos,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+    free_dvector(gdl->histNNSub,1,cmd->sizeHistN);
 
     return SUCCESS;
 }
@@ -1631,6 +1937,264 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
 }
 #endif
 
+
+#ifdef USEGSL
+local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
+                    gdlptr_sincos_omp_kkk gdl, gdlptr_sincos_omp_kkk_N gdlN,
+                    int n1, int n2)
+{
+    // 1 <= l, m <= 2*mChebyshev + 1
+    // 1 <= n1, n2 <= sizeHistN
+    int l, m;
+    int lmx;
+    int neqs=2*cmd->mChebyshev+1;
+    int mx=cmd->mChebyshev;
+    real C1;
+    int s;
+
+    gsl_vector * bl = gsl_vector_alloc (neqs);
+    gsl_matrix * Clm = gsl_matrix_alloc (neqs, neqs);
+    gsl_matrix * ClmChk = gsl_matrix_alloc (neqs, neqs);
+    gsl_vector *x = gsl_vector_alloc (neqs);
+    gsl_permutation * p = gsl_permutation_alloc (neqs);
+
+    gsl_vector *t = gsl_vector_alloc (neqs);
+    gsl_matrix * u = gsl_matrix_alloc (neqs, neqs);
+    real v;
+
+    for (l=0; l<neqs; l++) {
+        gsl_vector_set(bl, l, 0.0);
+        for (m=0; m<neqs; m++) {
+            gsl_matrix_set(Clm, l, m, 0.0);
+            gsl_matrix_set(ClmChk, l, m, 0.0);
+        }
+    }
+
+    if (cmd->verbose_log>=3)
+        verb_log_print(cmd->verbose_log, gd->outlog,"\n\nMatrix and b elements:\n\n");
+    for (l=0; l<neqs; l++) {
+        if (l<=mx)
+            lmx = mx-(l+1)+2;
+        else
+            lmx = (l-1)+2-mx;
+
+        gsl_vector_set(bl, l,
+                       (gdl->histZetaMcos[lmx][n1][n2] + gdl->histZetaMsin[lmx][n1][n2])
+                       /(gdlN->histZetaMcos[1][n1][n2] + gdlN->histZetaMsin[1][n1][n2]));
+        if (l<=mx) {
+            if (cmd->verbose_log>=3)
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               "b%d : %g :: %d %d\n",
+                               -(lmx-1), gsl_vector_get(bl, l), l, lmx);
+        } else {
+            if (cmd->verbose_log>=3)
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               "b%d : %g :: %d %d\n",
+                               lmx-1, gsl_vector_get(bl, l), l, lmx);
+        }
+        for (m=0; m<neqs; m++) {
+            if (l-m>=-mx && l-m<0) {
+                C1 = (gdlN->histZetaMcos[m-l+1][n1][n2]
+                      + gdlN->histZetaMsin[m-l+1][n1][n2]
+                      )/(gdlN->histZetaMcos[1][n1][n2]+gdlN->histZetaMsin[1][n1][n2]);
+                gsl_matrix_set(Clm, l, m, C1);
+                gsl_matrix_set( ClmChk, l, m, gsl_matrix_get(Clm, l, m) );
+                if (cmd->verbose_log>=3)
+                    verb_log_print(cmd->verbose_log, gd->outlog,
+                                   "%g ", gsl_matrix_get(Clm, l, m));
+                continue;
+            }
+            if (l-m>=0 && l-m<=mx) {
+                C1 = (gdlN->histZetaMcos[l-m+1][n1][n2]
+                      +gdlN->histZetaMsin[l-m+1][n1][n2])
+                      /(gdlN->histZetaMcos[1][n1][n2]+gdlN->histZetaMsin[1][n1][n2]);
+                gsl_matrix_set(Clm, l, m, C1);
+                gsl_matrix_set( ClmChk, l, m, gsl_matrix_get(Clm, l, m) );
+                if (cmd->verbose_log>=3)
+                    verb_log_print(cmd->verbose_log, gd->outlog,
+                                   "%g ", gsl_matrix_get(Clm, l, m));
+                continue;
+            }
+            if (cmd->verbose_log>=3)
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               "%g ", gsl_matrix_get(Clm, l, m));
+        }
+        if (cmd->verbose_log>=3)
+            verb_log_print(cmd->verbose_log, gd->outlog,"\n\n");
+    }
+
+    gsl_linalg_LU_decomp (Clm, p, &s);
+    gsl_linalg_LU_solve (Clm, p, bl, x);
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,"x = \n");
+        gsl_vector_fprintf (gd->outlog, x, "%g");
+    }
+
+    // check A x = b
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,"\nA x = b:\n");
+        for (l=0; l<neqs; l++) {
+            v = 0.0;
+            for (m=0; m<neqs; m++) {
+                v += ( gsl_matrix_get(ClmChk,l,m)*gsl_vector_get(x,m) );
+            }
+            gsl_vector_set(t, l, v);
+            verb_log_print(cmd->verbose_log, gd->outlog,
+                           "%8s %g %g\n"," ",
+                           gsl_vector_get(bl,l),gsl_vector_get(t,l));
+        }
+    }
+
+    for (l=0; l<neqs; l++) {
+        if (l<=mx)
+            lmx = mx-(l+1)+2;
+        else
+            lmx = (l-1)+2-mx;
+
+        gdl->histZetaM[lmx][n1][n2] = gsl_vector_get(x, l);
+    }
+    
+    gsl_matrix_free (u);
+    gsl_vector_free (t);
+    gsl_permutation_free (p);
+    gsl_vector_free (x);
+    gsl_matrix_free (ClmChk);
+    gsl_matrix_free (Clm);
+    gsl_vector_free (bl);
+
+    return SUCCESS;
+}
+#else // ! USEGSL
+// routine to compute matriz elements Clm and its inverse
+//  Be careful with the use of NONORMHISTON and NMultipoles switches:
+//  NMultipolesON = 1 and NONORMHISTON = 1
+local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
+                    gdlptr_sincos_omp_kkk gdl, gdlptr_sincos_omp_kkk_N gdlN,
+                                         int n1, int n2)
+{
+// 1 <= l, m <= 2*mChebyshev + 1
+// 1 <= n1, n2 <= sizeHistN
+    int l, m;
+    int j;
+    int *indx;
+    real p;
+    real **Clm;
+    real **ClmChk;
+    real **u;
+    real *bl;
+    real *blChk;
+    real *t;
+    real C1;
+
+    int lm, lp;
+    int neqs=2*cmd->mChebyshev+1;
+    int mx=cmd->mChebyshev;
+    int lmx;
+
+    Clm = dmatrix(1,neqs,1,neqs);
+    ClmChk = dmatrix(1,neqs,1,neqs);
+    u = dmatrix(1,neqs,1,neqs);
+    bl = dvector(1,neqs);
+    blChk = dvector(1,neqs);
+    t = dvector(1,neqs);
+    indx = ivector(1,neqs);
+
+    CLRM_ext(Clm,neqs);
+    CLRM_ext(ClmChk,neqs);
+    CLRV_ext(bl,neqs);
+
+    if (cmd->verbose_log>=3)
+        verb_log_print(cmd->verbose_log, gd->outlog,"\n\nMatrix and b elements:\n\n");
+    for (l=1; l<=neqs; l++) {
+        if (l<=mx+1)
+            lmx = (mx-(l+1)+2) +1;
+        else
+            lmx = (l-2)+2-mx;
+
+        bl[l] = (gdl->histZetaMcos[lmx][n1][n2] + gdl->histZetaMsin[lmx][n1][n2])
+                       /gdlN->histZetaMcos[1][n1][n2];
+        blChk[l] = bl[l];
+        if (l<=mx+1) {
+            if (cmd->verbose_log>=3)
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               "b%d : %g :: %d %d\n",
+                               -(lmx-1), bl[l], l, lmx);
+        } else {
+            if (cmd->verbose_log>=3)
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               "b%d : %g :: %d %d\n",
+                               lmx-1, bl[l], l, lmx);
+        }
+        for (m=1; m<=neqs; m++) {
+            if (l-m>=-mx && l-m<0) {
+                C1 = (gdlN->histZetaMcos[m-l+1][n1][n2]
+                      + gdlN->histZetaMsin[m-l+1][n1][n2]
+                      )/gdlN->histZetaMcos[1][n1][n2];
+                Clm[l][m] = C1;
+                ClmChk[l][m] = Clm[l][m];
+                if (cmd->verbose_log>=3)
+                    verb_log_print(cmd->verbose_log, gd->outlog,
+                                   "%g ", Clm[l][m]);
+                continue;
+            }
+            if (l-m>=0 && l-m<=mx) {
+                C1 = (gdlN->histZetaMcos[l-m+1][n1][n2]
+                      +gdlN->histZetaMsin[l-m+1][n1][n2])
+                      /gdlN->histZetaMcos[1][n1][n2];
+                Clm[l][m] = C1;
+                ClmChk[l][m] = Clm[l][m];
+                if (cmd->verbose_log>=3)
+                    verb_log_print(cmd->verbose_log, gd->outlog,
+                                   "%g ", Clm[l][m]);
+                continue;
+            }
+            if (cmd->verbose_log>=3)
+                verb_log_print(cmd->verbose_log, gd->outlog,
+                               "%g ", Clm[l][m]);
+        }
+        if (cmd->verbose_log>=3)
+            verb_log_print(cmd->verbose_log, gd->outlog,"\n\n");
+    }
+
+    ludcmp(Clm,neqs,indx,&p);
+    lubksb(Clm,neqs,indx,bl);
+
+    // vector solutions
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                       "\nVector solution:\n");
+        for (l=1;l<=neqs;l++) {
+            verb_log_print(cmd->verbose_log, gd->outlog,"%8s %g\n"," ", bl[l]);
+        }
+    }
+
+    // check A x = b
+    real v;
+    if (cmd->verbose_log>=3) {
+        verb_log_print(cmd->verbose_log, gd->outlog,"\nA x = b:\n");
+        for (l=1; l<=neqs; l++) {
+            v = 0.0;
+            for (m=0; m<neqs; m++) {
+                v += ClmChk[l][m]*bl[m];
+            }
+            t[l] = v;
+            verb_log_print(cmd->verbose_log, gd->outlog,
+                           "%8s %g %g\n"," ",blChk[l],t[l]);
+        }
+    }
+
+    free_ivector(indx,1,cmd->mChebyshev+1);
+    free_dvector(t,1,cmd->mChebyshev+1);
+    free_dvector(blChk,1,cmd->mChebyshev+1);
+    free_dvector(bl,1,cmd->mChebyshev+1);
+    free_dmatrix(u,1,cmd->mChebyshev+1,1,cmd->mChebyshev+1);
+    free_dmatrix(ClmChk,1,cmd->mChebyshev+1,1,cmd->mChebyshev+1);
+    free_dmatrix(Clm,1,cmd->mChebyshev+1,1,cmd->mChebyshev+1);
+
+    return SUCCESS;
+}
+#endif // ! USEGSL
+
 //E Routines as in cballsutils
 
 local int print_info(struct cmdline_data* cmd,
@@ -1688,3 +2252,1263 @@ error("CheckParameters: OCTREEKKKOMP definition works only in a 3D unit sphere")
 #undef FACTIVENB
 #undef FACTIVEINT
 #endif
+
+
+//B Saving histograms section: case KKKCORRELATION:
+
+local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
+{
+    real rBin, rbinlog;
+    int n;
+    stream outstr;
+
+    outstr = stropen(gd->fpfnamehistrBinsFileName, "w!");
+
+    verb_print_q(2, cmd->verbose,
+               "Printing : to a file %s ...\n",gd->fpfnamehistrBinsFileName);
+
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            if (cmd->rminHist==0) {
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+            } else {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
+            }
+            rBin=rpow(10.0,rbinlog);
+        } else {
+            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
+        }
+        fprintf(outstr,"%16.8e\n",rBin);
+    }
+    fclose(outstr);
+
+    return SUCCESS;
+}
+
+// Saves matrix ZetaM for each m multipole
+local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
+                                struct  global_data* gd,
+                                gdlptr_sincos_omp_kkk gdl)
+{
+    int n1, n2, m;
+    stream outstr;
+    char namebuf[256];
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_cos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaMcos[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_sin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaMsin[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_sincos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaMsincos[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_cossin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaMcossin[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+
+#define MHISTZETA \
+"%16.8e %16.8e %16.8e %16.8e %16.8e %16.8e\n"
+
+#define MHISTZETAHEADER \
+"# [1] rBins; [2] diagonal; [3] theta2=Nbins/4.0; [4] theta2=2.0*Nbins/4.0; \
+[5] theta2=3.0*Nbins/4.0; [6] theta2=4.0*Nbins/4.0 - 1.0\n"
+
+
+// Saves matrix ZetaM for each m multipole at a set of theta2 angles
+local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
+                                struct  global_data* gd,
+                                 gdlptr_sincos_omp_kkk gdl)
+{
+    real rBin, rbinlog;
+    int n1, m;
+    stream outstr;
+    real Zeta;
+    real Zeta2;
+    real Zeta3;
+    real Zeta4;
+    real Zeta5;
+    int Nbins;
+    char namebuf[256];
+
+    Nbins = cmd->sizeHistN;
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMcos[m][n1][n1];
+            Zeta2 = gdl->histZetaMcos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdl->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdl->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdl->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+        
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+                Zeta = gdl->histZetaMsin[m][n1][n1];
+                Zeta2 = gdl->histZetaMsin[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sincos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                        + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMsincos[m][n1][n1];
+            Zeta2 = gdl->histZetaMsincos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cossin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMcossin[m][n1][n1];
+            Zeta2 = gdl->histZetaMcossin[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+
+
+// Saves matrix ZetaG, full correlation function at each phi bins
+local int PrintHistZetaG(struct  cmdline_data* cmd,
+                        struct  global_data* gd, gdlptr_sincos_omp_kkk gdl)
+{
+    int n1, n2, l, m;
+    stream outstr;
+    char namebuf[256];
+    real theta;
+    real ***histXi3pcfIm;
+
+    histXi3pcfIm =
+        dmatrix3D(1,cmd->sizeHistPhi,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+    for (l=1; l<=cmd->sizeHistPhi; l++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                "_Xi3pcf_",l, EXTFILES);
+        theta = (real)l * gd->deltaPhi;
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s with theta %g...\n",namebuf, theta);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                gdl->histXi3pcf[l][n1][n2] = gdl->histZetaMcos[1][n1][n2]
+                                            + gdl->histZetaMsin[1][n1][n2];
+                histXi3pcfIm[l][n1][n2] = 0.0;
+                for (m=2; m<=cmd->mChebyshev+1; m++) {
+                    gdl->histXi3pcf[l][n1][n2] += 2.0*(
+                            gdl->histZetaMcos[m][n1][n2]
+                            + gdl->histZetaMsin[m][n1][n2]
+                                                       )*rcos((real)m*theta);
+                    //B This will be a measurement error
+                    histXi3pcfIm[l][n1][n2] +=
+                                            2.0*(
+                            gdl->histZetaMsincos[m][n1][n2]
+                    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+                            - gdl->histZetaMcossin[m][n1][n2]
+                                                 )*rcos((real)m*theta);
+                    //E
+                }
+                fprintf(outstr,"%16.8e ",gdl->histXi3pcf[l][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    free_dmatrix3D(histXi3pcfIm,1,cmd->sizeHistPhi,
+                   1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+    return SUCCESS;
+}
+
+
+
+// Saves matrix ZetaM as obtained from ZetaG, for each m multipole
+//  It seems this is doing in routine below... check and delete this if the case
+local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
+                                 struct  global_data* gd,
+                                 gdlptr_sincos_omp_kkk gdl)
+{
+    int n1, n2, m;
+    stream outstr;
+    char namebuf[256];
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                "_Re", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaGmRe[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                "_Im", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaGmIm[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+
+
+// Saves matrix ZetaG, real and imaginary parts, obtained from ZetaM multipoles
+//  also saves full 3pcf ZetaG matrix for each phi bins obtained from inverse FFT
+local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
+                                     struct  global_data* gd,
+                                      gdlptr_sincos_omp_kkk gdl)
+{
+    int n1, n2, m, l;
+    stream outstr;
+    char namebuf[256];
+
+    int NP = 2*(cmd->mChebyshev+1);
+    double ***histZetaG;
+    double ***histZetaG_Im;
+    histZetaG = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    histZetaG_Im = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+#ifdef USEGSL
+    double *data;
+    gsl_fft_real_wavetable * real;
+    gsl_fft_real_workspace * work;
+    gsl_fft_halfcomplex_wavetable * hc;
+
+    //B Test and check this allocation of memory...
+    //data=dvector(0,NP-1);
+    data=(double *)allocate(NP*sizeof(double));
+    //E
+
+    work = gsl_fft_real_workspace_alloc (NP);
+    real = gsl_fft_real_wavetable_alloc (NP);
+    hc = gsl_fft_halfcomplex_wavetable_alloc (NP);
+#else
+    double *data;
+    data=dvector(1,NP);
+#endif
+
+    //B Sum cos^2 + sin^2 and sincos - sincos
+    // mchebyshev + 1 < sizeHistPhi/2
+    // and mchebyshev + 1 must be a power of 2 also
+    for (n1=1; n1<=cmd->sizeHistN; n1++) {
+        for (n2=1; n2<=cmd->sizeHistN; n2++) {
+            for (m=1; m<=cmd->mChebyshev+1; m++) {
+                gdl->histZetaGmRe[m][n1][n2] =
+                        gdl->histZetaMcos[m][n1][n2]
+                        + gdl->histZetaMsin[m][n1][n2];
+                gdl->histZetaGmIm[m][n1][n2] =
+                        gdl->histZetaMsincos[m][n1][n2]
+                // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+                        - gdl->histZetaMcossin[m][n1][n2];
+            }
+#ifdef USEGSL
+            for (m=0; m<cmd->mChebyshev+1; m++) {
+                data[2*m] = gdl->histZetaGmRe[m+1][n1][n2];
+                data[2*m+1] = gdl->histZetaGmIm[m+1][n1][n2];
+            }
+
+            gsl_fft_complex_radix2_inverse (data, 1, NP/2);
+            for (l=0; l<NP; l++) {                 // l denote angular separation
+                histZetaG[l+1][n1][n2] = data[l];
+            }
+#else
+            int isign = -1;                         // sign in imaginary unit
+            for (m=1; m<=cmd->mChebyshev+1; m++) {
+                data[2*m-1] = gdl->histZetaGmRe[m][n1][n2];
+                data[2*m] = gdl->histZetaGmIm[m][n1][n2];
+            }
+            dfour1(data,NP/2,isign);                // Inverse Fourier transform
+                                                    // data has Re and Im parts
+            for (l=1; l<=NP; l++) {                 // l denote angular
+                                                    //  separation
+                histZetaG[l][n1][n2] = (2.0/(double)NP)*data[l];
+            }
+#endif
+        }
+    }
+    //E
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                "_Re", m, EXTFILES);
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaGmRe[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                "_Im", m, EXTFILES);
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdl->histZetaGmIm[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    for (l=1; l<=cmd->mChebyshev+1; l++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                "_fftinv_Re",l, EXTFILES);
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",histZetaG[2*l-1][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (l=1; l<=cmd->mChebyshev+1; l++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                "_fftinv_Im",l, EXTFILES);
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",histZetaG[2*l][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    //B Sum cos^2 + sin^2 and sincos - sincos
+    // mchebyshev + 1 < sizeHistPhi/2
+    // and mchebyshev + 1 must be a power of 2 also
+    double deltaPhi = TWOPI/((double)NP);
+    for (n1=1; n1<=cmd->sizeHistN; n1++) {
+        for (n2=1; n2<=cmd->sizeHistN; n2++) {
+            for (l=1; l<=NP; l++) {              // l denote angular sep.
+                histZetaG[l][n1][n2] = gdl->histZetaMcos[1][n1][n2]
+                                        + gdl->histZetaMsin[1][n1][n2];
+                histZetaG_Im[l][n1][n2] = gdl->histZetaMsincos[1][n1][n2]
+                // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+                                            - gdl->histZetaMcossin[1][n1][n2];
+                for (m=2; m<=cmd->mChebyshev+1; m++) {
+                    histZetaG[l][n1][n2] += 2.0*(gdl->histZetaMcos[m][n1][n2]
+                                            + gdl->histZetaMsin[m][n1][n2])
+                                            *rcos(((double)(m*l))*deltaPhi);
+                    histZetaG_Im[l][n1][n2] +=
+                                    2.0*(gdl->histZetaMsincos[m][n1][n2]
+                    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+                                    - gdl->histZetaMcossin[m][n1][n2])
+                                    *rcos(((double)(m*l))*deltaPhi);
+                }
+            }
+        }
+    }
+    //E
+    for (l=1; l<=NP; l++) {
+        sprintf(namebuf, "%s_%s_%d%s",
+                gd->fpfnamehistZetaGFileName, "Re", l, EXTFILES);
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",histZetaG[l][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (l=1; l<=NP; l++) {
+        sprintf(namebuf, "%s_%s_%d%s",
+                gd->fpfnamehistZetaGFileName, "Im", l, EXTFILES);
+        verb_print_q(2, cmd->verbose,
+                    "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",histZetaG_Im[l][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+#ifdef USEGSL
+    gsl_fft_halfcomplex_wavetable_free (hc);
+    gsl_fft_real_wavetable_free (real);
+    gsl_fft_real_workspace_free (work);
+//    free_dvector(data,0,NP-1);
+    free(data);
+#else
+    free_dvector(data,1,NP);
+#endif
+
+    free_dmatrix3D(histZetaG_Im,1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix3D(histZetaG,1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
+
+    return SUCCESS;
+}
+
+
+//#ifdef ADDONS
+//#include "cballs_include_05.h"
+//#endif
+
+
+//#undef MHISTZETAHEADER
+//#undef MHISTZETA
+
+
+
+#ifdef NMultipoles
+// Saves matrix ZetaM for each m multipole
+local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
+                                struct  global_data* gd,
+                                  gdlptr_sincos_omp_kkk_N gdlN)
+{
+    int n1, n2, m;
+    stream outstr;
+    char namebuf[256];
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_cos_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdlN->histZetaMcos[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_sin_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdlN->histZetaMsin[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_sincos_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdlN->histZetaMsincos[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_cossin_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",gdlN->histZetaMcossin[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+
+// Saves matrix ZetaM for each m multipole at a set of theta2 angles
+local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
+                                struct  global_data* gd,
+                                   gdlptr_sincos_omp_kkk_N gdlN)
+{
+    real rBin, rbinlog;
+    int n1, m;
+    stream outstr;
+    real Zeta;
+    real Zeta2;
+    real Zeta3;
+    real Zeta4;
+    real Zeta5;
+    int Nbins;
+    char namebuf[256];
+
+    Nbins = cmd->sizeHistN;
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cos_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdlN->histZetaMcos[m][n1][n1];
+            Zeta2 = gdlN->histZetaMcos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdlN->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdlN->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdlN->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+        
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sin_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+                Zeta = gdlN->histZetaMsin[m][n1][n1];
+                Zeta2 = gdlN->histZetaMsin[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = gdlN->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = gdlN->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = gdlN->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sincos_N", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                        + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdlN->histZetaMsincos[m][n1][n1];
+            Zeta2 = gdlN->histZetaMsincos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdlN->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdlN->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdlN->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cossin_", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdlN->histZetaMcossin[m][n1][n1];
+            Zeta2 = gdlN->histZetaMcossin[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdlN->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdlN->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdlN->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+//#endif
+
+
+//B Additional definitions... delete ASAP
+
+/*
+//#ifdef NMultipoles
+local int PrintHistXi2pcf_N(struct  cmdline_data* cmd, struct  global_data* gd)
+{
+    real rBin, rbinlog;
+    int n;
+    stream outstr;
+    char namebuf[256];
+
+    sprintf(namebuf, "%s%s%s%s", gd->fpfnamehistXi2pcfFileName,
+            "_N", cmd->suffixOutFiles, EXTFILES);
+    verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+    outstr = stropen(namebuf, "w!");
+
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        if (cmd->useLogHist) {
+            if (cmd->rminHist==0) {
+                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+            } else {
+                rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
+            }
+            rBin=rpow(10.0,rbinlog);
+        } else {
+            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
+        }
+        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->NhistXi2pcf[n]);
+    }
+    fclose(outstr);
+
+    return SUCCESS;
+}
+*/
+
+#ifdef NONORMHIST
+
+// Saves matrix ZetaM for each m multipole
+local int PrintHistZetaM_sincos_normalized(struct  cmdline_data* cmd,
+                                           struct  global_data* gd,
+                                           gdlptr_sincos_omp_kkk gdl,
+                                           gdlptr_sincos_omp_kkk_N gdlN)
+{
+    int n1, n2, m;
+    stream outstr;
+    char namebuf[256];
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_cos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",
+                        gdl->histZetaMcos[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_sin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",
+                        gdl->histZetaMsin[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_sincos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",
+                        gdl->histZetaMsincos[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_cossin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                fprintf(outstr,"%16.8e ",
+                        gdl->histZetaMcossin[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+
+// Saves matrix ZetaM for each m multipole at a set of theta2 angles
+//  normalization with N_0 = (N_histZetaMcos[1][n1][n1] + N_histZetaMsin[1][n1][n1])
+//                         = N_histZetaMcos[1][n1][n1]
+//  because N_histZetaMsin[1][n1][n1] = 0.
+local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
+                                            struct  global_data* gd,
+                                            gdlptr_sincos_omp_kkk gdl,
+                                            gdlptr_sincos_omp_kkk_N gdlN)
+{
+    real rBin, rbinlog;
+    int n1, m;
+    stream outstr;
+    real Zeta;
+    real Zeta2;
+    real Zeta3;
+    real Zeta4;
+    real Zeta5;
+    int Nbins;
+    char namebuf[256];
+
+    Nbins = cmd->sizeHistN;
+
+    real Norm;
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta  = gdl->histZetaMcos[m][n1][n1]
+                  /
+                    (
+                     gdlN->histZetaMcos[1][n1][n1]
+                     + gdlN->histZetaMsin[1][n1][n1]
+                     );
+            Zeta2 = gdl->histZetaMcos[m][n1][(int)(Nbins/4.0)]
+                  /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
+                     );
+            Zeta3 = gdl->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)]
+                  /
+                    (
+                    gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
+                     );
+            Zeta4 = gdl->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)]
+                  /
+                    (
+                    gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
+                     );
+            Zeta5 = gdl->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                  /
+                    (
+                    gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                     );
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+        
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+                Zeta = gdl->histZetaMsin[m][n1][n1]
+                     /
+                        (
+                        gdlN->histZetaMcos[1][n1][n1]
+                         + gdlN->histZetaMsin[1][n1][n1]
+                         );
+                Zeta2 = gdl->histZetaMsin[m][n1][(int)(Nbins/4.0)]
+                        /
+                        (
+                        gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
+                         + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
+                         );
+                Zeta3 = gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)]
+                        /
+                        (
+                         gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
+                         + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
+                         );
+                Zeta4 = gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)]
+                        /
+                        (
+                         gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
+                         + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
+                         );
+                Zeta5 = gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                        /
+                        (
+                         gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                         + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                         );
+                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sincos", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                        + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMsincos[m][n1][n1]
+                    /
+                    (
+                    gdlN->histZetaMcos[1][n1][n1]
+                     + gdlN->histZetaMsin[1][n1][n1]
+                     );
+            Zeta2 = gdl->histZetaMsincos[m][n1][(int)(Nbins/4.0)]
+                    /
+                    (
+                    gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
+                     );
+            Zeta3 = gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)]
+                    /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
+                     );
+            Zeta4 = gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)]
+                    /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
+                     );
+            Zeta5 = gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                    /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                     );
+
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cossin", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMcossin[m][n1][n1]
+                    /
+                    (
+                    gdlN->histZetaMcos[1][n1][n1]
+                     + gdlN->histZetaMsin[1][n1][n1]
+                     );
+            Zeta2 = gdl->histZetaMcossin[m][n1][(int)(Nbins/4.0)]
+                    /
+                    (
+                    gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
+                     );
+            Zeta3 = gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)]
+                    /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
+                     );
+            Zeta4 = gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)]
+                    /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
+                     );
+            Zeta5 = gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                    /
+                    (
+                     gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                     + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
+                     );
+
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    return SUCCESS;
+}
+
+
+// Saves matrix ZetaM for each m multipole at a set of theta2 angles
+local int PrintHistZetaMm_sincos_edge_effects(struct  cmdline_data* cmd,
+                                              struct  global_data* gd,
+                                              gdlptr_sincos_omp_kkk gdl,
+                                              gdlptr_sincos_omp_kkk_N gdlN)
+{
+    real rBin, rbinlog;
+    int n1, m;
+    stream outstr;
+    real Zeta;
+    real Zeta2;
+    real Zeta3;
+    real Zeta4;
+    real Zeta5;
+    int Nbins;
+    char namebuf[256];
+
+    Nbins = cmd->sizeHistN;
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_EE", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            matrixClm(cmd, gd, gdl, gdlN, n1, n1);
+            Zeta = gdl->histZetaM[m][n1][n1];
+            matrixClm(cmd, gd, gdl, gdlN, n1, (int)(Nbins/4.0));
+            Zeta2 = gdl->histZetaM[m][n1][(int)(Nbins/4.0)];
+            matrixClm(cmd, gd, gdl, gdlN, n1, (int)(2.0*Nbins/4.0));
+            Zeta3 = gdl->histZetaM[m][n1][(int)(2.0*Nbins/4.0)];
+            matrixClm(cmd, gd, gdl, gdlN, n1, (int)(3.0*Nbins/4.0));
+            Zeta4 = gdl->histZetaM[m][n1][(int)(3.0*Nbins/4.0)];
+            matrixClm(cmd, gd, gdl, gdlN, n1, (int)(4.0*Nbins/4.0 - 1.0));
+            Zeta5 = gdl->histZetaM[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    /*
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sin_EE", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+                Zeta = gdl->histZetaMsin[m][n1][n1];
+                Zeta2 = gdl->histZetaMsin[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_sincos_EE", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                        + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMsincos[m][n1][n1];
+            Zeta2 = gdl->histZetaMsincos[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+
+    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                "_cossin_EE", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        fprintf(outstr,MHISTZETAHEADER);
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            if (cmd->useLogHist) {
+                if (cmd->rminHist==0) {
+                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                            + rlog10(cmd->rangeN);
+                } else {
+                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                }
+                rBin=rpow(10.0,rbinlog);
+            } else {
+                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+            }
+            Zeta = gdl->histZetaMcossin[m][n1][n1];
+            Zeta2 = gdl->histZetaMcossin[m][n1][(int)(Nbins/4.0)];
+            Zeta3 = gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
+            Zeta4 = gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
+            Zeta5 = gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+        }
+        fclose(outstr);
+    }
+*/
+
+    return SUCCESS;
+}
+
+#endif // ! NONORMHIST
+
+#endif // ! NMultipoles
+
+#undef MHISTZETAHEADER
+#undef MHISTZETA
+
+
+//E Saving histograms section: case KKKCORRELATION:

@@ -75,8 +75,8 @@ local void startrun_ParamStat(struct  cmdline_data* cmd,
         cmd->rangeN = GetdParam("rangeN");
     if (GetParamStat("rminHist") & ARGPARAM)
         cmd->rminHist = GetdParam("rminHist");
-    if (GetParamStat("sizeHistTheta") & ARGPARAM)
-        cmd->sizeHistTheta = GetiParam("sizeHistTheta");
+    if (GetParamStat("sizeHistPhi") & ARGPARAM)
+        cmd->sizeHistPhi = GetiParam("sizeHistPhi");
     //
     if (GetParamStat("histNNFileName") & ARGPARAM)
         cmd->histNNFileName = GetParam("histNNFileName");

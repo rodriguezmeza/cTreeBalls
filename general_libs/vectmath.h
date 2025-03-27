@@ -16,6 +16,13 @@
         (v)[_i] = 0.0;                                                  \
 }
 
+#define CLRV_ext(v, dim)                                               \
+{                                                                       \
+    int _i;                                                             \
+    for (_i = 1; _i < dim; _i++)                                       \
+        (v)[_i] = 0.0;                                                  \
+}
+
 #define UNITV(v,j)                                                      \
 {                                                                       \
     int _i;                                                             \

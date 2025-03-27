@@ -12,9 +12,6 @@
 #include "input_iolib_02.h"
 #endif
 
-#ifdef TREE3PCFDIRECTOMP
-#endif
-
 #ifdef SAVERESTORE
 #include "input_save_restore_02.h"
 #endif

@@ -310,8 +310,9 @@ void in_vector_ndim(stream str, double *vec, int ndim)
 
     for (i=0; i<ndim; i++) {
 //        if (fscanf(str, "%lf", &tmp) != 1)
+//        if (fscanf(str, "%le", &tmp) != 1)
         if (fscanf(str, "%lg", &tmp) != 1)
-            error("in_vector_ndim: fscanf failed\n");
+            error("in_vector_ndim: fscanf failed %d\n",i);
 		vec[i] = tmp;
 	}
 	while ((c = getc(str)) != EOF)		// Reading rest of the line ...

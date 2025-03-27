@@ -243,6 +243,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 #define NNCORRELATION       1
 #define KKCORRELATION       2
 #define NNEstimator         3
+#define GGGCORRELATION      4
 
 local int correlation_int;
 
@@ -384,6 +385,10 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
         *correlation_int = KKKCORRELATION;
         return SUCCESS;
     }
+    if (scanopt(cmd->options, "GGGCorrelation")) {
+        *correlation_int = GGGCORRELATION;
+        return SUCCESS;
+    }
 
     if (*correlation_int == -1) {
         *correlation_int = KKKCORRELATION;
@@ -401,6 +406,7 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
 #undef NNCORRELATION
 #undef KKCORRELATION
 #undef NNEstimator
+#undef GGGCORRELATION
 
 
 local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd)
@@ -845,7 +851,7 @@ local int PrintHistZetaG(struct  cmdline_data* cmd,
     char namebuf[256];
 
     fclose(outstr);
-    for (l=1; l<=cmd->sizeHistTheta; l++) {
+    for (l=1; l<=cmd->sizeHistPhi; l++) {
         sprintf(namebuf, "%s_%d%s", gd->fpfnamehistZetaGFileName,
                 l, EXTFILES);
         verb_print_q(2, cmd->verbose,
@@ -923,7 +929,11 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     gsl_fft_real_workspace * work;
     gsl_fft_halfcomplex_wavetable * hc;
 
-    data=dvector(0,NP-1);
+    //B Test and check this allocation of memory...
+    //data=dvector(0,NP-1);
+    data=(double *)allocate(NP*sizeof(double));
+    //E
+
     work = gsl_fft_real_workspace_alloc (NP);
     real = gsl_fft_real_wavetable_alloc (NP);
     hc = gsl_fft_halfcomplex_wavetable_alloc (NP);
@@ -933,7 +943,7 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 #endif
 
     //B Sum cos^2 + sin^2 and sincos - sincos
-    // mchebyshev + 1 < sizeHistTheta/2
+    // mchebyshev + 1 < sizeHistPhi/2
     // and mchebyshev + 1 must be a power of 2 also
     for (n1=1; n1<=cmd->sizeHistN; n1++) {
         for (n2=1; n2<=cmd->sizeHistN; n2++) {
@@ -1032,9 +1042,9 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     }
 
     //B Sum cos^2 + sin^2 and sincos - sincos
-    // mchebyshev + 1 < sizeHistTheta/2
+    // mchebyshev + 1 < sizeHistPhi/2
     // and mchebyshev + 1 must be a power of 2 also
-    double deltaTheta = TWOPI/((double)NP);
+    double deltaPhi = TWOPI/((double)NP);
     for (n1=1; n1<=cmd->sizeHistN; n1++) {
         for (n2=1; n2<=cmd->sizeHistN; n2++) {
             for (l=1; l<=NP; l++) {              // l denote angular sep.
@@ -1046,12 +1056,12 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                 for (m=2; m<=cmd->mChebyshev+1; m++) {
                     histZetaG[l][n1][n2] += 2.0*(gd->histZetaMcos[m][n1][n2]
                                             + gd->histZetaMsin[m][n1][n2])
-                                            *rcos(((double)(m*l))*deltaTheta);
+                                            *rcos(((double)(m*l))*deltaPhi);
                     histZetaG_Im[l][n1][n2] +=
                                     2.0*(gd->histZetaMsincos[m][n1][n2]
                     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
                                     - gd->histZetaMcossin[m][n1][n2])
-                                    *rcos(((double)(m*l))*deltaTheta);
+                                    *rcos(((double)(m*l))*deltaPhi);
                 }
             }
         }
@@ -1088,9 +1098,10 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 
 #ifdef USEGSL
     gsl_fft_halfcomplex_wavetable_free (hc);
-    gsl_fft_real_workspace_free (work);
     gsl_fft_real_wavetable_free (real);
-    free_dvector(data,0,NP-1);
+    gsl_fft_real_workspace_free (work);
+//    free_dvector(data,0,NP-1);
+    free(data);
 #else
     free_dvector(data,1,NP);
 #endif

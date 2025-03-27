@@ -59,7 +59,7 @@ struct cmdline_data{
     int sizeHistN;
     real rangeN;
     real rminHist;
-    int sizeHistTheta;
+    int sizeHistPhi;
     //
     string histNNFileName;
     string histXi2pcfFileName;

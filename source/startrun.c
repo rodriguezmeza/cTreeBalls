@@ -266,7 +266,7 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
     cmd->sizeHistN = GetiParam("sizeHistN");
     cmd->rangeN = GetdParam("rangeN");
     cmd->rminHist = GetdParam("rminHist");
-    cmd->sizeHistTheta = GetiParam("sizeHistTheta");
+    cmd->sizeHistPhi = GetiParam("sizeHistPhi");
     //
     cmd->histNNFileName = GetParam("histNNFileName");
     cmd->histXi2pcfFileName = GetParam("histXi2pcfFileName");
@@ -375,7 +375,7 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
     IPName(cmd->sizeHistN,"sizeHistN");
     RPName(cmd->rangeN,"rangeN");
     RPName(cmd->rminHist,"rminHist");
-    IPName(cmd->sizeHistTheta,"sizeHistTheta");
+    IPName(cmd->sizeHistPhi,"sizeHistPhi");
     //
     SPName(cmd->histNNFileName,"histNNFileName",MAXLENGTHOFSTRSCMD);
     SPName(cmd->histXi2pcfFileName,"histXi2pcfFileName",MAXLENGTHOFSTRSCMD);
@@ -813,10 +813,10 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     //E
 #undef RADTOARCMIN
 
-    gd->deltaTheta = TWOPI/cmd->sizeHistTheta;
-    // Nyquist frecuency = 1/(2 deltaTheta)
+    gd->deltaPhi = TWOPI/cmd->sizeHistPhi;
+    // Nyquist frecuency = 1/(2 deltaPhi)
     verb_log_print(cmd->verbose_log, gd->outlog,
-                   "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaTheta);
+                   "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaPhi);
 
 #ifdef ADDONS
 #include "startrun_include_05.h"
@@ -838,18 +838,23 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
         error("CheckParameters: can´t have loghist false and balls-omp (%d %s)\n",
               cmd->useLogHist, cmd->searchMethod);
     if (cmd->computeTPCF) {
+#ifndef USEGSL
         if (cmd->mChebyshev + 1 < 2 || (cmd->mChebyshev + 1)&(cmd->mChebyshev))
             error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive and a power of 2\n", cmd->mChebyshev+1);
+#else
+        if (cmd->mChebyshev + 1 < 2)
+            error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive\n", cmd->mChebyshev+1);
+#endif
     }
-    if (cmd->mChebyshev + 1 > cmd->sizeHistTheta)
-        error("CheckParameters: mChebyshev + 1 must be less thatn sizeHistTheta\n");
+    if (cmd->mChebyshev + 1 > cmd->sizeHistPhi)
+        error("CheckParameters: mChebyshev + 1 must be less than sizeHistPhi\n");
     if (gd->nsmooth[0] < 1)
         error("CheckParameters: absurd value for nsmooth\n");
     if (gd->rsmooth[0] < 0 || gd->rsmoothFlag==FALSE)
         error("CheckParameters: absurd value for rsmooth (%s)\n",cmd->rsmooth);
     if (cmd->theta < 0)
         error("CheckParameters: absurd value for theta\n");
-    // We can get ride off one parameter if do sizeHistTheta = 2(mChebyshev + 1)
+    // We can get ride off one parameter if do sizeHistPhi = 2(mChebyshev + 1)
     //E
 
     //B Parameters to control the I/O file(s)
@@ -881,8 +886,8 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
         error("CheckParameters: absurd value for rangeN\n");
     if (cmd->rminHist < 0 || cmd->rminHist > cmd->rangeN)
         error("CheckParameters: absurd value for rminHist\n");
-    if (cmd->sizeHistTheta < 2 || cmd->sizeHistTheta&(cmd->sizeHistTheta-1))
-    error("CheckParameters: absurd value for sizeHistTheta\n\tmust be a power of 2\n");
+    if (cmd->sizeHistPhi < 2 || cmd->sizeHistPhi&(cmd->sizeHistPhi-1))
+    error("CheckParameters: absurd value for sizeHistPhi\n\tmust be a power of 2\n");
     //
     //E
     
@@ -1007,7 +1012,7 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
         fprintf(fdout,FMTI,"sizeHistN",cmd->sizeHistN);
         fprintf(fdout,FMTR,"rangeN",cmd->rangeN);
         fprintf(fdout,FMTR,"rminHist",cmd->rminHist);
-        fprintf(fdout,FMTI,"sizeHistTheta",cmd->sizeHistTheta);
+        fprintf(fdout,FMTI,"sizeHistPhi",cmd->sizeHistPhi);
         //
         fprintf(fdout,FMTT,"histNNFileName",cmd->histNNFileName);
         fprintf(fdout,FMTT,"histXi2pcfFileName",cmd->histXi2pcfFileName);
@@ -1071,7 +1076,7 @@ local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int se
     const gsl_rng_type * T;
     gsl_rng_env_setup();
     T = gsl_rng_default;
-    gd->r = gsl_rng_alloc (T);
+    gd->r = gsl_rng_alloc (T);                      // Deallocate properly at EndRun...
     if (cmd->verbose>=3)
         verb_print(cmd->verbose, "\nrandom_init: gd->r and seed = %d %d\n",
                    *(gd->r), seed);
@@ -1142,6 +1147,8 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
         bytes_tot_local +=
                 4*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 #ifdef USEGSL
+        //B Do not use anymore...
+        /*
         gd->histXi_gsl = gsl_matrix_complex_calloc(cmd->mChebyshev+1,cmd->sizeHistN);
         bytes_tot_local += (cmd->mChebyshev+1)*cmd->sizeHistN*2*sizeof(real);
 
@@ -1153,6 +1160,8 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
         }
         bytes_tot_local += 
                 (cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*2*sizeof(real);
+        */
+        //E
 #endif
         gd->histZetaGmRe =
                     dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);

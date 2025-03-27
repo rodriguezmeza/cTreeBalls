@@ -10,6 +10,7 @@
 /*
 #ifdef NMultipoles_kdtree
 //B kdtree-omp
+//B What if mChebyshev is less than 7... correct!
 #ifdef MANUALCHEBYSHEV
 #define NCHEBYSHEVTUOMPSINCOS                                      \
 {REAL xicosmphi,xisinmphi; int m;                                 \

@@ -10,7 +10,8 @@ DEFDIMENSION = 3
 #
 #
 # Default GSL public (not the internal sources version, not included).
-# GSL can be switched off by setting USEGSL to 0, by default is 1, means GSL is used:
+# GSL can be switched off by setting USEGSL to 0, by default is 0,
+#   means GSL is not used:
 USEGSL = 0
 # If you want the internal gsl version set it to 1, but you will need the gsl sources files.
 GSLINTERNAL = 0

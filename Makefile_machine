@@ -120,6 +120,7 @@ endif
 #
 MANUALCHEBYSHEVON = 1
 #
+# What if mChebyshev is less than 7... correct!
 ifeq ($(MANUALCHEBYSHEVON),1)
 MANUALCHEBYSHEV = -DMANUALCHEBYSHEV
 OPT2 += $(MANUALCHEBYSHEV)

@@ -4,7 +4,7 @@
 #ifndef _cballs_print_octree_kkk_omp_h
 #define _cballs_print_octree_kkk_omp_h
 
-//#define OCTREEKKKOMPMETHOD     61
+//#define OCTREEKKKOMP     61
 
 case 61:
     verb_print(cmd->verbose,
@@ -12,6 +12,8 @@ case 61:
     PrintHistrBins(cmd, gd);
 
 switch(correlation_int) {
+        
+        /*
     case KKKCORRELATION:
 //B (computeTPCF)
 #ifdef NONORMHIST
@@ -41,8 +43,20 @@ switch(correlation_int) {
         if (scanopt(cmd->options, "out-HistZetaG")) {
             PrintHistZetaGm_sincos(cmd, gd);
         }
+
+#ifdef NMultipoles
+#ifdef NONORMHIST
+        if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+            if (scanopt(cmd->options, "edge-corrections")) {
+                matrixClm(cmd, gd, 1, 1);
+            }
+        }
+#endif
+#endif
 //E (computeTPCF)
         break;
+        */
+
     case KKCORRELATION:
         if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
             PrintHistXi2pcf(cmd, gd);

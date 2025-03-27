@@ -21,8 +21,9 @@
 #define INMB                9.536743116E-7          // 1/(1024*1024)
 //E
 
-#define MAXITEMS    100
-#define MAXLENGTHOFFILES       1024
+#define MAXITEMS                100
+#define MAXLENGTHOFFILES        1024
+#define MAXNSLASHS              5
 
 #define VERBOSENOINFO           0
 #define VERBOSEMININFO          1

@@ -1,11 +1,10 @@
 // Use:
-//#include "cballs_octree_kkk_omp_00.h"
+//#include "cballs_include_00_NMultipoles.h"
 
-#ifndef _cballs_octree_kkk_omp_00_h
-#define _cballs_octree_kkk_omp_00_h
+#ifndef _cballs_include_00_NMultipoles_h
+#define _cballs_include_00_NMultipoles_h
 
-// Included in cballs_include_00_NMultipoles
-/*
+
 #ifdef NMultipoles
 local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
                                 struct  global_data* gd);
@@ -20,9 +19,6 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
                                             struct  global_data* gd);
 #endif
 #endif // ! NMultipoles
-*/
-
-local int PrintHistN2pcf(struct  cmdline_data* cmd, struct  global_data* gd);
 
 
-#endif	// ! _cballs_octree_kkk_omp_00_h
+#endif	// ! _cballs_include_00_NMultipoles_h
