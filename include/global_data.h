@@ -237,6 +237,8 @@ struct global_data{
 
     int irsmooth;
 
+    bool flagPrint;
+
 #ifdef ADDONS
 #include "globaldefs_include_03.h"
 #endif

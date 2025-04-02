@@ -8,6 +8,8 @@
 # BALLS ON and LOGHIST ON
 #ifeq ($(LOGHISTON),1)
 ifeq ($(BALLSON),1)
+$(info To use BALLS method need option useLogHist=true)
+$(info =====================================================)
 OPT2 += $(OPT2ADD)
 OPT2 += -DBALLS
 
@@ -37,7 +39,7 @@ EXTERNAL += search_balls_omp.o
 endif
 #
 #else
-#$(info ) To compile with BALLS need LOGHISTON = 1 in Makefile_settings
+#$(info To compile with BALLS need LOGHISTON = 1 in Makefile_settings)
 #endif
 #
 #E

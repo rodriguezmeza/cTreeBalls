@@ -4,20 +4,12 @@
 #ifndef _protodefs_include_h
 #define _protodefs_include_h
 
-#ifdef DIRECTMETHOD
-#include "protodefs_direct_method.h"
-#endif
-
 #ifdef BALLS
 #include "protodefs_balls_omp.h"
 #endif
 
 #ifdef PXD
 #include "protodefs_pxd.h"
-#endif
-
-#ifdef SAVERESTORE
-#include "protodefs_save_restore.h"
 #endif
 
 #ifdef KDTREEOMP
@@ -35,5 +27,32 @@
 /*
  Add your addon item here
  */
+
+
+/*
+ ############################
+ #B Addendum of some not important
+ #   modules or that are in
+ #   development phase
+ # Normally they will be switched OFF
+ ############################
+ */
+
+#ifdef DIRECTMETHOD
+#include "protodefs_direct_method.h"
+#endif
+
+#ifdef DIRECTMETHODSIMPLE
+#include "protodefs_direct_method_simple.h"
+#endif
+
+#ifdef SAVERESTORE
+#include "protodefs_save_restore.h"
+#endif
+
+/*
+ #B Addendum of some not important
+ ############################
+*/
 
 #endif	// ! _protodefs_include_h

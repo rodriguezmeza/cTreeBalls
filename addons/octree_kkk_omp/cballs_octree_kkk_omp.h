@@ -4,7 +4,7 @@
 #ifndef _cballs_octree_kkk_omp_h
 #define _cballs_octree_kkk_omp_h
 
-//#define OCTREEKKKOMPMETHOD     61
+//#define OCTREEKKKOMP     61
 
 case 61:                   // search=octree-kkk-omp
     verb_print(cmd->verbose,

@@ -6,7 +6,7 @@
  Language: C
  Major revision:
  ===============================================================================
- Use: cballs --help
+ Use: cballs --help (or -h)
  Input: 	Command line parameters, Parameters file, data catalogs
  Output: several histograms containing 2pcf, 3pcf,...
  Units:
@@ -24,6 +24,18 @@
 #include "globaldefs.h"
 #include "cmdline_defs.h"
 
+/*
+ Main routine:
+ 
+ This routine is in charge of main computational flow
+    as it is explained below in the comments.
+
+ Arguments:
+    * `argc`: Input: int
+    * `argv`: Input: string array
+ Return (the error status):
+    int SUCCESS or FAILURE
+ */
 int main(int argc, string argv[])
 {
     struct cmdline_data cmd;                        // share command parameters
@@ -42,7 +54,8 @@ int main(int argc, string argv[])
         endrun_mpi(ThisTask, 0);
     }
     strcpy(cmd.ParameterFile, argv[1]);
-    printf("\n -> Parameter file is %s\n", cmd.ParameterFile);
+    printf("\n -> Parameter file is %s\n",
+           cmd.ParameterFile);
 #endif
 
     StartRun(&cmd, &gd, argv[0],                    // get parameters and

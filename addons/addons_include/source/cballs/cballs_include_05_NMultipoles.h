@@ -4,6 +4,12 @@
 #ifndef _cballs_include_05_NMultipoles_h
 #define _cballs_include_05_NMultipoles_h
 
+//
+// Check in search_octree_kkk_omp.c if this routines are defined
+//
+
+/*
+
 #ifdef NMultipoles
 // Saves matrix ZetaM for each m multipole
 local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
@@ -471,6 +477,7 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
 
 #endif // ! NMultipoles
 
+*/
 
 /*
  Add your addon item here

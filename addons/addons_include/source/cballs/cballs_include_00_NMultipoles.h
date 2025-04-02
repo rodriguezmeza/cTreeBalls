@@ -4,7 +4,11 @@
 #ifndef _cballs_include_00_NMultipoles_h
 #define _cballs_include_00_NMultipoles_h
 
+//
+// Check in search_octree_kkk_omp.c if this routines are defined
+//
 
+/*
 #ifdef NMultipoles
 local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
                                 struct  global_data* gd);
@@ -19,6 +23,6 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
                                             struct  global_data* gd);
 #endif
 #endif // ! NMultipoles
-
+*/
 
 #endif	// ! _cballs_include_00_NMultipoles_h

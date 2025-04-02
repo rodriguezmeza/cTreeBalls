@@ -1,5 +1,5 @@
 /* ==============================================================================
- MODULE: direct_simple.c		[cTreeBalls]
+ MODULE: search_direct_method.c		[cTreeBalls]
  Written by: M.A. Rodriguez-Meza
  Starting date:    april 2023
  Purpose: 3-point correlation function computation
@@ -76,7 +76,7 @@ local int computeBodyProperties_sincos_direct(struct cmdline_data* cmd,
 /*
  Search serial routine using direct method:
 
- To be called using: search=direct-simple-sincos
+ To be called using: search=direct-sincos
 
  Arguments:
     * `btable`: Input: point table array
@@ -94,7 +94,7 @@ local int computeBodyProperties_sincos_direct(struct cmdline_data* cmd,
  Return:
     void
  */
-global int searchcalc_direct_simple_sincos(struct cmdline_data* cmd, 
+global int searchcalc_direct_sincos(struct cmdline_data* cmd,
                                            struct  global_data* gd,
                                            bodyptr *btable, INTEGER *nbody,
                             INTEGER ipmin, INTEGER *ipmax, int cat1, int cat2)
@@ -122,7 +122,7 @@ global int searchcalc_direct_simple_sincos(struct cmdline_data* cmd,
     if (strnull(cmd->restorefile)) {
 #endif
         cpustart = CPUTIME;
-        verb_print(cmd->verbose, "Search: Running... (direct-simple-sincos) \n");
+        verb_print(cmd->verbose, "Search: Running... (direct-sincos) \n");
 
         search_init_sincos_gd(cmd, gd, &hist);
         search_init_sincos(cmd, gd, &hist);

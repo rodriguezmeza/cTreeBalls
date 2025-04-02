@@ -15,6 +15,11 @@
 // Here and in EndRun in cballsio.c
 //
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 
 local void ReadParameterFile(struct  cmdline_data*, struct  global_data*, char *);
@@ -35,14 +40,18 @@ local int scanrOption(struct  cmdline_data*, struct  global_data*,
                       string, double *, int *, int, int, string);
 //E
 
+local int print_make_info(struct cmdline_data* cmd,
+                     struct  global_data* gd);
+
 #ifndef USEGSL
 local long saveidum;
 #endif
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_00.h"
 #endif
-
+//E
 
 /*
  StartRun routine:
@@ -52,7 +61,7 @@ local long saveidum;
  
  This routine is in charge of setting all global structures in order to
     the comutation process run smoothly with all parameters given
-    by the user set and checked.
+    by the user, set and checked.
 
  Arguments:
     * `cmd`: Input: structure cmdline_data pointer
@@ -82,6 +91,7 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->cputotal = 0.;
     gd->bytes_tot = 0;
     gd->sameposcount = 0;
+//    gd->flagPrint = TRUE;
 
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
@@ -138,13 +148,14 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->cputotalinout = 0.;
     gd->cputotal = 0.;
     gd->bytes_tot = 0;
-    
+//    gd->flagPrint = TRUE;
+
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
     if (*(cmd->paramfile)=='-')
         error("bad parameter %s\n", cmd->paramfile);
     if (!strnull(cmd->paramfile)) {
-        class_call_cballs(input_find_file(cmd->paramfile, &fc, errmsg), 
+        class_call_cballs(input_find_file(cmd, cmd->paramfile, &fc, errmsg),
                           errmsg, errmsg);
         class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
@@ -194,9 +205,11 @@ local int startrun_parameterfile(struct  cmdline_data* cmd, struct  global_data*
 	ReadParameterFile(cmd, gd, cmd->paramfile);
     ReadParametersCmdline_short(cmd, gd);
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_01.h"
 #endif
+//E
 
 #else // ! GETPARAM
     ReadParameterFile(cmd, gd, cmd->ParameterFile);
@@ -301,9 +314,11 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
     cmd->options = GetParam("options");
     //E
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_02.h"
 #endif
+//E
 }
 
 local void ReadParametersCmdline_short(struct  cmdline_data* cmd, struct  global_data* gd)
@@ -409,10 +424,12 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 #endif
     SPName(cmd->options,"options",MAXLENGTHOFSTRSCMD);
     //E
-    
+
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_03.h"
 #endif
+//E
 
     size_t slen;
     char *script1;
@@ -593,9 +610,16 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int ifile;
 
+    gd->flagPrint = TRUE;
+
+    if (scanopt(cmd->options, "make-info"))
+        print_make_info(cmd, gd);
+
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_04.h"
 #endif
+//E
 
     class_call_cballs(StartOutput(cmd, gd), errmsg, errmsg);
 
@@ -818,9 +842,11 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaPhi);
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_05.h"
 #endif
+//E
 
     return SUCCESS;
 }
@@ -839,8 +865,20 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
               cmd->useLogHist, cmd->searchMethod);
     if (cmd->computeTPCF) {
 #ifndef USEGSL
-        if (cmd->mChebyshev + 1 < 2 || (cmd->mChebyshev + 1)&(cmd->mChebyshev))
-            error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive and a power of 2\n", cmd->mChebyshev+1);
+        if (scanopt(cmd->options, "out-HistZetaG")) {
+            if (cmd->mChebyshev + 1 < 2
+                || (cmd->mChebyshev + 1)&(cmd->mChebyshev)) {
+                verb_print(cmd->verbose,
+                    "\nCheckParameters: using option out-HistZetaG...\n");
+                error("CheckParameters: %s (=%d)\n\t\t\t%s\n",
+                      "absurd value for mChebyshev + 1",
+                      cmd->mChebyshev+1, "must be positive and a power of 2");
+            }
+        } else {
+            if (cmd->mChebyshev + 1 < 2)
+            error("CheckParameters: %s (=%d)\n\t\t\tmust be positive\n",
+                  "absurd value for mChebyshev + 1", cmd->mChebyshev+1);
+        }
 #else
         if (cmd->mChebyshev + 1 < 2)
             error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive\n", cmd->mChebyshev+1);
@@ -925,9 +963,11 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
         error("CheckParameters: incompatible options bh86 and sw94\n");
     //
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_07.h"
 #endif
+//E
 
     return SUCCESS;
 }
@@ -1048,9 +1088,11 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
         fprintf(fdout,FMTT,"options",cmd->options);
         //E
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_08.h"
 #endif
+//E
 
         fprintf(fdout,"\n\n");
     }
@@ -1177,10 +1219,12 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
         gd->histXitx = dvector(1,cmd->sizeHistN);
     }
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_10.h"                    // should be sync with
                                                     //  "cballsio_include_10.h"
 #endif
+//E
 
     gd->bytes_tot += bytes_tot_local;
     verb_print(cmd->verbose,
@@ -1199,10 +1243,12 @@ local void search_method_string_to_int(string method_str,int *method_int)
     if (strcmp(method_str,"tree-omp-sincos") == 0)
                 *method_int = TREEOMPMETHODSINCOS;
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_11.h"                    // See in this file
                                                     //  the last tag number used
 #endif
+//E
 }
 
 
@@ -1329,9 +1375,11 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd, struct  global_da
         }
     }
 
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_12.h"
 #endif
+//E
 
     return SUCCESS;
 }
@@ -1497,3 +1545,151 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
 }
 
 //E Special routines to scan command line
+
+local int print_make_info(struct cmdline_data* cmd,
+                                  struct  global_data* gd)
+{
+    verb_print(cmd->verbose,
+               "\nprint_make_info:\n");
+
+#ifdef TWODIMCODE
+    verb_print(cmd->verbose, "TWODIMCODE\n");
+#endif
+#if THREEDIMCODE
+    verb_print(cmd->verbose, "THREEDIMCODE\n");
+#endif
+
+#ifdef OPENMPCODE
+    verb_print(cmd->verbose, "using OpenMP\n");
+#endif
+
+#ifdef MANUALCHEBYSHEV
+    verb_print(cmd->verbose, "MANUALCHEBYSHEV\n");
+#endif
+
+#ifdef SINGLEP
+    verb_print(cmd->verbose, "SINGLEP\n");
+#endif
+
+#ifdef KappaAvgON
+    verb_print(cmd->verbose, "KappaAvgON\n");
+#endif
+
+#ifdef LONGINT
+    verb_print(cmd->verbose, "LONGINT\n");
+#endif
+
+#ifdef PTOPIVOTROTATION
+    verb_print(cmd->verbose, "PTOPIVOTROTATION\n");
+#endif
+
+#ifdef DEBUG
+    verb_print(cmd->verbose, "DEBUG\n");
+#endif
+
+#ifdef GETPARAM
+    verb_print(cmd->verbose, "GETPARAM\n");
+#endif
+
+#ifdef USEGSL
+#ifdef GSLINTERNAL
+    verb_print(cmd->verbose, "using internal GSL\n");
+#else
+    verb_print(cmd->verbose, "using GSL\n");
+#endif
+#endif
+
+#ifdef ADDONS
+    verb_print(cmd->verbose, "with ADDONS\n");
+#endif
+
+#ifdef BALLS
+    verb_print(cmd->verbose, "with BALLS\n");
+#endif
+
+#ifdef SINCOS
+    verb_print(cmd->verbose, "with SINCOS\n");
+#endif
+
+#ifdef TREENODEALLBODIES
+    verb_print(cmd->verbose, "with TREENODEALLBODIES\n");
+#endif
+
+#ifdef TREENODEBALLS4
+    verb_print(cmd->verbose, "with TREENODEBALLS4\n");
+#endif
+
+#ifdef PIVOTEXTERNAL
+    verb_print(cmd->verbose, "with PIVOTEXTERNAL\n");
+#endif
+
+#ifdef GADGETIO
+    verb_print(cmd->verbose, "with GADGETIO\n");
+#endif
+
+#ifdef CLASSLIB
+    verb_print(cmd->verbose, "with CLASSLIB\n");
+#endif
+
+#ifdef PXD
+    verb_print(cmd->verbose, "with PXD\n");
+#endif
+
+#ifdef IOLIB
+    verb_print(cmd->verbose, "with IOLIB\n");
+#endif
+
+#ifdef CFITSIO
+    verb_print(cmd->verbose, "with CFITSIO\n");
+#endif
+
+#ifdef KDTREEOMP
+    verb_print(cmd->verbose, "with KDTREEOMP\n");
+#endif
+
+#ifdef OCTREEKKKOMP
+    verb_print(cmd->verbose, "with OCTREEKKKOMP\n");
+#endif
+
+#ifdef NMultipoles
+    verb_print(cmd->verbose, "with NMultipoles\n");
+#else
+    verb_print(cmd->verbose, "without NMultipoles\n");
+#endif
+#ifdef NONORMHIST
+    verb_print(cmd->verbose, "with NONORMHIST\n");
+#else
+    verb_print(cmd->verbose, "without NONORMHIST\n");
+#endif
+
+#ifdef POLARAXIS
+    verb_print(cmd->verbose, "with POLARAXIS\n");
+#endif
+
+#ifdef NOLIMBER
+    verb_print(cmd->verbose, "with NOLIMBER\n");
+#endif
+
+#ifdef ADDPIVOTNEIGHBOURS
+        verb_print(cmd->verbose, "with ADDPIVOTNEIGHBOURS\n");
+#endif
+
+#ifdef OVERCOUNTING
+        verb_print(cmd->verbose, "with OVERCOUNTING\n");
+#endif
+
+#ifdef SAVERESTORE
+        verb_print(cmd->verbose, "with SAVERESTORE\n");
+#endif
+
+#ifdef DIRECTMETHOD
+        verb_print(cmd->verbose, "with DIRECTMETHOD\n");
+#endif
+
+#ifdef DIRECTMETHODSIMPLE
+        verb_print(cmd->verbose, "with DIRECTMETHODSIMPLE\n");
+#endif
+
+    return SUCCESS;
+}
+

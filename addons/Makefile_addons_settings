@@ -7,6 +7,9 @@
 #
 #B Here switch on/off the AddOns´ modules
 
+$(info )
+$(info =====================================================)
+
 # BALLSOMP
 # For computing 3pcf using balls method
 BALLSON = 1
@@ -15,14 +18,27 @@ BALLSON = 1
 # For input data catalog in gadget format
 GADGETIOON = 1
 
-# DIRECTMETHOD
-# For computing 3pcf using direct method
-DIRECTMETHODON = 1
-
 # CLASSLIB
 # Several I/O routines from CLASS
 #   collision with GSL library. Set it off
+ifeq ($(USEGSL),0)
 CLASSLIBON = 1
+else
+$(info CLASSLIB collide with GSL library, needs USEGSL = 0, deactivating...)
+CLASSLIBON = 0
+endif
+
+# PXD
+# For cython interfacing...
+ifeq ($(CLASSLIBON),1)
+$(info Note: to use the Cython inferface (python cballys module), switch OFF USEGSL)
+PXDON = 1
+else
+$(info Note: to use the Cython inferface (python cballys module), switch OFF USEGSL)
+$(info To compile with PXD needs CLASSLIBON = 1, deactivating...)
+PXDON = 0
+endif
+
 
 # IOLIB
 # Several I/O routines
@@ -38,19 +54,15 @@ ifeq ($(IOLIBON),1)
 #   and then set it ON
 # there are collision with python interface, default is OFF,
 #   turn it ON if necessary
+ifeq ($(CLASSLIBON),0)
+CFITSIOON = 1
+else
+$(info To compile with CFITSIO needs CLASSLIBON = 0, deactivating CFITSIO...)
 CFITSIOON = 0
+endif
 else
 $(info To compile with CFITSIO needs IOLIBON = 1, deactivating...)
 CFITSIOON = 0
-endif
-
-# PXD
-# For cython interfacing...
-ifeq ($(CLASSLIBON),1)
-PXDON = 1
-else
-$(info To compile with PXD needs CLASSLIBON = 1, deactivating...)
-PXDON = 0
 endif
 
 # KDTREEOMP
@@ -60,30 +72,6 @@ KDTREEOMPON = 1
 # OCTREEKKKOMP
 # For computing 3pcf using octree-kkk-omp
 OCTREEKKKOMPON = 1
-
-# For complex math use only one: USEGSL or COMPLEXLIB
-# COMPLEXLIB
-# Library for complex computation
-ifeq ($(USEGSL),0)
-# default is OFF, turn it ON if necessary (OCTREEGGGOMP)
-COMPLEXLIBON = 0
-else
-$(info Use only one: USEGSL or COMPLEXLIB, deactivating...)
-COMPLEXLIBON = 0
-endif
-
-# OCTREEGGGOMP
-# For computing 3pcf using octree-ggg-omp
-ifeq ($(USEGSL),1)
-OCTREEGGGOMPON = 1
-else
-ifeq ($(COMPLEXLIBON),1)
-OCTREEGGGOMPON = 1
-else
-$(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
-OCTREEGGGOMPON = 0
-endif
-endif
 
 #E Set of settings
 
@@ -118,7 +106,51 @@ OVERCOUNTINGON = 0
 
 # SAVERESTORE
 # For save/restore options
-SAVERESTOREON = 1
+SAVERESTOREON = 0
 
 #E
 ############################
+
+
+############################
+#B Addendum of some not important
+#   modules or that are in
+#   development phase
+# Normally they will be switched OFF
+
+# DIRECTMETHOD
+# For computing 3pcf using direct method
+DIRECTMETHODON = 0
+
+# DIRECTMETHODSIMPLE
+# For computing 3pcf using direct method simple
+DIRECTMETHODSIMPLEON = 0
+
+# For complex math use only one: USEGSL or COMPLEXLIB
+# COMPLEXLIB
+# Library for complex computation
+ifeq ($(USEGSL),0)
+# default is OFF, turn it ON if necessary (OCTREEGGGOMP)
+COMPLEXLIBON = 0
+else
+$(info Use only one: USEGSL or COMPLEXLIB, deactivating COMPLEXLIB...)
+COMPLEXLIBON = 0
+endif
+
+# OCTREEGGGOMP
+# For computing 3pcf using octree-ggg-omp
+ifeq ($(USEGSL),1)
+OCTREEGGGOMPON = 0
+else
+ifeq ($(COMPLEXLIBON),1)
+OCTREEGGGOMPON = 0
+else
+$(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+OCTREEGGGOMPON = 0
+endif
+endif
+
+#E
+############################
+
+$(info =====================================================)

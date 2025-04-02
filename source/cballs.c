@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 
 local int PrintHistNN(struct cmdline_data* cmd, struct  global_data* gd);
@@ -36,10 +41,11 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
                                     struct  global_data* gd,
                                     int *correlation_int);
 
+//B socket:
 #ifdef ADDONS
 #include "cballs_include_00.h"
 #endif
-
+//E
 
 /*
  MainLoop routine:
@@ -64,9 +70,11 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
     int ifile = 0;
 
+//B socket:
 #ifdef ADDONS
 #include "cballs_include_01.h"
 #endif
+//E
 
     gd->flagSmoothCellMin = FALSE;
     gd->flagSmooth = FALSE;
@@ -212,8 +220,10 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
     EvalHist(cmd, gd);
 
-    if (!gd->stopflag)
-        PrintEvalHist(cmd, gd);
+    if (!gd->stopflag) {
+        if (gd->flagPrint)
+            PrintEvalHist(cmd, gd);
+    }
 
 #ifdef DEBUG
     if (!strnull(cmd->outfile))
@@ -268,6 +278,7 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
                             gd->iCatalogs[1]), errmsg, errmsg);
             break;
 
+//B socket:
 #ifdef ADDONS
 #include "cballs_include_02.h"
 #else
@@ -296,6 +307,7 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
                         gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
             break;
 #endif
+//E
     }
 
     return SUCCESS;
@@ -352,9 +364,11 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             }
             break;
 
+//B socket:
 #ifdef ADDONS
 #include "cballs_include_03.h"
 #endif
+//E
 
         }
     } // ! scanoptions no-out-Hist
@@ -908,8 +922,9 @@ local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
 }
 
 
-// Saves matrix ZetaG, real and imaginary parts, obtained from ZetaM multipoles
-//  also saves full 3pcf ZetaG matrix for each phi bins obtained from inverse FFT
+// Saves matrix ZetaG, real and imaginary parts, obtained from ZetaM
+//  multipoles also saves full 3pcf ZetaG matrix for each phi bins
+//  obtained from inverse FFT
 local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                      struct  global_data* gd)
 {
@@ -1115,10 +1130,11 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 
 
 
+//B socket:
 #ifdef ADDONS
 #include "cballs_include_05.h"
 #endif
-
+//E
 
 #undef MHISTZETAHEADER
 #undef MHISTZETA

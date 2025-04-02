@@ -7,11 +7,20 @@
 ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
 
 #include "globaldefs.h"
 #include "input.h"
 
-int input_find_file(char *fname,
+local void testParameterFile(struct  cmdline_data*,
+                             //struct  global_data*,
+                             char *);
+
+
+int input_find_file(struct  cmdline_data* cmd, char *fname,
                     struct file_content * fc,
                     ErrorMsg errmsg){
 
@@ -24,6 +33,12 @@ int input_find_file(char *fname,
   char extension[5];
   char input_file[_ARGUMENT_LENGTH_MAX_];
   char precision_file[_ARGUMENT_LENGTH_MAX_];
+
+    //B test if cmd->paramfile exist...
+    if (!strnull(fname)) {
+        testParameterFile(cmd, cmd->paramfile);
+    }
+    //E
 
   pfc_input = &fc_input;
 
@@ -181,6 +196,9 @@ int input_read_from_file(struct cmdline_data *cmd,
     int input_verbose = 0;
 
     class_read_int("verbose",input_verbose);
+//    if (!strnull(cmd->paramfile)) {
+//        testParameterFile(cmd, cmd->paramfile);
+//    }
     verb_print(input_verbose, "\nReading input parameters...\n");
 
     class_call(input_read_parameters(cmd, pfc, errmsg),errmsg,errmsg);
@@ -574,9 +592,11 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     }
     //E
 
+//B socket:
 #ifdef ADDONS
 #include "class_lib_include_01.h"
 #endif
+//
 
     class_call(parser_read_int(pfc,"sizeHistPhi",
                                &param,&flag,errmsg),errmsg,errmsg);
@@ -654,10 +674,293 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->options = "";
     //E
 
+//B socket:
 #ifdef ADDONS
 #include "class_lib_include_02.h"
 #endif
+//
 
   return SUCCESS;
+}
+//E
+
+
+//B parameter reading/testing from a file
+local void testParameterFile(struct  cmdline_data* cmd,
+                             //struct  global_data* gd,
+                             char *fname)
+{
+// Every item in cmdline_defs.h must have an item here::
+#define DOUBLE 1
+#define STRING 2
+#define INT 3
+#define LONG 6
+#define BOOLEAN 4
+#define MAXTAGS 300
+#define MAXCHARBUF 1024
+
+    FILE *fd;
+
+  int  i,j,nt;
+  int  id[MAXTAGS];
+  void *addr[MAXTAGS];
+  char tag[MAXTAGS][50];
+  int  errorFlag=0;
+
+//    printf("\nTesting input parameters file: %s...\n", fname);
+//    if (strnull(fname)) return;
+    int input_verbose = 1;
+    verb_print(input_verbose, "\nTesting input parameters...\n");
+
+    nt=0;
+
+    //B Parameters related to the searching method
+    SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
+    IPName(cmd->mChebyshev,"mChebyshev");
+    SPName(cmd->nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
+    RPName(cmd->theta,"theta");
+    BPName(cmd->computeTPCF,"computeTPCF");
+    BPName(cmd->computeShearCF,"computeShearCF");
+    BPName(cmd->usePeriodic,"usePeriodic");
+    //E
+
+    //B Parameters to control the I/O file(s)
+    // Input catalog parameters
+    SPName(cmd->infile,"infile",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->infilefmt,"infileformat",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->iCatalogs,"iCatalogs",MAXLENGTHOFSTRSCMD);
+    // Output parameters
+    SPName(cmd->rootDir,"rootDir",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->outfile,"outfile",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->outfilefmt,"outfileformat",MAXLENGTHOFSTRSCMD);
+    //B Parameters to set a region in the sky, for example for Takahasi data set.
+    RPName(cmd->thetaL,"thetaL");
+    RPName(cmd->thetaR,"thetaR");
+    RPName(cmd->phiL,"phiL");
+    RPName(cmd->phiR,"phiR");
+    //E
+
+    //B Parameters to control histograms and their output files
+    BPName(cmd->useLogHist,"useLogHist");
+    IPName(cmd->logHistBinsPD,"logHistBinsPD");
+    //
+    IPName(cmd->sizeHistN,"sizeHistN");
+    RPName(cmd->rangeN,"rangeN");
+    RPName(cmd->rminHist,"rminHist");
+    IPName(cmd->sizeHistPhi,"sizeHistPhi");
+    //
+    SPName(cmd->histNNFileName,"histNNFileName",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->histXi2pcfFileName,"histXi2pcfFileName",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->histZetaFileName,"histZetaFileName",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->suffixOutFiles,"suffixOutFiles",MAXLENGTHOFSTRSCMD);
+    //E
+
+    //B Set of parameters needed to construct a test model
+    IPName(cmd->seed,"seed");                       // to always have
+                                                    //  defaults
+    SPName(cmd->testmodel,"testmodel",MAXLENGTHOFSTRSCMD);
+#ifdef LONGINT
+    LPName(cmd->nbody,"nbody");
+#else
+    IPName(cmd->nbody,"nbody");
+#endif
+    RPName(cmd->lengthBox,"lengthBox");
+    //E
+
+    //B Miscellaneous parameters
+    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
+#ifdef LONGINT
+    LPName(cmd->stepState,"stepState");
+#else
+    IPName(cmd->stepState,"stepState");
+#endif
+    IPName(cmd->verbose,"verbose");
+    IPName(cmd->verbose_log,"verbose_log");
+#ifdef OPENMPCODE
+    IPName(cmd->numthreads,"numberThreads");
+#endif
+    SPName(cmd->options,"options",MAXLENGTHOFSTRSCMD);
+    //E
+    
+//B socket:
+#ifdef ADDONS
+#include "startrun_include_03.h"
+#endif
+//E
+
+    size_t slen;
+    char *script1;
+    char *script2;
+    char *script3;
+    char *script4;
+    char buf4[MAXCHARBUF];
+    char buf5[MAXCHARBUF];
+
+//B
+#ifndef _LINE_LENGTH_MAX_
+#define _LINE_LENGTH_MAX_ 1024
+#endif
+#define _ARGUMENT_LENGTH_MAX_ 1024
+        char line[_LINE_LENGTH_MAX_];
+        char name[_ARGUMENT_LENGTH_MAX_];
+        char value[_ARGUMENT_LENGTH_MAX_];
+        char * phash;
+        char * pequal;
+        char * left;
+        char * right;
+//E
+
+    if((fd=fopen(fname,"r"))) {
+        while(!feof(fd)) {
+//B
+            fgets(line,MAXCHARBUF,fd);
+
+            pequal=strchr(line,'=');
+            if (pequal == NULL)
+                continue;
+            phash=strchr(line,'#');
+            if ((phash != NULL) && (phash-pequal<2))
+                continue;
+
+            left=line;
+            while (left[0]==' ') {
+              left++;
+            }
+            if(left[0]=='\'' || left[0]=='\"'){
+              left++;
+            }
+            right=pequal-1;
+            while (right[0]==' ') {
+              right--;
+            }
+            if(right[0]=='\'' || right[0]=='\"'){
+              right--;
+            }
+
+            if (right-left < 0) {
+                fprintf(stdout,
+        "Error in file %s: there is no variable name before '=' in line: '%s'\n",
+                    fname, line);
+                errorFlag=1;
+                continue;
+            }
+
+            strncpy(name,left,right-left+1);
+            name[right-left+1]='\0';
+
+            left = pequal+1;
+            while (left[0]==' ') {
+              left++;
+            }
+
+            if (phash == NULL)
+              right = line+strlen(line)-1;
+            else
+              right = phash-1;
+
+            while (right[0]<=' ') {
+              right--;
+            }
+
+            if (right-left < 0)
+                continue;
+
+            strncpy(value,left,right-left+1);
+            value[right-left+1]='\0';
+//E
+
+            for(i=0,j=-1;i<nt;i++)
+                if(strcmp(name,tag[i])==0) {
+                    j=i;
+                    tag[i][0]=0;
+                    break;
+                }
+            if(j>=0) {
+                switch(id[j]) {
+                    case DOUBLE:
+                        *((double*)addr[j])=atof(value);
+                        break;
+                    case STRING:
+                        if (strcmp(name,"script") == 0){ // To remove both '"'
+                            int index;
+                            size_t slen;
+                                  slen = strlen(value);
+                                  cmd->script = (char*) malloc((slen-2)*sizeof(char));
+                                  script1 = (char*) malloc(slen*sizeof(char));
+                                  memcpy(script1,value,slen);
+                                  script2 = strchr(script1, '"');
+                                  memcpy(cmd->script,script2+1,slen-2);
+                        } else {
+                            strcpy(addr[j],value);
+                        }
+                        break;
+                    case INT:
+                        *((int*)addr[j])=atoi(value);
+                        break;
+                    case LONG:
+                        *((long*)addr[j])=atol(value);
+                        break;
+                    case BOOLEAN:
+                        if (strchr("tTyY1", *value) != NULL) {
+                            *((bool*)addr[j])=TRUE;
+                        } else
+                            if (strchr("fFnN0", *value) != NULL)  {
+                                *((bool*)addr[j])=FALSE;
+                            } else {
+                                error("getbparam: %s=%s not bool\n",name,value);
+                            }
+                        break;
+                }
+            } else {
+                fprintf(stdout, "Error in file %s: Tag '%s' %s\n",
+                        fname, name,
+                        "not allowed or multiple defined...\n");
+                errorFlag=1;
+            }
+        } // ! while loop
+        fclose(fd);
+    } else {
+        fprintf(stdout,"Parameter file %s not found.\n", fname);
+        errorFlag=2;
+        exit(0);
+    }
+
+    if (errorFlag==1)
+        error("\ntestParameterFile: going out\n");
+
+    for(i=0;i<nt;i++) {
+        if(*tag[i]) {
+            if (cmd->verbose>2)
+                fprintf(stdout,
+                "Warning! I miss a value for tag '%s' in parameter file '%s'.\n",
+                    tag[i],fname);
+            switch(id[i]) {
+                case DOUBLE:
+                    *((double*)addr[i])=GetdParam(tag[i]);
+                    break;
+                case STRING:
+                    strcpy(addr[i],GetParam(tag[i]));
+                    break;
+                case INT:
+                    *((int*)addr[i])=GetiParam(tag[i]);
+                    break;
+                case LONG:
+                    *((long*)addr[i])=GetlParam(tag[i]);
+                    break;
+                case BOOLEAN:
+                    *((bool*)addr[i])=GetbParam(tag[i]);
+                    break;
+            }
+            errorFlag=3;
+        }
+    }
+
+#undef DOUBLE
+#undef STRING
+#undef INT
+#undef BOOLEAN
+#undef MAXTAGS
+#undef MAXCHARBUF
 }
 //E

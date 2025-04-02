@@ -366,15 +366,17 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
                                        gdhistptr_sincos_omp_kkk_N);
 #endif
 
-#ifdef USEGSL
-local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
-                    gdlptr_sincos_omp_kkk, gdlptr_sincos_omp_kkk_N,
-                    int, int);
-#else
+//#ifdef USEGSL
+#ifdef NMultipoles
 local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                     gdlptr_sincos_omp_kkk, gdlptr_sincos_omp_kkk_N,
                     int, int);
 #endif
+//#else
+//local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
+//                    gdlptr_sincos_omp_kkk, gdlptr_sincos_omp_kkk_N,
+//                    int, int);
+//#endif
 
 //B Saving histograms section: case KKKCORRELATION:
 local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd);
@@ -394,6 +396,13 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                       struct  global_data* gd,
                                       gdlptr_sincos_omp_kkk);
 
+// NMultipoles precedes NONORMHIST?... Not necessarily.
+//  Check consistency!!!
+//  (NMultipoles, NONORMHIST):
+//      1               1
+//      1               0
+//      0               1
+//      0               0
 #ifdef NMultipoles
 local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
                                 struct  global_data* gd,
@@ -412,11 +421,17 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
                                             struct  global_data* gd,
                                             gdlptr_sincos_omp_kkk,
                                             gdlptr_sincos_omp_kkk_N);
-// edge effects:
+//B edge effects:
+local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
+                                             struct  global_data*,
+                                             gdlptr_sincos_omp_kkk,
+                                             gdlptr_sincos_omp_kkk_N);
+// Saves matrix ZetaM for each m multipole at a set of theta2 angles
 local int PrintHistZetaMm_sincos_edge_effects(struct  cmdline_data* cmd,
                                               struct  global_data* gd,
                                               gdlptr_sincos_omp_kkk,
                                               gdlptr_sincos_omp_kkk_N);
+//E
 #endif
 #endif // ! NMultipoles
 //E
@@ -480,7 +495,9 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 {
     double cpustart;
     gdl_sincos_omp_kkk gdl;
+#ifdef NMultipoles
     gdl_sincos_omp_kkk_N gdlN;
+#endif
 
     cpustart = CPUTIME;
     print_info(cmd, gd);
@@ -523,7 +540,7 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
                        "searchcalc: actlenNb = %ld\n",actlenNb);
         activeNb = (int *) allocate(actlenNb * sizeof(int));
         //E
-        //B Alloc memory for intercation lists
+        //B Alloc memory for interaction lists
         int NrangeN;
         NrangeN = 0.25*nbody[cat2]*rsqr(cmd->rangeN);
         actlenInt = FACTIVEINT * NrangeN;
@@ -545,7 +562,11 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "\nRunning...\n - Completed pivot node:\n");
 
+//
+// Check that all posibilities are take in to account...
+//
 #ifdef DEBUG
+//B In this segment there must be NMultipoles acting...
 #ifdef ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
@@ -556,14 +577,16 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
            ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap, gdl)
 #endif // ! ADDPIVOTNEIGHBOURS
-
+//E
 #else // ! DEBUG
 
 #ifdef ADDPIVOTNEIGHBOURS
+//B In this segment there must be NMultipoles acting...
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                         \
            actlenNb,activeNb,actlenInt,activeInt,                           \
            ipmin,ipmax,cat1,cat2,ipfalse,icountNbRmin,icountNbRminOverlap, gdl)
+//E
 #else // ! ADDPIVOTNEIGHBOURS
 
 #ifdef NMultipoles
@@ -866,7 +889,7 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #else
         xi = num/den;
 #endif
-#endif
+#endif // ! NONORMHIST
         if (cmd->verbose>=VERBOSENORMALINFO)
             verb_print(cmd->verbose,
                        "octree-kkk-omp: p falses found = %ld and %e %e %e\n",
@@ -941,6 +964,7 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
     verb_print(cmd->verbose,
         "\n\tsearch_octree_kkk_omp: printing octree-kkk-omp method...\n\n");
     PrintHistrBins(cmd, gd);
+#ifdef NMultipoles
 #ifdef NONORMHIST
         if (scanopt(cmd->options, "no-normalize-HistZeta"))
             PrintHistZetaM_sincos(cmd, gd, &gdl);
@@ -948,12 +972,18 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
             PrintHistZetaM_sincos_normalized(cmd, gd, &gdl, &gdlN);
 #else
         PrintHistZetaM_sincos(cmd, gd, &gdl);
-#endif
+#endif // ! NONORMHIST
+#else // ! NMultipoles
+    PrintHistZetaM_sincos(cmd, gd, &gdl);
+#endif // ! NMultipoles
+
+
 #ifdef NMultipoles
         PrintHistZetaM_sincos_N(cmd, gd, &gdlN);
 #endif
 
         if (scanopt(cmd->options, "out-m-HistZeta")) {
+#ifdef NMultipoles
 #ifdef NONORMHIST
             if (scanopt(cmd->options, "no-normalize-HistZeta"))
                 PrintHistZetaMm_sincos(cmd, gd, &gdl);
@@ -962,6 +992,10 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #else
             PrintHistZetaMm_sincos(cmd, gd, &gdl);
 #endif // ! NONORMHIST
+#else // ! NMultipoles
+            PrintHistZetaMm_sincos(cmd, gd, &gdl);
+#endif // ! NMultipoles
+
 #ifdef NMultipoles
             PrintHistZetaMm_sincos_N(cmd, gd, &gdlN);
 #endif
@@ -977,16 +1011,12 @@ global int searchcalc_octree_kkk_omp(struct cmdline_data* cmd,
 #ifdef NONORMHIST
         if (scanopt(cmd->options, "no-normalize-HistZeta")) {
             if (scanopt(cmd->options, "edge-corrections")) {
-#ifdef USEGSL
-                matrixClm(cmd, gd, &gdl, &gdlN, 4, 3);
-#else
-                matrixClm(cmd, gd, &gdl, &gdlN, 4, 3);
-#endif
-                PrintHistZetaMm_sincos_edge_effects(cmd, gd, &gdl, &gdlN);
+                PrintHistZetaM_sincos_edge_effects(cmd, gd, &gdl, &gdlN);
             }
         }
 #endif // ! NONORMHIST
 #endif // ! NMultipoles
+    gd->flagPrint = FALSE;
 //E Saving histograms section: case KKKCORRELATION
 
 
@@ -1700,7 +1730,7 @@ local int computeBodyProperties_sincos_kkk(struct  cmdline_data* cmd,
     }
     //E
 #endif
-#endif
+#endif // ! NONORMHIST
 
     for (m=1; m<=cmd->mChebyshev+1; m++)
 #ifdef NONORMHIST
@@ -1938,6 +1968,7 @@ local int computeBodyProperties_sincos_kkk_N(struct  cmdline_data* cmd,
 #endif
 
 
+#ifdef NMultipoles
 #ifdef USEGSL
 local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                     gdlptr_sincos_omp_kkk gdl, gdlptr_sincos_omp_kkk_N gdlN,
@@ -2194,6 +2225,7 @@ local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
     return SUCCESS;
 }
 #endif // ! USEGSL
+#endif
 
 //E Routines as in cballsutils
 
@@ -2202,6 +2234,10 @@ local int print_info(struct cmdline_data* cmd,
 {
     verb_print(cmd->verbose,
                "searchcalc: Using octree-kkk-omp... \n");
+
+    if (scanopt(cmd->options, "KKKCorrelation"))
+        verb_print(cmd->verbose, "computing KKK correlation... \n");
+
 
     if (cmd->usePeriodic==TRUE)
         error("CheckParameters: can´t have periodic boundaries and OCTREEKKKOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
@@ -2215,6 +2251,7 @@ local int print_info(struct cmdline_data* cmd,
 #if NDIM == 2
 error("CheckParameters: OCTREEKKKOMP definition works only in a 3D unit sphere")
 #endif
+
 #ifdef NMultipoles
     verb_print(cmd->verbose, "with NMultipoles... \n");
 #else
@@ -2227,6 +2264,37 @@ error("CheckParameters: OCTREEKKKOMP definition works only in a 3D unit sphere")
 #else
     verb_print(cmd->verbose, "without NONORMHIST... \n");
 #endif
+
+#if defined(NMultipoles) && defined(NONORMHIST)
+    if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+        if (scanopt(cmd->options, "edge-corrections"))
+            verb_print(cmd->verbose, "with option edge-corrections... \n");
+    } else {
+        if (scanopt(cmd->options, "edge-corrections")) {
+            verb_print(cmd->verbose,
+                       "option edge-corrections only works with %s... \n",
+                       "no-normalize-HistZeta option added");
+            // Check freeing allocated memory...
+            error("going out...\n");
+        }
+    }
+#else
+    if (scanopt(cmd->options, "edge-corrections")) {
+        verb_print(cmd->verbose,
+                   "option edge-corrections only works with %s activated... \n",
+                   "NMultipoles && NONORMHIST");
+        // Check freeing allocated memory...
+        error("going out...");
+    }
+#endif
+
+#ifndef USEGSL
+    if (scanopt(cmd->options, "edge-corrections"))
+        verb_print(cmd->verbose,
+                   "option edge-corrections is better computed with %s activated... \n",
+                   "USEGSL");
+#endif
+
 #ifdef POLARAXIS
     verb_print(cmd->verbose, "with POLARAXIS... \n");
 #endif
@@ -2243,6 +2311,7 @@ error("CheckParameters: OCTREEKKKOMP definition works only in a 3D unit sphere")
         verb_print(cmd->verbose, "with option default-rsmooth... \n");
     if (scanopt(cmd->options, "fix-rsmooth"))
         verb_print(cmd->verbose, "with option fix-rsmooth... \n");
+
 
     return SUCCESS;
 }
@@ -3361,6 +3430,75 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
 }
 
 
+// Saves matrix ZetaM for each m multipole
+local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
+                                              struct  global_data* gd,
+                                              gdlptr_sincos_omp_kkk gdl,
+                                              gdlptr_sincos_omp_kkk_N gdlN)
+{
+    int n1, n2, m;
+    stream outstr;
+    char namebuf[256];
+    real rBin, rbinlog;
+
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                "_EE", m, EXTFILES);
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        outstr = stropen(namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                matrixClm(cmd, gd, gdl, gdlN, n1, n2);
+                fprintf(outstr,"%16.8e ",gdl->histZetaM[m][n1][n2]);
+            }
+            fprintf(outstr,"\n");
+        }
+        fclose(outstr);
+    }
+
+    //B  and saves matrix ZetaM for each m multipole at a set of theta2 angles
+    if (scanopt(cmd->options, "out-m-HistZeta")) {
+        real Zeta;
+        real Zeta2;
+        real Zeta3;
+        real Zeta4;
+        real Zeta5;
+        int Nbins;
+        
+        Nbins = cmd->sizeHistN;
+        for (m = 1; m <= cmd->mChebyshev+1; m++) {
+            sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                    "_EE", m, EXTFILES);
+            verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+            outstr = stropen(namebuf, "w!");
+            fprintf(outstr,MHISTZETAHEADER);
+            for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                if (cmd->useLogHist) {
+                    if (cmd->rminHist==0) {
+                        rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
+                        + rlog10(cmd->rangeN);
+                    } else {
+                        rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
+                    }
+                    rBin=rpow(10.0,rbinlog);
+                } else {
+                    rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
+                }
+                Zeta = gdl->histZetaM[m][n1][n1];
+                Zeta2 = gdl->histZetaM[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = gdl->histZetaM[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = gdl->histZetaM[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = gdl->histZetaM[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            }
+            fclose(outstr);
+        }
+    }
+    //E
+
+    return SUCCESS;
+}
+
 // Saves matrix ZetaM for each m multipole at a set of theta2 angles
 local int PrintHistZetaMm_sincos_edge_effects(struct  cmdline_data* cmd,
                                               struct  global_data* gd,
@@ -3412,93 +3550,6 @@ local int PrintHistZetaMm_sincos_edge_effects(struct  cmdline_data* cmd,
         }
         fclose(outstr);
     }
-
-    /*
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sin_EE", m, EXTFILES);
-        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
-            if (cmd->useLogHist) {
-                if (cmd->rminHist==0) {
-                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
-                    + rlog10(cmd->rangeN);
-                } else {
-                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
-                }
-                rBin=rpow(10.0,rbinlog);
-            } else {
-                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
-            }
-                Zeta = gdl->histZetaMsin[m][n1][n1];
-                Zeta2 = gdl->histZetaMsin[m][n1][(int)(Nbins/4.0)];
-                Zeta3 = gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
-                Zeta4 = gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
-                Zeta5 = gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
-        }
-        fclose(outstr);
-    }
-
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sincos_EE", m, EXTFILES);
-        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
-            if (cmd->useLogHist) {
-                if (cmd->rminHist==0) {
-                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
-                        + rlog10(cmd->rangeN);
-                } else {
-                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
-                }
-                rBin=rpow(10.0,rbinlog);
-            } else {
-                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
-            }
-            Zeta = gdl->histZetaMsincos[m][n1][n1];
-            Zeta2 = gdl->histZetaMsincos[m][n1][(int)(Nbins/4.0)];
-            Zeta3 = gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
-            Zeta4 = gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
-            Zeta5 = gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
-        }
-        fclose(outstr);
-    }
-
-    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cossin_EE", m, EXTFILES);
-        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
-            if (cmd->useLogHist) {
-                if (cmd->rminHist==0) {
-                    rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
-                            + rlog10(cmd->rangeN);
-                } else {
-                    rbinlog = rlog10(cmd->rminHist) + ((real)(n1)-0.5)*gd->deltaR;
-                }
-                rBin=rpow(10.0,rbinlog);
-            } else {
-                rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
-            }
-            Zeta = gdl->histZetaMcossin[m][n1][n1];
-            Zeta2 = gdl->histZetaMcossin[m][n1][(int)(Nbins/4.0)];
-            Zeta3 = gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
-            Zeta4 = gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
-            Zeta5 = gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
-        }
-        fclose(outstr);
-    }
-*/
 
     return SUCCESS;
 }

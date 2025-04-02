@@ -4,11 +4,11 @@
 #ifndef _cballs_print_direct_method_h
 #define _cballs_print_direct_method_h
 
-//#define DIRECTSIMPLESINCOS      19
+//#define DIRECTSINCOS      19
 
 case 19:
     verb_print(cmd->verbose, 
-    "\n\tprintEvalHist: printing direct method simple (base sincos)\n\n");
+    "\n\tprintEvalHist: printing direct method (base sincos)\n\n");
     if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
     PrintHistrBins(cmd, gd);
     PrintHistXi2pcf(cmd, gd);

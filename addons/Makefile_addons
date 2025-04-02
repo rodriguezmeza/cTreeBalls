@@ -26,12 +26,6 @@ include $(MACHINES_DIR)/addons/gadget_io/Makefile_gadget_io
 endif
 #
 
-# DIRECTMETHOD
-ifeq ($(DIRECTMETHODON),1)
-include $(MACHINES_DIR)/addons/direct_method/Makefile_direct_method
-endif
-#
-
 # CLASSLIB
 ifeq ($(CLASSLIBON),1)
 include $(MACHINES_DIR)/addons/class_lib/Makefile_class_lib
@@ -176,6 +170,30 @@ endif
 ifeq ($(SAVERESTOREON),1)
 include $(MACHINES_DIR)/addons/save_restore/Makefile_save_restore
 endif
+
+#E
+############################
+
+
+############################
+#B Addendum of some not important
+#   modules or that are in
+#   development phase
+# Normally they will be switched OFF
+
+# DIRECTMETHOD
+# For computing 3pcf using direct method
+ifeq ($(DIRECTMETHODON),1)
+include $(MACHINES_DIR)/addons/direct_method/Makefile_direct_method
+endif
+#
+
+# DIRECTMETHODSIMPLE
+# For computing 3pcf using direct method simple
+ifeq ($(DIRECTMETHODSIMPLEON),1)
+include $(MACHINES_DIR)/addons/direct_method_simple/Makefile_direct_method_simple
+endif
+#
 
 #E
 ############################

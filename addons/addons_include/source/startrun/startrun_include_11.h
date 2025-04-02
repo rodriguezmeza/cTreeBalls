@@ -17,20 +17,16 @@
 #include "startrun_balls_omp_06.h"              // 46
 #endif
 
-#ifdef DIRECTMETHOD
-#include "startrun_direct_method.h"             // 19
-#endif
-
 #ifdef KDTREEOMP
 #include "startrun_kdtree_omp_11.h"             // 59
 #endif
 
 #ifdef OCTREEKKKOMP
-#include "startrun_octree_kkk_omp_11.h"             // 61
+#include "startrun_octree_kkk_omp_11.h"         // 61
 #endif
 
 #ifdef OCTREEGGGOMP
-#include "startrun_octree_ggg_omp_11.h"             // 66
+#include "startrun_octree_ggg_omp_11.h"         // 66
 #endif
 
 /*
@@ -40,4 +36,31 @@
 // it is recommended to use tag numbers above 100...
 
 
-#endif	// ! _startrun_include_11_h
+
+/*
+ ############################
+ #B Addendum of some not important
+ #   modules or that are in
+ #   development phase
+ # Normally they will be switched OFF
+ ############################
+ */
+
+
+#ifdef DIRECTMETHOD
+#include "startrun_direct_method.h"             // 19
+#endif
+
+#ifdef DIRECTMETHODSIMPLE
+#include "startrun_direct_method_simple.h"      // 67
+#endif
+
+
+/*
+ #B Addendum of some not important
+ ############################
+*/
+
+
+#endif    // ! _startrun_include_11_h
+

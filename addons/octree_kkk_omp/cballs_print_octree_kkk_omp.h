@@ -12,50 +12,11 @@ case 61:
     PrintHistrBins(cmd, gd);
 
 switch(correlation_int) {
-        
-        /*
-    case KKKCORRELATION:
-//B (computeTPCF)
-#ifdef NONORMHIST
-        if (scanopt(cmd->options, "no-normalize-HistZeta"))
-            PrintHistZetaM_sincos(cmd, gd);
-        else
-            PrintHistZetaM_sincos_normalized(cmd, gd);
-#else
-        PrintHistZetaM_sincos(cmd, gd);
-#endif
-#ifdef NMultipoles
-        PrintHistZetaM_sincos_N(cmd, gd);
-#endif
-        if (scanopt(cmd->options, "out-m-HistZeta")) {
-#ifdef NONORMHIST
-            if (scanopt(cmd->options, "no-normalize-HistZeta"))
-                PrintHistZetaMm_sincos(cmd, gd);
-            else
-                PrintHistZetaMm_sincos_normalized(cmd, gd);
-#else
-            PrintHistZetaMm_sincos(cmd, gd);
-#endif
-#ifdef NMultipoles
-            PrintHistZetaMm_sincos_N(cmd, gd);
-#endif
-        }
-        if (scanopt(cmd->options, "out-HistZetaG")) {
-            PrintHistZetaGm_sincos(cmd, gd);
-        }
 
-#ifdef NMultipoles
-#ifdef NONORMHIST
-        if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-            if (scanopt(cmd->options, "edge-corrections")) {
-                matrixClm(cmd, gd, 1, 1);
-            }
-        }
-#endif
-#endif
-//E (computeTPCF)
-        break;
-        */
+        //B This case is done in search_octree_kkk_omp routine
+//    case KKKCORRELATION:
+//        break;
+        //E
 
     case KKCORRELATION:
         if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
@@ -70,5 +31,6 @@ switch(correlation_int) {
         PrintHistN2pcf(cmd, gd);
         break;
 }
+    break;
 
 #endif	// ! _cballs_print_octree_kkk_omp_h

@@ -4,13 +4,17 @@
 #ifndef _startrun_octree_kkk_omp_10_h
 #define _startrun_octree_kkk_omp_10_h
 
+//
+// Check in search_octree_kkk_omp.c if this arrays are allocated
+//
+
 #ifdef NMultipoles
 // NMultipoles Deactivated in KDTREEOMP
 //B Already allocated in startrun_kdtree_omp_10.h
 //#ifndef KDTREEOMP
-    gd->NhistNNSub = dvector(1,cmd->sizeHistN);
-    bytes_tot_local += cmd->sizeHistN*sizeof(real);
-
+//    gd->NhistNNSub = dvector(1,cmd->sizeHistN);
+//    bytes_tot_local += cmd->sizeHistN*sizeof(real);
+/*
     gd->NhistXi = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     gd->NhistXicos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     gd->NhistXisin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
@@ -31,14 +35,16 @@
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
             4*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    gd->NhistZetaGmRe =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gd->NhistZetaGmIm =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    gd->NhistZetaGmRe =
+//                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    gd->NhistZetaGmIm =
+//                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
             2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 //#endif // NMultipoles Deactivated in KDTREEOMP
+ */
 //E
+
 #endif // ! NMultipoles
 
 // 2pcf
