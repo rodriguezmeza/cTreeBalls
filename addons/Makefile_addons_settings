@@ -25,7 +25,12 @@ ifeq ($(USEGSL),0)
 CLASSLIBON = 1
 else
 $(info CLASSLIB collide with GSL library, needs USEGSL = 0, deactivating...)
+ifeq ($(GSLINTERNAL),0)
 CLASSLIBON = 0
+else
+$(info CLASSLIB does not collide with internal GSL library, activating...)
+CLASSLIBON = 1
+endif
 endif
 
 # PXD
@@ -41,8 +46,17 @@ endif
 
 
 # IOLIB
-# Several I/O routines
+# Several additional I/O routines
 IOLIBON = 1
+
+# CFITSIOLIB
+# internal cfitsio lib.
+#   Default is 0,
+#   means you have to install cfitsio library by your self
+#   or ask administrator to have it for you.
+#   If set to 1,
+#   no collision of CFITSIO addon with python interface
+CFITSIOLIBON = 0
 
 # CFITSIO
 # To IO fits format
@@ -52,13 +66,17 @@ ifeq ($(IOLIBON),1)
 # When user knows where cfitsio lib/include directories live,
 #   make respective changes in Makefile_machine file
 #   and then set it ON
-# there are collision with python interface, default is OFF,
+# there is collision with python interface, default is OFF,
 #   turn it ON if necessary
+ifeq ($(CFITSIOLIBON),0)
 ifeq ($(CLASSLIBON),0)
 CFITSIOON = 1
 else
 $(info To compile with CFITSIO needs CLASSLIBON = 0, deactivating CFITSIO...)
 CFITSIOON = 0
+endif
+else
+CFITSIOON = 1
 endif
 else
 $(info To compile with CFITSIO needs IOLIBON = 1, deactivating...)
@@ -108,6 +126,17 @@ OVERCOUNTINGON = 0
 # For save/restore options
 SAVERESTOREON = 0
 
+# NOSTANDARNORMHISTON switch
+#   If activated histograms are saved without normalization
+#   only for kdtree-omp and tree-omp-sincos searching methods
+# Default is 0
+NOSTANDARNORMHISTON = 0
+
+# CMDLINE_DEFS_UNITSPHERE
+# set of useful default values for the unit sphere
+CMDLINE_DEFS_UNITSPHERE_ON = 1
+
+
 #E
 ############################
 
@@ -152,5 +181,6 @@ endif
 
 #E
 ############################
+
 
 $(info =====================================================)

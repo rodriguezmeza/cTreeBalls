@@ -5,7 +5,17 @@
 case INCFITSIO:
     verb_print(cmd->verbose,
                "\n\tInput in fits format...\n");
-    inputdata_cfitsio(cmd, gd, filename, ifile); 
+    inputdata_cfitsio(cmd, gd, filename, ifile);
+    break;
+case INFITSRADECTC:
+    verb_print(cmd->verbose,
+               "\n\tInput in fits-healpix-radec-tc format...\n");
+    inputdata_cfitsio_radec_tc(cmd, gd, filename, ifile);
+    break;
+case INFITSHEALPIX:
+    verb_print(cmd->verbose,
+               "\n\tInput in fits-healpix format...\n");
+    inputdata_cfitsio_healpix(cmd, gd, filename, ifile);
     break;
 
 #endif	// ! _cballsio_cfitsio_01_h

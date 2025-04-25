@@ -1,0 +1,270 @@
+Making install in gsl
+make[4]: Nothing to be done for `install-exec-am'.
+make[4]: Nothing to be done for `install-data-am'.
+Making install in utils
+make[4]: Nothing to be done for `install-exec-am'.
+make[4]: Nothing to be done for `install-data-am'.
+Making install in sys
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_sys.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in test
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_test.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in err
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_errno.h gsl_message.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in bst
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_bst.h gsl_bst_types.h gsl_bst_avl.h gsl_bst_rb.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in const
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_const.h gsl_const_cgs.h gsl_const_mks.h gsl_const_cgsm.h gsl_const_mksa.h gsl_const_num.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in complex
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_complex.h gsl_complex_math.h test_source.c '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in cheb
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_chebyshev.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in block
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_block.h gsl_block_char.h gsl_block_complex_double.h gsl_block_complex_float.h gsl_block_complex_long_double.h gsl_block_double.h gsl_block_float.h gsl_block_int.h gsl_block_long.h gsl_block_long_double.h gsl_block_short.h gsl_block_uchar.h gsl_block_uint.h gsl_block_ulong.h gsl_block_ushort.h gsl_check_range.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in vector
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_vector.h gsl_vector_char.h gsl_vector_complex.h gsl_vector_complex_double.h gsl_vector_complex_float.h gsl_vector_complex_long_double.h gsl_vector_double.h gsl_vector_float.h gsl_vector_int.h gsl_vector_long.h gsl_vector_long_double.h gsl_vector_short.h gsl_vector_uchar.h gsl_vector_uint.h gsl_vector_ulong.h gsl_vector_ushort.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in matrix
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_matrix.h gsl_matrix_char.h gsl_matrix_complex_double.h gsl_matrix_complex_float.h gsl_matrix_complex_long_double.h gsl_matrix_double.h gsl_matrix_float.h gsl_matrix_int.h gsl_matrix_long.h gsl_matrix_long_double.h gsl_matrix_short.h gsl_matrix_uchar.h gsl_matrix_uint.h gsl_matrix_ulong.h gsl_matrix_ushort.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in permutation
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_permutation.h gsl_permute.h gsl_permute_char.h gsl_permute_complex_double.h gsl_permute_complex_float.h gsl_permute_complex_long_double.h gsl_permute_double.h gsl_permute_float.h gsl_permute_int.h gsl_permute_long.h gsl_permute_long_double.h gsl_permute_short.h gsl_permute_uchar.h gsl_permute_uint.h gsl_permute_ulong.h gsl_permute_ushort.h gsl_permute_vector.h gsl_permute_vector_char.h gsl_permute_vector_complex_double.h gsl_permute_vector_complex_float.h gsl_permute_vector_complex_long_double.h gsl_permute_vector_double.h gsl_permute_vector_float.h gsl_permute_vector_int.h gsl_permute_vector_long.h gsl_permute_vector_long_double.h gsl_permute_vector_short.h gsl_permute_vector_uchar.h gsl_permute_vector_uint.h gsl_permute_vector_ulong.h gsl_permute_vector_ushort.h gsl_permute_matrix_char.h gsl_permute_matrix_complex_long_double.h gsl_permute_matrix.h gsl_permute_matrix_long.h gsl_permute_matrix_uint.h gsl_permute_matrix_complex_double.h gsl_permute_matrix_double.h gsl_permute_matrix_int.h gsl_permute_matrix_short.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_permute_matrix_ulong.h gsl_permute_matrix_complex_float.h gsl_permute_matrix_float.h gsl_permute_matrix_long_double.h gsl_permute_matrix_uchar.h gsl_permute_matrix_ushort.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in combination
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_combination.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multiset
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multiset.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in sort
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_heapsort.h gsl_sort.h gsl_sort_char.h gsl_sort_double.h gsl_sort_float.h gsl_sort_int.h gsl_sort_long.h gsl_sort_long_double.h gsl_sort_short.h gsl_sort_uchar.h gsl_sort_uint.h gsl_sort_ulong.h gsl_sort_ushort.h gsl_sort_vector.h gsl_sort_vector_char.h gsl_sort_vector_double.h gsl_sort_vector_float.h gsl_sort_vector_int.h gsl_sort_vector_long.h gsl_sort_vector_long_double.h gsl_sort_vector_short.h gsl_sort_vector_uchar.h gsl_sort_vector_uint.h gsl_sort_vector_ulong.h gsl_sort_vector_ushort.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in ieee-utils
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_ieee_utils.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in cblas
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/lib'
+ /bin/sh ../libtool   --mode=install /usr/bin/install -c   libgslcblas.la '/Users/mar/NagBody_pkg/local/gsl/lib'
+libtool: install: /usr/bin/install -c .libs/libgslcblas.0.dylib /Users/mar/NagBody_pkg/local/gsl/lib/libgslcblas.0.dylib
+libtool: install: (cd /Users/mar/NagBody_pkg/local/gsl/lib && { ln -s -f libgslcblas.0.dylib libgslcblas.dylib || { rm -f libgslcblas.dylib && ln -s libgslcblas.0.dylib libgslcblas.dylib; }; })
+libtool: install: /usr/bin/install -c .libs/libgslcblas.lai /Users/mar/NagBody_pkg/local/gsl/lib/libgslcblas.la
+libtool: install: /usr/bin/install -c .libs/libgslcblas.a /Users/mar/NagBody_pkg/local/gsl/lib/libgslcblas.a
+libtool: install: chmod 644 /Users/mar/NagBody_pkg/local/gsl/lib/libgslcblas.a
+libtool: install: ranlib /Users/mar/NagBody_pkg/local/gsl/lib/libgslcblas.a
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_cblas.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in blas
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_blas.h gsl_blas_types.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in linalg
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_linalg.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in eigen
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_eigen.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in specfunc
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_sf.h gsl_sf_airy.h gsl_sf_bessel.h gsl_sf_clausen.h gsl_sf_coulomb.h gsl_sf_coupling.h gsl_sf_dawson.h gsl_sf_debye.h gsl_sf_dilog.h gsl_sf_elementary.h gsl_sf_ellint.h gsl_sf_elljac.h gsl_sf_erf.h gsl_sf_exp.h gsl_sf_expint.h gsl_sf_fermi_dirac.h gsl_sf_gamma.h gsl_sf_gegenbauer.h gsl_sf_hermite.h gsl_sf_hyperg.h gsl_sf_laguerre.h gsl_sf_lambert.h gsl_sf_legendre.h gsl_sf_log.h gsl_sf_mathieu.h gsl_sf_pow_int.h gsl_sf_psi.h gsl_sf_result.h gsl_sf_sincos_pi.h gsl_sf_synchrotron.h gsl_sf_transport.h gsl_sf_trig.h gsl_sf_zeta.h gsl_specfunc.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in dht
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_dht.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in qrng
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_qrng.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in rng
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_rng.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in randist
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_randist.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in fft
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_fft.h gsl_fft_complex.h gsl_fft_halfcomplex.h gsl_fft_real.h gsl_dft_complex.h gsl_dft_complex_float.h gsl_fft_complex_float.h gsl_fft_halfcomplex_float.h gsl_fft_real_float.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in poly
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_poly.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in fit
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_fit.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multifit
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multifit.h gsl_multifit_nlin.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multifit_nlinear
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multifit_nlinear.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multilarge
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multilarge.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multilarge_nlinear
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multilarge_nlinear.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in filter
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_filter.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in movstat
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_movstat.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in rstat
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_rstat.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in statistics
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_statistics.h gsl_statistics_char.h gsl_statistics_double.h gsl_statistics_float.h gsl_statistics_int.h gsl_statistics_long.h gsl_statistics_long_double.h gsl_statistics_short.h gsl_statistics_uchar.h gsl_statistics_uint.h gsl_statistics_ulong.h gsl_statistics_ushort.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in siman
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_siman.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in sum
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_sum.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in integration
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_integration.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in interpolation
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_interp.h gsl_spline.h gsl_interp2d.h gsl_spline2d.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in histogram
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_histogram.h gsl_histogram2d.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in ode-initval
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_odeiv.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in ode-initval2
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_odeiv2.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in roots
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_roots.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multiroots
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multiroots.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in min
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_min.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in multimin
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_multimin.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in monte
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_monte.h gsl_monte_vegas.h gsl_monte_miser.h gsl_monte_plain.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in ntuple
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_ntuple.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in diff
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_diff.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in deriv
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_deriv.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in cdf
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_cdf.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in wavelet
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_wavelet.h gsl_wavelet2d.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in bspline
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_bspline.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in spblas
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_spblas.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in spmatrix
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_spmatrix.h gsl_spmatrix_char.h gsl_spmatrix_double.h gsl_spmatrix_float.h gsl_spmatrix_int.h gsl_spmatrix_long_double.h gsl_spmatrix_long.h gsl_spmatrix_short.h gsl_spmatrix_uchar.h gsl_spmatrix_uint.h gsl_spmatrix_ulong.h gsl_spmatrix_ushort.h gsl_spmatrix_complex_float.h gsl_spmatrix_complex_double.h gsl_spmatrix_complex_long_double.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in splinalg
+make[4]: Nothing to be done for `install-exec-am'.
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_splinalg.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+Making install in doc
+Making install in .
+make[5]: Nothing to be done for `install-exec-am'.
+.././install-sh -c -d "/Users/mar/NagBody_pkg/local/gsl/share/info"
+/usr/bin/install -c -m 644 ./gsl-ref.info /Users/mar/NagBody_pkg/local/gsl/share/info
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/share/man/man1'
+ /usr/bin/install -c -m 644 gsl-config.1 gsl-randist.1 gsl-histogram.1 '/Users/mar/NagBody_pkg/local/gsl/share/man/man1'
+ .././install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/share/man/man3'
+ /usr/bin/install -c -m 644 gsl.3 '/Users/mar/NagBody_pkg/local/gsl/share/man/man3'
+Making install in examples
+make[5]: Nothing to be done for `install-exec-am'.
+make[5]: Nothing to be done for `install-data-am'.
+ ./install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/lib'
+ /bin/sh ./libtool   --mode=install /usr/bin/install -c   libgsl.la '/Users/mar/NagBody_pkg/local/gsl/lib'
+libtool: install: /usr/bin/install -c .libs/libgsl.27.dylib /Users/mar/NagBody_pkg/local/gsl/lib/libgsl.27.dylib
+libtool: install: (cd /Users/mar/NagBody_pkg/local/gsl/lib && { ln -s -f libgsl.27.dylib libgsl.dylib || { rm -f libgsl.dylib && ln -s libgsl.27.dylib libgsl.dylib; }; })
+libtool: install: /usr/bin/install -c .libs/libgsl.lai /Users/mar/NagBody_pkg/local/gsl/lib/libgsl.la
+libtool: install: /usr/bin/install -c .libs/libgsl.a /Users/mar/NagBody_pkg/local/gsl/lib/libgsl.a
+libtool: install: chmod 644 /Users/mar/NagBody_pkg/local/gsl/lib/libgsl.a
+libtool: install: ranlib /Users/mar/NagBody_pkg/local/gsl/lib/libgsl.a
+ ./install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/bin'
+  /bin/sh ./libtool   --mode=install /usr/bin/install -c gsl-randist gsl-histogram '/Users/mar/NagBody_pkg/local/gsl/bin'
+libtool: install: /usr/bin/install -c .libs/gsl-randist /Users/mar/NagBody_pkg/local/gsl/bin/gsl-randist
+libtool: install: /usr/bin/install -c .libs/gsl-histogram /Users/mar/NagBody_pkg/local/gsl/bin/gsl-histogram
+ ./install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/bin'
+ /usr/bin/install -c gsl-config '/Users/mar/NagBody_pkg/local/gsl/bin'
+ ./install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/share/aclocal'
+ /usr/bin/install -c -m 644 gsl.m4 '/Users/mar/NagBody_pkg/local/gsl/share/aclocal'
+ ./install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/lib/pkgconfig'
+ /usr/bin/install -c -m 644 gsl.pc '/Users/mar/NagBody_pkg/local/gsl/lib/pkgconfig'
+ ./install-sh -c -d '/Users/mar/NagBody_pkg/local/gsl/include/gsl'
+ /usr/bin/install -c -m 644 gsl_math.h gsl_pow_int.h gsl_nan.h gsl_machine.h gsl_mode.h gsl_precision.h gsl_types.h gsl_version.h gsl_minmax.h gsl_inline.h '/Users/mar/NagBody_pkg/local/gsl/include/gsl'

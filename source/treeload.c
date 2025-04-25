@@ -11,6 +11,11 @@
 
 // Work to do in order to use with boxes not centered at (0,0,...)
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 
 local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int);
@@ -379,11 +384,13 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
         gd->nnodescanlevTable[ifile] = inodelev;
         save_nodes(cmd, gd, ifile);
     } // ! scanLevel==0
-    
+
+//B socket:
 #ifdef ADDONS
 #include "tree_include.h"
 #endif
-    
+//E
+
     //B Root nodes to scan:
     inodelev_root = 0;
     ibodyleftout_root = 0;
@@ -528,7 +535,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
         if (strnull(cmd->rsmooth)) {
             if (scanopt(cmd->options, "fix-rsmooth")) {
                 //B Leave it as a refereence: green line
-//            gd->rsmooth[0] = 0.00416666665;           // (0.25 arcmin)/60
+//            gd->rsmooth[0] = 0.00416666665;       // (0.25 arcmin)/60
                 //E
                 gd->rsmooth[0] = 0.01*cmd->rangeN;  // 1% of rangeN
                                                     // 200*0.01 -> 0.00058178 rad
@@ -685,8 +692,10 @@ global int expandbox(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-#define EPSILON 1.0E-7                              // Choose well. If not tdepth and
-                                                    //  no. of cell will grow badly...
+#define EPSILON 1.0E-7                              // Choose well.
+                                                    //  If not tdepth and
+                                                    //  no. of cell will
+                                                    //  grow badly...
 #define EPSILONFLOAT 1.0E-0                         // this is for float pos
 
 local int loadbody(struct  cmdline_data* cmd,
@@ -717,20 +726,29 @@ startagain:
                                "\nIds: %ld and %ld have the same position\n",
                                Id(p),Id(Subp(q)[qind]));
                 DO_COORD(k)
-                    verb_log_print(cmd->verbose_log,gd->outlog,"Pos[k]: %le %le\n",
+                    verb_log_print(cmd->verbose_log,gd->outlog,
+                                   "Pos[k]: %le %le\n",
                                Pos(p)[k],Pos(Subp(q)[qind])[k]);
                 if (scanopt(cmd->options, "no-check-two-bodies-eq-pos")) {
                     DO_COORD(k) {
-                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*gd->Box[k]);
+//                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*gd->Box[k]);
+                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
 //                        Pos(p)[k] += EPSILONFLOAT*grandom(0.0, 0.01*gd->Box[k]);
 //                        Pos(p)[k] += grandom(0.0, 0.1*gd->Box[k]);
+                        DO_COORD(k) {
+                            verb_log_print(cmd->verbose_log,gd->outlog,
+                            "CorrectedPos[k]: %g %g and correction: %le\n",
+                            Pos(p)[k],Pos(Subp(q)[qind])[k],
+                            EPSILON*grandom(0.0, 0.01*qsize));
+                        }
                     }
                     Update(p) = FALSE;
                     gd->sameposcount++;
                     sameposcount++;
                     goto startagain;
                 } else {
-                    error("loadbody: two bodies have same position\n");
+                    error("loadbody: two bodies have same position...\n\t%s",
+                          "consider the option: 'no-check-two-bodies-eq-pos'");
                 }
             }
             c = makecell(cmd, gd, ifile);

@@ -1,0 +1,17 @@
+# ----- MAKE FILE addons definitions (cmdline_defs_settings) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(CMDLINE_DEFS_UNITSPHERE_ON),1)
+OPT2 += -DCMDLINE_DEFS_UNITSPHERE
+CMDLINE_DEFS_UNITSPHERE = ../addons/cmdline_defs_settings/
+vpath %.c ./addons/cmdline_defs_settings/
+INCLUDES += -I$(CMDLINE_DEFS_UNITSPHERE)
+HEADERFILES += $(wildcard $(CMDLINE_DEFS_UNITSPHERE)/*.h)
+EXTERNAL +=
+endif
+#
+#E

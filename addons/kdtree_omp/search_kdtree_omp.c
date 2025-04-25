@@ -348,7 +348,11 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 //B kappa Avg Rmin
         den = (real)(nbody[cat1]-ipfalse);
 //E
+#ifdef NOSTANDARNORMHIST
+        xi = 1.0;
+#else
         xi = num/den;
+#endif // ! NONORMHIST
         verb_print(cmd->verbose,
                    "kdtree-omp: p falses found = %ld and %e %e %e\n",
                    ipfalse, num, den, xi);
@@ -717,7 +721,11 @@ local int print_info(struct cmdline_data* cmd,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
     if (!cmd->computeTPCF)
         verb_print(cmd->verbose, "computing only 2pcf... \n");
+#ifdef NOSTANDARNORMHIST
+    verb_print(cmd->verbose, "warning!! histograms will not be normalized... \n");
+#endif
 
     return SUCCESS;
 }
+
 

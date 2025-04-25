@@ -1,5 +1,10 @@
 // Use:
 //#include "startrun_include_11.h"
+//
+//  it is included in (the socket):
+//      source/startrun.c
+//      in the search_method_string_to_int routine
+//
 
 // These header files have defined tag numbers for the searching methods...
 // It is recommended to use tag numbers greater than 100
@@ -57,7 +62,7 @@
 
 
 /*
- #B Addendum of some not important
+ #E Addendum of some not important
  ############################
 */
 

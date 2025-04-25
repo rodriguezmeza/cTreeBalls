@@ -93,6 +93,12 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->sameposcount = 0;
 //    gd->flagPrint = TRUE;
 
+//B here capture a yaml parameter file
+//      must detect extension ".yaml"
+//      or the yaml type could be stated in options=yaml
+//      once detected run a python script to
+//          write parameters in yaml file to
+//          the standard cballs parameters file 
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
     if (*(cmd->paramfile)=='-')
@@ -104,6 +110,7 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #else
     startrun_parameterfile(cmd, gd);
 #endif
+//E
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
@@ -126,7 +133,9 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #else // ! CLASSLIB
 
 #ifdef USEGSL
+#ifndef GSLINTER
 #error `USEGSL` and `CLASSLIB` can not used at the same time. Switched off one of them
+#endif
 #endif
 
 #include "input.h"
@@ -252,7 +261,10 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
     cmd->rsmooth = GetParam("rsmooth");
     cmd->theta = GetdParam("theta");
     cmd->computeTPCF = GetbParam("computeTPCF");
-    cmd->computeShearCF = GetbParam("computeShearCF");
+    //B correction 2025-04-06
+    // Move this to addon that compute shear correlations
+//    cmd->computeShearCF = GetbParam("computeShearCF");
+    //E
     cmd->usePeriodic = GetbParam("usePeriodic");
     //E
 
@@ -363,7 +375,10 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
     SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
     BPName(cmd->computeTPCF,"computeTPCF");
-    BPName(cmd->computeShearCF,"computeShearCF");
+    //B correction 2025-04-06
+    // Move this to addon that compute shear correlations
+//    BPName(cmd->computeShearCF,"computeShearCF");
+    //E
     BPName(cmd->usePeriodic,"usePeriodic");
     //E
 
@@ -774,15 +789,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                         "deltaR=%lf normal scale):\n",gd->deltaR);
     } // ! useLogHist
 
-#ifdef CELLMETHOD
-        MULVS(gd->cells, gd->Box, 1.0/gd->Rcut);    // Only needed for cellmethod
-        AllocMem(gd->cellList, VProd (gd->cells)    // Only needed for cellmethod
-                + cmd->nbody, INTEGER);
-        gd->bytes_tot += (VProd(gd->cells)+cmd->nbody)*sizeof(INTEGER);
-        verb_print(cmd->verbose,
-                   "\n\nAllocated %g MByte for cells storage...\n",
-                   (VProd(gd->cells)+cmd->nbody)*sizeof(INTEGER)*INMB);
-#endif
+//B correction 2025-04-06
+//#ifdef CELLMETHOD
+//        MULVS(gd->cells, gd->Box, 1.0/gd->Rcut);    // Only needed for cellmethod
+//        AllocMem(gd->cellList, VProd (gd->cells)    // Only needed for cellmethod
+//                + cmd->nbody, INTEGER);
+//        gd->bytes_tot += (VProd(gd->cells)+cmd->nbody)*sizeof(INTEGER);
+//        verb_print(cmd->verbose,
+//                   "\n\nAllocated %g MByte for cells storage...\n",
+//                   (VProd(gd->cells)+cmd->nbody)*sizeof(INTEGER)*INMB);
+//#endif
+//E
         real Vol = 1.0;
         int k;
         DO_COORD(k)
@@ -811,7 +828,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                    "and Nsmooth (Takahasi): (N*rs^2)/4: %g\n\n",
                    gd->nbodyTable[gd->iCatalogs[0]]*rpow(avgDistance,2.0)*0.25);
 
-
+// 180*60/Pi
 #define RADTOARCMIN   3437.74677
     //B cell size threshold computed for gd->iCatalogs[0] only...
     real rSizeTmp;
@@ -865,8 +882,9 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
               cmd->useLogHist, cmd->searchMethod);
     if (cmd->computeTPCF) {
 #ifndef USEGSL
+        //  for recursivity needs that at least 3 multipoles be evaluated
         if (scanopt(cmd->options, "out-HistZetaG")) {
-            if (cmd->mChebyshev + 1 < 2
+            if (cmd->mChebyshev + 1 < 3
                 || (cmd->mChebyshev + 1)&(cmd->mChebyshev)) {
                 verb_print(cmd->verbose,
                     "\nCheckParameters: using option out-HistZetaG...\n");
@@ -875,12 +893,13 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
                       cmd->mChebyshev+1, "must be positive and a power of 2");
             }
         } else {
-            if (cmd->mChebyshev + 1 < 2)
+            if (cmd->mChebyshev + 1 < 3)
             error("CheckParameters: %s (=%d)\n\t\t\tmust be positive\n",
                   "absurd value for mChebyshev + 1", cmd->mChebyshev+1);
         }
 #else
-        if (cmd->mChebyshev + 1 < 2)
+        //  for recursivity needs that at least 3 multipoles be evaluated
+        if (cmd->mChebyshev + 1 < 3)
             error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive\n", cmd->mChebyshev+1);
 #endif
     }
@@ -1024,8 +1043,11 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
         fprintf(fdout,FMTT,"rsmooth",cmd->rsmooth);
         fprintf(fdout,FMTR,"theta",cmd->theta);
         fprintf(fdout,FMTT,"computeTPCF",cmd->computeTPCF ? "true" : "false");
-        fprintf(fdout,FMTT,"computeShearCF",
-                cmd->computeShearCF ? "true" : "false");
+        //B correction 2025-04-06
+        // Move this to addon that compute shear correlations
+//        fprintf(fdout,FMTT,"computeShearCF",
+//                cmd->computeShearCF ? "true" : "false");
+        //E
         fprintf(fdout,FMTT,"usePeriodic",cmd->usePeriodic ? "true" : "false");
         //E
 
@@ -1168,7 +1190,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     bytes_tot_local += 7*cmd->sizeHistN*sizeof(real);
 
     if (cmd->computeTPCF) {
-        gd->histXi = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+        // array histXi is not used any more.
+        //  remove it from all the places...
+//        gd->histXi = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+        //
         gd->histXicos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         gd->histXisin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         bytes_tot_local += 3*(cmd->mChebyshev+1)*cmd->sizeHistN*sizeof(real);
@@ -1213,11 +1238,14 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
                 2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
     } // ! computeTPCF
 
-    if (cmd->computeShearCF) {
-        gd->histXitt = dvector(1,cmd->sizeHistN);
-        gd->histXixx = dvector(1,cmd->sizeHistN);
-        gd->histXitx = dvector(1,cmd->sizeHistN);
-    }
+    //B correction 2025-04-06
+    // Move this to addon that computes shear correlations
+//    if (cmd->computeShearCF) {
+//        gd->histXitt = dvector(1,cmd->sizeHistN);
+//        gd->histXixx = dvector(1,cmd->sizeHistN);
+//        gd->histXitx = dvector(1,cmd->sizeHistN);
+//    }
+    //
 
 //B socket:
 #ifdef ADDONS
@@ -1563,9 +1591,11 @@ local int print_make_info(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "using OpenMP\n");
 #endif
 
-#ifdef MANUALCHEBYSHEV
-    verb_print(cmd->verbose, "MANUALCHEBYSHEV\n");
-#endif
+//B correction 2025-04-06
+//#ifdef MANUALCHEBYSHEV
+//    verb_print(cmd->verbose, "MANUALCHEBYSHEV\n");
+//#endif
+//E correction 2025-04-06
 
 #ifdef SINGLEP
     verb_print(cmd->verbose, "SINGLEP\n");

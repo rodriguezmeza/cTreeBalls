@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #ifndef _global_data_h
 #define _global_data_h
 
@@ -65,12 +70,15 @@ struct global_data{
      real RcutSq;
     real cpusearch;
 //
-#ifdef CELLMETHOD
-// Cell search
-     vectorI cells;
-    INTEGER *cellList;
-//
-#endif
+
+//B correction 2025-04-06
+//#ifdef CELLMETHOD
+// // Cell search
+//     vectorI cells;
+//    INTEGER *cellList;
+// //
+//#endif
+//E
 
     int infilefmt_int;
 
@@ -109,7 +117,10 @@ struct global_data{
     real *histXi2pcf_omp;
     real ***histXi3pcf;
 // TPCF
-    real **histXi;
+    // array histXi is not used any more.
+    //  remove it from all the places...
+//    real **histXi;
+    //
     real **histXicos;
     real **histXisin;
 #ifdef USEGSL
@@ -123,11 +134,14 @@ struct global_data{
     real ***histZetaGmIm;
 //E
     
+    //B correction 2025-04-06
+    // Move this to addon that computes shear correlations
 //B To save total 3pcf shear
-    real *histXitt;
-    real *histXixx;
-    real *histXitx;
+//    real *histXitt;
+//    real *histXixx;
+//    real *histXitx;
 //E
+    //E
 
 //E Histograms arrays
 // -----------------------------------
@@ -185,9 +199,11 @@ struct global_data{
 
     real i_deltaR;
 
+//B socket:
 #ifdef ADDONS
 #include "global_data_include.h"
 #endif
+//E
 
     char fnameData_kd[128];
     char fnameOut_kd[128];
@@ -239,9 +255,11 @@ struct global_data{
 
     bool flagPrint;
 
+//B socket:
 #ifdef ADDONS
 #include "globaldefs_include_03.h"
 #endif
+//E
 
 };
 

@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #ifndef _cmdline_data_h
 #define _cmdline_data_h
 
@@ -32,7 +37,10 @@ struct cmdline_data{
     string rsmooth;
     real theta;
     bool computeTPCF;
-    bool computeShearCF;
+    //B correction 2025-04-06
+    // Move this to addon that computes shear correlations
+//    bool computeShearCF;
+    //E
     bool usePeriodic;
     //E
 
@@ -87,9 +95,12 @@ struct cmdline_data{
 
     string version;
 
+//B socket:
 #ifdef ADDONS
 #include "globaldefs_include_01.h"
 #endif
+//E
+
 };
 
 #endif // ! _cmdline_data_h

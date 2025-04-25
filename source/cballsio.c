@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 
 local int inputdata_ascii(struct cmdline_data*, struct  global_data*,
@@ -26,9 +31,11 @@ local int outputdata_bin(struct cmdline_data*, struct  global_data*,
                          bodyptr, INTEGER);
 local int EndRun_FreeMemory(struct cmdline_data*, struct  global_data*);
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_00.h"
 #endif
+//E
 
 local int outfilefmt_string_to_int(string,int *);
 local int outfilefmt_int;
@@ -72,9 +79,11 @@ int InputData(struct cmdline_data* cmd,
                        errmsg, errmsg);
             break;
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_01.h"
 #endif
+//E
 
         default:
             verb_print(cmd->verbose,
@@ -1147,9 +1156,11 @@ local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
             outputdata_ascii(cmd, gd, btable, nbody); break;
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_03.h"
 #endif
+//E
 
         default:
             verb_print(cmd->verbose, 
@@ -1229,9 +1240,11 @@ global int infilefmt_string_to_int(string infmt_str,int *infmt_int)
     if (strcmp(infmt_str,"binary") == 0)                *infmt_int = INCOLUMNSBIN;
     if (strcmp(infmt_str,"takahasi") == 0)              *infmt_int = INTAKAHASI;
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_08.h"
 #endif
+//E
 
     return SUCCESS;
 }
@@ -1243,9 +1256,11 @@ local int outfilefmt_string_to_int(string outfmt_str,int *outfmt_int)
     if (strnull(outfmt_str))                        *outfmt_int = OUTNULL;
     if (strcmp(outfmt_str,"binary") == 0)           *outfmt_int = OUTCOLUMNSBIN;
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_09.h"
 #endif
+//E
 
     return SUCCESS;
 }
@@ -1347,9 +1362,11 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     
     free(ipos);
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_09b.h"
 #endif
+//E
 
 }
 
@@ -1424,15 +1441,20 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 //
 local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 {
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_10.h"
 #endif
+//E
 
-    if (cmd->computeShearCF) {
-        free_dvector(gd->histXitx,1,cmd->sizeHistN);
-        free_dvector(gd->histXixx,1,cmd->sizeHistN);
-        free_dvector(gd->histXitt,1,cmd->sizeHistN);
-    }
+    //B correction 2025-04-06
+    // Move this to addon that computes shear correlations
+//    if (cmd->computeShearCF) {
+//        free_dvector(gd->histXitx,1,cmd->sizeHistN);
+//        free_dvector(gd->histXixx,1,cmd->sizeHistN);
+//        free_dvector(gd->histXitt,1,cmd->sizeHistN);
+//    }
+    //E
 
     if (cmd->computeTPCF) {
         free_dmatrix3D(gd->histZetaGmIm,
@@ -1463,7 +1485,10 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(gd->histXisin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         free_dmatrix(gd->histXicos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-        free_dmatrix(gd->histXi,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+        // array histXi is not used any more.
+        //  remove it from all the places...
+//        free_dmatrix(gd->histXi,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+        //
     }
 
     free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
@@ -1491,12 +1516,14 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
     return SUCCESS;
 }
 
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_11a.h"
 #endif
+//E
 
-
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_11b.h"
 #endif
-
+//E

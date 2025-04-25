@@ -370,7 +370,7 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
-        }
+        } // ! switch
     } // ! scanoptions no-out-Hist
 
     gd->cputotalinout += CPUTIME - cpustart;
@@ -406,10 +406,12 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
 
     if (*correlation_int == -1) {
         *correlation_int = KKKCORRELATION;
-        verb_print(cmd->verbose,
-                   "\nNot given a correlation type... running deafult ");
-        verb_print(cmd->verbose,
-                   "KKKCorrelation\n");
+        if (cmd->computeTPCF) {
+            verb_print(cmd->verbose,
+                       "\nNot given a correlation type... running deafult ");
+            verb_print(cmd->verbose,
+                       "KKKCorrelation\n");
+        }
         return SUCCESS;
     }
 

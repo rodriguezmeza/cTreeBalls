@@ -12,12 +12,6 @@ case 61:
     PrintHistrBins(cmd, gd);
 
 switch(correlation_int) {
-
-        //B This case is done in search_octree_kkk_omp routine
-//    case KKKCORRELATION:
-//        break;
-        //E
-
     case KKCORRELATION:
         if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
             PrintHistXi2pcf(cmd, gd);

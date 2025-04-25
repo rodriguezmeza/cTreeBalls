@@ -9,6 +9,11 @@
 !==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 local int testdata_sc_random(struct  cmdline_data* cmd, struct  global_data* gd);
 local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd);
@@ -423,8 +428,10 @@ global int doBoxWrapping(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 
 
+//B socket:
 #ifdef ADDONS
 #include "testdata_include.h"
 #endif
+//E
 
 //E

@@ -1,5 +1,10 @@
 // Use:
 //#include "protodefs_include.h"
+//
+//  it is included in (the socket):
+//      include/protodefs.h
+//      at the end of the file
+//
 
 #ifndef _protodefs_include_h
 #define _protodefs_include_h
@@ -51,7 +56,7 @@
 #endif
 
 /*
- #B Addendum of some not important
+ #E Addendum of some not important
  ############################
 */
 

@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4          5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 /*
 If you need to add a parameter, the pattern is a line like the following:
  
@@ -40,21 +45,30 @@ and if necessary in
 #define HEAD2	"cBalls code for computing (2,3)pcf, expected: O(N logN)"
 #define HEAD3	"..."
 
+#ifndef CMDLINE_DEFS_UNITSPHERE
+
 string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
+
+//B socket:
 #ifdef ADDONS
 #include "cmdline_defs_include_00.h"
 #else
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
 #endif
+//E
+
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
     "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
     "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
     "computeTPCF=true",                 ";If true, compute 3pcf", ":tpcf",
-    "computeShearCF=true",              ";If true, compute shear cf", ":shearcf",
+    //B correction 2025-04-06
+    // Move this to addon that computes shear correlations
+//    "computeShearCF=true",              ";If true, compute shear cf", ":shearcf",
+    //E
     "usePeriodic=false",                ";If false, don't use periodic boundary condition", ":periodic",
     //E
 
@@ -108,12 +122,18 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "options=",                         ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
     //E
 
+//B socket:
 #ifdef ADDONS
 #include "cmdline_defs_include.h"
 #endif
+//E
 
-    "Version=1.0.0",			        ";Mario A. Rodríguez-Meza (2023-2024)",
+    "Version=1.0.0",			        ";Mario A. Rodríguez-Meza (2023-2025)",
     NULL,
 };
+
+#else
+#include "cmdline_defs_02_unit_sphere.h"
+#endif
 
 #endif // ! _cmdline_defs_h

@@ -1,0 +1,198 @@
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for a race-free mkdir -p... ./install-sh -c -d
+checking for gawk... no
+checking for mawk... no
+checking for nawk... no
+checking for awk... awk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking whether to enable maintainer-specific portions of Makefiles... no
+checking for a sed that does not truncate output... /usr/bin/sed
+checking whether make sets $(MAKE)... (cached) yes
+checking build system type... x86_64-apple-darwin13.4.0
+checking host system type... x86_64-apple-darwin13.4.0
+checking for x86_64-apple-darwin13.4.0-gcc... x86_64-apple-darwin13.4.0-clang
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether x86_64-apple-darwin13.4.0-clang accepts -g... yes
+checking for x86_64-apple-darwin13.4.0-clang option to enable C11 features... none needed
+checking whether x86_64-apple-darwin13.4.0-clang understands -c and -o together... yes
+checking whether make supports the include directive... yes (GNU style)
+checking dependency style of x86_64-apple-darwin13.4.0-clang... gcc3
+checking how to run the C preprocessor... x86_64-apple-darwin13.4.0-clang -E
+checking whether ln -s works... yes
+checking how to print strings... printf
+checking for a sed that does not truncate output... (cached) /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by x86_64-apple-darwin13.4.0-clang... x86_64-apple-darwin13.4.0-ld
+checking if the linker (x86_64-apple-darwin13.4.0-ld) is GNU ld... no
+checking for BSD- or MS-compatible name lister (nm)... x86_64-apple-darwin13.4.0-nm
+checking the name lister (x86_64-apple-darwin13.4.0-nm) interface... BSD nm
+checking the maximum length of command line arguments... 786432
+checking how to convert x86_64-apple-darwin13.4.0 file names to x86_64-apple-darwin13.4.0 format... func_convert_file_noop
+checking how to convert x86_64-apple-darwin13.4.0 file names to toolchain format... func_convert_file_noop
+checking for x86_64-apple-darwin13.4.0-ld option to reload object files... -r
+checking for x86_64-apple-darwin13.4.0-objdump... no
+checking for objdump... objdump
+checking how to recognize dependent libraries... pass_all
+checking for x86_64-apple-darwin13.4.0-dlltool... no
+checking for dlltool... no
+checking how to associate runtime and link libraries... printf %s\n
+checking for x86_64-apple-darwin13.4.0-ar... x86_64-apple-darwin13.4.0-ar
+checking for archiver @FILE support... no
+checking for x86_64-apple-darwin13.4.0-strip... x86_64-apple-darwin13.4.0-strip
+checking for x86_64-apple-darwin13.4.0-ranlib... x86_64-apple-darwin13.4.0-ranlib
+checking command to parse x86_64-apple-darwin13.4.0-nm output from x86_64-apple-darwin13.4.0-clang object... ok
+checking for sysroot... no
+checking for a working dd... /bin/dd
+checking how to truncate binary pipes... /bin/dd bs=4096 count=1
+checking for x86_64-apple-darwin13.4.0-mt... no
+checking for mt... no
+checking if : is a manifest tool... no
+checking for x86_64-apple-darwin13.4.0-dsymutil... no
+checking for dsymutil... dsymutil
+checking for x86_64-apple-darwin13.4.0-nmedit... x86_64-apple-darwin13.4.0-nmedit
+checking for x86_64-apple-darwin13.4.0-lipo... x86_64-apple-darwin13.4.0-lipo
+checking for x86_64-apple-darwin13.4.0-otool... x86_64-apple-darwin13.4.0-otool
+checking for x86_64-apple-darwin13.4.0-otool64... no
+checking for otool64... no
+checking for -single_module linker flag... yes
+checking for -exported_symbols_list linker flag... yes
+checking for -force_load linker flag... yes
+checking for stdio.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for strings.h... yes
+checking for sys/stat.h... yes
+checking for sys/types.h... yes
+checking for unistd.h... yes
+checking for dlfcn.h... yes
+checking for objdir... .libs
+checking if x86_64-apple-darwin13.4.0-clang supports -fno-rtti -fno-exceptions... yes
+checking for x86_64-apple-darwin13.4.0-clang option to produce PIC... -fno-common -DPIC
+checking if x86_64-apple-darwin13.4.0-clang PIC flag -fno-common -DPIC works... yes
+checking if x86_64-apple-darwin13.4.0-clang static flag -static works... no
+checking if x86_64-apple-darwin13.4.0-clang supports -c -o file.o... yes
+checking if x86_64-apple-darwin13.4.0-clang supports -c -o file.o... (cached) yes
+checking whether the x86_64-apple-darwin13.4.0-clang linker (x86_64-apple-darwin13.4.0-ld) supports shared libraries... yes
+checking dynamic linker characteristics... darwin13.4.0 dyld
+checking how to hardcode library paths into programs... immediate
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+checking for size_t... yes
+checking for working volatile... yes
+checking for inline... inline
+checking whether char is unsigned... no
+checking for GNU-style extern inline... no
+checking for C99-style inline... yes
+checking for ieeefp.h... no
+checking for complex.h... yes
+checking for vprintf... yes
+checking for memcpy... yes
+checking for memmove... yes
+checking for strdup... yes
+checking for strtol... yes
+checking for strtoul... yes
+checking for EXIT_SUCCESS and EXIT_FAILURE... yes
+checking for cos in -lm... yes
+checking for x86_64-apple-darwin13.4.0-clang options needed to detect all undeclared functions... -fno-builtin
+checking whether feenableexcept is declared... no
+checking whether fesettrapenable is declared... no
+checking whether hypot is declared... yes
+checking whether expm1 is declared... yes
+checking whether acosh is declared... yes
+checking whether asinh is declared... yes
+checking whether atanh is declared... yes
+checking whether ldexp is declared... yes
+checking whether frexp is declared... yes
+checking whether fprnd_t is declared... no
+checking whether isinf is declared... yes
+checking whether isfinite is declared... yes
+checking whether finite is declared... yes
+checking whether isnan is declared... yes
+checking whether log1p is declared... yes
+checking for long double stdio... yes
+checking for extended floating point registers... yes
+checking for IEEE arithmetic interface type... unknown
+checking for IEEE compiler flags... none
+checking for IEEE comparisons... yes
+checking for IEEE denormalized values... yes
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating gsl_version.h
+config.status: creating gsl.spec
+config.status: creating blas/Makefile
+config.status: creating block/Makefile
+config.status: creating bspline/Makefile
+config.status: creating bst/Makefile
+config.status: creating cblas/Makefile
+config.status: creating cdf/Makefile
+config.status: creating cheb/Makefile
+config.status: creating combination/Makefile
+config.status: creating complex/Makefile
+config.status: creating const/Makefile
+config.status: creating deriv/Makefile
+config.status: creating dht/Makefile
+config.status: creating diff/Makefile
+config.status: creating doc/Makefile
+config.status: creating doc/examples/Makefile
+config.status: creating eigen/Makefile
+config.status: creating err/Makefile
+config.status: creating fft/Makefile
+config.status: creating filter/Makefile
+config.status: creating fit/Makefile
+config.status: creating gsl/Makefile
+config.status: creating histogram/Makefile
+config.status: creating ieee-utils/Makefile
+config.status: creating integration/Makefile
+config.status: creating interpolation/Makefile
+config.status: creating linalg/Makefile
+config.status: creating matrix/Makefile
+config.status: creating min/Makefile
+config.status: creating monte/Makefile
+config.status: creating movstat/Makefile
+config.status: creating multifit/Makefile
+config.status: creating multifit_nlinear/Makefile
+config.status: creating multilarge/Makefile
+config.status: creating multilarge_nlinear/Makefile
+config.status: creating multimin/Makefile
+config.status: creating multiroots/Makefile
+config.status: creating multiset/Makefile
+config.status: creating ntuple/Makefile
+config.status: creating ode-initval/Makefile
+config.status: creating ode-initval2/Makefile
+config.status: creating permutation/Makefile
+config.status: creating poly/Makefile
+config.status: creating qrng/Makefile
+config.status: creating randist/Makefile
+config.status: creating rng/Makefile
+config.status: creating roots/Makefile
+config.status: creating rstat/Makefile
+config.status: creating siman/Makefile
+config.status: creating sort/Makefile
+config.status: creating spblas/Makefile
+config.status: creating splinalg/Makefile
+config.status: creating spmatrix/Makefile
+config.status: creating specfunc/Makefile
+config.status: creating statistics/Makefile
+config.status: creating sum/Makefile
+config.status: creating sys/Makefile
+config.status: creating test/Makefile
+config.status: creating utils/Makefile
+config.status: creating vector/Makefile
+config.status: creating wavelet/Makefile
+config.status: creating config.h
+config.status: executing depfiles commands
+config.status: executing libtool commands

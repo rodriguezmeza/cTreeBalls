@@ -11,7 +11,7 @@ CFITSIO = ../addons/cfitsio/
 vpath %.c ./addons/cfitsio/
 INCLUDES += -I$(CFITSIO)
 HEADERFILES += $(wildcard $(CFITSIO)/*.h)
-EXTERNAL +=
+EXTERNAL += chealpix.o
 endif
 #
 #E

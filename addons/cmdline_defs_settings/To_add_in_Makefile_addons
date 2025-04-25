@@ -1,0 +1,24 @@
+# ----- MAKE FILE addons definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# CMDLINE_DEFS_UNITSPHERE
+# set of useful default values for the unit sphere
+#
+# This line is added to ../Makefile_addons_settings
+#CMDLINE_DEFS_UNITSPHERE_ON = 1
+#   ... then comment it
+#
+ifeq ($(CMDLINE_DEFS_UNITSPHERE_ON),1)
+include $(MACHINES_DIR)/addons/cmdline_defs_settings/Makefile_cmdline_defs_settings
+endif
+#E
+
+

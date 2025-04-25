@@ -298,14 +298,17 @@ int input_read_parameters_general(struct cmdline_data *cmd,
             cmd->computeTPCF=0;
     }
 
-    class_call(parser_read_string(pfc,"computeShearCF",&string1,&flag1,errmsg),
-             errmsg,errmsg);
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->computeShearCF=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->computeShearCF=0;
-    }
+    //B correction 2025-04-06
+    // Move this to addon that compute shear correlations
+//    class_call(parser_read_string(pfc,"computeShearCF",&string1,&flag1,errmsg),
+//             errmsg,errmsg);
+//    if (flag1 == TRUE) {
+//        if (strchr("tTyY1", *string1) != NULL)
+//            cmd->computeShearCF=1;
+//        if (strchr("fFnN0", *string1) != NULL)
+//            cmd->computeShearCF=0;
+//    }
+    //E
 
     class_call(parser_read_string(pfc,"usePeriodic",&string1,&flag1,errmsg),
              errmsg,errmsg);
@@ -620,7 +623,10 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->rsmooth = "";
     cmd->theta = 1.0;
     cmd->computeTPCF = 1;
-    cmd->computeShearCF = 0;
+    //B correction 2025-04-06
+    // Move this to addon that computes shear correlations
+//    cmd->computeShearCF = 0;
+    //E
     cmd->usePeriodic = 0;
     //E
 
@@ -721,7 +727,10 @@ local void testParameterFile(struct  cmdline_data* cmd,
     SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
     BPName(cmd->computeTPCF,"computeTPCF");
-    BPName(cmd->computeShearCF,"computeShearCF");
+    //B correction 2025-04-06
+    // Move this to addon that compute shear correlations
+//    BPName(cmd->computeShearCF,"computeShearCF");
+    //E
     BPName(cmd->usePeriodic,"usePeriodic");
     //E
 

@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #ifndef _datastruc_hist_h
 #define _datastruc_hist_h
 
@@ -120,9 +125,11 @@ typedef struct {
     int nblist;
 } gdhist_sincos_omp_3pcfbf, *gdhistptr_sincos_omp_3pcfbf;
 
+//B socket:
 #ifdef ADDONS
 #include "datastruc_hist_include.h"
 #endif
+//E
 
 //
 //E Structure definitions for histograms

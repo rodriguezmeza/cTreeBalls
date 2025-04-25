@@ -117,15 +117,19 @@ OPT2 += $(OMPCODE)
 endif
 #
 
-#
-MANUALCHEBYSHEVON = 1
-#
-# What if mChebyshev is less than 7... correct!
-ifeq ($(MANUALCHEBYSHEVON),1)
-MANUALCHEBYSHEV = -DMANUALCHEBYSHEV
-OPT2 += $(MANUALCHEBYSHEV)
-endif
-#
+
+#B correction 2025-04-06
+##
+#MANUALCHEBYSHEVON = 1
+##
+## What if mChebyshev is less than 7... correct!
+#ifeq ($(MANUALCHEBYSHEVON),1)
+#MANUALCHEBYSHEV = -DMANUALCHEBYSHEV
+#OPT2 += $(MANUALCHEBYSHEV)
+#endif
+##
+#E correction 2025-04-06
+
 
 # To activate float real set to 1. Else 0
 SINGLEPON = 0
@@ -270,8 +274,10 @@ ifeq ($(CFITSIOON),1)
 # To be able to use CFITSIO with multi-threaded parallel programs
 #   it is needed to ./configure --enable-reentrant
 #
+ifeq ($(CFITSIOLIBON),0)
     CCFLAG += $(CFITSIO_INCL)
     LDFLAG += $(CFITSIO_LIBS)
+endif
 endif
 # -------------------
 

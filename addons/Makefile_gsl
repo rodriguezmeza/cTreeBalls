@@ -1,0 +1,87 @@
+# ----- MAKE FILE machine definitions (GSL) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+
+#
+#B GSL section
+#
+# eventually update flags for including gsl (see at the end, below)
+ifeq ($(GSLINTERNAL),1)
+GSL = ./addons/gsl
+vpath %.c $(GSL) \
+	$(GSL)/err \
+	$(GSL)/sys \
+	$(GSL)/complex \
+	$(GSL)/cheb \
+	$(GSL)/specfunc \
+	$(GSL)/rng		\
+	$(GSL)/matrix \
+	$(GSL)/vector \
+	$(GSL)/block \
+	$(GSL)/blas  \
+	$(GSL)/cblas \
+	$(GSL)/fft \
+    $(GSL)/integration \
+    $(GSL)/linalg \
+    $(GSL)/permutation
+CCFLAG += -DGSLINTER
+OPT2 += -DGSLINTER
+#LDFLAGS += -DGSL
+INCLUDES += -I../addons/gsl
+INCLUDES += -I../addons/gsl/gsl
+EXTERNAL += gamma.o  \
+	error.o trig.o log.o ldfrexp.o infnan.o \
+	fdiv.o exp.o psi.o math.o zeta.o elementary.o coerce.o stream.o
+EXTERNAL += eval.o init.o
+EXTERNAL += rng.o default.o mt.o types.o ran0.o ran1.o ran2.o ran3.o rand.o rand48.o random.o \
+	borosh13.o coveyou.o cmrg.o fishman18.o fishman20.o fishman2x.o gfsr4.o knuthran.o \
+	knuthran2.o knuthran2002.o lecuyer21.o minstd.o r250.o randu.o ranf.o ranlux.o \
+	ranlxd.o ranlxs.o ranmar.o slatec.o taus.o taus113.o transputer.o tt.o uni.o uni32.o \
+	vax.o waterman14.o zuf.o inline.o mrg.o
+# block
+EXTERNAL += block.o init_block.o file_block.o 
+# matrix
+EXTERNAL += copy.o file.o getset.o init_matrix.o oper.o rowcol.o \
+    matrix.o minmax.o prop.o submatrix.o \
+    swap.o view.o
+# vector
+EXTERNAL += init_vector.o oper_vector.o vector.o view_vector.o swap_vector.o subvector.o reim.o \
+    prop_vector.o oper_vector.o minmax_vector.o file_vector.o copy_vector.o
+EXTERNAL += blas.o
+EXTERNAL += caxpy.o ccopy.o cdotc_sub.o cdotu_sub.o cgemm.o cgemv.o cgbmv.o cgerc.o chbmv.o chemm.o \
+	chemv.o cher.o cher2.o cher2k.o cherk.o chpmv.o chpr.o chpr2.o cscal.o csscal.o cswap.o csymm.o \
+	csyr2k.o csyrk.o ctbmv.o ctbsv.o ctpmv.o ctpsv.o ctrmm.o ctrmv.o ctrsm.o daxpy.o dcopy.o \
+	ddot.o dgbmv.o cgeru.o ctrsv.o dasum.o dgemm.o dgemv.o dger.o dnrm2.o drot.o drotg.o drotm.o drotmg.o dscal.o \
+	dswap.o dsdot.o dsymm.o dsymv.o dsyr.o dsyr2k.o dsyrk.o dtrmm.o dtrmv.o dtrsm.o dtrsv.o dzasum.o \
+	dznrm2.o dsyr2.o icamax.o idamax.o isamax.o izamax.o sasum.o saxpy.o scasum.o scnrm2.o scopy.o sdot.o \
+	sdsdot.o sgemm.o sgemv.o sger.o snrm2.o srot.o srotg.o srotm.o srotmg.o sscal.o sswap.o ssymm.o ssymv.o \
+	ssyr.o ssyr2.o ssyr2k.o ssyrk.o strmm.o strmv.o strsm.o strsv.o xerbla.o zaxpy.o zcopy.o \
+ 	zgerc.o zgeru.o zhemm.o zhemv.o zher.o zdotc_sub.o zdotu_sub.o zdscal.o zgemm.o zgemv.o zher2.o zher2k.o \
+	zherk.o zscal.o zswap.o ztrsv.o zsymm.o zsyr2k.o zsyrk.o ztrmm.o ztrmv.o ztrsm.o
+# fft
+EXTERNAL += fft.o
+# INTEGRATION
+EXTERNAL += workspace.o qag.o qk61.o qk15.o qk21.o qk31.o qk41.o qk51.o qk.o
+endif
+
+# linalg
+EXTERNAL += lu.o trimult.o invtri.o
+# permutation
+EXTERNAL += canonical.o permutation.o init_permutation.o permute.o inline_permutation.o
+
+#E
+
+# Do not use GSL
+ifeq ($(GSLINTERNAL),-1)
+CCFLAG += -DNOGSL
+OPT2 += -DNOGSL
+endif
+#
+
+
+
+
+
+

@@ -8,7 +8,6 @@
 #include "cballs_pxd_05.h"
 #endif
 
-#include "cballs_include_05_NMultipoles.h"
 
 #ifdef OCTREEKKKOMP
 #include "cballs_octree_kkk_omp_05.h"

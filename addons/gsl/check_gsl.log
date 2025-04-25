@@ -1,0 +1,1527 @@
+Making check in gsl
+make[3]: Nothing to be done for `check'.
+Making check in utils
+make[3]: Nothing to be done for `check'.
+Making check in sys
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslsys.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ./.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in test
+make[3]: Nothing to be done for `check'.
+Making check in err
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..     -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in bst
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslbst.la ../test/libgsltest.la ../sys/libgslsys.la ../err/libgslerr.la ../sort/libgslsort.la ../rng/libgslrng.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslbst.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../err/.libs/libgslerr.a ../sort/.libs/libgslsort.a ../rng/.libs/libgslrng.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in const
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in complex
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test test_c11
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslcomplex.la ../err/libgslerr.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la  ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..  -DTEST_C11 -g -O2 -MT test_c11-test.o -MD -MP -MF .deps/test_c11-test.Tpo -c -o test_c11-test.o `test -f 'test.c' || echo './'`test.c
+mv -f .deps/test_c11-test.Tpo .deps/test_c11-test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10 -DTEST_C11 -g -O2   -o test_c11 test_c11-test.o libgslcomplex.la ../err/libgslerr.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la  ../utils/libutils.la -lm 
+libtool: link: gcc-10 -DTEST_C11 -g -O2 -o test_c11 test_c11-test.o  ./.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+PASS: test_c11
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 2
+# PASS:  2
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in cheb
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslcheb.la ../ieee-utils/libgslieeeutils.la ../test/libgsltest.la ../sys/libgslsys.la ../err/libgslerr.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslcheb.a ../ieee-utils/.libs/libgslieeeutils.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../err/.libs/libgslerr.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in block
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in vector
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test test_static
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_static.o -MD -MP -MF .deps/test_static.Tpo -c -o test_static.o test_static.c
+mv -f .deps/test_static.Tpo .deps/test_static.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test_static test_static.o libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test_static test_static.o  ./.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+PASS: test_static
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 2
+# PASS:  2
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in matrix
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test test_static
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmatrix.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_static.o -MD -MP -MF .deps/test_static.Tpo -c -o test_static.o test_static.c
+mv -f .deps/test_static.Tpo .deps/test_static.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test_static test_static.o libgslmatrix.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test_static test_static.o  ./.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+PASS: test_static
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 2
+# PASS:  2
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in permutation
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslpermutation.la ../vector/libgslvector.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslpermutation.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in combination
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslcombination.la ../vector/libgslvector.la  ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslcombination.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multiset
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmultiset.la ../vector/libgslvector.la  ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslmultiset.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in sort
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslsort.la ../permutation/libgslpermutation.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslsort.a ../permutation/.libs/libgslpermutation.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in ieee-utils
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in cblas
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_amax.o -MD -MP -MF .deps/test_amax.Tpo -c -o test_amax.o test_amax.c
+mv -f .deps/test_amax.Tpo .deps/test_amax.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_asum.o -MD -MP -MF .deps/test_asum.Tpo -c -o test_asum.o test_asum.c
+mv -f .deps/test_asum.Tpo .deps/test_asum.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_axpy.o -MD -MP -MF .deps/test_axpy.Tpo -c -o test_axpy.o test_axpy.c
+mv -f .deps/test_axpy.Tpo .deps/test_axpy.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_copy.o -MD -MP -MF .deps/test_copy.Tpo -c -o test_copy.o test_copy.c
+mv -f .deps/test_copy.Tpo .deps/test_copy.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_dot.o -MD -MP -MF .deps/test_dot.Tpo -c -o test_dot.o test_dot.c
+mv -f .deps/test_dot.Tpo .deps/test_dot.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_gbmv.o -MD -MP -MF .deps/test_gbmv.Tpo -c -o test_gbmv.o test_gbmv.c
+mv -f .deps/test_gbmv.Tpo .deps/test_gbmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_gemm.o -MD -MP -MF .deps/test_gemm.Tpo -c -o test_gemm.o test_gemm.c
+mv -f .deps/test_gemm.Tpo .deps/test_gemm.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_gemv.o -MD -MP -MF .deps/test_gemv.Tpo -c -o test_gemv.o test_gemv.c
+mv -f .deps/test_gemv.Tpo .deps/test_gemv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_ger.o -MD -MP -MF .deps/test_ger.Tpo -c -o test_ger.o test_ger.c
+mv -f .deps/test_ger.Tpo .deps/test_ger.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hbmv.o -MD -MP -MF .deps/test_hbmv.Tpo -c -o test_hbmv.o test_hbmv.c
+mv -f .deps/test_hbmv.Tpo .deps/test_hbmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hemm.o -MD -MP -MF .deps/test_hemm.Tpo -c -o test_hemm.o test_hemm.c
+mv -f .deps/test_hemm.Tpo .deps/test_hemm.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hemv.o -MD -MP -MF .deps/test_hemv.Tpo -c -o test_hemv.o test_hemv.c
+mv -f .deps/test_hemv.Tpo .deps/test_hemv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_her.o -MD -MP -MF .deps/test_her.Tpo -c -o test_her.o test_her.c
+mv -f .deps/test_her.Tpo .deps/test_her.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_her2.o -MD -MP -MF .deps/test_her2.Tpo -c -o test_her2.o test_her2.c
+mv -f .deps/test_her2.Tpo .deps/test_her2.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_her2k.o -MD -MP -MF .deps/test_her2k.Tpo -c -o test_her2k.o test_her2k.c
+mv -f .deps/test_her2k.Tpo .deps/test_her2k.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_herk.o -MD -MP -MF .deps/test_herk.Tpo -c -o test_herk.o test_herk.c
+mv -f .deps/test_herk.Tpo .deps/test_herk.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hpmv.o -MD -MP -MF .deps/test_hpmv.Tpo -c -o test_hpmv.o test_hpmv.c
+mv -f .deps/test_hpmv.Tpo .deps/test_hpmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hpr.o -MD -MP -MF .deps/test_hpr.Tpo -c -o test_hpr.o test_hpr.c
+mv -f .deps/test_hpr.Tpo .deps/test_hpr.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hpr2.o -MD -MP -MF .deps/test_hpr2.Tpo -c -o test_hpr2.o test_hpr2.c
+mv -f .deps/test_hpr2.Tpo .deps/test_hpr2.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_nrm2.o -MD -MP -MF .deps/test_nrm2.Tpo -c -o test_nrm2.o test_nrm2.c
+mv -f .deps/test_nrm2.Tpo .deps/test_nrm2.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_rot.o -MD -MP -MF .deps/test_rot.Tpo -c -o test_rot.o test_rot.c
+mv -f .deps/test_rot.Tpo .deps/test_rot.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_rotg.o -MD -MP -MF .deps/test_rotg.Tpo -c -o test_rotg.o test_rotg.c
+mv -f .deps/test_rotg.Tpo .deps/test_rotg.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_rotm.o -MD -MP -MF .deps/test_rotm.Tpo -c -o test_rotm.o test_rotm.c
+mv -f .deps/test_rotm.Tpo .deps/test_rotm.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_rotmg.o -MD -MP -MF .deps/test_rotmg.Tpo -c -o test_rotmg.o test_rotmg.c
+mv -f .deps/test_rotmg.Tpo .deps/test_rotmg.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_sbmv.o -MD -MP -MF .deps/test_sbmv.Tpo -c -o test_sbmv.o test_sbmv.c
+mv -f .deps/test_sbmv.Tpo .deps/test_sbmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_scal.o -MD -MP -MF .deps/test_scal.Tpo -c -o test_scal.o test_scal.c
+mv -f .deps/test_scal.Tpo .deps/test_scal.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_spmv.o -MD -MP -MF .deps/test_spmv.Tpo -c -o test_spmv.o test_spmv.c
+mv -f .deps/test_spmv.Tpo .deps/test_spmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_spr.o -MD -MP -MF .deps/test_spr.Tpo -c -o test_spr.o test_spr.c
+mv -f .deps/test_spr.Tpo .deps/test_spr.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_spr2.o -MD -MP -MF .deps/test_spr2.Tpo -c -o test_spr2.o test_spr2.c
+mv -f .deps/test_spr2.Tpo .deps/test_spr2.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_swap.o -MD -MP -MF .deps/test_swap.Tpo -c -o test_swap.o test_swap.c
+mv -f .deps/test_swap.Tpo .deps/test_swap.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_symm.o -MD -MP -MF .deps/test_symm.Tpo -c -o test_symm.o test_symm.c
+mv -f .deps/test_symm.Tpo .deps/test_symm.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_symv.o -MD -MP -MF .deps/test_symv.Tpo -c -o test_symv.o test_symv.c
+mv -f .deps/test_symv.Tpo .deps/test_symv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_syr.o -MD -MP -MF .deps/test_syr.Tpo -c -o test_syr.o test_syr.c
+mv -f .deps/test_syr.Tpo .deps/test_syr.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_syr2.o -MD -MP -MF .deps/test_syr2.Tpo -c -o test_syr2.o test_syr2.c
+mv -f .deps/test_syr2.Tpo .deps/test_syr2.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_syr2k.o -MD -MP -MF .deps/test_syr2k.Tpo -c -o test_syr2k.o test_syr2k.c
+mv -f .deps/test_syr2k.Tpo .deps/test_syr2k.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_syrk.o -MD -MP -MF .deps/test_syrk.Tpo -c -o test_syrk.o test_syrk.c
+mv -f .deps/test_syrk.Tpo .deps/test_syrk.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_tbmv.o -MD -MP -MF .deps/test_tbmv.Tpo -c -o test_tbmv.o test_tbmv.c
+mv -f .deps/test_tbmv.Tpo .deps/test_tbmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_tbsv.o -MD -MP -MF .deps/test_tbsv.Tpo -c -o test_tbsv.o test_tbsv.c
+mv -f .deps/test_tbsv.Tpo .deps/test_tbsv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_tpmv.o -MD -MP -MF .deps/test_tpmv.Tpo -c -o test_tpmv.o test_tpmv.c
+mv -f .deps/test_tpmv.Tpo .deps/test_tpmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_tpsv.o -MD -MP -MF .deps/test_tpsv.Tpo -c -o test_tpsv.o test_tpsv.c
+mv -f .deps/test_tpsv.Tpo .deps/test_tpsv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_trmm.o -MD -MP -MF .deps/test_trmm.Tpo -c -o test_trmm.o test_trmm.c
+mv -f .deps/test_trmm.Tpo .deps/test_trmm.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_trmv.o -MD -MP -MF .deps/test_trmv.Tpo -c -o test_trmv.o test_trmv.c
+mv -f .deps/test_trmv.Tpo .deps/test_trmv.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_trsm.o -MD -MP -MF .deps/test_trsm.Tpo -c -o test_trsm.o test_trsm.c
+mv -f .deps/test_trsm.Tpo .deps/test_trsm.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_trsv.o -MD -MP -MF .deps/test_trsv.Tpo -c -o test_trsv.o test_trsv.c
+mv -f .deps/test_trsv.Tpo .deps/test_trsv.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test_amax.o test_asum.o test_axpy.o test_copy.o test_dot.o test_gbmv.o test_gemm.o test_gemv.o test_ger.o test_hbmv.o test_hemm.o test_hemv.o test_her.o test_her2.o test_her2k.o test_herk.o test_hpmv.o test_hpr.o test_hpr2.o test_nrm2.o test_rot.o test_rotg.o test_rotm.o test_rotmg.o test_sbmv.o test_scal.o test_spmv.o test_spr.o test_spr2.o test_swap.o test_symm.o test_symv.o test_syr.o test_syr2.o test_syr2k.o test_syrk.o test_tbmv.o test_tbsv.o test_tpmv.o test_tpsv.o test_trmm.o test_trmv.o test_trsm.o test_trsv.o libgslcblas.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o test_amax.o test_asum.o test_axpy.o test_copy.o test_dot.o test_gbmv.o test_gemm.o test_gemv.o test_ger.o test_hbmv.o test_hemm.o test_hemv.o test_her.o test_her2.o test_her2k.o test_herk.o test_hpmv.o test_hpr.o test_hpr2.o test_nrm2.o test_rot.o test_rotg.o test_rotm.o test_rotmg.o test_sbmv.o test_scal.o test_spmv.o test_spr.o test_spr2.o test_swap.o test_symm.o test_symv.o test_syr.o test_syr2.o test_syr2k.o test_syrk.o test_tbmv.o test_tbsv.o test_tpmv.o test_tpsv.o test_trmm.o test_trmv.o test_trsm.o test_trsv.o  ./.libs/libgslcblas.dylib ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in blas
+make[3]: Nothing to be done for `check'.
+Making check in linalg
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../permutation/libgslpermutation.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la ../rng/libgslrng.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../permutation/.libs/libgslpermutation.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in eigen
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgsleigen.la  ../test/libgsltest.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la  ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../sys/libgslsys.la ../err/libgslerr.la ../utils/libutils.la ../rng/libgslrng.la ../sort/libgslsort.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgsleigen.a ../test/.libs/libgsltest.a ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../sys/.libs/libgslsys.a ../err/.libs/libgslerr.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a ../sort/.libs/libgslsort.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in specfunc
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_sf.o -MD -MP -MF .deps/test_sf.Tpo -c -o test_sf.o test_sf.c
+mv -f .deps/test_sf.Tpo .deps/test_sf.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_airy.o -MD -MP -MF .deps/test_airy.Tpo -c -o test_airy.o test_airy.c
+mv -f .deps/test_airy.Tpo .deps/test_airy.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_bessel.o -MD -MP -MF .deps/test_bessel.Tpo -c -o test_bessel.o test_bessel.c
+mv -f .deps/test_bessel.Tpo .deps/test_bessel.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_coulomb.o -MD -MP -MF .deps/test_coulomb.Tpo -c -o test_coulomb.o test_coulomb.c
+mv -f .deps/test_coulomb.Tpo .deps/test_coulomb.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_dilog.o -MD -MP -MF .deps/test_dilog.Tpo -c -o test_dilog.o test_dilog.c
+mv -f .deps/test_dilog.Tpo .deps/test_dilog.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_gamma.o -MD -MP -MF .deps/test_gamma.Tpo -c -o test_gamma.o test_gamma.c
+mv -f .deps/test_gamma.Tpo .deps/test_gamma.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hermite.o -MD -MP -MF .deps/test_hermite.Tpo -c -o test_hermite.o test_hermite.c
+mv -f .deps/test_hermite.Tpo .deps/test_hermite.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_hyperg.o -MD -MP -MF .deps/test_hyperg.Tpo -c -o test_hyperg.o test_hyperg.c
+mv -f .deps/test_hyperg.Tpo .deps/test_hyperg.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_legendre.o -MD -MP -MF .deps/test_legendre.Tpo -c -o test_legendre.o test_legendre.c
+mv -f .deps/test_legendre.Tpo .deps/test_legendre.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_mathieu.o -MD -MP -MF .deps/test_mathieu.Tpo -c -o test_mathieu.o test_mathieu.c
+mv -f .deps/test_mathieu.Tpo .deps/test_mathieu.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_sincos_pi.o -MD -MP -MF .deps/test_sincos_pi.Tpo -c -o test_sincos_pi.o test_sincos_pi.c
+mv -f .deps/test_sincos_pi.Tpo .deps/test_sincos_pi.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test_sf.o test_airy.o test_bessel.o test_coulomb.o test_dilog.o test_gamma.o test_hermite.o test_hyperg.o test_legendre.o test_mathieu.o test_sincos_pi.o libgslspecfunc.la ../eigen/libgsleigen.la ../linalg/libgsllinalg.la  ../sort/libgslsort.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../complex/libgslcomplex.la ../poly/libgslpoly.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test_sf.o test_airy.o test_bessel.o test_coulomb.o test_dilog.o test_gamma.o test_hermite.o test_hyperg.o test_legendre.o test_mathieu.o test_sincos_pi.o  ./.libs/libgslspecfunc.a ../eigen/.libs/libgsleigen.a ../linalg/.libs/libgsllinalg.a ../sort/.libs/libgslsort.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../poly/.libs/libgslpoly.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in dht
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgsldht.la ../specfunc/libgslspecfunc.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgsldht.a ../specfunc/.libs/libgslspecfunc.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in qrng
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslqrng.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslqrng.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in rng
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslrng.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslrng.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in randist
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslrandist.la ../rng/libgslrng.la ../cdf/libgslcdf.la ../specfunc/libgslspecfunc.la ../integration/libgslintegration.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la ../statistics/libgslstatistics.la ../sort/libgslsort.la ../linalg/libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslrandist.a ../rng/.libs/libgslrng.a ../cdf/.libs/libgslcdf.a ../specfunc/.libs/libgslspecfunc.a ../integration/.libs/libgslintegration.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../statistics/.libs/libgslstatistics.a ../sort/.libs/libgslsort.a ../linalg/.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in fft
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT signals.o -MD -MP -MF .deps/signals.Tpo -c -o signals.o signals.c
+mv -f .deps/signals.Tpo .deps/signals.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o signals.o libgslfft.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o signals.o  ./.libs/libgslfft.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in poly
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslpoly.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la ../sort/libgslsort.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslpoly.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../sort/.libs/libgslsort.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in fit
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslfit.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../utils/libutils.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslfit.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../utils/.libs/libutils.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multifit
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmultifit.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../sort/libgslsort.la ../statistics/libgslstatistics.la ../vector/libgslvector.la ../block/libgslblock.la  ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../utils/libutils.la ../sys/libgslsys.la ../rng/libgslrng.la ../specfunc/libgslspecfunc.la ../min/libgslmin.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslmultifit.a ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../sort/.libs/libgslsort.a ../statistics/.libs/libgslstatistics.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../utils/.libs/libutils.a ../sys/.libs/libgslsys.a ../rng/.libs/libgslrng.a ../specfunc/.libs/libgslspecfunc.a ../min/.libs/libgslmin.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multifit_nlinear
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmultifit_nlinear.la ../eigen/libgsleigen.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../sort/libgslsort.la ../statistics/libgslstatistics.la ../vector/libgslvector.la ../block/libgslblock.la  ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../utils/libutils.la ../sys/libgslsys.la ../rng/libgslrng.la ../specfunc/libgslspecfunc.la ../poly/libgslpoly.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslmultifit_nlinear.a ../eigen/.libs/libgsleigen.a ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../sort/.libs/libgslsort.a ../statistics/.libs/libgslstatistics.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../utils/.libs/libutils.a ../sys/.libs/libgslsys.a ../rng/.libs/libgslrng.a ../specfunc/.libs/libgslspecfunc.a ../poly/.libs/libgslpoly.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multilarge
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmultilarge.la ../test/libgsltest.la ../multifit/libgslmultifit.la ../eigen/libgsleigen.la ../linalg/libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../permutation/libgslpermutation.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la  ../sys/libgslsys.la ../utils/libutils.la ../rng/libgslrng.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../complex/libgslcomplex.la ../min/libgslmin.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslmultilarge.a ../test/.libs/libgsltest.a ../multifit/.libs/libgslmultifit.a ../eigen/.libs/libgsleigen.a ../linalg/.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../permutation/.libs/libgslpermutation.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../complex/.libs/libgslcomplex.a ../min/.libs/libgslmin.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multilarge_nlinear
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmultilarge_nlinear.la ../test/libgsltest.la ../multilarge/libgslmultilarge.la ../multifit/libgslmultifit.la ../eigen/libgsleigen.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la  ../sys/libgslsys.la ../utils/libutils.la ../rng/libgslrng.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../complex/libgslcomplex.la ../poly/libgslpoly.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslmultilarge_nlinear.a ../test/.libs/libgsltest.a ../multilarge/.libs/libgslmultilarge.a ../multifit/.libs/libgslmultifit.a ../eigen/.libs/libgsleigen.a ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../complex/.libs/libgslcomplex.a ../poly/.libs/libgslpoly.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in filter
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslfilter.la ../movstat/libgslmovstat.la ../statistics/libgslstatistics.la ../sort/libgslsort.la ../ieee-utils/libgslieeeutils.la ../randist/libgslrandist.la ../rng/libgslrng.la ../specfunc/libgslspecfunc.la ../complex/libgslcomplex.la ../err/libgslerr.la ../test/libgsltest.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../poly/libgslpoly.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslfilter.a ../movstat/.libs/libgslmovstat.a ../statistics/.libs/libgslstatistics.a ../sort/.libs/libgslsort.a ../ieee-utils/.libs/libgslieeeutils.a ../randist/.libs/libgslrandist.a ../rng/.libs/libgslrng.a ../specfunc/.libs/libgslspecfunc.a ../complex/.libs/libgslcomplex.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../poly/.libs/libgslpoly.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in movstat
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmovstat.la ../statistics/libgslstatistics.la ../sort/libgslsort.la ../ieee-utils/libgslieeeutils.la ../randist/libgslrandist.la ../rng/libgslrng.la ../specfunc/libgslspecfunc.la ../complex/libgslcomplex.la ../err/libgslerr.la ../test/libgsltest.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslmovstat.a ../statistics/.libs/libgslstatistics.a ../sort/.libs/libgslsort.a ../ieee-utils/.libs/libgslieeeutils.a ../randist/.libs/libgslrandist.a ../rng/.libs/libgslrng.a ../specfunc/.libs/libgslspecfunc.a ../complex/.libs/libgslcomplex.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in rstat
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslrstat.la ../statistics/libgslstatistics.la ../sort/libgslsort.la ../ieee-utils/libgslieeeutils.la ../randist/libgslrandist.la ../rng/libgslrng.la ../specfunc/libgslspecfunc.la ../complex/libgslcomplex.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la ../vector/libgslvector.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslrstat.a ../statistics/.libs/libgslstatistics.a ../sort/.libs/libgslsort.a ../ieee-utils/.libs/libgslieeeutils.a ../randist/.libs/libgslrandist.a ../rng/.libs/libgslrng.a ../specfunc/.libs/libgslspecfunc.a ../complex/.libs/libgslcomplex.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../vector/.libs/libgslvector.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in statistics
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_nist.o -MD -MP -MF .deps/test_nist.Tpo -c -o test_nist.o test_nist.c
+mv -f .deps/test_nist.Tpo .deps/test_nist.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_robust.o -MD -MP -MF .deps/test_robust.Tpo -c -o test_robust.o test_robust.c
+mv -f .deps/test_robust.Tpo .deps/test_robust.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test_nist.o test_robust.o libgslstatistics.la ../sort/libgslsort.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../rng/libgslrng.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la ../vector/libgslvector.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o test_nist.o test_robust.o  ./.libs/libgslstatistics.a ../sort/.libs/libgslsort.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../rng/.libs/libgslrng.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../vector/.libs/libgslvector.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in siman
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslsiman.la ../rng/libgslrng.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslsiman.a ../rng/.libs/libgslrng.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in sum
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslsum.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslsum.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in integration
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT tests.o -MD -MP -MF .deps/tests.Tpo -c -o tests.o tests.c
+mv -f .deps/tests.Tpo .deps/tests.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o tests.o libgslintegration.la ../ieee-utils/libgslieeeutils.la ../specfunc/libgslspecfunc.la ../complex/libgslcomplex.la ../poly/libgslpoly.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o tests.o  ./.libs/libgslintegration.a ../ieee-utils/.libs/libgslieeeutils.a ../specfunc/.libs/libgslspecfunc.a ../complex/.libs/libgslcomplex.a ../poly/.libs/libgslpoly.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in interpolation
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslinterpolation.la ../poly/libgslpoly.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../blas/libgslblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../cblas/libgslcblas.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslinterpolation.a ../poly/.libs/libgslpoly.a ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../blas/.libs/libgslblas.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../cblas/.libs/libgslcblas.dylib ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in histogram
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test1d.o -MD -MP -MF .deps/test1d.Tpo -c -o test1d.o test1d.c
+mv -f .deps/test1d.Tpo .deps/test1d.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test2d.o -MD -MP -MF .deps/test2d.Tpo -c -o test2d.o test2d.c
+mv -f .deps/test2d.Tpo .deps/test2d.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test1d_resample.o -MD -MP -MF .deps/test1d_resample.Tpo -c -o test1d_resample.o test1d_resample.c
+mv -f .deps/test1d_resample.Tpo .deps/test1d_resample.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test2d_resample.o -MD -MP -MF .deps/test2d_resample.Tpo -c -o test2d_resample.o test2d_resample.c
+mv -f .deps/test2d_resample.Tpo .deps/test2d_resample.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test1d_trap.o -MD -MP -MF .deps/test1d_trap.Tpo -c -o test1d_trap.o test1d_trap.c
+mv -f .deps/test1d_trap.Tpo .deps/test1d_trap.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test2d_trap.o -MD -MP -MF .deps/test2d_trap.Tpo -c -o test2d_trap.o test2d_trap.c
+mv -f .deps/test2d_trap.Tpo .deps/test2d_trap.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test1d.o test2d.o test1d_resample.o test2d_resample.o test1d_trap.o test2d_trap.o libgslhistogram.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o test1d.o test2d.o test1d_resample.o test2d_resample.o test1d_trap.o test2d_trap.o  ./.libs/libgslhistogram.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in ode-initval
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslodeiv.la ../linalg/libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../permutation/libgslpermutation.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la  -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslodeiv.a ../linalg/.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../permutation/.libs/libgslpermutation.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in ode-initval2
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslodeiv2.la ../linalg/libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../permutation/libgslpermutation.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la  -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslodeiv2.a ../linalg/.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../permutation/.libs/libgslpermutation.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in roots
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_funcs.o -MD -MP -MF .deps/test_funcs.Tpo -c -o test_funcs.o test_funcs.c
+mv -f .deps/test_funcs.Tpo .deps/test_funcs.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test_funcs.o libgslroots.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o test_funcs.o  ./.libs/libgslroots.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multiroots
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_funcs.o -MD -MP -MF .deps/test_funcs.Tpo -c -o test_funcs.o test_funcs.c
+mv -f .deps/test_funcs.Tpo .deps/test_funcs.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test_funcs.o libgslmultiroots.la ../linalg/libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../permutation/libgslpermutation.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o test_funcs.o  ./.libs/libgslmultiroots.a ../linalg/.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../permutation/.libs/libgslpermutation.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in min
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_funcs.o -MD -MP -MF .deps/test_funcs.Tpo -c -o test_funcs.o test_funcs.c
+mv -f .deps/test_funcs.Tpo .deps/test_funcs.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test_funcs.o libgslmin.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../utils/libutils.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o test_funcs.o  ./.libs/libgslmin.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../utils/.libs/libutils.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in multimin
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test_funcs.o -MD -MP -MF .deps/test_funcs.Tpo -c -o test_funcs.o test_funcs.c
+mv -f .deps/test_funcs.Tpo .deps/test_funcs.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o test_funcs.o libgslmultimin.la ../min/libgslmin.la ../poly/libgslpoly.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o test_funcs.o  ./.libs/libgslmultimin.a ../min/.libs/libgslmin.a ../poly/.libs/libgslpoly.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in monte
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslmonte.la ../rng/libgslrng.la  ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslmonte.a ../rng/.libs/libgslrng.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in ntuple
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslntuple.la ../histogram/libgslhistogram.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslntuple.a ../histogram/.libs/libgslhistogram.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in diff
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgsldiff.la  ../vector/libgslvector.la ../block/libgslblock.la  ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgsldiff.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in deriv
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslderiv.la  ../vector/libgslvector.la ../block/libgslblock.la  ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslderiv.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in cdf
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslcdf.la ../randist/libgslrandist.la ../rng/libgslrng.la ../specfunc/libgslspecfunc.la ../complex/libgslcomplex.la ../ieee-utils/libgslieeeutils.la ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o test test.o  ./.libs/libgslcdf.a ../randist/.libs/libgslrandist.a ../rng/.libs/libgslrng.a ../specfunc/.libs/libgslspecfunc.a ../complex/.libs/libgslcomplex.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in wavelet
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslwavelet.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslwavelet.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in bspline
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslbspline.la ../linalg/libgsllinalg.la ../permutation/libgslpermutation.la ../blas/libgslblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la ../complex/libgslcomplex.la ../cblas/libgslcblas.la ../ieee-utils/libgslieeeutils.la  ../err/libgslerr.la ../test/libgsltest.la ../sys/libgslsys.la ../utils/libutils.la ../statistics/libgslstatistics.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslbspline.a ../linalg/.libs/libgsllinalg.a ../permutation/.libs/libgslpermutation.a ../blas/.libs/libgslblas.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../complex/.libs/libgslcomplex.a ../cblas/.libs/libgslcblas.dylib ../ieee-utils/.libs/libgslieeeutils.a ../err/.libs/libgslerr.a ../test/.libs/libgsltest.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../statistics/.libs/libgslstatistics.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in spblas
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslspblas.la ../spmatrix/libgslspmatrix.la ../bst/libgslbst.la ../test/libgsltest.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la  ../sys/libgslsys.la ../err/libgslerr.la ../utils/libutils.la ../rng/libgslrng.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslspblas.a ../spmatrix/.libs/libgslspmatrix.a ../bst/.libs/libgslbst.a ../test/.libs/libgsltest.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../sys/.libs/libgslsys.a ../err/.libs/libgslerr.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in spmatrix
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslspmatrix.la ../bst/libgslbst.la ../test/libgsltest.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../block/libgslblock.la  ../sys/libgslsys.la ../err/libgslerr.la ../utils/libutils.la ../rng/libgslrng.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslspmatrix.a ../bst/.libs/libgslbst.a ../test/.libs/libgsltest.a ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../block/.libs/libgslblock.a ../sys/.libs/libgslsys.a ../err/.libs/libgslerr.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in splinalg
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test
+gcc-10 -DHAVE_CONFIG_H -I. -I..  -I..   -g -O2 -MT test.o -MD -MP -MF .deps/test.Tpo -c -o test.o test.c
+mv -f .deps/test.Tpo .deps/test.Po
+/bin/sh ../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o test test.o libgslsplinalg.la ../spmatrix/libgslspmatrix.la ../spblas/libgslspblas.la ../bst/libgslbst.la ../test/libgsltest.la ../linalg/libgsllinalg.la ../blas/libgslblas.la ../cblas/libgslcblas.la ../matrix/libgslmatrix.la ../vector/libgslvector.la ../block/libgslblock.la  ../sys/libgslsys.la ../utils/libutils.la ../rng/libgslrng.la ../err/libgslerr.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/test test.o  ./.libs/libgslsplinalg.a ../spmatrix/.libs/libgslspmatrix.a ../spblas/.libs/libgslspblas.a ../bst/.libs/libgslbst.a ../test/.libs/libgsltest.a ../linalg/.libs/libgsllinalg.a ../blas/.libs/libgslblas.a ../cblas/.libs/libgslcblas.dylib ../matrix/.libs/libgslmatrix.a ../vector/.libs/libgslvector.a ../block/.libs/libgslblock.a ../sys/.libs/libgslsys.a ../utils/.libs/libutils.a ../rng/.libs/libgslrng.a ../err/.libs/libgslerr.a -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 1
+# PASS:  1
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================
+Making check in doc
+Making check in .
+make[4]: Nothing to be done for `check-am'.
+Making check in examples
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  blas block cblas cdf cheb combination multiset const diff eigen fft fftmr fftreal filt_edge fitting fitting2 fitting3 fitreg fitreg2 gaussfilt gaussfilt2 histogram histogram2d ieee ieeeround impulse integration integration2 interp interp2d intro linalglu largefit matrix matrixw min monte movstat1 movstat2 movstat3 ntupler ntuplew ode-initval permseq permshuffle polyroots qrng randpoisson randwalk rng rngunif robfit rootnewt roots siman siman_tsp sortsmall specfun specfun_e rstat rquantile stat statsort sum vector vectorr vectorview vectorw dwt nlfit nlfit2 nlfit2b nlfit3 nlfit4 interpp eigen_nonsymm bspline poisson interp_compare spmatrix
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT blas.o -MD -MP -MF .deps/blas.Tpo -c -o blas.o blas.c
+mv -f .deps/blas.Tpo .deps/blas.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o blas blas.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/blas blas.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT block.o -MD -MP -MF .deps/block.Tpo -c -o block.o block.c
+mv -f .deps/block.Tpo .deps/block.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o block block.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/block block.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT cblas.o -MD -MP -MF .deps/cblas.Tpo -c -o cblas.o cblas.c
+mv -f .deps/cblas.Tpo .deps/cblas.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o cblas cblas.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/cblas cblas.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT cdf.o -MD -MP -MF .deps/cdf.Tpo -c -o cdf.o cdf.c
+mv -f .deps/cdf.Tpo .deps/cdf.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o cdf cdf.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/cdf cdf.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT cheb.o -MD -MP -MF .deps/cheb.Tpo -c -o cheb.o cheb.c
+mv -f .deps/cheb.Tpo .deps/cheb.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o cheb cheb.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/cheb cheb.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT combination.o -MD -MP -MF .deps/combination.Tpo -c -o combination.o combination.c
+mv -f .deps/combination.Tpo .deps/combination.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o combination combination.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/combination combination.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT multiset.o -MD -MP -MF .deps/multiset.Tpo -c -o multiset.o multiset.c
+mv -f .deps/multiset.Tpo .deps/multiset.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o multiset multiset.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/multiset multiset.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT const.o -MD -MP -MF .deps/const.Tpo -c -o const.o const.c
+mv -f .deps/const.Tpo .deps/const.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o const const.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/const const.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT diff.o -MD -MP -MF .deps/diff.Tpo -c -o diff.o diff.c
+mv -f .deps/diff.Tpo .deps/diff.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o diff diff.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/diff diff.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT eigen.o -MD -MP -MF .deps/eigen.Tpo -c -o eigen.o eigen.c
+mv -f .deps/eigen.Tpo .deps/eigen.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o eigen eigen.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/eigen eigen.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fft.o -MD -MP -MF .deps/fft.Tpo -c -o fft.o fft.c
+mv -f .deps/fft.Tpo .deps/fft.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fft fft.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fft fft.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fftmr.o -MD -MP -MF .deps/fftmr.Tpo -c -o fftmr.o fftmr.c
+mv -f .deps/fftmr.Tpo .deps/fftmr.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fftmr fftmr.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fftmr fftmr.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fftreal.o -MD -MP -MF .deps/fftreal.Tpo -c -o fftreal.o fftreal.c
+mv -f .deps/fftreal.Tpo .deps/fftreal.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fftreal fftreal.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fftreal fftreal.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT filt_edge.o -MD -MP -MF .deps/filt_edge.Tpo -c -o filt_edge.o filt_edge.c
+mv -f .deps/filt_edge.Tpo .deps/filt_edge.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o filt_edge filt_edge.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/filt_edge filt_edge.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fitting.o -MD -MP -MF .deps/fitting.Tpo -c -o fitting.o fitting.c
+mv -f .deps/fitting.Tpo .deps/fitting.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fitting fitting.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fitting fitting.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fitting2.o -MD -MP -MF .deps/fitting2.Tpo -c -o fitting2.o fitting2.c
+mv -f .deps/fitting2.Tpo .deps/fitting2.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fitting2 fitting2.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fitting2 fitting2.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fitting3.o -MD -MP -MF .deps/fitting3.Tpo -c -o fitting3.o fitting3.c
+mv -f .deps/fitting3.Tpo .deps/fitting3.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fitting3 fitting3.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fitting3 fitting3.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fitreg.o -MD -MP -MF .deps/fitreg.Tpo -c -o fitreg.o fitreg.c
+mv -f .deps/fitreg.Tpo .deps/fitreg.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fitreg fitreg.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fitreg fitreg.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT fitreg2.o -MD -MP -MF .deps/fitreg2.Tpo -c -o fitreg2.o fitreg2.c
+mv -f .deps/fitreg2.Tpo .deps/fitreg2.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o fitreg2 fitreg2.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/fitreg2 fitreg2.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT gaussfilt.o -MD -MP -MF .deps/gaussfilt.Tpo -c -o gaussfilt.o gaussfilt.c
+mv -f .deps/gaussfilt.Tpo .deps/gaussfilt.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o gaussfilt gaussfilt.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/gaussfilt gaussfilt.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT gaussfilt2.o -MD -MP -MF .deps/gaussfilt2.Tpo -c -o gaussfilt2.o gaussfilt2.c
+mv -f .deps/gaussfilt2.Tpo .deps/gaussfilt2.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o gaussfilt2 gaussfilt2.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/gaussfilt2 gaussfilt2.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT histogram.o -MD -MP -MF .deps/histogram.Tpo -c -o histogram.o histogram.c
+mv -f .deps/histogram.Tpo .deps/histogram.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o histogram histogram.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/histogram histogram.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT histogram2d.o -MD -MP -MF .deps/histogram2d.Tpo -c -o histogram2d.o histogram2d.c
+mv -f .deps/histogram2d.Tpo .deps/histogram2d.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o histogram2d histogram2d.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/histogram2d histogram2d.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT ieee.o -MD -MP -MF .deps/ieee.Tpo -c -o ieee.o ieee.c
+mv -f .deps/ieee.Tpo .deps/ieee.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o ieee ieee.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/ieee ieee.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT ieeeround.o -MD -MP -MF .deps/ieeeround.Tpo -c -o ieeeround.o ieeeround.c
+mv -f .deps/ieeeround.Tpo .deps/ieeeround.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o ieeeround ieeeround.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/ieeeround ieeeround.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT impulse.o -MD -MP -MF .deps/impulse.Tpo -c -o impulse.o impulse.c
+mv -f .deps/impulse.Tpo .deps/impulse.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o impulse impulse.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/impulse impulse.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT integration.o -MD -MP -MF .deps/integration.Tpo -c -o integration.o integration.c
+mv -f .deps/integration.Tpo .deps/integration.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o integration integration.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/integration integration.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT integration2.o -MD -MP -MF .deps/integration2.Tpo -c -o integration2.o integration2.c
+mv -f .deps/integration2.Tpo .deps/integration2.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o integration2 integration2.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/integration2 integration2.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT interp.o -MD -MP -MF .deps/interp.Tpo -c -o interp.o interp.c
+mv -f .deps/interp.Tpo .deps/interp.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o interp interp.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/interp interp.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT interp2d.o -MD -MP -MF .deps/interp2d.Tpo -c -o interp2d.o interp2d.c
+mv -f .deps/interp2d.Tpo .deps/interp2d.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o interp2d interp2d.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/interp2d interp2d.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT intro.o -MD -MP -MF .deps/intro.Tpo -c -o intro.o intro.c
+mv -f .deps/intro.Tpo .deps/intro.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o intro intro.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/intro intro.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT linalglu.o -MD -MP -MF .deps/linalglu.Tpo -c -o linalglu.o linalglu.c
+mv -f .deps/linalglu.Tpo .deps/linalglu.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o linalglu linalglu.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/linalglu linalglu.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT largefit.o -MD -MP -MF .deps/largefit.Tpo -c -o largefit.o largefit.c
+mv -f .deps/largefit.Tpo .deps/largefit.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o largefit largefit.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/largefit largefit.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT matrix.o -MD -MP -MF .deps/matrix.Tpo -c -o matrix.o matrix.c
+mv -f .deps/matrix.Tpo .deps/matrix.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o matrix matrix.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/matrix matrix.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT matrixw.o -MD -MP -MF .deps/matrixw.Tpo -c -o matrixw.o matrixw.c
+mv -f .deps/matrixw.Tpo .deps/matrixw.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o matrixw matrixw.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/matrixw matrixw.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT min.o -MD -MP -MF .deps/min.Tpo -c -o min.o min.c
+mv -f .deps/min.Tpo .deps/min.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o min min.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/min min.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT monte.o -MD -MP -MF .deps/monte.Tpo -c -o monte.o monte.c
+mv -f .deps/monte.Tpo .deps/monte.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o monte monte.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/monte monte.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT movstat1.o -MD -MP -MF .deps/movstat1.Tpo -c -o movstat1.o movstat1.c
+mv -f .deps/movstat1.Tpo .deps/movstat1.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o movstat1 movstat1.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/movstat1 movstat1.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT movstat2.o -MD -MP -MF .deps/movstat2.Tpo -c -o movstat2.o movstat2.c
+mv -f .deps/movstat2.Tpo .deps/movstat2.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o movstat2 movstat2.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/movstat2 movstat2.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT movstat3.o -MD -MP -MF .deps/movstat3.Tpo -c -o movstat3.o movstat3.c
+mv -f .deps/movstat3.Tpo .deps/movstat3.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o movstat3 movstat3.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/movstat3 movstat3.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT ntupler.o -MD -MP -MF .deps/ntupler.Tpo -c -o ntupler.o ntupler.c
+mv -f .deps/ntupler.Tpo .deps/ntupler.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o ntupler ntupler.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/ntupler ntupler.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT ntuplew.o -MD -MP -MF .deps/ntuplew.Tpo -c -o ntuplew.o ntuplew.c
+mv -f .deps/ntuplew.Tpo .deps/ntuplew.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o ntuplew ntuplew.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/ntuplew ntuplew.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT ode-initval.o -MD -MP -MF .deps/ode-initval.Tpo -c -o ode-initval.o ode-initval.c
+mv -f .deps/ode-initval.Tpo .deps/ode-initval.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o ode-initval ode-initval.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/ode-initval ode-initval.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT permseq.o -MD -MP -MF .deps/permseq.Tpo -c -o permseq.o permseq.c
+mv -f .deps/permseq.Tpo .deps/permseq.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o permseq permseq.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/permseq permseq.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT permshuffle.o -MD -MP -MF .deps/permshuffle.Tpo -c -o permshuffle.o permshuffle.c
+mv -f .deps/permshuffle.Tpo .deps/permshuffle.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o permshuffle permshuffle.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/permshuffle permshuffle.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT polyroots.o -MD -MP -MF .deps/polyroots.Tpo -c -o polyroots.o polyroots.c
+mv -f .deps/polyroots.Tpo .deps/polyroots.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o polyroots polyroots.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/polyroots polyroots.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT qrng.o -MD -MP -MF .deps/qrng.Tpo -c -o qrng.o qrng.c
+mv -f .deps/qrng.Tpo .deps/qrng.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o qrng qrng.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/qrng qrng.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT randpoisson.o -MD -MP -MF .deps/randpoisson.Tpo -c -o randpoisson.o randpoisson.c
+mv -f .deps/randpoisson.Tpo .deps/randpoisson.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o randpoisson randpoisson.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/randpoisson randpoisson.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT randwalk.o -MD -MP -MF .deps/randwalk.Tpo -c -o randwalk.o randwalk.c
+mv -f .deps/randwalk.Tpo .deps/randwalk.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o randwalk randwalk.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/randwalk randwalk.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT rng.o -MD -MP -MF .deps/rng.Tpo -c -o rng.o rng.c
+mv -f .deps/rng.Tpo .deps/rng.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o rng rng.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/rng rng.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT rngunif.o -MD -MP -MF .deps/rngunif.Tpo -c -o rngunif.o rngunif.c
+mv -f .deps/rngunif.Tpo .deps/rngunif.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o rngunif rngunif.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/rngunif rngunif.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT robfit.o -MD -MP -MF .deps/robfit.Tpo -c -o robfit.o robfit.c
+mv -f .deps/robfit.Tpo .deps/robfit.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o robfit robfit.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/robfit robfit.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT rootnewt.o -MD -MP -MF .deps/rootnewt.Tpo -c -o rootnewt.o rootnewt.c
+mv -f .deps/rootnewt.Tpo .deps/rootnewt.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o rootnewt rootnewt.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/rootnewt rootnewt.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT roots.o -MD -MP -MF .deps/roots.Tpo -c -o roots.o roots.c
+mv -f .deps/roots.Tpo .deps/roots.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o roots roots.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/roots roots.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT siman.o -MD -MP -MF .deps/siman.Tpo -c -o siman.o siman.c
+mv -f .deps/siman.Tpo .deps/siman.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o siman siman.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/siman siman.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT siman_tsp.o -MD -MP -MF .deps/siman_tsp.Tpo -c -o siman_tsp.o siman_tsp.c
+mv -f .deps/siman_tsp.Tpo .deps/siman_tsp.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o siman_tsp siman_tsp.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/siman_tsp siman_tsp.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT sortsmall.o -MD -MP -MF .deps/sortsmall.Tpo -c -o sortsmall.o sortsmall.c
+mv -f .deps/sortsmall.Tpo .deps/sortsmall.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o sortsmall sortsmall.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/sortsmall sortsmall.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT specfun.o -MD -MP -MF .deps/specfun.Tpo -c -o specfun.o specfun.c
+mv -f .deps/specfun.Tpo .deps/specfun.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o specfun specfun.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/specfun specfun.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT specfun_e.o -MD -MP -MF .deps/specfun_e.Tpo -c -o specfun_e.o specfun_e.c
+mv -f .deps/specfun_e.Tpo .deps/specfun_e.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o specfun_e specfun_e.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/specfun_e specfun_e.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT rstat.o -MD -MP -MF .deps/rstat.Tpo -c -o rstat.o rstat.c
+mv -f .deps/rstat.Tpo .deps/rstat.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o rstat rstat.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/rstat rstat.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT rquantile.o -MD -MP -MF .deps/rquantile.Tpo -c -o rquantile.o rquantile.c
+mv -f .deps/rquantile.Tpo .deps/rquantile.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o rquantile rquantile.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/rquantile rquantile.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT stat.o -MD -MP -MF .deps/stat.Tpo -c -o stat.o stat.c
+mv -f .deps/stat.Tpo .deps/stat.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o stat stat.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/stat stat.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT statsort.o -MD -MP -MF .deps/statsort.Tpo -c -o statsort.o statsort.c
+mv -f .deps/statsort.Tpo .deps/statsort.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o statsort statsort.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/statsort statsort.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT sum.o -MD -MP -MF .deps/sum.Tpo -c -o sum.o sum.c
+mv -f .deps/sum.Tpo .deps/sum.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o sum sum.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/sum sum.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT vector.o -MD -MP -MF .deps/vector.Tpo -c -o vector.o vector.c
+mv -f .deps/vector.Tpo .deps/vector.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o vector vector.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/vector vector.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT vectorr.o -MD -MP -MF .deps/vectorr.Tpo -c -o vectorr.o vectorr.c
+mv -f .deps/vectorr.Tpo .deps/vectorr.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o vectorr vectorr.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/vectorr vectorr.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT vectorview.o -MD -MP -MF .deps/vectorview.Tpo -c -o vectorview.o vectorview.c
+mv -f .deps/vectorview.Tpo .deps/vectorview.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o vectorview vectorview.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/vectorview vectorview.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT vectorw.o -MD -MP -MF .deps/vectorw.Tpo -c -o vectorw.o vectorw.c
+mv -f .deps/vectorw.Tpo .deps/vectorw.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o vectorw vectorw.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/vectorw vectorw.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT dwt.o -MD -MP -MF .deps/dwt.Tpo -c -o dwt.o dwt.c
+mv -f .deps/dwt.Tpo .deps/dwt.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o dwt dwt.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/dwt dwt.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT nlfit.o -MD -MP -MF .deps/nlfit.Tpo -c -o nlfit.o nlfit.c
+mv -f .deps/nlfit.Tpo .deps/nlfit.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o nlfit nlfit.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/nlfit nlfit.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT nlfit2.o -MD -MP -MF .deps/nlfit2.Tpo -c -o nlfit2.o nlfit2.c
+mv -f .deps/nlfit2.Tpo .deps/nlfit2.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o nlfit2 nlfit2.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/nlfit2 nlfit2.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT nlfit2b.o -MD -MP -MF .deps/nlfit2b.Tpo -c -o nlfit2b.o nlfit2b.c
+mv -f .deps/nlfit2b.Tpo .deps/nlfit2b.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o nlfit2b nlfit2b.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/nlfit2b nlfit2b.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT nlfit3.o -MD -MP -MF .deps/nlfit3.Tpo -c -o nlfit3.o nlfit3.c
+mv -f .deps/nlfit3.Tpo .deps/nlfit3.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o nlfit3 nlfit3.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/nlfit3 nlfit3.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT nlfit4.o -MD -MP -MF .deps/nlfit4.Tpo -c -o nlfit4.o nlfit4.c
+mv -f .deps/nlfit4.Tpo .deps/nlfit4.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o nlfit4 nlfit4.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/nlfit4 nlfit4.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT interpp.o -MD -MP -MF .deps/interpp.Tpo -c -o interpp.o interpp.c
+mv -f .deps/interpp.Tpo .deps/interpp.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o interpp interpp.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/interpp interpp.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT eigen_nonsymm.o -MD -MP -MF .deps/eigen_nonsymm.Tpo -c -o eigen_nonsymm.o eigen_nonsymm.c
+mv -f .deps/eigen_nonsymm.Tpo .deps/eigen_nonsymm.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o eigen_nonsymm eigen_nonsymm.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/eigen_nonsymm eigen_nonsymm.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT bspline.o -MD -MP -MF .deps/bspline.Tpo -c -o bspline.o bspline.c
+mv -f .deps/bspline.Tpo .deps/bspline.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o bspline bspline.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/bspline bspline.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT poisson.o -MD -MP -MF .deps/poisson.Tpo -c -o poisson.o poisson.c
+mv -f .deps/poisson.Tpo .deps/poisson.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o poisson poisson.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/poisson poisson.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT interp_compare.o -MD -MP -MF .deps/interp_compare.Tpo -c -o interp_compare.o interp_compare.c
+mv -f .deps/interp_compare.Tpo .deps/interp_compare.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o interp_compare interp_compare.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/interp_compare interp_compare.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+gcc-10 -DHAVE_CONFIG_H -I. -I../..     -g -O2 -MT spmatrix.o -MD -MP -MF .deps/spmatrix.Tpo -c -o spmatrix.o spmatrix.c
+mv -f .deps/spmatrix.Tpo .deps/spmatrix.Po
+/bin/sh ../../libtool  --tag=CC   --mode=link gcc-10  -g -O2   -o spmatrix spmatrix.o ../../libgsl.la ../../cblas/libgslcblas.la -lm 
+libtool: link: gcc-10 -g -O2 -o .libs/spmatrix spmatrix.o  ../../.libs/libgsl.dylib ../../cblas/.libs/libgslcblas.dylib -lm
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  test_gsl_histogram.sh pkgconfig.test
+make[4]: Nothing to be done for `test_gsl_histogram.sh'.
+make[4]: Nothing to be done for `pkgconfig.test'.
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  check-TESTS
+PASS: test_gsl_histogram.sh
+PASS: pkgconfig.test
+============================================================================
+Testsuite summary for gsl 2.7.1
+============================================================================
+# TOTAL: 2
+# PASS:  2
+# SKIP:  0
+# XFAIL: 0
+# FAIL:  0
+# XPASS: 0
+# ERROR: 0
+============================================================================

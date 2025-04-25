@@ -49,7 +49,7 @@ endif
 #E
 
 $(EXEC): $(OBJS) $(EXTERNAL) $(MAIN)
-	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) -o $(EXEC) $(addprefix build/,$(notdir $^)) $(MLIBS)
+	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) -o $(EXEC) $(addprefix build/,$(notdir $^)) $(MLIBS) $(FITSIOLIBS)
 
 
 $(EXEC)y: lib$(EXEC).a python/$(EXEC)y.pyx python/c$(EXEC)y.pxd

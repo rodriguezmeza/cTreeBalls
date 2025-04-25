@@ -4,8 +4,6 @@
 #ifndef _cballs_include_00_h
 #define _cballs_include_00_h
 
-#include "cballs_include_00_NMultipoles.h"
-
 #ifdef OCTREEKKKOMP
 #include "cballs_octree_kkk_omp_00.h"
 #endif

@@ -11,6 +11,11 @@
 
 // TODO :: Work to do in order to use with boxes not centered at (0,0,...)
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 
 local void normal_walktree_sincos(struct  cmdline_data* cmd, 
@@ -77,6 +82,9 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         verb_print(cmd->verbose, "computing only 2pcf... \n");
     if (scanopt(cmd->options, "kappa-constant-one"))
         verb_print(cmd->verbose, "kappa constant = 1... \n");
+#ifdef NOSTANDARNORMHIST
+    verb_print(cmd->verbose, "warning!! histograms will not be normalized... \n");
+#endif
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
@@ -370,7 +378,12 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 //B kappa Avg Rmin
         den = (real)(nbody[cat1]-ipfalse);
 //E
+//        xi = num/den;
+#ifdef NOSTANDARNORMHIST
+        xi = 1.0;
+#else
         xi = num/den;
+#endif // ! NONORMHIST
         verb_print(cmd->verbose,
                    "tree-omp-sincos: p falses found = %ld and %e %e %e\n",
                    ipfalse, num, den, xi);
@@ -947,7 +960,8 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd, struct  global_data* g
     }
 }
 
+//B socket:
 #ifdef ADDONS
 #include "search_include.h"
 #endif
-
+//E

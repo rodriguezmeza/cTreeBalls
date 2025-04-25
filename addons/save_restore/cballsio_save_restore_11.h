@@ -934,12 +934,14 @@ global int restorestate(struct cmdline_data* cmd,
     saferead(&gd->RcutSq, sizeof(real), str);
     saferead(&gd->cpusearch, sizeof(real), str);
 
-#ifdef CELLMETHOD
+//B correction 2025-04-06
+// #ifdef CELLMETHOD
 // Cell search
 //     vectorI cells;
 //    INTEGER *cellList;
 //
-#endif
+//#endif
+//E
 
     saferead(&gd->infilefmt_int, sizeof(int), str);
 

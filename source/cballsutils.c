@@ -11,6 +11,11 @@
 
 // Work to do in order to use with boxes not centered at (0,0,...)
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #include "globaldefs.h"
 
 
@@ -139,6 +144,7 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     real xi, xi_2p;
 
     //B Normalization of histograms
+/*
     if (Type(p) == BODY) {
         xi = Kappa(p)/nbody;
         xi_2p = Kappa(p);
@@ -148,6 +154,28 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
             xi = NbRmin(p)*xi_2p/nbody;
         }
         //E
+    } else if (Type(p) == BODY3) {
+*/
+    if (Type(p) == BODY) {
+#ifdef NOSTANDARNORMHIST
+        xi = Kappa(p);
+        xi_2p = Kappa(p);
+        //B kappa Avg Rmin
+        if (scanopt(cmd->options, "smooth-pivot")) {
+            xi_2p = KappaRmin(p);
+            xi = NbRmin(p)*xi_2p;
+        }
+        //E
+#else
+        xi = Kappa(p)/nbody;
+        xi_2p = Kappa(p);
+        //B kappa Avg Rmin
+        if (scanopt(cmd->options, "smooth-pivot")) {
+            xi_2p = KappaRmin(p);
+            xi = NbRmin(p)*xi_2p/nbody;
+        }
+        //E
+#endif // ! NONORMHIST
     } else if (Type(p) == BODY3) {
 #ifdef BODY3ON
         xi = Nbb(p)*Kappa(p)/nbody;
@@ -159,10 +187,23 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     if (cmd->computeTPCF) {
         for (m=1; m<=cmd->mChebyshev+1; m++)
             //B Normalization of histograms
+            /*
             for (n=1; n<=cmd->sizeHistN; n++) {
                 hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
                 hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
             }
+        */
+#ifdef NOSTANDARNORMHIST
+            for (n=1; n<=cmd->sizeHistN; n++) {
+                hist->histXithreadcos[m][n] /= 1.0;
+                hist->histXithreadsin[m][n] /= 1.0;
+            }
+#else
+            for (n=1; n<=cmd->sizeHistN; n++) {
+                hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
+                hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
+            }
+#endif
             //E
         for (m=1; m<=cmd->mChebyshev+1; m++){
             OUTVP_ext(hist->xiOUTVPcos,
@@ -189,10 +230,12 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
             ADDM_ext(hist->histZetaMthreadsin[m],
                      hist->histZetaMthreadsin[m],hist->histZetaMtmpsin,cmd->sizeHistN);
             ADDM_ext(hist->histZetaMthreadsincos[m],
-                    hist->histZetaMthreadsincos[m],hist->histZetaMtmpsincos,cmd->sizeHistN);
+                     hist->histZetaMthreadsincos[m],
+                     hist->histZetaMtmpsincos,cmd->sizeHistN);
             // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
             ADDM_ext(hist->histZetaMthreadcossin[m],
-                    hist->histZetaMthreadcossin[m],hist->histZetaMtmpcossin,cmd->sizeHistN);
+                     hist->histZetaMthreadcossin[m],
+                     hist->histZetaMtmpcossin,cmd->sizeHistN);
         }
     }
 
@@ -222,10 +265,13 @@ global int search_init_gd_hist(struct  cmdline_data* cmd, struct  global_data* g
         gd->histNNSubXi2pcftotal[n] = 0.0;
 //E
         gd->histXi2pcf[n] = 0.0;
-        if (cmd->computeTPCF) {
-            for (m = 1; m <= cmd->mChebyshev+1; m++)
-                gd->histXi[m][n] = 0.0;
-        }
+        // array histXi is not used any more.
+        //  remove it from all the places...
+//        if (cmd->computeTPCF) {
+//            for (m = 1; m <= cmd->mChebyshev+1; m++)
+//                gd->histXi[m][n] = 0.0;
+//        }
+        //
     }
     
     if (cmd->computeTPCF) {
@@ -262,9 +308,13 @@ global int search_init_gd_hist_sincos(struct  cmdline_data* cmd, struct  global_
 //E
         gd->histXi2pcf[n] = 0.0;
         if (cmd->computeTPCF) {
-            for (m = 1; m <= cmd->mChebyshev+1; m++)
+            for (m = 1; m <= cmd->mChebyshev+1; m++) {
                 // HERE MUST BE gd->histXicos and gd->histXisin
-                gd->histXi[m][n] = 0.0;
+                // array histXi is not used any more.
+                //  remove it from all the places...
+                //                gd->histXi[m][n] = 0.0;
+                //
+            }
         }
     }
     gd->actmax = gd->nbbcalc = gd->nbccalc = gd->ncccalc = 0;
@@ -515,9 +565,12 @@ global int ThreadCount(struct  cmdline_data* cmd, struct  global_data* gd,
         nthreads++;
     }
     verb_print(cmd->verbose, "\nUsing %d threads \n",nthreads);
+
+//B socket:
 #ifdef ADDONS
 #include "cballsutils_include_01.h"
 #endif
+//E
 
     return SUCCESS;
 }
@@ -1359,6 +1412,8 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
 
 //E
 
+//B socket:
 #ifdef ADDONS
 #include "cballsutils_include_02.h"
 #endif
+//E

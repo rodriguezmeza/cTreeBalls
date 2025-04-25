@@ -7,124 +7,114 @@
 
 #include "fitsio.h"
 
+
 local int outputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
                              bodyptr bodytab, INTEGER nbody)
 {
-    fitsfile *fptr;
-    char card[FLEN_CARD];
-    int status = 0, nkeys, ii;                      // MUST initialize status
+    char namebuf[256];
 
     gd->output_comment = "fits output file";
 
-    //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
+    sprintf(namebuf, "%s", gd->fpfnameOutputFileName);
     verb_print(cmd->verbose,
-               "\toutputdata_cfitsio: -D_REENTRANT flag: %d...\n\n",
-               fits_is_reentrant());
-    //E
+               "\toutputdata_cfitsio: opening fits file: %s...\n",
+               namebuf);
 
-    if (scanopt(cmd->options, "fits-type-file"))
-        fits_open_file(&fptr, cmd->outfile, READONLY, &status);
-    else
-        fits_open_data(&fptr, cmd->outfile, READONLY, &status);
-    if (status) {                               // print any error messages
+    if (scanopt(cmd->options, "kappa")) {
+        writebintable_kappa(cmd, gd, bodytab, nbody, namebuf);
+    } else { // ! kappa
         verb_print(cmd->verbose,
-                   "\toutputdata_cfitsio: open status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-
-    fits_get_hdrspace(fptr, &nkeys, NULL, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\toutputdata_cfitsio: get_hdrspace status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-    fits_get_num_rows(fptr, &cmd->nbody, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\toutputdata_cfitsio: get_num_rows status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-
-    if (scanopt(cmd->options, "fits-header-info")){
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-            printf("%s\n", card);
-        }
-        printf("END\n\n");                          // terminate listing with END */
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-                   "\toutputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
-                   cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            error("toutputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
-
-        int typecode;
-        long repeat;
-        long width;
-        verb_print(cmd->verbose,
-                   "Columns info details:\n");
-        for (ii = 1; ii <= ncols; ii++) {
-            fits_get_coltype(fptr, ii, &typecode,
-                             &repeat, &width, &status);
-            switch(typecode) {
-                case TLONG:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TLONG", repeat, width);
-                    break;
-                case TFLOAT:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TFLOAT", repeat, width);
-                    break;
-                case TDOUBLE:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TDOUBLE", repeat, width);
-                    break;
-            }
-        }
-        verb_print(cmd->verbose,"\n");
-    } else { // ! fits-header-info
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-        }
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-                   "\toutputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
-                   cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            error("toutputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
-    }
-
-    if (scanopt(cmd->options, "stop")) {
-        fits_close_file(fptr, &status);
-        if (status) {                               // print any error messages
-            verb_print(cmd->verbose,
-                       "\toutputdata_cfitsio: status: %d...\n\n",
-                       status);
-            fits_report_error(stderr, status);
-        }
-        exit(1);
-    }
-
-    if (scanopt(cmd->options, "ra-dec")) {
-//        outputdata_cfitsio_ra_dec(cmd, gd,
-//                                 cmd->outfile, 1, fptr);
-    } else { // ! ra-dec
-//        outputdata_cfitsio_xyz(cmd, gd,
-//                              cmd->outfile, 1, fptr);
+        "\toutputdata_cfitsio: only convergence (kappa) is %s\n\n",
+                   "implemented. No file is saved...");
     }
 
     return SUCCESS;
 }
 
+// write a fits file for convergence (kappa)
+//  only 3D
+void writebintable_kappa(struct cmdline_data* cmd,
+                         struct  global_data* gd,
+                         bodyptr bodytab, INTEGER nbody,
+                         string filename)
+{
+    bodyptr p;
+    fitsfile *fptr;
+
+    int status=0;
+    int hdutype;
+    long firstrow, firstelem;
+    long nrows;
+
+    int tfields   = 4;
+
+    char extname[] = "Kappa_Binary";            // extension name
+
+    //B define the name, datatype, and physical units for the 4 columns
+    char *ttype[] = { "X", "Y", "Z", "KAPPA" };
+    char *tform[] = { "1D","1D","1D","1D"    };
+    char *tunit[] = { " ",  " ",  " ",  " "      };
+    //E
+
+    status=0;
+
+    nrows = nbody;
+    double *arrayX;
+    double *arrayY;
+    double *arrayZ;
+    double *kappa;
+    arrayX = (double*) allocate(nbody * sizeof(double));
+    arrayY = (double*) allocate(nbody * sizeof(double));
+    arrayZ = (double*) allocate(nbody * sizeof(double));
+    kappa = (double*) allocate(nbody * sizeof(double));
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        arrayX[p-bodytab] = Pos(p)[0];
+        arrayY[p-bodytab] = Pos(p)[1];
+        arrayZ[p-bodytab] = Pos(p)[2];
+        kappa[p-bodytab] = Kappa(p);
+    }
+
+    long naxes[] = {0,0};
+
+    if (fits_create_file(&fptr, filename, &status))
+         printerror(status);
+
+    fits_create_img(fptr, SHORT_IMG, 0, naxes, &status);
+
+    if (fits_create_tbl(fptr, BINARY_TBL, nrows, tfields, ttype, tform,
+                        tunit, extname, &status));
+        printerror(status);
+
+    firstrow  = 1;
+    firstelem = 1;
+
+    fits_write_col(fptr, TDOUBLE, 1, firstrow, firstelem, nrows, arrayX,
+                   &status);
+    fits_write_col(fptr, TDOUBLE, 2, firstrow, firstelem, nrows, arrayY,
+                   &status);
+    fits_write_col(fptr, TDOUBLE, 3, firstrow, firstelem, nrows, arrayZ,
+                   &status);
+    fits_write_col(fptr, TDOUBLE, 4, firstrow, firstelem, nrows, kappa,
+                   &status);
+    if (fits_close_file(fptr, &status))
+        printerror(status);
+
+    free(kappa);
+    free(arrayZ);
+    free(arrayY);
+    free(arrayX);
+
+    return;
+}
+
+void printerror( int status)
+{
+    if (status) {
+       fits_report_error(stderr, status);
+       exit(status);
+    }
+
+    return;
+}
 
 #endif	// ! _cballsio_cfitsio_07_h

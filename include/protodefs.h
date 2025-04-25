@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #ifndef _protodefs_h
 #define _protodefs_h
 
@@ -141,12 +146,13 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd);
 //E
 
 
+//B socket:
 #ifdef ADDONS
-// If you have an addon that need global protodefinitions
+// If you have an addon that need global proto definitions
 //  go to this file and add the addon item.
 #include "protodefs_include.h"
 #endif
-
+//E
 
 #ifdef __cplusplus
 }

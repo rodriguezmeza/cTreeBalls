@@ -39,6 +39,13 @@ include $(MACHINES_DIR)/addons/iolib/Makefile_iolib
 endif
 #
 
+# CFITSIOLIB
+# internal cfitsio lib
+ifeq ($(CFITSIOLIBON),1)
+include $(MACHINES_DIR)/addons/cfitsiolib/Makefile_cfitsiolib
+endif
+#
+
 # CFITSIO
 # To IO fit format
 ifeq ($(CFITSIOON),1)
@@ -170,6 +177,19 @@ endif
 ifeq ($(SAVERESTOREON),1)
 include $(MACHINES_DIR)/addons/save_restore/Makefile_save_restore
 endif
+
+# NOSTANDARNORMHIST switch
+ifeq ($(NOSTANDARNORMHISTON),1)
+OPT2 += -DNOSTANDARNORMHIST
+endif
+#
+
+# CMDLINE_DEFS_UNITSPHERE
+# set of useful default values for the unit sphere
+ifeq ($(CMDLINE_DEFS_UNITSPHERE_ON),1)
+include $(MACHINES_DIR)/addons/cmdline_defs_settings/Makefile_cmdline_defs_settings
+endif
+#
 
 #E
 ############################

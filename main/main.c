@@ -1,6 +1,6 @@
 /*==============================================================================
  NAME: main.c				[cTreeBalls]
- Written by: M.A. Rodriguez-Meza
+ Written by: Mario A. Rodriguez-Meza
  Starting date: april 2023
  Purpose: Main routine
  Language: C
@@ -11,10 +11,13 @@
  Output: several histograms containing 2pcf, 3pcf,...
  Units:
  History:
+ Acknowledgements: Abraham Arvizu, Alejandro Aviles, Juan Carlos Hidalgo,
+                    Eladio Moreno, Gustavo Niz and Sofia Samario
  Comments and notes: (palimsesto)... coding based on references below.
  References:    Zeno project, NEMO project, Gadget, COLA, CLASS,
-                NR, GSL, Rapaport's book, cute, cfitsio...
+                NR, GSL, Rapaport's book, cute, cfitsio, Healpix...
  github: https://github.com/rodriguezmeza/cTreeBalls.git
+ Publication: cite: JCAP12(2024)049 (ArXiv ePrint: 2408.16847)
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
@@ -51,7 +54,7 @@ int main(int argc, string argv[])
     if(argc < 2) {
         verb_print(1, "Parameters are missing.\n");
         verb_print(1, "Call with <ParameterFile>\n");
-        endrun_mpi(ThisTask, 0);
+        exit(1);
     }
     strcpy(cmd.ParameterFile, argv[1]);
     printf("\n -> Parameter file is %s\n",

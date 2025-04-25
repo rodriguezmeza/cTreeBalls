@@ -9,6 +9,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+//
+// lines where there is a "//B socket:" string are places to include module files
+//  that can be found in addons/addons_include folder
+//
+
 #ifndef _globaldefs_h
 #define _globaldefs_h
 
@@ -56,7 +61,7 @@
 #include "gsl_fft_halfcomplex.h"
 #include "gsl_fft_complex.h"
 #include "gsl_integration.h"
-//#include "gsl_linalg.h"                           // Extract from sources...
+#include "gsl_linalg.h"                           // Extract from sources...
 #else // ! NOINTERNALGSL
 #include <stdio.h>
 #include <math.h>
@@ -151,10 +156,11 @@ global real *inout_uval;
 global real *inout_vval;
 global real *inout_wval;
 
+//B socket:
 #ifdef ADDONS
 #include "globaldefs_include_04.h"
 #endif
-
+//E
 
 //B CLASSLIB section
 // standard libraries from Julien Lesgourges CLASS
@@ -230,9 +236,11 @@ int string_begins_with(char* thestring, char beginchar);
 //E
 
 
+//B socket:
 #ifdef ADDONS
 #include "globaldefs_include_05.h"
 #endif
+//E
 
 #include "protodefs.h"
 

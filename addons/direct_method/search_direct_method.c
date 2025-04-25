@@ -466,10 +466,13 @@ local int search_init_sincos_gd(struct cmdline_data* cmd,
     for (n = 1; n <= cmd->sizeHistN; n++) {
         gd->histNNSubXi2pcf[n] = 0.0;
         gd->histNN[n] = 0.0;
-        if (cmd->computeTPCF) {
-            for (m = 1; m <= cmd->mChebyshev+1; m++)
-                gd->histXi[m][n] = 0.0;
-        }
+        // array histXi is not used any more.
+        //  remove it from all the places...
+//        if (cmd->computeTPCF) {
+//            for (m = 1; m <= cmd->mChebyshev+1; m++)
+//                gd->histXi[m][n] = 0.0;
+//        }
+        //
     }
     gd->nbbcalc = 0;                                // B-B encounter
 
