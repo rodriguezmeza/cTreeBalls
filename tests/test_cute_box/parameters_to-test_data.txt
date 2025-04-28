@@ -19,7 +19,7 @@ options =                            compute-HistN,and-CF,post-processing,only-p
 #
 infile =                             ./data.txt
 infileformat =                      multi-columns-ascii
-columns = 1,2,3
+#columns = 1,2,3
 #
 rootDir =                           Output
 #
@@ -39,7 +39,8 @@ computeTPCF = false
 useLogHist = false
 usePeriodic = true
 #
+# conflict with columns above
 script = "python plotCF.py"
-
+#
 
 

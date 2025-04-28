@@ -1,4 +1,8 @@
 #
+# -------------------------
+# To test tree-omp-sincos searching method
+# -------------------------
+#
 # Run it as:
 # cd tests
 #

@@ -55,6 +55,10 @@
 #include "protodefs_save_restore.h"
 #endif
 
+#ifdef KDTREECUTEBOX
+#include "protodefs_kdtree_cute_box.h"
+#endif
+
 /*
  #E Addendum of some not important
  ############################

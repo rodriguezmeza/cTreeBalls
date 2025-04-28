@@ -1,0 +1,54 @@
+#
+# -------------------------
+# To test balls-omp searching method
+# -------------------------
+#
+# Run it as:
+# cd tests
+#
+# First check fits file header info:
+# time ../cballs in=./catalogs/Takahasi/allskymap_zs9_r000_nside512.fits infmt=fits-healpix options=header-info,stop
+#
+# You will know, then, columns to give with position and field of each pixel or if it is Healpix, check 
+#	that RING scheme
+#
+# Version parameter file:
+# time ../cballs ./In/parameters_to-test_nside256_fits_balls-omp
+#
+# In command line version:
+# time ../cballs options=compute-HistN,and-CF,out-m-HistZeta rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 stepState=50000 verb=2 verblog=2 nthreads=16 in=./catalogs/Takahasi/allskymap_zs9_r000_nside512.fits infmt=fits search=balls-omp mChebyshev=7
+#
+# -------------------------
+# -------------------------
+#
+#
+#
+searchMethod =                       balls-omp
+#
+theta =                              1
+nsmooth =                            1
+#
+rsmooth =
+#
+options =                           compute-HistN,and-CF,out-m-HistZeta
+#options=header-info,stop
+#
+infile =                            ./catalogs/Takahasi/allskymap_nres08r081_zs9_mag.fits
+infileformat =                       fits-healpix
+iCatalogs =                         1
+#columns = 1,2,3,4
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+rangeN =                            0.0633205
+rminHist =                           0.00213811
+sizeHistN =                         20
+#
+mChebyshev =                         7
+stepState   =                       50000
+#
+verbose  =                          2
+verbose_log =                        2
+numberThreads =                      16
+#

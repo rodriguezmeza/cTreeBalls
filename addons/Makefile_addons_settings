@@ -153,7 +153,7 @@ DIRECTMETHODON = 0
 
 # DIRECTMETHODSIMPLE
 # For computing 3pcf using direct method simple
-DIRECTMETHODSIMPLEON = 0
+DIRECTMETHODSIMPLEON = 1
 
 # For complex math use only one: USEGSL or COMPLEXLIB
 # COMPLEXLIB
@@ -178,6 +178,10 @@ $(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating.
 OCTREEGGGOMPON = 0
 endif
 endif
+
+# KDTREECUTEBOX
+# For computing 2pcf using cute_box methods
+KDTREECUTEBOXON = 0
 
 #E
 ############################

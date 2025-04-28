@@ -142,4 +142,13 @@ cBalls use/is based on the following codes or projects:
 -   [GSL](https://www.gnu.org/software/gsl/)
 -   [CLASS](https://github.com/lesgourg/class_public)
 -   [CFITSIO](https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html)
+-   [HEALPix](https://healpix.sourceforge.io/)
 
+Also author acknowledgments for helpful discussion and testing to the following people:
+
+- Abraham Arvizu
+- Alejandro Aviles
+- Juan Carlos Hidalgo
+- Eladio Moreno
+- Gustavo Niz
+- Sofia Samario

@@ -1292,7 +1292,8 @@ int SetNumberThreads(struct  cmdline_data *cmd)
 
 //B Special routines to scan command line
 
-local int startrun_getParamsSpecial(struct  cmdline_data* cmd, struct  global_data* gd)
+local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
+                                    struct  global_data* gd)
 {
     char *pch;
     int nitems, ndummy=1;
@@ -1302,7 +1303,7 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd, struct  global_da
     if (strnull(cmd->infile)) {
         if (cmd->verbose_log>=3)
        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "\nstartrun_getParamsSpecial: no inputfile was given, making data ...\n");
+            "\nstartrun_getParamsSpecial: no inputfile was given, making data ...\n");
         gd->ninfiles=1;                              // To test data...
     } else {
         strcpy(inputnametmp,cmd->infile);
@@ -1316,7 +1317,8 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd, struct  global_da
             strcpy(gd->infilenames[gd->ninfiles],pch);
             ++gd->ninfiles;
             if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, "%s\n",gd->infilenames[gd->ninfiles-1]);
+            verb_log_print(cmd->verbose_log, gd->outlog, "%s\n",
+                           gd->infilenames[gd->ninfiles-1]);
             pch = strtok (NULL, " ,");
         }
         if (cmd->verbose_log>=3)

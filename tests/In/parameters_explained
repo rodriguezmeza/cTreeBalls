@@ -43,7 +43,7 @@ options                            = compute-HistN,and-CF,out-m-HistZeta
 								#	but will be slower than the default searching method
 # 
 # Give the name of the point catalog to analyze and its format.
-infile                             = ./scripts/Abraham/kappa_nres12_zs9NS256r000.bin
+infile                             = ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
 infileformat                       = binary		# can be columns-ascii (default value), binary or takahasi
 iCatalogs                          = 1			# this is the tag associated to catalog giving in above
 								# several files can be given, the 'iCatalog' tag them
@@ -56,7 +56,7 @@ rangeN                             = 0.0633205
 rminHist                           = 0.00213811
 sizeHistN                          = 20
 #
-# Give the number of Chebyshev multipoles to compute. Is active when is cBalls has been given computeTPCF = true
+# Give the number of Chebyshev multipoles to compute. Is active when cBalls has been given computeTPCF = true
 mChebyshev                         = 7			# mChebyshev + 1 must be a power of 2
 stepState                          = 1000		# gives the frequency to save the the number of pivot computed. Useful to see the state of the run
 #

@@ -617,16 +617,16 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
     real xmin, ymin, zmin;
     real xmax, ymax, zmax;
 
-    if (scanopt(cmd->options, "all")) {
-        Takahasi_region_selection_3d_all(cmd, gd,
-                                         nside, npix, conv, shear1, shear2, rotat,
-            dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
-            &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile);
-    } else {
+    if (scanopt(cmd->options, "patch")) {
         Takahasi_region_selection_3d(cmd, gd,
                                      nside, npix, conv, shear1, shear2, rotat,
                 dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
                 &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile);
+    } else {
+        Takahasi_region_selection_3d_all(cmd, gd,
+                                         nside, npix, conv, shear1, shear2, rotat,
+            dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
+            &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile);
     }
 #else   // ! TREEDIM
     real xmin, ymin;
@@ -781,40 +781,8 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
         p = bodytabtmp+i;
         Update(p) = FALSE;
 
-        if (scanopt(cmd->options, "all")) {
-            iselect++;
-            if (scanopt(cmd->options, "rotation")) {
-                theta_rot = theta - dtheta_rot;
-                phi_rot = phi - dphi_rot;
-            } else {
-                theta_rot = theta;
-                phi_rot = phi;
-            }
-
-            spherical_to_cartesians(cmd, gd, theta_rot, phi_rot, Pos(p));
-
-            if (!scanopt(cmd->options, "kappa-constant"))
-                Kappa(p) = conv[i];
-            else {
-                Kappa(p) = 2.0;
-                if (scanopt(cmd->options, "kappa-constant-one"))
-                    Kappa(p) = 1.0;
-            }
-            Type(p) = BODY;
-            Mass(p) = mass;
-            Weight(p) = weight;
-            Id(p) = p-bodytabtmp+iselect;
-
-            *xmin = Pos(p)[0];
-            *ymin = Pos(p)[1];
-            *zmin = Pos(p)[2];
-            *xmax = Pos(p)[0];
-            *ymax = Pos(p)[1];
-            *zmax = Pos(p)[2];
-
-            Update(p) = TRUE;
-
-        } else {
+        if (scanopt(cmd->options, "patch")) {
+            //B
             if (thetaL < theta - dtheta_rot && theta - dtheta_rot < thetaR) {
                 if (phiL < phi - dphi_rot && phi - dphi_rot < phiR) {
                     iselect++;
@@ -847,11 +815,46 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
                     Update(p) = TRUE;
                 }
             }
-        }
+            //E
+        } else { // ! all
+            //B
+            iselect++;
+            if (scanopt(cmd->options, "rotation")) {
+                theta_rot = theta - dtheta_rot;
+                phi_rot = phi - dphi_rot;
+            } else {
+                theta_rot = theta;
+                phi_rot = phi;
+            }
+
+            spherical_to_cartesians(cmd, gd, theta_rot, phi_rot, Pos(p));
+
+            if (!scanopt(cmd->options, "kappa-constant"))
+                Kappa(p) = conv[i];
+            else {
+                Kappa(p) = 2.0;
+                if (scanopt(cmd->options, "kappa-constant-one"))
+                    Kappa(p) = 1.0;
+            }
+            Type(p) = BODY;
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytabtmp+iselect;
+
+            *xmin = Pos(p)[0];
+            *ymin = Pos(p)[1];
+            *zmin = Pos(p)[2];
+            *xmax = Pos(p)[0];
+            *ymax = Pos(p)[1];
+            *zmax = Pos(p)[2];
+
+            Update(p) = TRUE;
+            //E
+        } // ! all
     } // ! end for
 
     bodyptr q;
-    if (!scanopt(cmd->options, "all"))
+    if (scanopt(cmd->options, "patch"))
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
@@ -886,13 +889,13 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "\tinputdata_takahasi: min and max of z = %f %f\n",*zmin, *zmax);
     free(bodytabtmp);
 
-    if (scanopt(cmd->options, "all"))
+    if (scanopt(cmd->options, "patch"))
+        verb_print(cmd->verbose,
+                   "\n\tinputdata_takahasi: selected read points = %ld\n",iselect);
+    else
         verb_print(cmd->verbose,
                    "\n\tinputdata_takahasi: selected read points and nbody: %ld %ld\n",
                    iselect, cmd->nbody);
-    else
-        verb_print(cmd->verbose, 
-                   "\n\tinputdata_takahasi: selected read points = %ld\n",iselect);
 
     verb_print(cmd->verbose, 
                "inputdata_takahasi: average of kappa (%ld particles) = %le\n",
@@ -938,38 +941,8 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
         p = bodytabtmp+i;
         Update(p) = FALSE;
 
-        if (scanopt(cmd->options, "all")) {
-            iselect++;
-            if (scanopt(cmd->options, "rotation")) {
-                theta_rot = theta - dtheta_rot;
-                phi_rot = phi - dphi_rot;
-            } else {
-                theta_rot = theta;
-                phi_rot = phi;
-            }
-
-// Better use theta, phi as x, y
-
-            ra = phi_rot;
-            dec = theta_rot;
-            Pos(p)[0] = ra;
-            Pos(p)[1] = dec;
-
-            Kappa(p) = conv[i];
-            Type(p) = BODY;
-            Mass(p) = mass;
-            Weight(p) = weight;
-            Id(p) = p-bodytabtmp+iselect;
-
-            *xmin = Pos(p)[0];
-            *ymin = Pos(p)[1];
-            *xmax = Pos(p)[0];
-            *ymax = Pos(p)[1];
-
-            Update(p) = TRUE;
-
-        } else {
-
+        if (scanopt(cmd->options, "patch")) {
+            //B
             if (thetaL < theta - dtheta_rot && theta - dtheta_rot < thetaR) {
                 if (phiL < phi - dphi_rot && phi - dphi_rot < phiR) {
                     iselect++;
@@ -1002,11 +975,43 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
                     Update(p) = TRUE;
                 }
             }
+            //E
+        } else { // ! all
+            //B
+            iselect++;
+            if (scanopt(cmd->options, "rotation")) {
+                theta_rot = theta - dtheta_rot;
+                phi_rot = phi - dphi_rot;
+            } else {
+                theta_rot = theta;
+                phi_rot = phi;
+            }
+
+// Better use theta, phi as x, y
+
+            ra = phi_rot;
+            dec = theta_rot;
+            Pos(p)[0] = ra;
+            Pos(p)[1] = dec;
+
+            Kappa(p) = conv[i];
+            Type(p) = BODY;
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytabtmp+iselect;
+
+            *xmin = Pos(p)[0];
+            *ymin = Pos(p)[1];
+            *xmax = Pos(p)[0];
+            *ymax = Pos(p)[1];
+
+            Update(p) = TRUE;
+            //E
         } // ! all
     } // ! end loop i
 
     bodyptr q;
-    if (!scanopt(cmd->options, "all"))
+    if (scanopt(cmd->options, "patch"))
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;

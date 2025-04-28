@@ -50,6 +50,10 @@
 #include "cballs_direct_method_simple.h"
 #endif
 
+#ifdef KDTREECUTEBOX
+#include "cballs_kdtree_cute_box.h"
+#endif
+
 
 /*
  #E Addendum of some not important

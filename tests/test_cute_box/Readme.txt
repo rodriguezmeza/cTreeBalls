@@ -5,22 +5,27 @@ and in terminal: make clean; make all
 
 
 In data.txt there is a configuration space sample. Can be visualized with:
-(Run from tests directory)
 
-$ python test_cute_box/data_3d_view.py
+$ python data_3d_view.py
 
 If you have cute_box installed, correlation can be done:
 
-$ cute_box params.txt
-
-For a gadget input (check the params_cola_064.txt for details):
-
-$ cute_box params_cola_064.txt
+$ CUTE_BOX params.txt
 
 To compare with the results obtained using cBalls do:
 
-../../cballs parameters_to-test_data.txt
+$ ../../cballs parameters_to-test_data.txt
 
 Compare results with (from tests directory):
 
-$ python test_cute_box/plotCF.py
+$ python plotCF.py
+
+
+There is also a lpicola n-body simulations results in folder example_cola. Process with cBalls using
+
+$ cballs parameters_to-test_data_cola_064.txt 
+
+and also can be analyzed using CUTE_BOX. For a gadget input (check the params_cola_064.txt for details):
+
+$ CUTE_BOX params_cola_064.txt
+

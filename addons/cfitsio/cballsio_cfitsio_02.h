@@ -762,28 +762,8 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         p = bodytabtmp+ipix;
         Update(p) = FALSE;
         pix2ang_ring(nside, ipix, &theta, &phi);
-        if (scanopt(cmd->options, "all")) {
-            iselect++;
-            spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
-            if (!scanopt(cmd->options, "kappa-constant"))
-                Kappa(p) = map[ipix];
-            else {
-                Kappa(p) = 2.0;
-                if (scanopt(cmd->options, "kappa-constant-one"))
-                    Kappa(p) = 1.0;
-            }
-            Type(p) = BODY;
-            Mass(p) = mass;
-            Weight(p) = weight;
-            Id(p) = p-bodytabtmp+iselect;
-            Update(p) = TRUE;
-            xmin = Pos(p)[0];
-            ymin = Pos(p)[1];
-            zmin = Pos(p)[2];
-            xmax = Pos(p)[0];
-            ymax = Pos(p)[1];
-            zmax = Pos(p)[2];
-        } else { // ! all
+        if (scanopt(cmd->options, "patch")) {
+            //B
             if (cmd->thetaL < theta && theta < cmd->thetaR) {
                 if (cmd->phiL < phi && phi < cmd->phiR) {
                     iselect++;
@@ -808,6 +788,30 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                     zmax = Pos(p)[2];
                 }
             }
+            //E
+        } else { // ! all
+            //B
+            iselect++;
+            spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
+            if (!scanopt(cmd->options, "kappa-constant"))
+                Kappa(p) = map[ipix];
+            else {
+                Kappa(p) = 2.0;
+                if (scanopt(cmd->options, "kappa-constant-one"))
+                    Kappa(p) = 1.0;
+            }
+            Type(p) = BODY;
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytabtmp+iselect;
+            Update(p) = TRUE;
+            xmin = Pos(p)[0];
+            ymin = Pos(p)[1];
+            zmin = Pos(p)[2];
+            xmax = Pos(p)[0];
+            ymax = Pos(p)[1];
+            zmax = Pos(p)[2];
+            //E
         } // ! all
     } // ! end loop ipix
 
@@ -819,7 +823,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
 
     bodyptr q;
-    if (!scanopt(cmd->options, "all"))
+    if (scanopt(cmd->options, "patch"))
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;

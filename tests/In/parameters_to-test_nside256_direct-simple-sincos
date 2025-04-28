@@ -1,0 +1,40 @@
+#
+# -------------------------
+# To test direct-simple searching method
+# -------------------------
+#
+# This search method does not run in parallel... 
+#	It has the purpose to illustrate the programming and use it as test method.
+#
+# Run in approximately 70:00 minutes 
+#
+# Run it as:
+# cd tests
+#
+# Version parameter file:
+# time ../cballs ./In/parameters_to-test_nside256_direct-simple-sincos
+#
+# command line version:
+# time ../cballs search=direct-simple-sincos in=./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 options=compute-HistN,and-CF,out-m-HistZeta stepState=50000 verb=2 verblog=2
+#
+# To plot Zeta matrix vs standard results:
+# python scripts/mZetaM_test_kkk_direct-simple-sincos.py
+#
+# -------------------------
+# -------------------------
+#
+searchMethod                       = direct-simple-sincos
+infile                             = ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
+infileformat                       = binary
+# This values are in such a way to have a search range of 8 arcmin to 200 arcmin:
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+mChebyshev                         = 7
+#
+options                             = compute-HistN,and-CF,out-m-HistZeta
+stepState=50000
+#
+verbose  =                          2
+verbose_log =                        2
+#

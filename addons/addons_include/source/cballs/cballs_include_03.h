@@ -37,6 +37,10 @@
 #include "cballs_print_direct_method.h"
 #endif
 
+#ifdef KDTREECUTEBOX
+#include "cballs_print_kdtree_cute_box.h"
+#endif
+
 /*
  #B Addendum of some not important
  ############################

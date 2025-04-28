@@ -1,0 +1,44 @@
+#
+# -------------------------
+# To test tree-omp-sincos searching method
+# -------------------------
+#
+#
+# cd tests/test_cute_box
+# time ../../cballs ./parameters_to-test_data_cola_064.txt
+# 
+# command line version:
+# time ../../cballs search=tree-omp-sincos in=./data.txt infmt=multi-columns-ascii options=compute-HistN,and-CF,post-processing,only-pos script="python plotCF.py" rangeN=100 rminHist=0.1 sizeHistN=60 nthreads=16 computeTPCF=false useLogHist=false usePeriodic=true
+#
+# -------------------------
+# -------------------------
+#
+searchMethod                       = tree-omp-sincos
+#
+options =                            compute-HistN,and-CF,post-processing
+#
+infile =                             ./example_cola/files_out_064/example_filename_z0p000
+infileformat =                      gadget
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+rangeN =                             100
+# rminHist > 0 when LOGHISTON is set to 1
+rminHist =                          0.1
+sizeHistN =                         60
+#
+stepState =                          1000
+#
+verbose =                           2
+verbose_log =                       2
+numberThreads =                      16
+#
+computeTPCF = false
+useLogHist = false
+usePeriodic = true
+#
+script = "python plotCF_cola_064.py"
+#
+
+

@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+#CBALLS=$HOME/Research/Codigos/NagBody_pkg/NagBody_sources/perturbations/cTreeBalls/git_cosmoinin/test/cTreeBalls/cballs
+CBALLS=cballs
+PYTHON='python'
+InDir='./In'
+scriptsDir='./scripts'
+
+#
+# All tests use 16 threads (OpenMP)
+#   CPU times are for MacBook Pro 16", apple M3 Max, 128 Gb, macOS 15.1.1
+#       gcc 12.4.0, python 3.7.12
+#
+# Plots are relative difference of the test results vs a reference results
+#
+
+# Test 01 :: (CPU real 0m6.021s)
+echo ""
+echo "===================="
+echo "Test 01 :: balls-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_balls-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_balls-omp.py || exit
+
+# Test 02 :: (CPU real 0m6.268s)
+echo ""
+echo "===================="
+echo "Test 02 :: tree-omp-sincos"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_tree-omp-sincos || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_tree-omp-sincos.py || exit
+
+# Test 03 :: (CPU real 0m5.850s)
+echo ""
+echo "===================="
+echo "Test 03 :: tree-omp-sincos_no-one-ball"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_tree-omp-sincos_no-one-ball || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_tree-omp-sincos_no-one-ball.py || exit
+
+# Test 04 :: (CPU real 0m5.119s)
+echo ""
+echo "===================="
+echo "Test 04 :: kdtree-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_kdtree-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_kdtree-omp.py || exit
+
+# Test 05 :: (CPU real 0m6.486s)
+echo ""
+echo "===================="
+echo "Test 05 :: octree-kkk-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_octree-kkk-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_octree-kkk-omp.py || exit
+
+#
+# Tests 06 and 07 are incompatibles in the default settings
+#   Unselect CFITSIO addon in Makefile_addons_settings to test cython
+#   But can be made comptibles using internal GSL and CFITSIOLIB addons
+
+# Test 06 :: (CPU real 0m6.611s)
+echo ""
+echo "===================="
+echo "Test 06 :: cython_test"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $PYTHON $InDir/test_cython_balls.py || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_cython_test.py || exit
+
+# Test 07 :: (CPU real 0m55.585s)
+# First check fits file header info:
+# cballs in=./catalogs/Takahasi/allskymap_nres08r081_zs9_mag.fits infmt=fits-healpix options=header-info,stop
+echo ""
+echo "===================="
+echo "Test 07 :: fits_balls-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_fits_balls-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_fits_balls-omp.py || exit
+
+# Test 08 :: (CPU real 25m19.591s)
+echo ""
+echo "===================="
+echo "Test 08 :: direct-simple-sincos"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_direct-simple-sincos || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_direct-simple-sincos.py || exit
+

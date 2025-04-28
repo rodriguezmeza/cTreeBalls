@@ -1,0 +1,36 @@
+#
+# -------------------------
+# To test octree-kkk-omp searching method
+# -------------------------
+#
+# Run it as:
+# cd tests
+#
+# Version parameter file:
+# time ../cballs ./In/parameters_to-test_nside256_octree-kkk-omp
+#
+# command line version:
+# time cballs search=octree-kkk-omp in=./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 options=compute-HistN,and-CF,out-m-HistZeta stepState=50000 statefile=state
+#
+# -------------------------
+# -------------------------
+#
+# If NONORMHISTON = 0 in addons/Makefile_addons_settings
+#	then compare output versus balls-omp standard
+# -------------------------
+#
+#
+searchMethod                       = octree-kkk-omp
+infile                             = ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
+infileformat                       = binary
+# This values are in such a way to have a search range of 8 arcmin to 200 arcmin:
+rangeN                             = 0.0633205
+rminHist                           = 0.00213811
+sizeHistN                          = 20
+mChebyshev                         = 7
+#
+options                             = out-m-HistZeta,KKKCorrelation
+stepState=50000
+verbose = 2
+verbose_log = 2
+

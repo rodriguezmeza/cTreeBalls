@@ -21,7 +21,8 @@ plt.style.use('bmh')
 #xyz = np.loadtxt(f"./scripts/Abraham/50patches_zs9_r43/Taka_nres12r043.zs9_region_49of50.txt")
 #
 # Catalog from cute_box:
-xyz = np.loadtxt(f"./test_cute_box/data.txt")
+#xyz = np.loadtxt(f"./test_cute_box/data.txt")
+xyz = np.loadtxt(f"./data.txt")
 #xyz = np.loadtxt(f"./test_cute_box/data_format_cballs.txt")
 
 #print(xyz.shape)

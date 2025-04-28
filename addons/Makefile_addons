@@ -215,5 +215,12 @@ include $(MACHINES_DIR)/addons/direct_method_simple/Makefile_direct_method_simpl
 endif
 #
 
+# KDTREECUTEBOX
+# For computing 2pcf using cute_box methods
+ifeq ($(KDTREECUTEBOXON),1)
+include $(MACHINES_DIR)/addons/kdtree_cute_box/Makefile_kdtree_cute_box
+endif
+#
+
 #E
 ############################

@@ -612,6 +612,8 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 
 
 //B cTreeBalls default values
+#ifndef CMDLINE_DEFS_UNITSPHERE
+
 int input_default_params(struct cmdline_data *cmd)
 {
 // Every item in cmdline_defs.h must have an item here::
@@ -688,6 +690,11 @@ int input_default_params(struct cmdline_data *cmd)
 
   return SUCCESS;
 }
+
+#else
+#include "input_default_params.h"
+#endif
+
 //E
 
 

@@ -227,7 +227,7 @@ int input_find_file(struct  cmdline_data* cmd, char *fname,
   int input_read_parameters_general(struct cmdline_data *cmd, struct file_content * pfc,
                                     ErrorMsg errmsg);
 
-  int input_default_params(struct cmdline_data *cmd);
+  int input_default_params(struct cmdline_data *);
 
   int tpcf_version( char * version);
 
