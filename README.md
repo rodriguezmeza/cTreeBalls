@@ -144,7 +144,7 @@ cBalls use/is based on the following codes or projects:
 -   [CFITSIO](https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html)
 -   [HEALPix](https://healpix.sourceforge.io/)
 
-Also author acknowledgments for helpful discussion and testing to the following people:
+Also author acknowledges for helpful discussion and testing to the following people:
 
 - Abraham Arvizu
 - Alejandro Aviles
