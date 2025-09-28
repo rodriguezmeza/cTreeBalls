@@ -1,0 +1,22 @@
+# ----- MAKE FILE module definitions (octree_ggg_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# OCTREEGGGOMP
+ifeq ($(OCTREEGGGOMPON),1)
+OPT2 += -DOCTREEGGGOMP
+# add two control flags for computing 2,3-point correlations functions
+#OPT2 += -DTWOPCF
+#OPT2 += -DTHREEPCFCONVERGENCE
+#OPT2 += -DTHREEPCFSHEAR
+OCTREEGGGOMP = ../addons/octree_ggg_omp/
+vpath %.c ./addons/octree_ggg_omp/
+INCLUDES += -I$(OCTREEGGGOMP)
+HEADERFILES += $(wildcard $(OCTREEGGGOMP)/*.h)
+EXTERNAL += search_octree_ggg_omp.o
+endif
+
+#E

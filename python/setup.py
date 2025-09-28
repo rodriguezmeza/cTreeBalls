@@ -70,6 +70,7 @@ cballys_ext = Extension("cballys", [os.path.join(cballys_folder, "cballys.pyx")]
 #                            '/Users/mar/NagBody_pkg/local/cfitsio/lib/'
                            ],
                            extra_link_args=['-lgomp']
+#                           extra_link_args=['-lgomp', '-Wl,-rpath,/usr/local/Cellar/gcc@12/12.4.0/lib/gcc/12/']
 #                           extra_link_args=['-lgomp', '-lcfitsio']
 #                           extra_link_args=['-lgomp -lgsl -lgslcblas']
                        )

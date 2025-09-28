@@ -214,7 +214,10 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 //B kappa Avg Rmin
                 gd->histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
 //E
+                //B Check this line and the histogram array histXi2pcfthread
+                //  and correct if necessary
                 gd->histXi2pcf[n] += hist.histXi2pcfthread[n];
+                //E
             }
             if (cmd->computeTPCF) {
                 int m;
@@ -341,7 +344,10 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 //B kappa Avg Rmin
         gd->histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
 //E
+        //B Check this line and the histogram array histXi2pcfthread
+        //  and correct if necessary
         gd->histXi2pcf[n] += hist.histXi2pcfthread[n];
+        //E
     }
     if (cmd->computeTPCF) {
         int m;

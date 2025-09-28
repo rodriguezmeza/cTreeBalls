@@ -99,6 +99,9 @@ int parser_read_line(char * line,
   phash=strchr(line,'#');
   if ((phash != NULL) && (phash-pequal<2)) {*is_data = FALSE; return SUCCESS;}
 
+  phash=strchr(line,'%');
+  if ((phash != NULL) && (phash-pequal<2)) {*is_data = FALSE; return SUCCESS;}
+
   /* get the name, i.e. the block before the '=' */
 
   left=line;

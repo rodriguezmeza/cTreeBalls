@@ -120,6 +120,10 @@ global nodeptr *nodetablescanlev[MAXITEMS];
 global nodeptr *nodetablescanlev_root[MAXITEMS];
 global cellptr roottable[MAXITEMS];
 
+#ifdef BALLS4SCANLEV
+global nodeptr *nodetablescanlevB4[MAXITEMS];
+#endif
+
 //global bodyptr bodytab;
 global bodyptr bodytabbf;
 global bodyptr bodytabsm;

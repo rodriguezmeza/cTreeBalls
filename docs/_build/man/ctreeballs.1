@@ -1,0 +1,453 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "CTREEBALLS" "1" "May 27, 2025" "" "cTreeBalls"
+.SH NAME
+ctreeballs \- cTreeBalls 1.0.0
+.SH OVERVIEW
+.sp
+cTreeBalls: Correlation functions computation with Tree/Balls methods
+.sp
+Author: Mario A. Rodriguez\-Meza
+.sp
+For download and information, see \X'tty: link https://github.com/rodriguezmeza/cTreeBalls'\fI\%https://github.com/rodriguezmeza/cTreeBalls\fP\X'tty: link'
+.SS Introduction
+.sp
+Correlation function computation with Tree/Balls methods (short\-name cBalls) is a C code for computing correlation functions using tree and balls methods. So far can compute 2 points correlation function (2pcf) and 3 points correlation function for scalar fields like weak lensing convergence.
+.SS Compiling and getting started
+.sp
+Download the code by cloning it from \X'tty: link https://github.com/rodriguezmeza/cTreeBalls'\fI\%https://github.com/rodriguezmeza/cTreeBalls\fP\X'tty: link'
+.sp
+Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Go to its web page \X'tty: link https://www.gnu.org/software/gsl/'\fI\%GSL\fP\X'tty: link' for details or ask to your system administrator. Make necessary changes in \fBMakefile_machine\fP file and look up for \fBGSL\fP\&. Can be switched off: USEGSL = 0 in \fBMakefile_settings\fP\&. I/O cfitsio library is set it OFF. Can be set it ON in \fBaddons/Makefile_settings\fP\&.
+.sp
+Go to the \fBcTreeBalls\fP directory (\fBcd cTreeBalls\fP) and compile (\fBmake clean; make\fP). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: \fB\-O4 \-ffast\-math\fP) and of the OpenMP flag (default: \-fopenmp; this flag is facultative, you are free to compile without OpenMP if you don\(aqt want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with \fB\-fopenmp\fP). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
+.sp
+To check that the code runs, type:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+cd tests
+\&../cballs parameters_explained
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+The parameters_explained file is a reference input file, containing and explaining the use of all possible input parameters.
+.sp
+By default \fBcBalls\fP reads/writes catalog of points to analyzed files in 4\-column format with x, y, z columns first and then value of the convergence field. It has a two line header:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+# nbody NDIM Lx Ly Lz
+# nbody\-value NDIM\-value Lx Ly Lz \- values
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Try running:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&../cballs nbody=6480 o=points_on_sphere testmodel=unit\-sphere\-random options=stop
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+In the \fBOutput\fP directory you will have a file: \fBpoints_on_sphere.txt\fP\&. View its contents to see the two lines header and the 4 columns structure of data.
+.sp
+Note: in the above example \fBpoints_on_sphere\fP was not given an extension. By default cBalls gives to the output files the extension \fB\&.txt\fP\&.
+.sp
+On top of that, if you wish to modify the code, you will find comments directly in the files in the folder \fBaddons\fP, and the modules you may add must go in this folder. See one of the most simple in \fBaddons/direct_method\fP\&.
+.sp
+For the moment you may consult man page:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+man ../docs/cballs.m
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+or open with a browser the html file: docs/man/cballs.html
+.sp
+See more details about parameters needed by cBalls below (\fI\%Parameters\fP).
+.SS Configuration
+.sp
+cBalls can be configured by switching on/off several options. Configuration file is \fBMakefile_setting\fP\&. Search method \fBballs\-omp\fP in folder addons/balls_omp: \fBMakefile_settings_balls_omp\fP has other options that can be switched on/off.
+.SS Parameters
+.sp
+The list of available command line parameters can be consulted using the \fB\-\-help\fP flag:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&../cballs \-\-help
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+or its short version:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&../cballs \-h
+.EE
+.UNINDENT
+.UNINDENT
+.SS Python
+.sp
+To install cBalls python module (cballys) go to directory \(aqpython\(aq and execute:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+python setup.py build
+python setup.py install \-\-user
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Note: make sure you create cBalls library: in directory cTreeBalls execute:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+make clean; make all
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+To test it go to directory tests and \(aqrun\(aq:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+python test_cython_balls.py
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Note: this interface in Cython was tested in a python environment with \fBpython3.7\fP\&.
+.SS Plotting utilities
+.sp
+Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are available to process cBalls results. They are in the github repository:
+.sp
+\X'tty: link https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks'\fI\%https://github.com/joar\-cafe/CBalls_plots/tree/main/benchmarks\fP\X'tty: link'
+.sp
+or you can find more scripts in \fBtests\fP folder.
+.SS License
+.sp
+cBalls is written by Mario A. Rodriguez\-Meza, and is distributed under the \X'tty: link https://github.com/rodriguezmeza/cTreeBalls/blob/main/LICENSE'\fI\%MIT license\fP\X'tty: link'\&. If you use this program in research work that results in publications, please cite the following paper:
+.sp
+\X'tty: link https://arxiv.org/abs/2408.16847'\fI\%Abraham Arvizu et al., arXiv:2048.16847\fP\X'tty: link'
+.SS Acknowledgements
+.sp
+cBalls use/is based on the following codes or projects:
+.INDENT 0.0
+.IP \(bu 2
+\X'tty: link https://home.ifa.hawaii.edu/users/barnes/zeno/index.html'\fI\%Zeno\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://wwwmpa.mpa-garching.mpg.de/gadget/'\fI\%Gadget\-2\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://github.com/damonge/CUTE'\fI\%CUTE\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://numerical.recipes/'\fI\%Numerical recipies\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://www.gnu.org/software/gsl/'\fI\%GSL\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://github.com/lesgourg/class_public'\fI\%CLASS\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html'\fI\%CFITSIO\fP\X'tty: link'
+.UNINDENT
+.SH INSTALLATION
+.sp
+This section describes the installation settings of cBalls:
+.SS Makefile
+.SS Makefile settings
+.SS Makefile plataform machine
+.SH PARAMETERS
+.sp
+This section describes the various parameters cBalls needs for controlling
+what the searching process do:
+.SS Parameters related to the searching method
+.INDENT 0.0
+.TP
+.B searchMethod
+(str or list) [alias: search]
+The searching method to use. Default is \fBtree\-omp\-sincos\fP\&. Fastest method so far is \fBballs\-omp\fP\&.
+.sp
+Use it as:
+.INDENT 7.0
+.INDENT 3.5
+.sp
+.EX
+searchMethod = balls\-omp
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+In command line version do not use spaces before and after \fB=\fP or it won\(aqt be parsed correctly. In a parameter file you have more liberty.
+.TP
+.B mChebyshev
+(positive int) [alias: mcheb]
+The number of multipoles to compute for a 3pcf computation. Number of them are: \fBmChebyshev + 1\fP, because it includes the monopole.
+.sp
+Use it as:
+.INDENT 7.0
+.INDENT 3.5
+.sp
+.EX
+mChebyshev = 7
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Default value is \fB7\fP\&. As multipoles comes from a harmonic expansion, we may be interested in computing the whole 3pcf. This process involves a FFT, therefore give \fBmChebyshev + 1\fP as a power of 2.
+.UNINDENT
+.SS Parameters to control the I/O file(s)
+.INDENT 0.0
+.TP
+.B infile
+(str, default=\(dq\(dq) [alias: in] File names with points to analyse.
+.TP
+.B infileformat
+(str, default=columns\-ascii) [alias: infmt] Data input files format (columns\-ascii, binary or takahasi)
+.sp
+The input columns for \fBcolumns\-ascii\fP format:
+.INDENT 7.0
+.IP \(bu 2
+\fBx\fP = x position of a point in the catalog.
+.IP \(bu 2
+\fBy\fP = y position of a point in the catalog.
+.IP \(bu 2
+\fBz\fP = z position of a point in the catalog.
+.IP \(bu 2
+\fBkappa\fP = The kappa value of the point.
+.UNINDENT
+.UNINDENT
+.SS Parameters to control histograms and their output files
+.INDENT 0.0
+.TP
+.B useLogHist
+(bool, default=true) Which type of binning should be used.
+.TP
+.B logHistBinsPD
+(float) The minimum separation to include in the histograms.
+.TP
+.B rangeN
+(float) The maximum separation to include in the histograms.
+.TP
+.B rminHist
+(float) The minimum separation to include in the histograms.
+.TP
+.B sizeHistN
+(int) The number of output bins to use.
+.UNINDENT
+.SS Set of parameters needed to construct a test model
+.INDENT 0.0
+.TP
+.B seed
+(int, default=123) Random number seed to test run or useful to change a random region in Takahasi simulations.
+.TP
+.B testmodel
+(str, default=simple\-cubic\-random) [alias: tstmodel] Test model name to analyse.
+.TP
+.B nbody
+(int, default=16348) Number of points to test.
+.TP
+.B lengthBox
+(float, default=10000) [alias: lbox] Length of the box to test.
+.UNINDENT
+.SS Miscellaneous parameters
+.INDENT 0.0
+.TP
+.B script
+(str, default=\(dq\(dq) Scripts in shell or python that can be run in pre\-processing or post\-processing.
+.TP
+.B stepState
+(int, default=10000) number of steps to save a state\-run info (pivot number completed in the log file).
+.TP
+.B verbose
+(int, default=1) [alias: verb] How verbose the code should be during processing.
+.INDENT 7.0
+.IP \(bu 2
+0 = no output unless there is an error
+.IP \(bu 2
+1 = output warnings
+.IP \(bu 2
+2 = output progress information
+.IP \(bu 2
+3 = output extra debugging lines
+.UNINDENT
+.TP
+.B verbose_log
+(int, default=1) [alias: verblog] To print messages to a log file \fBcballs.log\fP in directory \fBtmp\fP under output directory given by the parameter: 
+.nf
+\(ga\(ga
+.fi
+rootDir\(ga.
+.sp
+Amount of message information is controlled by the int given.
+.TP
+.B numberThreads
+(int, default=4) [alias: nthreads] How many OpenMP threads should be used.
+.sp
+It is needed to switch on OpenMP: \fBOPENMPMACHINE = 1\fP in \fBMakefile_settings\fP and recompile cBalls again.
+.TP
+.B options
+(str, default=\(dq\(dq) [alias: opt] You may give here various code behavior options.
+.sp
+Use it as:
+.INDENT 7.0
+.INDENT 3.5
+.sp
+.EX
+options = str1,str2,str3,...
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+where str# is one of the:
+.INDENT 7.0
+.IP \(bu 2
+stop = stop execution before searching process
+.IP \(bu 2
+compute\-HistN = compute NN encounters and save histogram in a file
+.IP \(bu 2
+and\-CF = if you use \fBcompute\-HistN\fP then you may compute and save the correlation funcion of NN encounters (the equivalent to the radial distribution function in liquids).
+.IP \(bu 2
+no\-one\-ball = during the searching process does not use balls criterion to speed up the code
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+.IP \(bu 2
+It is not necessary to specify all the parameters. You need to give only the ones apropriate to the run. The rest of parameters will use their default values if they are OK with you.
+.IP \(bu 2
+When you specify the root output directory using: \fBrootDir\fP, and this is a single directory that will be located in the pwd dir, then do not use \fB\&./\fP at the begining of the name or \fB/\fP at its end.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SH CATALOG FILES
+.sp
+This section describes the various formats of catalog points you need to compute correlation functions on them.
+.sp
+They are given with the option: \fBinfileformat\fP\&.
+.SS Standard formats
+.INDENT 0.0
+.TP
+.B columns\-ascii
+The file(s) with the data to be correlated.
+.TP
+.B binary
+The file with data to be correlated in binary format.
+.TP
+.B takahasi
+The file with data to be correlated using Takahasi simulations format (Healpix).
+.UNINDENT
+.SS Miscellaneous formats
+.INDENT 0.0
+.TP
+.B gadget
+Gadget files can be read using this format. Catalog can be only one file or composed of several files.
+.TP
+.B multi\-columns\-ascii
+This format is to be able to read any ascci file with values arrage in columns. Positions can be in any order and with/without header. For example, files with halo catalogs from Rockstar can be read.
+.UNINDENT
+.SH PRE/POST PROCESSING
+.sp
+This section describes the various pre/pos processing for controlling
+what the \fIcballs\fP before/after main processing:
+.SS Pre\-processing
+.SS Post\-processing
+.SH ADDON'S
+.sp
+This section describes the mechanism to add more functionally to cBalls:
+.SS Include files
+.SS Source files
+.SH PYTHON INTERFACE
+.sp
+This section describes the mechanism to add more functionally to cBalls:
+.SS Using command line interface
+.SS Cython interface
+.SH HANDS ON
+.sp
+This section describes a practical guide to use \fBcBalls\fP:
+.sp
+Let us test one of the \X'tty: link https://arxiv.org/pdf/1706.01472'\fI\%Takahasi\fP\X'tty: link' realizations. We download the realization using unix \fBwget\fP command in the terminal:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+wget http://cosmo.phys.hirosaki\-u.ac.jp/takahasi/allsky_raytracing/sub1/nres12/allskymap_nres12r000.zs9.mag.dat
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Then we will have in our working directory the file \fBallskymap_nres12r000.zs9.mag.dat\fP, 3 Gb in size with ~200 million points distributed on the surface of a unit sphere.
+.SH 2-POINT CORRELATION FUNCTIONS
+.sp
+\fBcBalls\fP can compute 2\-point correlations (2pcf) when counts (N) or a scalar field are involved (like convergence K):
+.INDENT 0.0
+.TP
+.B NN
+It is the normal 2\-point correlation function of number counts (typically
+galaxy counts).
+.TP
+.B KK
+So far we have consider that the scalar field is the convergence in weak lensing \ekappa\&. Then this gives the 2\-point kappa\-kappa correlation function.
+.UNINDENT
+.sp
+N represent simple counting and K represent a real scalar field, like convergence in weak lensing.
+.SH 3-POINT CORRELATION FUNCTIONS
+.sp
+\fBcBalls\fP can also compute 3\-point correlations (3pcf) when counts (N) or a scalar field are involved (like convergence \ekappa). In particular to compute the correlation KKK the numerical code use the harmonic base.
+.SS Harmonic base
+.INDENT 0.0
+.IP \(bu 2
+\fI\%Index\fP
+.IP \(bu 2
+\fI\%Module Index\fP
+.IP \(bu 2
+\fI\%Search Page\fP
+.UNINDENT
+.SH AUTHOR
+Mario A. Rodriguez-Meza
+.SH COPYRIGHT
+2024, Mario A. Rodriguez-Meza
+.\" Generated by docutils manpage writer.
+.

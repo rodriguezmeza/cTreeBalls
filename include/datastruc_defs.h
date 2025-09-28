@@ -16,15 +16,38 @@
 #ifndef _data_struc_defs_h
 #define _data_struc_defs_h
 
+//B experimental, do not activate
+//      do the same in treeload.c
+#define PRUNNING
+#undef PRUNNING
+//E
+
 typedef struct _node {
     short type;
     bool update;
+    bool update2;
+//#ifdef MASKED
+//    bool mask;
+    short mask;                                     // 1: unmasked body
+                                                    // 0: masked body
+//#endif
+
+//B look for edge-effects
+#if defined(NMultipoles) && defined(NONORMHIST)
+    bool updatepivot;
+#endif
+//E
+
     REAL mass;                                      // to weight counts...
     REAL kappa;                                     // scalar field of interest
+
+#ifdef THREEPCFSHEAR
 //B shear
     REAL gamma1;
     REAL gamma2;
 //E
+#endif
+
     REAL weight;                                    // to weight fields...
     vector pos;
     struct _node *next;
@@ -80,12 +103,27 @@ typedef struct _node {
 
 #define Type(x)   (((nodeptr) (x))->type)
 #define Update(x) (((nodeptr) (x))->update)
+#define Update2(x) (((nodeptr) (x))->update2)
+//#ifdef MASKED
+#define Mask(x) (((nodeptr) (x))->mask)
+//#endif
+
+//B correction 2025-05-03 :: look for edge-effects
+#if defined(NMultipoles) && defined(NONORMHIST)
+#define UpdatePivot(x) (((nodeptr) (x))->updatepivot)
+#endif
+//E
+
 #define Mass(x)   (((nodeptr) (x))->mass)
 #define Kappa(x)    (((nodeptr) (x))->kappa)
+
+#ifdef THREEPCFSHEAR
 //B shear
 #define Gamma1(x)    (((nodeptr) (x))->gamma1)
 #define Gamma2(x)    (((nodeptr) (x))->gamma2)
 //E
+#endif
+
 #define Weight(x)   (((nodeptr) (x))->weight)
 
 #ifdef KappaAvgON
@@ -164,6 +202,9 @@ typedef struct {
     INTEGER Id;
 #endif
     bool inside;
+#ifdef PRUNNING
+    REAL rmax;
+#endif
 } cell, *cellptr;
  
 //B To debug cells:
@@ -175,6 +216,11 @@ typedef struct {
 #define IdCell(x)   (((cellptr) (x))->Id)
 #endif
 #define Inside(x)   (((cellptr) (x))->inside)
+
+#ifdef PRUNNING
+#define RMAX(x)    (((cellptr) (x))->rmax)
+#endif
+
 
 //B socket:
 #ifdef ADDONS
@@ -387,14 +433,18 @@ typedef struct {
 
 //B Input file formats:
 #define INCOLUMNS       0
+#define INCOLUMNSALL    10
 #define INCOLUMNSBIN    2
+#define INCOLUMNSBINALL 11
 #define INNULL          1
 #define INTAKAHASI      3                           // Takahasi
 //E
 
 //B Output file formats:
 #define OUTCOLUMNS       0
+#define OUTCOLUMNSALL    3
 #define OUTCOLUMNSBIN    2
+#define OUTCOLUMNSBINALL 4
 #define OUTNULL          1
 //E
 

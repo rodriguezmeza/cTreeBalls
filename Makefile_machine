@@ -114,6 +114,7 @@ endif
 ifeq ($(OPENMPMACHINE),1)
 OMPCODE = -DOPENMPCODE
 OPT2 += $(OMPCODE)
+MLIBS += -lgomp
 endif
 #
 
@@ -141,7 +142,7 @@ endif
 #
 
 #
-KAPPAAVGON = 1
+KAPPAAVGON = 0
 #
 ifeq ($(KAPPAAVGON),1)
 KappaAvgON = -DKappaAvgON
@@ -168,16 +169,25 @@ endif
 
 #B ADDONS
 #
+#B Do not use any of these flags.
+#   Are intended for developing and debuging purposes.
+#
 # To print some useful debuggin info set to 1. Else 0
 #   acts also as (thoroughly )DIAGNOSTICS flag...
 DEBUGON = 0
 DEBUGCOMPILINGON = 0
+DEBUGTREEON = 0
+#
+#E
 #
 ifeq ($(DEBUGCOMPILINGON),1)
 OPT2 += -Wall
 endif
 ifeq ($(DEBUGON),1)
 OPT2 += -DDEBUG
+endif
+ifeq ($(DEBUGTREEON),1)
+OPT2 += -DDEBUGTREE
 endif
 #
 ifeq ($(ADDONSON),1)
@@ -244,8 +254,8 @@ NAGBODYDIR = $(HOME)/NagBody_pkg/local
 #B GSL section
 ifeq ($(USEGSL),1)
 OPT2 += -DUSEGSL
-GSLON = 1
-ifeq ($(GSLON),1)
+#GSLON = 1
+#ifeq ($(GSLON),1)
 ifeq ($(GSLINTERNAL),0)
 # Change these lines to fit your GSL installation
     GSL_INCL =  -I$(NAGBODYDIR)/gsl/include
@@ -253,11 +263,12 @@ ifeq ($(GSLINTERNAL),0)
     CCFLAG += $(GSL_INCL)
     LDFLAG += $(GSL_LIBS)
     CCFLAG += -DNOINTERNALGSL
+#    OPT2 += -DNOINTERNALGSL
 endif
 ifeq ($(GSLINTERNAL),1)
 include $(MACHINES_DIR)/addons/Makefile_gsl
 endif
-endif # ! GSLON
+#endif # ! GSLON
 endif # ! USEGSL
 #E
 # -------------------
@@ -265,6 +276,10 @@ endif # ! USEGSL
 # -------------------
 #B CFITSIO section
 ifeq ($(CFITSIOON),1)
+# set to empty string:
+    CFITSIO_INCL =
+    CFITSIO_LIBS =
+ifeq ($(CFITSIOLIBON),0)
 # Change these two lines to fit your CFITSIO installation
     CFITSIO_INCL =  -I$(NAGBODYDIR)/cfitsio/include
     CFITSIO_LIBS =  -L$(NAGBODYDIR)/cfitsio/lib -lcfitsio
@@ -274,7 +289,10 @@ ifeq ($(CFITSIOON),1)
 # To be able to use CFITSIO with multi-threaded parallel programs
 #   it is needed to ./configure --enable-reentrant
 #
-ifeq ($(CFITSIOLIBON),0)
+#ifeq ($(CFITSIOLIBON),0)
+    CCFLAG += $(CFITSIO_INCL)
+    LDFLAG += $(CFITSIO_LIBS)
+else
     CCFLAG += $(CFITSIO_INCL)
     LDFLAG += $(CFITSIO_LIBS)
 endif

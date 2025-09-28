@@ -32,13 +32,38 @@ void in_int_long(stream str, INTEGER *iptr)
 
 void in_short(stream str, short *iptr)
 {
-	int tmp;
+    int tmp;
 
     if (fscanf(str, "%d", &tmp) != 1) {
-        error("in_int_short: input conversion error\n");
+        error("in_short: input conversion error\n");
     }
-	*iptr = tmp;
+    *iptr = tmp;
 }
+
+//B not finished yet...
+void in_bool(stream str, bool *iptr)
+{
+    char tmp[10];
+
+    if (fscanf(str, "%s", &tmp) != 1) {
+        error("in_bool: input conversion error\n");
+    }
+//    *iptr = tmp;
+    if (strchr("tTyY1", *tmp) != NULL) {
+//        *iptr=TRUE;
+        *iptr=1;
+//        printf("\tin_bool: found: %d", *iptr);
+    } else
+        if (strchr("fFnN0", *tmp) != NULL)  {
+//            *iptr=FALSE;
+            *iptr=0;
+//            printf("\tin_bool: found: %d", *iptr);
+        } else {
+            error("in_bool: %s not bool\n",*tmp);
+        }
+
+}
+//E
 
 #ifdef SINGLEP
 void in_real(stream str, float *rptr)
@@ -276,6 +301,12 @@ void out_bool_mar_bin(stream str, bool bval)
 {
     if (fwrite((void *) &bval, sizeof(bool), 1, str) != 1)
         error("out_bool_mar_bin: fwrite failed\n");
+}
+
+void out_short_mar_bin(stream str, short bval)
+{
+    if (fwrite((void *) &bval, sizeof(short), 1, str) != 1)
+        error("out_short_mar_bin: fwrite failed\n");
 }
 
 
@@ -1021,12 +1052,439 @@ void InputData_5c(string filename, int col1, int col2, int col3,
     fprintf(stdout,"\n... done.\n");
 }
 
+
+//B additions
+
+// Column vector input
+//  offset as NR
+//local int inout_InputDataVector(struct cmdline_data*, struct  global_data*,
+//                                string, real *, int *);
+
+// Column vector input
+//  offset as NR
+int inout_InputDataVector(
+                          string filename, real *vec, int *npts,
+                          short verbose, short verbose_log, FILE *outlog
+                          )
+{
+    stream instr;
+    int ncol, nrow;
+    real *row;
+    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
+    short int *lineQ;
+    int col1=1;
+    
+    instr = stropen(filename, "r");
+
+    if (verbose_log>=3)
+        verb_log_print(verbose_log, outlog,
+               "\nReading matrix elements from file %s... ",filename);
+
+    state = OUT;
+    nl = nw = nc = 0;
+    while ((c = getc(instr)) != EOF) {
+        ++nc;
+        if (c=='\n')
+            ++nl;
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else if (state == OUT) {
+            state = IN;
+            ++nw;
+        }
+    }
+    if (verbose_log>=3) {
+        verb_log_print(verbose_log, outlog,
+                   "\n\tGeneral statistics : ");
+        verb_log_print(verbose_log, outlog,
+                   "number of lines, words, and characters : %d %d %d", nl, nw, nc);
+    }
+
+    rewind(instr);
+    
+    lineQ = (short int *) allocate(nl * sizeof(short int));
+    for (i=0; i<nl; i++) lineQ[i]=FALSE;
+    
+    nw = nrow = ncol = nwxc = 0;
+    state = OUT;
+    salto = NO;
+    
+    i=0;
+    
+    while ((c = getc(instr)) != EOF) {
+        
+        if(c=='%' || c=='#') {
+            while ((c = getc(instr)) != EOF)
+                if (c=='\n') break;
+            ++i;
+            continue;
+        }
+        
+        if (c=='\n' && nw > 0) {
+            if (salto==NO) {
+                ++nrow;
+                salto=SI;
+                if (ncol != nwxc && nrow>1) {
+                    printf("\nvalores diferentes : ");
+                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                          nrow, ncol, nwxc);
+                }
+                ncol = nwxc;
+                lineQ[i]=TRUE;
+                ++i;
+                nwxc=0;
+            } else {
+                ++i;
+            }
+        }
+        
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else
+            if (state == OUT) {
+                state = IN;
+                ++nw; ++nwxc;
+                salto=NO;
+            }
+    }
+    if (verbose_log>=3) {
+        verb_log_print(verbose_log, outlog,"\n\tValid numbers statistics : ");
+        verb_log_print(verbose_log, outlog,
+                       "nrow, ncol, nvalues : %d %d %d", nrow, ncol, nw);
+    }
+
+    rewind(instr);
+    
+    npoint=nrow;
+    row = (realptr) allocate(ncol*sizeof(real));
+
+    *npts = npoint;
+    
+    ip = 1;
+    for (i=0; i<nl; i++) {
+        if (lineQ[i]) {
+            in_vector_ndim(instr, row, ncol);
+            vec[ip] = row[col1-1];
+            ++ip;
+        } else {
+            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
+                if (c=='\n') break;
+        }
+    }
+    fclose(instr);
+
+    if (verbose_log>=3)
+        verb_log_print(verbose_log, outlog,"\n\t... done.\n");
+
+    return SUCCESS;
+}
+
+
+int inout_InputDataMatrix_info(
+                               string filename, int *nrow_out, int *ncol_out,
+                               short verbose, short verbose_log, FILE *outlog
+                               )
+{
+    stream instr;
+    int ncol, nrow;
+    real *row;
+    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
+    short int *lineQ;
+    int col1=1;
+    int col2=2;
+    
+    instr = stropen(filename, "r");
+
+    if (verbose_log>=3)
+        verb_log_print(verbose_log, outlog,
+               "\nReading matrix elements from file %s... ",filename);
+
+    state = OUT;
+    nl = nw = nc = 0;
+    while ((c = getc(instr)) != EOF) {
+        ++nc;
+        if (c=='\n')
+            ++nl;
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else if (state == OUT) {
+            state = IN;
+            ++nw;
+        }
+    }
+    if (verbose_log>=3) {
+        verb_log_print(verbose_log, outlog,
+                   "\n\tGeneral statistics : ");
+        verb_log_print(verbose_log, outlog,
+                   "number of lines, words, and characters : %d %d %d", nl, nw, nc);
+    }
+
+    rewind(instr);
+    
+    lineQ = (short int *) allocate(nl * sizeof(short int));
+    for (i=0; i<nl; i++) lineQ[i]=FALSE;
+    
+    nw = nrow = ncol = nwxc = 0;
+    state = OUT;
+    salto = NO;
+    
+    i=0;
+    
+    while ((c = getc(instr)) != EOF) {
+        
+        if(c=='%' || c=='#') {
+            while ((c = getc(instr)) != EOF)
+                if (c=='\n') break;
+            ++i;
+            continue;
+        }
+        
+        if (c=='\n' && nw > 0) {
+            if (salto==NO) {
+                ++nrow;
+                salto=SI;
+                if (ncol != nwxc && nrow>1) {
+                    printf("\nvalores diferentes : ");
+                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                          nrow, ncol, nwxc);
+                }
+                ncol = nwxc;
+                lineQ[i]=TRUE;
+                ++i;
+                nwxc=0;
+            } else {
+                ++i;
+            }
+        }
+        
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else
+            if (state == OUT) {
+                state = IN;
+                ++nw; ++nwxc;
+                salto=NO;
+            }
+    }
+    if (verbose_log>=3) {
+        verb_log_print(verbose_log, outlog,"\n\tValid numbers statistics : ");
+        verb_log_print(verbose_log, outlog,
+                       "nrow, ncol, nvalues : %d %d %d", nrow, ncol, nw);
+    }
+
+    rewind(instr);
+
+    if (nrow != ncol) {
+        verb_print(verbose_log,
+                   "\ninout_InputDataMatrix: warning!!! in input file: %s %d %d",
+                   "nrow and ncol are different:", nrow, ncol);
+    }
+
+    *nrow_out = nrow;
+    *ncol_out = ncol;
+
+    fclose(instr);
+
+    if (verbose_log>=3)
+        verb_log_print(verbose_log, outlog,"\n\t... done.\n");
+
+    return SUCCESS;
+}
+
+int inout_InputDataMatrix(
+                          string filename, real **mat, int *npts,
+                          short verbose, short verbose_log, FILE *outlog
+                          )
+{
+    stream instr;
+    int ncol, nrow;
+    real *row;
+    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
+    short int *lineQ;
+    int col1=1;
+    int col2=2;
+    
+    instr = stropen(filename, "r");
+
+    if (verbose_log>=3)
+        verb_log_print(verbose_log, outlog,
+               "\nReading matrix elements from file %s... ",filename);
+
+    state = OUT;
+    nl = nw = nc = 0;
+    while ((c = getc(instr)) != EOF) {
+        ++nc;
+        if (c=='\n')
+            ++nl;
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else if (state == OUT) {
+            state = IN;
+            ++nw;
+        }
+    }
+    if (verbose_log>=3) {
+        verb_log_print(verbose_log, outlog,
+                   "\n\tGeneral statistics : ");
+        verb_log_print(verbose_log, outlog,
+                   "number of lines, words, and characters : %d %d %d", nl, nw, nc);
+    }
+
+    rewind(instr);
+    
+    lineQ = (short int *) allocate(nl * sizeof(short int));
+    for (i=0; i<nl; i++) lineQ[i]=FALSE;
+    
+    nw = nrow = ncol = nwxc = 0;
+    state = OUT;
+    salto = NO;
+    
+    i=0;
+    
+    while ((c = getc(instr)) != EOF) {
+        
+        if(c=='%' || c=='#') {
+            while ((c = getc(instr)) != EOF)
+                if (c=='\n') break;
+            ++i;
+            continue;
+        }
+        
+        if (c=='\n' && nw > 0) {
+            if (salto==NO) {
+                ++nrow;
+                salto=SI;
+                if (ncol != nwxc && nrow>1) {
+                    printf("\nvalores diferentes : ");
+                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                          nrow, ncol, nwxc);
+                }
+                ncol = nwxc;
+                lineQ[i]=TRUE;
+                ++i;
+                nwxc=0;
+            } else {
+                ++i;
+            }
+        }
+        
+        if (c==' ' || c=='\n' || c=='\t')
+            state = OUT;
+        else
+            if (state == OUT) {
+                state = IN;
+                ++nw; ++nwxc;
+                salto=NO;
+            }
+    }
+    if (verbose_log>=3) {
+        verb_log_print(verbose_log, outlog,"\n\tValid numbers statistics : ");
+        verb_log_print(verbose_log, outlog,
+                       "nrow, ncol, nvalues : %d %d %d", nrow, ncol, nw);
+    }
+
+    rewind(instr);
+
+    if (nrow != ncol) {
+        error("\ninout_InputDataMatrix: in input file: %s %d %d",
+              "nrow and ncol are different:", nrow, ncol);
+    }
+
+    npoint=nrow;
+    row = (realptr) allocate(ncol*sizeof(real));
+
+    *npts = npoint;
+    
+    ip = 1;
+    for (i=0; i<nl; i++) {
+        if (lineQ[i]) {
+            in_vector_ndim(instr, row, ncol);
+            for (int j=0; j<ncol; j++) {
+                mat[ip][j+1] = row[j];
+            }
+            ++ip;
+        } else {
+            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
+                if (c=='\n') break;
+        }
+    }
+    fclose(instr);
+
+    if (verbose_log>=3)
+        verb_log_print(verbose_log, outlog,"\n\t... done.\n");
+
+    return SUCCESS;
+}
+
+//E additions
+
+
 #undef IN
 #undef OUT
 #undef SI
 #undef NO
 
 //E PARA IMPLEMENTAR LECTURA GENERAL DE ARCHIVOS DE DATOS CON FORMATO DE COLUMNAS
+
+// Extract input rootDirPath and preFileName
+int extractInputRootDir(char *infilenames,
+                        char *rootDirPath, char *preFileName, int ifile,
+                        short verbose, short verbose_log, FILE *outlog
+                        )
+{
+char bufsystem[200];
+char *rootDirPath_tmp;
+char *preFileName_tmp;
+int ndefault = 0;
+int *ipos;
+char *dp1, *dp2;
+int lenDir = strlen(infilenames);
+int i;
+
+int nslashs = MAXNSLASHS;
+ipos = (int*) malloc((nslashs)*sizeof(int));
+
+for (i=0; i< lenDir; i++) {
+    if(infilenames[i] == '/') {
+        ipos[ndefault] = i+1;
+        ndefault++;
+    }
+}
+if (ndefault>nslashs)
+    error(
+    "extractInputRootDir: more '/' than %d in 'infilename=%s'. Use only %d or none\n",
+    nslashs, infilenames, nslashs);
+
+if (ndefault == 0) {
+    sprintf(rootDirPath_tmp,"./");
+} else {
+    for (i=0; i<ndefault; i++) {
+        dp1 = (char*) malloc((ipos[i]-1)*sizeof(char));
+        strncpy(dp1, infilenames, ipos[i]-1);
+        dp2 = (char*) malloc((lenDir-ipos[i])*sizeof(char));
+        strncpy(dp2, infilenames + ipos[i], lenDir-ipos[i]);
+        verb_print_q(2,verbose,
+                "extractInputRootDir: '/' counts %d pos %d and %s %s\n",
+                ndefault, ipos[i], dp1, dp2);
+        free(dp2);
+        free(dp1);
+    }
+    rootDirPath_tmp = (char*) malloc((ipos[i-1]-1)*sizeof(char));
+    strncpy(rootDirPath_tmp, infilenames, ipos[i-1]-1);
+    preFileName_tmp = (char*) malloc((ipos[i-1]-1)*sizeof(char));
+    strncpy(preFileName_tmp, infilenames + ipos[i-1], lenDir-ipos[i-1]);
+    verb_print_q(2,verbose, "extractInputRootDir: preFileName %s\n",
+                preFileName_tmp);
+}
+verb_print_q(2,verbose,
+            "extractInputRootDir: rootDirPath %s\n",
+            rootDirPath_tmp);
+
+    strcpy(rootDirPath, rootDirPath_tmp);
+    strcpy(preFileName, preFileName_tmp);
+
+return SUCCESS;
+}
 
 
 #ifdef ADDONS

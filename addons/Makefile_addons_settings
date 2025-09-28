@@ -21,25 +21,31 @@ GADGETIOON = 1
 # CLASSLIB
 # Several I/O routines from CLASS
 #   collision with GSL library. Set it off
-ifeq ($(USEGSL),0)
+#ifeq ($(USEGSL),0)
 CLASSLIBON = 1
-else
-$(info CLASSLIB collide with GSL library, needs USEGSL = 0, deactivating...)
-ifeq ($(GSLINTERNAL),0)
-CLASSLIBON = 0
-else
-$(info CLASSLIB does not collide with internal GSL library, activating...)
-CLASSLIBON = 1
-endif
-endif
+#else
+#$(info CLASSLIB collide with GSL library, needs USEGSL = 0, deactivating...)
+#$(info or compile with USEGSL = 1 and GSLINTERNAL = 1, deactivating...)
+#ifeq ($(GSLINTERNAL),0)
+# testing without GSLINTERNAL (=0), only USEGSL=1
+#CLASSLIBON = 0
+#CLASSLIBON = 1
+#else
+#$(info CLASSLIB does not collide with internal GSL library, activating...)
+#CLASSLIBON = 1
+#endif
+#endif
 
 # PXD
 # For cython interfacing...
 ifeq ($(CLASSLIBON),1)
-$(info Note: to use the Cython inferface (python cballys module), switch OFF USEGSL)
+#$(info Note: to use the Cython inferface (python cballys module), switch OFF USEGSL)
+#$(info Note: or switch ON USEGSL)
+#$(info Note:           and switch ON GSLINTERNAL)
 PXDON = 1
 else
-$(info Note: to use the Cython inferface (python cballys module), switch OFF USEGSL)
+#$(info Note: to use the Cython inferface (python cballys module), switch OFF USEGSL)
+#$(info or switch ON USEGSL and switch ON GSLINTERNAL)
 $(info To compile with PXD needs CLASSLIBON = 1, deactivating...)
 PXDON = 0
 endif
@@ -56,7 +62,7 @@ IOLIBON = 1
 #   or ask administrator to have it for you.
 #   If set to 1,
 #   no collision of CFITSIO addon with python interface
-CFITSIOLIBON = 0
+CFITSIOLIBON = 1
 
 # CFITSIO
 # To IO fits format
@@ -68,16 +74,18 @@ ifeq ($(IOLIBON),1)
 #   and then set it ON
 # there is collision with python interface, default is OFF,
 #   turn it ON if necessary
-ifeq ($(CFITSIOLIBON),0)
-ifeq ($(CLASSLIBON),0)
+#ifeq ($(CFITSIOLIBON),0)
+#ifeq ($(CLASSLIBON),0)
+#CFITSIOON = 1
+#else
+#$(info To compile with CFITSIO needs CLASSLIBON = 0, deactivating CFITSIO...)
+# testing without internal cfitsio lib...
+#CFITSIOON = 0
+#CFITSIOON = 1
+#endif
+#else
 CFITSIOON = 1
-else
-$(info To compile with CFITSIO needs CLASSLIBON = 0, deactivating CFITSIO...)
-CFITSIOON = 0
-endif
-else
-CFITSIOON = 1
-endif
+#endif
 else
 $(info To compile with CFITSIO needs IOLIBON = 1, deactivating...)
 CFITSIOON = 0
@@ -124,6 +132,7 @@ OVERCOUNTINGON = 0
 
 # SAVERESTORE
 # For save/restore options
+#   is in development phase. Do not use.
 SAVERESTOREON = 0
 
 # NOSTANDARNORMHISTON switch
@@ -136,6 +145,15 @@ NOSTANDARNORMHISTON = 0
 # set of useful default values for the unit sphere
 CMDLINE_DEFS_UNITSPHERE_ON = 1
 
+#B for some addons will be useful this switches
+OPT2 += -DTWOPCF
+OPT2 += -DTHREEPCFCONVERGENCE
+#OPT2 += -DTHREEPCFSHEAR
+#OPT2 += -DBALLS4SCANLEV
+# not used anymore
+#OPT2 += -DMASKED
+#
+#E
 
 #E
 ############################
@@ -156,6 +174,8 @@ DIRECTMETHODON = 0
 DIRECTMETHODSIMPLEON = 1
 
 # For complex math use only one: USEGSL or COMPLEXLIB
+#   COMPLEXLIB is in development phase.
+#   Not included. Do not use.
 # COMPLEXLIB
 # Library for complex computation
 ifeq ($(USEGSL),0)
@@ -168,20 +188,56 @@ endif
 
 # OCTREEGGGOMP
 # For computing 3pcf using octree-ggg-omp
+#   is in development phase. Do not use.
 ifeq ($(USEGSL),1)
-OCTREEGGGOMPON = 0
+OCTREEGGGOMPON = 1
 else
 ifeq ($(COMPLEXLIBON),1)
-OCTREEGGGOMPON = 0
+OCTREEGGGOMPON = 1
 else
 $(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
-OCTREEGGGOMPON = 0
+# Note:
+#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
+#OCTREEGGGOMPON = 0
+OCTREEGGGOMPON = 1
 endif
+endif
+
+# OCTREEGGGOMPTRIANGLES
+# For computing 3pcf using octree-ggg-omp-triangles
+#   is in development phase. Not included. Do not use.
+ifeq ($(USEGSL),1)
+OCTREEGGGOMPTRIANGLESON = 0
+else
+$(info To compile with OCTREEGGGOMPTRIANGLES needs USEGSL = 1, deactivating...)
+OCTREEGGGOMPTRIANGLESON = 0
 endif
 
 # KDTREECUTEBOX
 # For computing 2pcf using cute_box methods
 KDTREECUTEBOXON = 0
+
+# OCTREEKKKBALLS4OMP
+# For computing 3pcf using octree-kkk-balls4-omp
+#   is in development phase. Not included. Do not use.
+# Needs BALLSON = 1 above
+ifeq ($(BALLSON),1)
+OCTREEKKKBALLS4OMPON = 0
+else
+$(info To compile with OCTREEKKKBALLS4OMP needs BALLSON = 1, deactivating...)
+OCTREEKKKBALLS4OMPON = 0
+endif
+
+# OCTREEKKKBALLS4OMPTRIANGLES
+# For computing 3pcf using octree-kkk-balls4-omp-triangles
+#   is in development phase. Not included. Do not use.
+# Needs BALLSON = 1 above
+ifeq ($(BALLSON),1)
+OCTREEKKKBALLS4OMPTRIANGLESON = 0
+else
+$(info To compile with OCTREEKKKBALLS4OMPTRIANGLES needs BALLSON = 1, deactivating...)
+OCTREEKKKBALLS4OMPTRIANGLESON = 0
+endif
 
 #E
 ############################

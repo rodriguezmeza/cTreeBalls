@@ -6,6 +6,7 @@
 local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
+    string routine_name = "inputdata_ascii_pos";
     stream instr;
     int ndim;
     bodyptr p;
@@ -21,10 +22,10 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     fscanf(instr,"%1s",gato);
     in_int_long(instr, &cmd->nbody);
     if (cmd->nbody < 1)
-        error("inputdata: nbody = %d is absurd\n", cmd->nbody);
+        error("%s: nbody = %d is absurd\n", routine_name, cmd->nbody);
     in_int(instr, &ndim);
     if (ndim != NDIM)
-        error("inputdata: ndim = %d; expected %d\n", ndim, NDIM);
+        error("%s: ndim = %d; expected %d\n", routine_name, ndim, NDIM);
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -51,9 +52,10 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     gd->Box[1] = Ly;
 #endif
 
-    verb_print(cmd->verbose, "\tInput: nbody and ndim: %d %d...\n", cmd->nbody, ndim);
-    verb_print(cmd->verbose, "\tInput: Lx, Ly, Lz: %g %g %g...\n",
-               gd->Box[0], gd->Box[1], gd->Box[2]);
+    verb_print(cmd->verbose, "\t%s: nbody and ndim: %d %d...\n",
+               routine_name, cmd->nbody, ndim);
+    verb_print(cmd->verbose, "\t%s: Lx, Ly, Lz: %g %g %g...\n",
+               routine_name, gd->Box[0], gd->Box[1], gd->Box[2]);
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
@@ -73,11 +75,11 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
         kavg += Kappa(p);
     }
     verb_print(cmd->verbose,
-               "inputdata_ascii_pos: average of kappa (%ld particles) = %le\n",
-               cmd->nbody, kavg/((real)cmd->nbody) );
+               "%s: average of kappa (%ld particles) = %le\n",
+               routine_name, cmd->nbody, kavg/((real)cmd->nbody) );
 
     //B If needed locate particles with same position.
-    //  This is a slow process, use if it necessary...
+    //  This is a slow process, use if it is necessary...
     if (scanopt(cmd->options, "check-eq-pos")) {
     bodyptr q;
     real dist2;
@@ -91,7 +93,8 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
                     flag=1;
                 }
             }
-    if (flag) error("inputdata_ascii: at least two bodies have same position\n");
+        if (flag)
+            error("%s: at least two bodies have same position\n", routine_name);
     }
     //E
 
@@ -146,8 +149,12 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
         in_real(instr, &Pos(p)[0]);
         in_real(instr, &Pos(p)[1]);
         in_real(instr, &Kappa(p));
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant")) {
+            if (scanopt(cmd->options, "kappa-constant-one"))
+                Kappa(p) = 1.0;
+            else
+                Kappa(p) = 2.0;
+        }
     }
 
     fclose(instr);
@@ -199,7 +206,8 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         theta = Pos(p)[0];
         phi = Pos(p)[1];
-        spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
+//        spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
+        coordinate_transformation(cmd, gd, theta, phi, Pos(p));
     }
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
@@ -285,20 +293,28 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
         Pos(p)[2] = inout_zval[Id(p)-1];
         if (scanopt(cmd->options, "pos-and-convergence"))
             Kappa(p) = inout_uval[Id(p)-1];
+
+#ifdef THREEPCFSHEAR
         if (scanopt(cmd->options, "pos-and-shear")) {
             Gamma1(p) = inout_uval[Id(p)-1];
             Gamma2(p) = inout_vval[Id(p)-1];
         }
-#else
+#endif
+
+#else // ! NDIM
         Pos(p)[0] = inout_xval[Id(p)-1];
         Pos(p)[1] = inout_yval[Id(p)-1];
         if (scanopt(cmd->options, "pos-and-convergence"))
             Kappa(p) = inout_zval[Id(p)-1];
+
+#ifdef THREEPCFSHEAR
         if (scanopt(cmd->options, "pos-and-shear")) {
             Gamma1(p) = inout_zval[Id(p)-1];
             Gamma2(p) = inout_uval[Id(p)-1];
         }
 #endif
+
+#endif // ! NDIM
     }
 
 #if NDIM == 3
@@ -322,9 +338,9 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     cellptr root;                                   // Set it up a temporal root
     root = (cellptr) allocate(1 * sizeof(body));
 
-    findRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
     centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    findRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
     CLRV(Pos(root));
 //E
     gd->rSizeTable[ifile] = 1.0;
@@ -377,8 +393,12 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
         Type(p) = BODY;
         Mass(p) = mass;
         Weight(p) = weight;
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant")) {
+            if (scanopt(cmd->options, "kappa-constant-one"))
+                Kappa(p) = 1.0;
+            else
+                Kappa(p) = 2.0;
+        }
         kavg += Kappa(p);
     }
     verb_print_q(2, cmd->verbose,

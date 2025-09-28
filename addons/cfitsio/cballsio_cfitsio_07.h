@@ -117,4 +117,28 @@ void printerror( int status)
     return;
 }
 
+local int outputdata_numpy_healpix(struct cmdline_data* cmd, struct  global_data* gd,
+                             bodyptr bodytab, INTEGER nbody)
+{
+    char namebuf[256];
+
+    gd->output_comment = "numpy-healpix output file";
+
+    sprintf(namebuf, "%s", gd->fpfnameOutputFileName);
+    verb_print(cmd->verbose,
+               "\toutputdata_cfitsio: opening fits file: %s...\n",
+               namebuf);
+
+    if (scanopt(cmd->options, "kappa")) {
+        writebintable_kappa(cmd, gd, bodytab, nbody, namebuf);
+    } else { // ! kappa
+        verb_print(cmd->verbose,
+        "\toutputdata_cfitsio: only convergence (kappa) is %s\n\n",
+                   "implemented. No file is saved...");
+    }
+
+    return SUCCESS;
+}
+
+
 #endif	// ! _cballsio_cfitsio_07_h

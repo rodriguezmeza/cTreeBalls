@@ -34,7 +34,7 @@ struct cmdline_data{
     string searchMethod;
     int mChebyshev;
     string nsmooth;
-    string rsmooth;
+    string rsmooth;                                 // use to smooth pivot
     real theta;
     bool computeTPCF;
     //B correction 2025-04-06
@@ -83,7 +83,9 @@ struct cmdline_data{
     //E
 
     //B Miscellaneous parameters
-    string script;
+//    string script;
+    string preScript;
+    string posScript;
     INTEGER stepState;
     short verbose;
     short verbose_log;

@@ -12,9 +12,9 @@ DEFDIMENSION = 3
 # Default GSL public (not the internal sources version, not included).
 # GSL can be switched off by setting USEGSL to 0, by default is 0,
 #   means GSL is not used:
-USEGSL = 0
+USEGSL = 1
 # If you want the internal gsl version set it to 1, gsl sources files are included.
-GSLINTERNAL = 0
+GSLINTERNAL = 1
 # When USEGSL = 1 and GSLINTERNAL = 0 you must configure GSL directory in the system
 #   in order to be found. See Makefile_machine
 #   and set NAGBODYDIR to point to GSL directory in your machine.

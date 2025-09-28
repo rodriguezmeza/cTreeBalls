@@ -52,11 +52,28 @@ int TestData(struct cmdline_data* cmd, struct  global_data* gd);
 global int infilefmt_string_to_int(string, int *);
 int InputData(struct cmdline_data* cmd,
               struct  global_data* gd, string filename, int);
+global int InputData_all_in_one(struct cmdline_data* cmd,
+                                struct  global_data* gd);
 
 //B I/O directories:
 global void setFilesDirs_log(struct cmdline_data*, struct  global_data* gd);
 global void setFilesDirs(struct cmdline_data*, struct  global_data* gd);
 //E
+
+/*
+// Column vector and matrix input
+//  offset as NR
+global int inout_InputDataVector(struct cmdline_data*, struct  global_data*,
+                                string, real *, int *);
+global int inout_InputDataMatrix(struct cmdline_data*, struct  global_data*,
+                                string, real **, int *);
+*/
+// routine to compute edge corrections using two saved histZetaM histograms
+global int computeEdgeCorrections(struct cmdline_data* cmd,
+                                  struct  global_data* gd);
+global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
+                     double ***mat3, double ***mat4,
+                     int n1, int n2, double ***mat5);
 //E
 
 
@@ -82,7 +99,7 @@ global int searchcalc_normal_sincos(struct cmdline_data* cmd,
 //B treeload utilities
 global int expandbox(struct  cmdline_data*, struct  global_data*,
                     bodyptr, int, int, cellptr);
-global int findRootCenter(struct  cmdline_data* cmd, struct  global_data* gd,
+global int FindRootCenter(struct  cmdline_data* cmd, struct  global_data* gd,
                          bodyptr, int, int, cellptr);
 global int centerBodies(bodyptr, int, int, cellptr);
 //global cellptr makecell(struct  cmdline_data* cmd, struct  global_data* gd, int);
@@ -101,8 +118,6 @@ global bool reject_cellcell(struct cmdline_data* cmd, struct  global_data* gd,
 
 global bool reject_balls(struct cmdline_data* cmd, struct  global_data* gd,
                          nodeptr p, nodeptr q, real *drpq, vector dr);
-global bool nodes_condition_balls(struct cmdline_data* cmd, struct  global_data* gd,
-                                  nodeptr p, nodeptr q, real *dr1, vector dr);
 
 #ifdef SINGLEP
 global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
@@ -135,9 +150,23 @@ global int search_compute_HistN(struct cmdline_data* cmd, struct  global_data* g
 
 
 //B Other utilities
-global int ThreadCount(struct cmdline_data* cmd, struct  global_data* gd, INTEGER, int);
-global int spherical_to_cartesians(struct cmdline_data* cmd, struct  global_data* gd,
+global int ThreadCount(struct cmdline_data* cmd,
+                       struct  global_data* gd, INTEGER, int);
+global int coordinate_string_to_int(struct cmdline_data* cmd,
+                                    struct  global_data* gd);
+global int coordinate_transformation(struct cmdline_data* cmd,
+                                   struct  global_data* gd,
                                    real, real, vector);
+/*global int spherical_to_cartesians(struct cmdline_data* cmd,
+                                   struct  global_data* gd,
+                                   real, real, vector);
+global int galactic_to_cartesians(struct cmdline_data* cmd,
+                                   struct  global_data* gd,
+                                   real, real, vector);
+global int celestial_to_cartesians(struct cmdline_data* cmd,
+                                   struct  global_data* gd,
+                                   real, real, vector);
+*/
 global int spherical_periodic_condition(real *, real *, real *, real *);
 
 

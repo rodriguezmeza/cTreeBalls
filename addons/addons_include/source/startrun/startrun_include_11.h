@@ -65,6 +65,18 @@
 #include "startrun_kdtree_cute_box.h"           // 48
 #endif
 
+#ifdef OCTREEGGGOMPTRIANGLES
+#include "startrun_octree_ggg_omp_triangles_11.h"   // 68
+#endif
+
+#ifdef OCTREEKKKBALLS4OMP
+#include "startrun_octree_kkk_balls4_omp_11.h"   // 69
+#endif
+
+#ifdef OCTREEKKKBALLS4OMPTRIANGLES
+#include "startrun_octree_kkk_balls4_omp_triangles_11.h"   // 70
+#endif
+
 /*
  #E Addendum of some not important
  ############################

@@ -28,6 +28,10 @@ NOTA: El orden de los terminos en la busqueda del árbol de cada particula
 
 #include "globaldefs.h"
 
+local bool nodes_condition_balls(struct cmdline_data* cmd,
+                                  struct  global_data* gd,
+                                  nodeptr p, nodeptr q, real *dr1, vector dr);
+
 //#ifdef BALLS
 #if defined(OPENMPCODE) || defined(BALLS)
 
@@ -2940,7 +2944,7 @@ global int search_free_balls_omp_cc(struct cmdline_data* cmd,
 }
 
 //B 2023.11.22
-global bool nodes_condition_balls(struct cmdline_data* cmd, struct  global_data* gd,
+local bool nodes_condition_balls(struct cmdline_data* cmd, struct  global_data* gd,
                                   nodeptr p, nodeptr q, real *dr1, vector dr)
 {
 //    real drpq, drpq2;

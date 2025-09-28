@@ -66,7 +66,9 @@ int input_default_params(struct cmdline_data *cmd)
     //E
 
     //B Miscellaneous parameters
-    cmd->script = "";
+//    cmd->script = "";
+    cmd->preScript = "";
+    cmd->posScript = "";
     cmd->stepState = 100000;
     cmd->verbose = 2;
     cmd->verbose_log = 2;

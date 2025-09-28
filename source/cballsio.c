@@ -18,7 +18,11 @@
 
 local int inputdata_ascii(struct cmdline_data*, struct  global_data*,
                           string filename, int);
+local int inputdata_ascii_all(struct cmdline_data*, struct  global_data*,
+                          string filename, int);
 local int inputdata_bin(struct cmdline_data*, struct  global_data*,
+                        string filename, int);
+local int inputdata_bin_all(struct cmdline_data*, struct  global_data*,
                         string filename, int);
 local int inputdata_takahasi(struct cmdline_data*, struct  global_data*,
                              string filename, int);
@@ -27,7 +31,11 @@ local int outputdata(struct cmdline_data*, struct  global_data*,
                      bodyptr, INTEGER nbody);
 local int outputdata_ascii(struct cmdline_data*, struct  global_data*,
                          bodyptr, INTEGER);
+local int outputdata_ascii_all(struct cmdline_data*, struct  global_data*,
+                         bodyptr, INTEGER);
 local int outputdata_bin(struct cmdline_data*, struct  global_data*,
+                         bodyptr, INTEGER);
+local int outputdata_bin_all(struct cmdline_data*, struct  global_data*,
                          bodyptr, INTEGER);
 local int EndRun_FreeMemory(struct cmdline_data*, struct  global_data*);
 
@@ -61,20 +69,35 @@ local int outfilefmt_int;
 int InputData(struct cmdline_data* cmd,
               struct  global_data* gd, string filename, int ifile)
 {
+    string routineName = "InputData";
     double cpustart = CPUTIME;
 
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "\n%s: reading data catalog...\n", routineName);
     switch(gd->infilefmt_int) {
         case INCOLUMNS:
-            verb_print(cmd->verbose,"\n\tInput in columns (ascii) format...\n");
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "\n\tInput in columns (ascii) format...\n");
             inputdata_ascii(cmd, gd, filename, ifile); break;
+        case INCOLUMNSALL:
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                "\tInput in columns (ascii) all format...\n");
+            inputdata_ascii_all(cmd, gd, filename, ifile); break;
         case INNULL:
-            verb_print(cmd->verbose,"\n\t(Null) Input in columns (ascii) format...\n");
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                            "\n\t(Null) Input in columns (ascii) format...\n");
             inputdata_ascii(cmd, gd, filename, ifile); break;
         case INCOLUMNSBIN:
-            verb_print(cmd->verbose,"\n\tInput in binary format...\n");
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "\n\tInput in binary format...\n");
             inputdata_bin(cmd, gd, filename, ifile); break;
+        case INCOLUMNSBINALL:
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "\n\tInput in binary-all format...\n");
+            inputdata_bin_all(cmd, gd, filename, ifile); break;
         case INTAKAHASI:
-            verb_print(cmd->verbose,"\n\tInput in takahasi format...\n");
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "\n\tInput in takahashi format...\n");
             class_call_cballs(inputdata_takahasi(cmd, gd, filename, ifile),
                        errmsg, errmsg);
             break;
@@ -103,6 +126,8 @@ int InputData(struct cmdline_data* cmd,
                                               errmsg, errmsg);
             break;
     }
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "\tdone reading.\n");
 
     gd->cputotalinout += CPUTIME - cpustart;
 
@@ -112,12 +137,13 @@ int InputData(struct cmdline_data* cmd,
     //  options=header-info
     // (and works with 'options=0')
 #ifdef DEBUG
-    verb_print(cmd->verbose,
-               "\n\tinputdata :: reading time = %f\n",CPUTIME-cpustart);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+               "\tinputdata :: reading time = %f\n",CPUTIME-cpustart);
 #else
     // but if comment above line and use this... works (?)
-    verb_print(cmd->verbose, "\n\tinputdata :: reading time = %f %s\n",
-               CPUTIME - cpustart, PRNUNITOFTIMEUSED);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                "\tinputdata :: reading time = %f %s\n",
+                CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 #endif
     // seems it is associated to the design of
     //      void verb_print(int verbose, string fmt, ...)
@@ -127,6 +153,183 @@ int InputData(struct cmdline_data* cmd,
     return SUCCESS;
 }
 
+//B gives treeload expandbox: rSize = 4.000000
+//#define EPSILON 1.0E-7
+//E
+#define EPSILON 1.0E-8
+
+/*
+ InputData_all_in_one routine:
+
+ To be called by StartRun_Common in startrun.c
+
+ This routine is in charge of reading catalogs of data
+    to be analyzed and then combine all of them in one catalog
+
+ Arguments:
+    * `cmd`:        Input: structure cmdline_data pointer
+    * `gd`:         Input: structure global_data pointer
+ Return (the error status):
+    int SUCCESS or FAILURE
+ */
+global int InputData_all_in_one(struct cmdline_data* cmd,
+                               struct  global_data* gd)
+{
+    string routineName = "InputData_all_in_one";
+    bodyptr p,q;
+    INTEGER i, l, ij;
+    int j;
+    int k;
+    bodyptr bodytabtmp;
+
+    cmd->nbody = 0;
+    for (j=0; j<gd->ninfiles; j++)
+        cmd->nbody += gd->nbodyTable[j];
+    bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
+
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+    "\n\t%s: Allocated %g MByte for tmp bodytable storage (total bodies=%ld).\n",
+    routineName, cmd->nbody*sizeof(body)*INMB, cmd->nbody);
+
+    INTEGER iselect = 0;
+    l=0;
+    ij=0;
+    for (j=0; j<gd->ninfiles; j++) {
+        i = 0;
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\t%s: processing file %d... with ",
+                               routineName, j);
+        DO_BODY(q, bodytable[j], bodytable[j]+gd->nbodyTable[j]) {
+            p = bodytabtmp + ij;
+                DO_COORD(k){
+                    Pos(p)[k] = Pos(q)[k];
+                    Pos(p)[k] +=
+                        EPSILON*grandom(0.0, 1.0);  // use 0.01*gd->rSizeTable[j]
+                }
+            Kappa(p) = Kappa(q);
+            if (scanopt(cmd->options, "kappa-constant"))
+                Kappa(p) = 2.0;
+            if (scanopt(cmd->options, "kappa-constant-one"))
+                Kappa(p) = 1.0;
+            
+            Mass(p) = Mass(q);
+            
+#ifdef THREEPCFSHEAR
+            Gamma1(p) = Gamma1(q);
+            Gamma2(p) = Gamma2(q);
+#endif
+            Weight(p) = Weight(q);
+            Type(p) = BODY;
+            Id(p) = p-bodytabtmp+1;
+            Mask(p) = Mask(q);
+            if (Mask(p) == 0) {
+                iselect++;
+            }
+            i++;
+            ij++;
+        }
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%ld bodies\n", i);
+        l += i;
+    }
+
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\t%s: masked pixels = %ld\n",
+                                  routineName, iselect);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\t%s: unmasked pixels = %ld\n",
+                                  routineName, cmd->nbody-iselect);
+
+    if (l!=cmd->nbody || ij!=cmd->nbody)
+        error("\n%s: nbody (%ld) not equal to read bodies (%ld, %ld)\n\n",
+              routineName, cmd->nbody, i, ij);
+
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,"\n");
+    for (j=0; j<gd->ninfiles; j++) {
+        free(bodytable[j]);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                            "\tfreed %g %s (catalog %d with %ld bodies).\n",
+                            gd->nbodyTable[j]*sizeof(body)*INMB,
+                            "MByte for particle storage", j, gd->nbodyTable[j]);
+        gd->bytes_tot -= gd->nbodyTable[j]*sizeof(body);
+    }
+
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\n\tallocating %ld bodies (%ld)... ",
+                           l, cmd->nbody-iselect);
+    gd->nbodyTable[0] = cmd->nbody-iselect;
+    bodytable[0] = (bodyptr) allocate(gd->nbodyTable[0] * sizeof(body));
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "done allocating.\n");
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+"\n\t%s: Allocated %g MByte for final bodytable storage (total bodies=%ld).\n",
+        routineName, gd->nbodyTable[0]*sizeof(body)*INMB, gd->nbodyTable[0]);
+    gd->bytes_tot += gd->nbodyTable[0]*sizeof(body);
+
+    real kavg = 0;
+    ij=0;
+    for(i=0;i<cmd->nbody;i++){
+        q = bodytabtmp+i;
+        if (Mask(q) == 1) {
+            p = bodytable[0]+ij;
+            Pos(p)[0] = Pos(q)[0];
+            Pos(p)[1] = Pos(q)[1];
+            Pos(p)[2] = Pos(q)[2];
+            Kappa(p) = Kappa(q);
+            
+#ifdef THREEPCFSHEAR
+            Gamma1(p) = Gamma1(q);
+            Gamma2(p) = Gamma2(q);
+#endif
+            
+            Type(p) = Type(q);
+            Mass(p) = Mass(q);
+            Weight(p) = Weight(q);
+            Id(p) = p-bodytable[0]+i;
+            kavg += Kappa(p);
+            Update(p) = Update(q);
+            Mask(p) = Mask(q);
+            ij++;
+        }
+    }
+
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\t%s: final unmasked pixels = %ld\n",
+                        routineName, ij);
+
+    if (gd->nbodyTable[0]>0) {
+        kavg /= ((real)gd->nbodyTable[0]);
+        real kstd;
+        real sum=0.0;
+        DO_BODY(p, bodytable[0], bodytable[0]+gd->nbodyTable[0]) {
+            sum += rsqr(Kappa(p) - kavg);
+        }
+        kstd = rsqrt( sum/((real)gd->nbodyTable[0] - 1.0) );
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\t%s: average and std dev of kappa ", routineName);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "(%ld particles) = %le %le\n",
+                               gd->nbodyTable[0], kavg, kstd);
+    } else {
+        error("%s: no unmasked bodies (nbody=%ld) were given... exiting...\n",
+              routineName, gd->nbodyTable[0]);
+    }
+
+    free(bodytabtmp);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\n\tfreed %g MByte for tmp storage (%ld bodies).\n\n",
+                        cmd->nbody * sizeof(body)*INMB, cmd->nbody);
+
+    for (i=0; i<gd->ninfiles; i++) {
+        (gd->iCatalogs[i]) = 0;
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                            "\t%s: iCatalogs final values: %d\n",
+                            routineName, gd->iCatalogs[i]);
+    }
+
+    return SUCCESS;
+}
+#undef EPSILON
 
 local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
                            string filename, int ifile)
@@ -202,6 +405,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     verb_print(cmd->verbose,"\n\n");
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bytes_tot += cmd->nbody*sizeof(body);
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         in_vector(instr, Pos(p));
@@ -210,6 +414,14 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
             Kappa(p) = 2.0;
         if (scanopt(cmd->options, "kappa-constant-one"))
             Kappa(p) = 1.0;
+
+#ifdef THREEPCFSHEAR
+        //B 3pcf shear
+        Gamma1(p) = 1.0;
+        Gamma2(p) = 1.0;
+        //E
+#endif
+
     }
 
     fclose(instr);
@@ -219,6 +431,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
         Type(p) = BODY;
         Mass(p) = mass;
         Weight(p) = weight;
+        Mask(p) = TRUE;                             // initialize body's Mask
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }
@@ -255,6 +468,150 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     return SUCCESS;
 }
 
+local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
+                           string filename, int ifile)
+{
+    string routineName = "inputdata_ascii_all";
+    stream instr;
+    int ndim;
+    bodyptr p;
+    char gato[1], firstline[20];
+    real mass=1;
+    real weight=1;
+
+    gd->input_comment = "Column form input file all";
+
+    instr = stropen(filename, "r");
+
+    if (scanopt(cmd->options, "header-info")){
+        InputData_check_file(filename);
+        fgets(firstline,200,instr);
+        verb_print(cmd->verbose, "\n\t%s: header of %s\n", routineName,filename);
+        verb_print(cmd->verbose, "\t1st line: %s", firstline);
+        fgets(firstline,200,instr);
+        verb_print(cmd->verbose, "\t2nd line: %s\n", firstline);
+        rewind(instr);
+        if (scanopt(cmd->options, "stop")) {
+            fclose(instr);
+            exit(1);
+        }
+    }
+
+    fgets(firstline,200,instr);
+    fscanf(instr,"%1s",gato);
+    in_int_long(instr, &cmd->nbody);
+    if (cmd->nbody < 1)
+        error("%s: nbody = %d is absurd\n", routineName, cmd->nbody);
+    in_int(instr, &ndim);
+    if (ndim != NDIM)
+        error("%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
+
+    gd->nbodyTable[ifile] = cmd->nbody;
+
+// Check the center of the box!!!
+#if NDIM == 3
+    real Lx, Ly, Lz;
+#ifdef SINGLEP
+    in_real_double(instr, &Lx);
+    in_real_double(instr, &Ly);
+    in_real_double(instr, &Lz);
+#else
+    in_real(instr, &Lx);
+    in_real(instr, &Ly);
+    in_real(instr, &Lz);
+#endif
+    gd->Box[0] = Lx;
+    gd->Box[1] = Ly;
+    gd->Box[2] = Lz;
+#else // ! NDIM
+    real Lx, Ly;
+    in_real(instr, &Lx);
+    in_real(instr, &Ly);
+    gd->Box[0] = Lx;
+    gd->Box[1] = Ly;
+#endif
+
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\t%s: nbody and ndim: %d %d...\n",
+                        routineName, cmd->nbody, ndim);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\t%s: lbox dimensions: ", routineName);
+    int k;
+    DO_COORD(k)
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "%g ", gd->Box[k]);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
+
+    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bytes_tot += cmd->nbody*sizeof(body);
+
+    INTEGER iselect = 0;
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        in_vector(instr, Pos(p));
+        in_real(instr, &Kappa(p));
+        if (scanopt(cmd->options, "kappa-constant"))
+            Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant-one"))
+            Kappa(p) = 1.0;
+        in_real(instr, &Weight(p));
+        in_short(instr, &Mask(p));
+        if (Mask(p) == 0) {
+            iselect++;
+        }
+#ifdef THREEPCFSHEAR
+        Gamma1(p) = 1.0;
+        Gamma2(p) = 1.0;
+#endif
+    }
+
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\t%s: masked pixels = %ld\n",
+                           routineName, iselect);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\t%s: unmasked pixels = %ld\n",
+                           routineName, gd->nbodyTable[ifile]-iselect);
+
+    fclose(instr);
+
+    real kavg=0.0;
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        Type(p) = BODY;
+        Mass(p) = mass;
+        Id(p) = p-bodytable[ifile]+1;
+        kavg += Kappa(p);
+    }
+    kavg /= ((real)cmd->nbody);
+    real kstd;
+    real sum=0.0;
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        sum += rsqr(Kappa(p) - kavg);
+    }
+    kstd = rsqrt( sum/((real)cmd->nbody - 1.0) );
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\t%s: average and std dev of kappa ", routineName);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "(%ld particles) = %le %le\n", cmd->nbody, kavg, kstd);
+
+//B Locate particles with same position
+    if (scanopt(cmd->options, "check-eq-pos")) {
+        bodyptr q;
+        real dist2;
+        vector distv;
+        bool flag=0;
+        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody-1)
+            DO_BODY(q, p+1, bodytable[ifile]+cmd->nbody)
+                if (p != q) {
+                    DOTPSUBV(dist2, distv, Pos(p), Pos(q));
+                    if (dist2 == 0.0)
+                        flag=1;
+                }
+        if (flag)
+            error("%s: at least two bodies have same position\n", routineName);
+    }
+//E
+
+    return SUCCESS;
+}
 
 local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
                          string filename, int ifile)
@@ -352,6 +709,115 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
         Type(p) = BODY;
         Mass(p) = mass;
         Weight(p) = weight;
+        Mask(p) = TRUE;                             // initialize body's Mask
+        Id(p) = p-bodytable[ifile]+1;
+    }
+
+    return SUCCESS;
+}
+
+local int inputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
+                         string filename, int ifile)
+{
+    string routineName = "inputdata_bin_all";
+    stream instr;
+    int ndim;
+    bodyptr p;
+    real mass=1;
+    real weight=1;
+
+    gd->input_comment = "Binary-all input file";
+
+    instr = stropen(filename, "r");
+
+    if (scanopt(cmd->options, "header-info")){
+        verb_print(cmd->verbose, "\n\t%s: header of %s\n",
+                   routineName, filename);
+        in_int_bin_long(instr, &cmd->nbody);
+        verb_print(cmd->verbose, "\t1st line: %d\n", cmd->nbody);
+        in_int_bin(instr, &ndim);
+        verb_print(cmd->verbose, "\t2nd line: %d\n", ndim);
+#ifdef SINGLEP
+        in_real_bin_double(instr, &gd->Box[0]);
+        in_real_bin_double(instr, &gd->Box[1]);
+#if NDIM == 3
+        in_real_bin_double(instr, &gd->Box[2]);
+#endif
+#else
+        in_real_bin(instr, &gd->Box[0]);
+        in_real_bin(instr, &gd->Box[1]);
+#if NDIM == 3
+        in_real_bin(instr, &gd->Box[2]);
+#endif
+#endif
+#if NDIM == 3
+        verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n\n",
+                   routineName, gd->Box[0], gd->Box[1], gd->Box[2]);
+#else
+        verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n\n",
+                   routineName, gd->Box[0], gd->Box[1]);
+#endif
+        rewind(instr);
+        if (scanopt(cmd->options, "stop")) {
+            fclose(instr);
+            exit(1);
+        }
+    }
+
+    in_int_bin_long(instr, &cmd->nbody);
+    verb_print(cmd->verbose, "\t%s: nbody %d\n", routineName, cmd->nbody);
+    if (cmd->nbody < 1)
+        error("%s: nbody = %d is absurd\n", routineName, cmd->nbody);
+    in_int_bin(instr, &ndim);
+    if (ndim != NDIM)
+        error("%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
+    verb_print(cmd->verbose, "\t%s: nbody and ndim: %d %d...\n",
+               routineName, cmd->nbody, ndim);
+
+#ifdef SINGLEP
+    in_real_bin_double(instr, &gd->Box[0]);
+    in_real_bin_double(instr, &gd->Box[1]);
+#if NDIM == 3
+    in_real_bin_double(instr, &gd->Box[2]);
+#endif
+#else
+    in_real_bin(instr, &gd->Box[0]);
+    in_real_bin(instr, &gd->Box[1]);
+#if NDIM == 3
+    in_real_bin(instr, &gd->Box[2]);
+#endif
+#endif
+
+#if NDIM == 3
+    verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n",
+               routineName, gd->Box[0], gd->Box[1], gd->Box[2]);
+#else
+    verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n",
+               routineName, gd->Box[0], gd->Box[1]);
+#endif
+
+    gd->nbodyTable[ifile] = cmd->nbody;
+    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bytes_tot += cmd->nbody*sizeof(body);
+
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
+        in_vector_bin(instr, Pos(p));
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        in_real_bin(instr, &Kappa(p));
+        if (scanopt(cmd->options, "kappa-constant"))
+            Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant-one"))
+            Kappa(p) = 1.0;
+    }
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
+        in_real_bin(instr, &Weight(p));
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
+        in_short_bin(instr, &Mask(p));
+    fclose(instr);
+
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        Type(p) = BODY;
+        Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
     }
 
@@ -360,7 +826,7 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
 
 
 //B BEGIN:: Reading Takahasi simulations
-//From Takahasi web page. Adapted to our needs
+//From Takahashi web page. Adapted to our needs
 
 #include<math.h>
 #include<stdio.h>
@@ -403,6 +869,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
                              string filename, int ifile)
 {
+    string routinename = "inputdata_takahasi";
     FILE *fp;
     long i,j,npix,dummy;
     long jj[6]={536870908,1073741818,1610612728,2147483638,2684354547,3221225457};
@@ -416,8 +883,8 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
     fp = stropen(filename, "rb");
 
     if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose, "\n\tinputdata_takahasi: header of %s... ",
-                   filename);
+        verb_print(cmd->verbose, "\n\t%s: header of %s... ",
+                   routinename, filename);
         verb_print(cmd->verbose, "not available yet... sorry!\n\n");
         if (scanopt(cmd->options, "stop")) {
             fclose(fp);
@@ -467,12 +934,12 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
       for(i=0;i<6;i++) if(j==jj[i]) fread(&dummy, sizeof(long), 1, fp);
     }
 
-    fclose(fp);             // Close Takahasi file.
+    fclose(fp);                                     // Close Takahashi file.
 
     verb_print(cmd->verbose,
-               "\n\tinputdata_takahasi: total read points = %ld\n",npix);
+               "\n\t%s: total read points = %ld\n",routinename, npix);
 
-//E End reading Takahasi file
+//E End reading Takahashi file
 
     Takahasi_region_selection(cmd, gd,
                               nside, npix, conv, shear1, shear2, rotat, ifile);
@@ -490,6 +957,7 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
                                     int nside, int npix,
             float *conv, float *shear1, float *shear2, float *rotat, int ifile)
 {
+    string routinename = "Takahasi_region_selection";
     double theta,phi;
     long i;
 
@@ -500,7 +968,7 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
     theta_max = theta_min;
     phi_max = phi_min;
 
-    for(i=1;i<npix;i++){   // Healpix ring scheme
+    for(i=1;i<npix;i++){                            // Healpix ring scheme
         pix2ang(i,nside,&theta,&phi);
         theta_min = MIN(theta_min,theta);
         theta_max = MAX(theta_max,theta);
@@ -508,11 +976,11 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         phi_max = MAX(phi_max,phi);
     }
     verb_print(cmd->verbose,
-               "\tinputdata_takahasi: min and max of theta = %f %f\n",
-               theta_min, theta_max);
+               "\t%s: min and max of theta = %f %f\n",
+               routinename, theta_min, theta_max);
     verb_print(cmd->verbose,
-               "\tinputdata_takahasi: min and max of phi = %f %f\n",
-               phi_min, phi_max);
+               "\t%s: min and max of phi = %f %f\n",
+               routinename, phi_min, phi_max);
 //E
 
 //B Selection of a region: the (center) lower edge is random... or not
@@ -522,8 +990,8 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         rphi    = 2.0 * PI * xrandom(0.0, 1.0);
         rtheta    = racos(1.0 - 2.0 * xrandom(0.0, 1.0));
         verb_print(cmd->verbose,
-                   "\tinputdata_takahasi: random theta and phi = %f %f\n",
-                   rtheta, rphi);
+                   "\t%s: random theta and phi = %f %f\n",
+                   routinename, rtheta, rphi);
     } else {
 // The radius of the region is:
 //        rsqrt(rsqr(0.5*(thetaR - thetaL)) + rsqr(0.5*(phiR - phiL)))
@@ -531,15 +999,16 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         rphi = 0.5*(cmd->phiR + cmd->phiL);
         rtheta = 0.5*(cmd->thetaR + cmd->thetaL);
         verb_print(cmd->verbose,
-                   "\tinputdata_takahasi: fix theta and phi = %f %f\n",
-                   rtheta, rphi);
+                   "\t%s: fix theta and phi = %f %f\n",
+                   routinename, rtheta, rphi);
     }
 //E
 
     if (cmd->lengthBox>PI) {
-        fprintf(stdout,"\ninputdata_takahasi: Warning! %s\n%s\n\n",
+        fprintf(stdout,"\n%s: Warning! %s\n%s\n\n",
                 "lengthBox is greater than one of the angular ranges...",
-                "using length = PI");
+                "using length = PI",
+                routinename);
         cmd->lengthBox = PI;
     }
 
@@ -553,16 +1022,16 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         rtheta_rot = rtheta - dtheta_rot;
         rphi_rot = rphi - dphi_rot;
         verb_print(cmd->verbose,
-                   "\tinputdata_takahasi: rotated theta and phi = %f %f\n",
-                   rtheta_rot, rphi_rot);
+                   "\t%s: rotated theta and phi = %f %f\n",
+                   routinename, rtheta_rot, rphi_rot);
     } else {
         dtheta_rot = 0.0,
         dphi_rot = 0.0;
         rtheta_rot = rtheta;
         rphi_rot = rphi;
         verb_print(cmd->verbose,
-                "\tinputdata_takahasi: theta and phi (no-rotation) = %f %f\n",
-                rtheta_rot, rphi_rot);
+                "\t%s: theta and phi (no-rotation) = %f %f\n",
+                   routinename, rtheta_rot, rphi_rot);
     }
 //E
 
@@ -580,11 +1049,13 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
         phiL = rphi_rot - 0.5*cmd->lengthBox;
         phiR = rphi_rot + 0.5*cmd->lengthBox;
         verb_print(cmd->verbose,
-"\tinputdata_takahasi: theta and phi of the center of the selected region = %lf %lf\n",
-                   0.5*(thetaR + thetaL), 0.5*(phiR + phiL));
+        "\t%s: theta and phi of the center of the selected region = %lf %lf\n",
+                   routinename, 0.5*(thetaR + thetaL), 0.5*(phiR + phiL));
         verb_print(cmd->verbose,
-                "\tinputdata_takahasi: radius of the selected region = %lf\n",
-                rsqrt(rsqr(0.5*(thetaR - thetaL)) + rsqr(0.5*(phiR - phiL))) );
+                "\t%s: radius of the selected region = %lf\n",
+                   routinename,
+                   rsqrt(rsqr(0.5*(thetaR - thetaL)) + rsqr(0.5*(phiR - phiL)))
+                   );
     } else {
 // Fix-center is given by thetaL, phiL, thetaR, phiR.
 // But it does use L and R. It doesn´t use the size of the box, lBox
@@ -598,19 +1069,21 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
 "\tinputdata_takahasi: theta and phi of the center of the selected region = %f %f\n",
                        0.5*(thetaR + thetaL), 0.5*(phiR + phiL));
             verb_print(cmd->verbose,
-                "\tinputdata_takahasi: radius of the selected region = %lf\n",
-                rsqrt(rsqr(0.5*(thetaR - thetaL)) + rsqr(0.5*(phiR - phiL))) );
+                    "\t%s: radius of the selected region = %lf\n",
+                    routinename,
+                    rsqrt(rsqr(0.5*(thetaR - thetaL)) + rsqr(0.5*(phiR - phiL)))
+                       );
     }
 
     verb_print(cmd->verbose,
-               "\tinputdata_takahasi: left and right theta = %f %f\n", 
-               thetaL, thetaR);
+               "\t%s: left and right theta = %f %f\n",
+               routinename, thetaL, thetaR);
     verb_print(cmd->verbose,
-               "\tinputdata_takahasi: left and right phi = %f %f\n", 
-               phiL, phiR);
+               "\t%s: left and right phi = %f %f\n",
+               routinename, phiL, phiR);
     verb_print(cmd->verbose,
-               "\tinputdata_takahasi: theta and phi d_rotation = %f %f\n",
-               dtheta_rot, dphi_rot);
+               "\t%s: theta and phi d_rotation = %f %f\n",
+               routinename, dtheta_rot, dphi_rot);
 //E
 
 #if NDIM == 3
@@ -658,6 +1131,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
             real dphi_rot, real phiL, real phiR,
     real *xmin, real *xmax, real *ymin, real *ymax, real *zmin, real *zmax, int ifile)
 {
+    string routinename = "Takahasi_region_selection_3d_all";
     long i;
     bodyptr p;
     real mass = 1.0;
@@ -677,7 +1151,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
     *xmin=0., *ymin=0., *zmin=0.;
     *xmax=0., *ymax=0., *zmax=0.;
 
-    for(i=0;i<npix;i++){                                // Healpix ring scheme
+    for(i=0;i<npix;i++){                            // Healpix ring scheme
         pix2ang(i,nside,&theta,&phi);
 //        printf("%ld %f %f %f %f \n", 
 //                i, conv[i], shear1[i], shear2[i], rotat[i]);
@@ -692,7 +1166,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
             phi_rot = phi;
         }
 
-        spherical_to_cartesians(cmd, gd, theta_rot, phi_rot, Pos(p));
+        coordinate_transformation(cmd, gd, theta, phi, Pos(p));
 
         if (!scanopt(cmd->options, "kappa-constant"))
             Kappa(p) = conv[i];
@@ -701,6 +1175,14 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
             if (scanopt(cmd->options, "kappa-constant-one"))
                 Kappa(p) = 1.0;
         }
+
+#ifdef THREEPCFSHEAR
+        //B 3pcf shear
+        Gamma1(p) = shear1[i];
+        Gamma2(p) = shear2[i];
+        //E
+#endif
+
         Type(p) = BODY;
         Mass(p) = mass;
         Weight(p) = weight;
@@ -714,9 +1196,39 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
         *zmax = Pos(p)[2];
 
         Update(p) = TRUE;
+        Mask(p) = TRUE;                             // initialize body's Mask
 
+        //B correction 2025-05-03 :: look for edge-effects
+        // activate a flag for this catalog, that it is using patch-with-all
+        //  and use it in EvalHist routine...
+#if defined(NMultipoles) && defined(NONORMHIST)
+        if (scanopt(cmd->options, "patch-with-all")) {
+            UpdatePivot(p) = TRUE;
+            if (thetaL < theta - dtheta_rot && theta - dtheta_rot < thetaR) {
+                if (phiL < phi - dphi_rot && phi - dphi_rot < phiR) {
+                    UpdatePivot(p) = TRUE;
+                    gd->pivotCount += 1;
+                } else {
+                    UpdatePivot(p) = FALSE;
+                }
+            } else {
+                UpdatePivot(p) = FALSE;
+            }
+        }
+#endif
+        //E
     } // ! end for
 
+    //B correction 2025-05-03 :: look for edge-effects
+#if defined(NMultipoles) && defined(NONORMHIST)
+    if (scanopt(cmd->options, "patch-with-all")) {
+        verb_print(cmd->verbose,
+            "\nsearchcalc_tc_kkk_omp: total number of pixels to be pivots: %ld\n",
+            gd->pivotCount);
+    }
+#endif
+    //E
+    
     real kavg = 0;
     for(i=0;i<npix;i++){
         p = bodytable[ifile] +i;
@@ -729,19 +1241,22 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
         kavg += Kappa(p);
     }
     verb_print(cmd->verbose, 
-               "\n\tinputdata_takahasi: min and max of x = %f %f\n",*xmin, *xmax);
-    verb_print(cmd->verbose, 
-               "\tinputdata_takahasi: min and max of y = %f %f\n",*ymin, *ymax);
-    verb_print(cmd->verbose, 
-               "\tinputdata_takahasi: min and max of z = %f %f\n",*zmin, *zmax);
+               "\n\t%s: min and max of x = %f %f\n",
+               routinename, *xmin, *xmax);
+    verb_print(cmd->verbose,
+               "\t%s: min and max of y = %f %f\n",
+               routinename, *ymin, *ymax);
+    verb_print(cmd->verbose,
+               "\t%s: min and max of z = %f %f\n",
+               routinename, *zmin, *zmax);
 
     verb_print(cmd->verbose,
-        "\n\tinputdata_takahasi: selected all read points and nbody: %ld %ld\n",
-        iselect, cmd->nbody);
+        "\n\t%s: selected all read points and nbody: %ld %ld\n",
+               routinename, iselect, cmd->nbody);
 
     verb_print(cmd->verbose, 
-               "\tinputdata_takahasi: average of kappa (%ld particles) = %le\n",
-               cmd->nbody, kavg/((real)cmd->nbody) );
+               "\t%s: average of kappa (%ld particles) = %le\n",
+               routinename, cmd->nbody, kavg/((real)cmd->nbody) );
 
     return SUCCESS;
 }
@@ -773,13 +1288,14 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
     *xmin=0., *ymin=0., *zmin=0.;
     *xmax=0., *ymax=0., *zmax=0.;
 
-    for(i=0;i<npix;i++){                                // Healpix ring scheme
+    for(i=0;i<npix;i++){                            // Healpix ring scheme
         pix2ang(i,nside,&theta,&phi);
 //        printf("%ld %f %f %f %f \n", 
 //                i, conv[i], shear1[i], shear2[i], rotat[i]);
 //        printf("%ld %f %f %f \n", i, theta, phi, conv[i]);
         p = bodytabtmp+i;
         Update(p) = FALSE;
+        Mask(p) = TRUE;                             // initialize body's Mask
 
         if (scanopt(cmd->options, "patch")) {
             //B
@@ -794,12 +1310,27 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
                         phi_rot = phi;
                     }
 
-                    spherical_to_cartesians(cmd, gd, theta_rot, phi_rot, Pos(p));
+                    coordinate_transformation(cmd, gd, theta, phi, Pos(p));
 
-                    if (!scanopt(cmd->options, "kappa-fix"))
+/*                    if (!scanopt(cmd->options, "kappa-fix"))
                         Kappa(p) = conv[i];
                     else
+                        Kappa(p) = 2.0; */
+                    if (!scanopt(cmd->options, "kappa-constant"))
+                        Kappa(p) = conv[i];
+                    else {
                         Kappa(p) = 2.0;
+                        if (scanopt(cmd->options, "kappa-constant-one"))
+                            Kappa(p) = 1.0;
+                    }
+
+#ifdef THREEPCFSHEAR
+                    //B 3pcf shear
+                    Gamma1(p) = shear1[i];
+                    Gamma2(p) = shear2[i];
+                    //E
+#endif
+
                     Type(p) = BODY;
                     Mass(p) = mass;
                     Weight(p) = weight;
@@ -827,7 +1358,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
                 phi_rot = phi;
             }
 
-            spherical_to_cartesians(cmd, gd, theta_rot, phi_rot, Pos(p));
+            coordinate_transformation(cmd, gd, theta, phi, Pos(p));
 
             if (!scanopt(cmd->options, "kappa-constant"))
                 Kappa(p) = conv[i];
@@ -836,6 +1367,14 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
                 if (scanopt(cmd->options, "kappa-constant-one"))
                     Kappa(p) = 1.0;
             }
+
+#ifdef THREEPCFSHEAR
+            //B 3pcf shear
+            Gamma1(p) = shear1[i];
+            Gamma2(p) = shear2[i];
+            //E
+#endif
+
             Type(p) = BODY;
             Mass(p) = mass;
             Weight(p) = weight;
@@ -870,9 +1409,18 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
             Pos(p)[1] = Pos(q)[1];
             Pos(p)[2] = Pos(q)[2];
             Kappa(p) = Kappa(q);
+
+#ifdef THREEPCFSHEAR
+            //B 3pcf shear
+            Gamma1(p) = Gamma1(q);
+            Gamma2(p) = Gamma2(q);
+            //E
+#endif
+
             Type(p) = Type(q);
             Mass(p) = mass;
             Weight(p) = weight;
+            Mask(p) = Mask(q);
             Id(p) = p-bodytable[ifile]+i;
             *xmin = MIN(*xmin,Pos(p)[0]);
             *ymin = MIN(*ymin,Pos(p)[1]);
@@ -934,12 +1482,13 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 
     real ra, dec;
 
-    for(i=0;i<npix;i++){   // Healpix ring scheme
+    for(i=0;i<npix;i++){                            // Healpix ring scheme
         pix2ang(i,nside,&theta,&phi);
     //        printf("%ld %f %f %f %f \n", i, conv[i], shear1[i], shear2[i], rotat[i]);
     //        printf("%ld %f %f %f \n", i, theta, phi, conv[i]);
         p = bodytabtmp+i;
         Update(p) = FALSE;
+        Mask(p) = TRUE;                             // initialize body's Mask
 
         if (scanopt(cmd->options, "patch")) {
             //B
@@ -1032,6 +1581,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
             Type(p) = Type(q);
             Mass(p) = mass;
             Weight(p) = weight;
+            Mask(p) = Mask(q);
             Id(p) = p-bodytable[ifile]+i;
             *xmin = MIN(*xmin,Pos(p)[0]);
             *ymin = MIN(*ymin,Pos(p)[1]);
@@ -1154,9 +1704,15 @@ local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
         case OUTCOLUMNS:
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
             outputdata_ascii(cmd, gd, btable, nbody); break;
+        case OUTCOLUMNSALL:
+            verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
+            outputdata_ascii_all(cmd, gd, btable, nbody); break;
         case OUTCOLUMNSBIN:
             verb_print(cmd->verbose, "\n\tbinary format output\n");
             outputdata_bin(cmd, gd, btable, nbody); break;
+        case OUTCOLUMNSBINALL:
+            verb_print(cmd->verbose, "\n\tbinary-all format output\n");
+            outputdata_bin_all(cmd, gd, btable, nbody); break;
         case OUTNULL:
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
             outputdata_ascii(cmd, gd, btable, nbody); break;
@@ -1186,13 +1742,13 @@ local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     sprintf(namebuf, gd->fpfnameOutputFileName);
     outstr = stropen(namebuf, "w!");
 #if NDIM == 3
-    fprintf(outstr,"# nbody NDIM Lx Ly Lz\n# %ld %d ",cmd->nbody,NDIM);
+    fprintf(outstr,"# nbody NDIM Lx Ly Lz\n# %ld %d ",nbody,NDIM);
     fprintf(outstr,"%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
 #else
-    fprintf(outstr,"# nbody NDIM Lx Ly\n# %ld %d ",cmd->nbody,NDIM);
+    fprintf(outstr,"# nbody NDIM Lx Ly\n# %ld %d ",nbody,NDIM);
     fprintf(outstr,"%lf %lf\n",gd->Box[0],gd->Box[1]);
 #endif
-    DO_BODY(p, bodytab, bodytab+cmd->nbody) {
+    DO_BODY(p, bodytab, bodytab+nbody) {
         out_vector_mar(outstr, Pos(p));
         out_real_mar(outstr, Kappa(p));
 //B BALLS :: DIAGNOSTICS (DEBUG)
@@ -1206,6 +1762,44 @@ local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     }
     fclose(outstr);
     verb_print(cmd->verbose, "\tdata output to file %s\n", namebuf);
+
+    return SUCCESS;
+}
+
+local int outputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
+                             bodyptr bodytab, INTEGER nbody)
+{
+    string routineName = "outputdata_ascii_all";
+    char namebuf[256];
+    stream outstr;
+    bodyptr p;
+
+    sprintf(namebuf, gd->fpfnameOutputFileName);
+    outstr = stropen(namebuf, "w!");
+#if NDIM == 3
+    fprintf(outstr,"# nbody NDIM Lx Ly Lz\n# %ld %d ",nbody,NDIM);
+    fprintf(outstr,"%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
+#else
+    fprintf(outstr,"# nbody NDIM Lx Ly\n# %ld %d ",nbody,NDIM);
+    fprintf(outstr,"%lf %lf\n",gd->Box[0],gd->Box[1]);
+#endif
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        out_vector_mar(outstr, Pos(p));
+        out_real_mar(outstr, Kappa(p));
+        out_real_mar(outstr, Weight(p));
+        out_short_mar(outstr, Mask(p));
+//B BALLS :: DIAGNOSTICS (DEBUG)
+#ifdef DEBUG
+        out_bool_mar(outstr, HIT(p));
+//        out_bool_mar(outstr, Selected(p));
+//        out_bool_mar(outstr, Update(p));
+#endif
+//E
+        fprintf(outstr,"\n");
+    }
+    fclose(outstr);
+    verb_print(cmd->verbose, "\t%s: data output to file %s\n",
+               routineName, namebuf);
 
     return SUCCESS;
 }
@@ -1236,14 +1830,52 @@ local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
     return SUCCESS;
 }
 
+local int outputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
+                         bodyptr bodytab, INTEGER nbody)
+{
+    char namebuf[256];
+    stream outstr;
+    bodyptr p;
+
+    sprintf(namebuf, gd->fpfnameOutputFileName);
+    outstr = stropen(namebuf, "w!");
+    out_int_bin_long(outstr, nbody);
+    out_int_bin(outstr, NDIM);
+    out_real_bin(outstr, gd->Box[0]);
+    out_real_bin(outstr, gd->Box[1]);
+#if NDIM == 3
+    out_real_bin(outstr, gd->Box[2]);
+#endif
+    DO_BODY(p, bodytab, bodytab+nbody)
+        out_vector_bin(outstr, Pos(p));
+    DO_BODY(p, bodytab, bodytab+nbody)
+        out_real_bin(outstr, Kappa(p));
+    DO_BODY(p, bodytab, bodytab+nbody)
+        out_real_bin(outstr, Weight(p));
+    DO_BODY(p, bodytab, bodytab+nbody)
+        out_short_bin(outstr, Mask(p));
+    //B BALLS :: DIAGNOSTICS (DEBUG)
+#ifdef DEBUG
+    DO_BODY(p, bodytab, bodytab+nbody)
+        out_bool_mar(outstr, HIT(p));
+#endif
+    //E
+    fclose(outstr);
+    verb_print(cmd->verbose, "\tdata output to file %s\n", namebuf);
+
+    return SUCCESS;
+}
+
 
 global int infilefmt_string_to_int(string infmt_str,int *infmt_int)
 {
     *infmt_int=-1;
-    if (strcmp(infmt_str,"columns-ascii") == 0)         *infmt_int = INCOLUMNS;
-    if (strnull(infmt_str))                             *infmt_int = INNULL;
-    if (strcmp(infmt_str,"binary") == 0)                *infmt_int = INCOLUMNSBIN;
-    if (strcmp(infmt_str,"takahasi") == 0)              *infmt_int = INTAKAHASI;
+    if (strcmp(infmt_str,"columns-ascii") == 0)     *infmt_int = INCOLUMNS;
+    if (strcmp(infmt_str,"columns-ascii-all") == 0) *infmt_int = INCOLUMNSALL;
+    if (strnull(infmt_str))                         *infmt_int = INNULL;
+    if (strcmp(infmt_str,"binary") == 0)            *infmt_int = INCOLUMNSBIN;
+    if (strcmp(infmt_str,"binary-all") == 0)        *infmt_int = INCOLUMNSBINALL;
+    if (strcmp(infmt_str,"takahasi") == 0)          *infmt_int = INTAKAHASI;
 
 //B socket:
 #ifdef ADDONS
@@ -1257,9 +1889,11 @@ global int infilefmt_string_to_int(string infmt_str,int *infmt_int)
 local int outfilefmt_string_to_int(string outfmt_str,int *outfmt_int)
 {
     *outfmt_int=-1;
-    if (strcmp(outfmt_str,"columns-ascii") == 0)    *outfmt_int = OUTCOLUMNS;
-    if (strnull(outfmt_str))                        *outfmt_int = OUTNULL;
+    if (strcmp(outfmt_str,"columns-ascii") == 0)     *outfmt_int = OUTCOLUMNS;
+    if (strcmp(outfmt_str,"columns-ascii-all") == 0) *outfmt_int = OUTCOLUMNSALL;
+    if (strnull(outfmt_str))                         *outfmt_int = OUTNULL;
     if (strcmp(outfmt_str,"binary") == 0)           *outfmt_int = OUTCOLUMNSBIN;
+    if (strcmp(outfmt_str,"binary-all") == 0)      *outfmt_int = OUTCOLUMNSBINALL;
 
 //B socket:
 #ifdef ADDONS
@@ -1287,6 +1921,7 @@ global void setFilesDirs_log(struct cmdline_data* cmd, struct  global_data* gd)
 
 global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "setFilesDirs";
     char buf[200];
 
     double cpustart = CPUTIME;
@@ -1308,13 +1943,14 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     }
     if (ndefault>nslashs)
         error(
-        "setFilesDirs: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
-        nslashs, cmd->rootDir, nslashs);
+              "%s: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
+              routineName, nslashs, cmd->rootDir, nslashs);
 
     if (ndefault == 0) {
         sprintf(gd->outputDir,cmd->rootDir);
         sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",gd->outputDir,gd->outputDir);
-        verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
+        if (cmd->verbose >= 3)
+            verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
         system(buf);
     } else {
         for (i=0; i<ndefault; i++) {
@@ -1322,9 +1958,9 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
         strncpy(dp1, cmd->rootDir, ipos[i]-1);
         dp2 = (char*) malloc((lenDir-ipos[i])*sizeof(char));
         strncpy(dp2, cmd->rootDir + ipos[i], lenDir-ipos[i]);
-        verb_print_q(2,cmd->verbose,
-                    "setFilesDirs: '/' counts %d pos %d and %s %s\n",
-                    ndefault, ipos[i], dp1, dp2);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: '/' counts %d pos %d and %s %s\n",
+                              routineName, ndefault, ipos[i], dp1, dp2);
 
         sprintf(gd->outputDir,cmd->rootDir);
         sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",dp1,dp1);
@@ -1452,15 +2088,6 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//    if (cmd->computeShearCF) {
-//        free_dvector(gd->histXitx,1,cmd->sizeHistN);
-//        free_dvector(gd->histXixx,1,cmd->sizeHistN);
-//        free_dvector(gd->histXitt,1,cmd->sizeHistN);
-//    }
-    //E
-
     if (cmd->computeTPCF) {
         free_dmatrix3D(gd->histZetaGmIm,
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -1515,7 +2142,7 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 //B Set gsl uniform random :: If not needed globally
 //      this line have to go to testdata
 #ifdef USEGSL
-    gsl_rng_free (gd->r);
+    gsl_rng_free (gd->r);           // allocated by random_init routine in startrun.c
 #endif
 
     return SUCCESS;

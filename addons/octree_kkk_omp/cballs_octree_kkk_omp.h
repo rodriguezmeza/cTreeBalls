@@ -10,8 +10,9 @@ case 61:                   // search=octree-kkk-omp
     verb_print(cmd->verbose,
     "\n\tevalHist: with octree-kkk-omp method\n\n");
     for (ifile=0; ifile<gd->ninfiles; ifile++) {
-        DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
-        Update(p) = TRUE;
+        DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile]) {
+            Update(p) = TRUE;
+        }
         MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
     }
     switch(correlation_int) {

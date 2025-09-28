@@ -30,6 +30,5 @@
 #define VERBOSENORMALINFO       2
 #define VERBOSEDEBUGINFO        3
 
-
 #endif // ! _common_defs_h
 

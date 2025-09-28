@@ -45,6 +45,10 @@ typedef struct {
     INTEGER ipcount;
 } gdhist_sincos_omp_kk, *gdhistptr_sincos_omp_kk;
 
+#ifndef BALLS
+local bool nodes_condition_balls(struct cmdline_data* cmd, struct  global_data* gd,
+                                 nodeptr p, nodeptr q, real *dr1, vector dr);
+#endif
 
 local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
                                nodeptr *, nodeptr *, cellptr, cellptr,
@@ -193,10 +197,17 @@ global int searchcalc_octree_kk_balls4_omp(struct cmdline_data* cmd,
 
 #pragma omp for nowait schedule(dynamic)
       for (i=0; i< gd->nnodescanlevTable[cat1]; i++) {
+#ifdef BALLS
           if (cmd->scanLevel==0)
               p = (nodeptr) roottable[cat1];
           else
               p = nodetablescanlev[cat1][i];
+#else
+          //B if not def BALLS chose one of these:
+          p = (nodeptr) roottable[cat1];
+//          p = nodetablescanlev[cat1][i];
+          //E
+#endif
           //B Set histograms to zero for the pivot
           for (n = 1; n <= cmd->sizeHistN; n++)
               hist.histNNSubthread[n] = 0.0;
@@ -334,6 +345,60 @@ global int searchcalc_octree_kk_balls4_omp(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
+
+//#ifndef BALLS
+//B 2023.11.22
+local bool nodes_condition_balls(struct cmdline_data* cmd, struct  global_data* gd,
+                                  nodeptr p, nodeptr q, real *dr1, vector dr)
+{
+//    real drpq, drpq2;
+/*
+     DOTPSUBV(drpq2, dr, Pos(p), Pos(q));
+ #ifdef PERIODIC
+     VWrapAll(dr);
+     DOTVP(drpq2, dr, dr);
+ #endif
+     drpq = rsqrt(drpq2);
+     *dr1 = drpq;
+*/
+     int n;
+
+     if ( *dr1 == 0.0)
+         return (FALSE);
+     else
+         if ( (Radius(p)+Radius(q))/(*dr1) < gd->deltaR) {
+             if (scanopt(cmd->options, "behavior-tree-omp")) {
+//B To behaves as tree-omp
+                 if ( (*dr1)<gd->Rcut ) {
+                     if((*dr1)>cmd->rminHist) {
+                         if (cmd->rminHist==0)
+                             n = (int)(cmd->logHistBinsPD*(rlog10(*dr1) -
+                                     rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
+                         else
+                             n = (int)(rlog10((*dr1)/cmd->rminHist)
+                                       * gd->i_deltaR) + 1;
+                         if (n<=cmd->sizeHistN-1 && n>=1) {
+                             if ( gd->deltaRV[n] < *dr1 - Radius(q) && *dr1
+                                 + Radius(q) < gd->deltaRV[n+1]) {
+                                 return (TRUE);
+                             } else {
+                                 return (FALSE);
+                             }
+                         } else
+                             return (FALSE);
+                     } else
+                         return (FALSE);
+                 } else
+                     return (FALSE);
+ //E
+             } else { // ! behavior-tree-omp
+                 return (TRUE);
+             }
+         } else
+             return (FALSE);
+}
+//E
+//#endif
 
 local void walktree_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
                                nodeptr *aptr, nodeptr *nptr,

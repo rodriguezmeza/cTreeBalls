@@ -346,6 +346,18 @@ void verb_print(int verbose, string fmt, ...)
     }
 }
 
+void verb_print_warning(int verbose, string fmt, ...)
+{
+    va_list ap;
+
+    if (verbose >= 0) {
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        fflush(stdout);
+        va_end(ap);
+    }
+}
+
 void verb_print_debug(int verbose, string fmt, ...)
 {
     va_list ap;
@@ -368,6 +380,66 @@ void verb_log_print(int verbose, stream sout,  string fmt, ...)
         fflush(sout);
         va_end(ap);
     }
+}
+
+void verb_print_min_info(int verbose, int verbose_log, stream sout,
+                  string fmt, ...)
+{
+    va_list ap;
+
+    if (verbose >= VERBOSEMININFO) {
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        fflush(stdout);
+        va_end(ap);
+    }
+    if (verbose_log >= VERBOSEMININFO) {
+        va_start(ap, fmt);
+        vfprintf(sout, fmt, ap);
+        fflush(sout);
+        va_end(ap);
+    }
+
+}
+
+void verb_print_normal_info(int verbose, int verbose_log, stream sout,
+                  string fmt, ...)
+{
+    va_list ap;
+
+    if (verbose >= VERBOSENORMALINFO) {
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        fflush(stdout);
+        va_end(ap);
+    }
+    if (verbose_log >= VERBOSENORMALINFO) {
+        va_start(ap, fmt);
+        vfprintf(sout, fmt, ap);
+        fflush(sout);
+        va_end(ap);
+    }
+
+}
+
+void verb_print_debug_info(int verbose, int verbose_log, stream sout,
+                  string fmt, ...)
+{
+    va_list ap;
+
+    if (verbose >= VERBOSEDEBUGINFO) {
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        fflush(stdout);
+        va_end(ap);
+    }
+    if (verbose_log >= VERBOSEDEBUGINFO) {
+        va_start(ap, fmt);
+        vfprintf(sout, fmt, ap);
+        fflush(sout);
+        va_end(ap);
+    }
+
 }
 
 void endrun(int ierr)

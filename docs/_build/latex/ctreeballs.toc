@@ -1,0 +1,37 @@
+\babel@toc {english}{}
+\contentsline {chapter}{\numberline {1}Overview}{1}{chapter.1}% 
+\contentsline {section}{\numberline {1.1}Introduction}{1}{section.1.1}% 
+\contentsline {section}{\numberline {1.2}Compiling and getting started}{1}{section.1.2}% 
+\contentsline {section}{\numberline {1.3}Configuration}{2}{section.1.3}% 
+\contentsline {section}{\numberline {1.4}Parameters}{2}{section.1.4}% 
+\contentsline {section}{\numberline {1.5}Python}{2}{section.1.5}% 
+\contentsline {section}{\numberline {1.6}Plotting utilities}{3}{section.1.6}% 
+\contentsline {section}{\numberline {1.7}License}{3}{section.1.7}% 
+\contentsline {section}{\numberline {1.8}Acknowledgements}{3}{section.1.8}% 
+\contentsline {chapter}{\numberline {2}Installation}{5}{chapter.2}% 
+\contentsline {section}{\numberline {2.1}Makefile}{5}{section.2.1}% 
+\contentsline {section}{\numberline {2.2}Makefile settings}{5}{section.2.2}% 
+\contentsline {section}{\numberline {2.3}Makefile plataform machine}{5}{section.2.3}% 
+\contentsline {chapter}{\numberline {3}Parameters}{7}{chapter.3}% 
+\contentsline {section}{\numberline {3.1}Parameters related to the searching method}{7}{section.3.1}% 
+\contentsline {section}{\numberline {3.2}Parameters to control the I/O file(s)}{7}{section.3.2}% 
+\contentsline {section}{\numberline {3.3}Parameters to control histograms and their output files}{8}{section.3.3}% 
+\contentsline {section}{\numberline {3.4}Set of parameters needed to construct a test model}{8}{section.3.4}% 
+\contentsline {section}{\numberline {3.5}Miscellaneous parameters}{8}{section.3.5}% 
+\contentsline {chapter}{\numberline {4}Catalog files}{11}{chapter.4}% 
+\contentsline {section}{\numberline {4.1}Standard formats}{11}{section.4.1}% 
+\contentsline {section}{\numberline {4.2}Miscellaneous formats}{11}{section.4.2}% 
+\contentsline {chapter}{\numberline {5}Pre/Post processing}{13}{chapter.5}% 
+\contentsline {section}{\numberline {5.1}Pre\sphinxhyphen {}processing}{13}{section.5.1}% 
+\contentsline {section}{\numberline {5.2}Post\sphinxhyphen {}processing}{13}{section.5.2}% 
+\contentsline {chapter}{\numberline {6}AddOn\textquotesingle {}s}{15}{chapter.6}% 
+\contentsline {section}{\numberline {6.1}Include files}{15}{section.6.1}% 
+\contentsline {section}{\numberline {6.2}Source files}{15}{section.6.2}% 
+\contentsline {chapter}{\numberline {7}Python interface}{17}{chapter.7}% 
+\contentsline {section}{\numberline {7.1}Using command line interface}{17}{section.7.1}% 
+\contentsline {section}{\numberline {7.2}Cython interface}{17}{section.7.2}% 
+\contentsline {chapter}{\numberline {8}Hands on}{19}{chapter.8}% 
+\contentsline {chapter}{\numberline {9}2\sphinxhyphen {}point correlation functions}{21}{chapter.9}% 
+\contentsline {chapter}{\numberline {10}3\sphinxhyphen {}point correlation functions}{23}{chapter.10}% 
+\contentsline {section}{\numberline {10.1}Harmonic base}{23}{section.10.1}% 
+\contentsline {chapter}{\numberline {11}Indices and tables}{25}{chapter.11}% 

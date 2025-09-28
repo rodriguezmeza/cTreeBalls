@@ -63,6 +63,11 @@ struct global_data{
     INTEGER nnodescanlev_rootTable[MAXITEMS];
 //E
 
+//B BALLS4
+    INTEGER nnodescanlevTableB4[MAXITEMS];
+//E
+
+
     real cputree;
 
 // Tree:
@@ -128,8 +133,10 @@ struct global_data{
 #endif
 
 //B To save total 3pcf
+    //B look for where these two arrays are allocated...
     real **histZetaGcos;
     real **histZetaGsin;
+    //E
     real ***histZetaGmRe;
     real ***histZetaGmIm;
 //E
@@ -254,6 +261,22 @@ struct global_data{
     int irsmooth;
 
     bool flagPrint;
+
+//B correction 2025-05-03 :: look for edge-effects
+#if defined(NMultipoles) && defined(NONORMHIST)
+//    INTEGER NNCounts;
+//    INTEGER NNCountsN;
+    INTEGER pivotCount;
+#endif
+//E
+
+    //B correction 2025-04-06
+    INTEGER pivotNumber;
+    //E
+
+    INTEGER stepState;
+
+    short coordTag;
 
 //B socket:
 #ifdef ADDONS

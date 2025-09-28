@@ -54,6 +54,17 @@
 #include "cballs_kdtree_cute_box.h"
 #endif
 
+#ifdef OCTREEGGGOMPTRIANGLES
+#include "cballs_octree_ggg_omp_triangles.h"
+#endif
+
+#ifdef OCTREEKKKBALLS4OMP
+#include "cballs_octree_kkk_balls4_omp.h"
+#endif
+
+#ifdef OCTREEKKKBALLS4OMPTRIANGLES
+#include "cballs_octree_kkk_balls4_omp_triangles.h"
+#endif
 
 /*
  #E Addendum of some not important

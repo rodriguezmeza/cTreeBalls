@@ -33,6 +33,7 @@
 void in_int(stream, int *);
 void in_int_long(stream, INTEGER *);
 void in_short(stream, short *);
+void in_bool(stream, bool *);
 #ifdef SINGLEP
 void in_real(stream, REAL *);
 void in_real_double(stream, double *);
@@ -74,6 +75,7 @@ void out_short_bin(stream, short);
 void out_real_bin(stream, real);
 void out_vector_bin(stream, vector);
 void out_bool_mar_bin(stream, bool);
+void out_short_mar_bin(stream, short);
 
 
 // ------------[	inout other definitions	 		]------------
@@ -112,6 +114,34 @@ void InputData_3c(string, int, int, int, int *);
 void InputData_4c(string filename, int, int, int, int, int *);
 void InputData_5c(string filename, int, int, int, int, int, int *);
 //E
+
+
+//B additions
+
+//B Column vector and matrix input
+//  offset as NR
+int inout_InputDataVector(
+                          string, real *, int *,
+                          short verbose, short verbose_log, FILE *outlog
+                          );
+int inout_InputDataMatrix_info(
+                               string filename, int *, int *,
+                               short verbose, short verbose_log, FILE *outlog
+                               );
+int inout_InputDataMatrix(
+                          string, real **, int *,
+                          short verbose, short verbose_log, FILE *outlog
+                          );
+
+//E
+
+int extractInputRootDir(char *infilenames,
+                        char *rootDirPath, char *preFileName, int ifile,
+                        short verbose, short verbose_log, FILE *outlog
+                        );
+
+//E additions
+
 
 #ifdef ADDONS
 //#include "inout_01.h"

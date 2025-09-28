@@ -215,10 +215,31 @@ include $(MACHINES_DIR)/addons/direct_method_simple/Makefile_direct_method_simpl
 endif
 #
 
+# OCTREEGGGOMPTRIANGLES
+# For computing 3pcf using octree-ggg-omp-triangles
+ifeq ($(OCTREEGGGOMPTRIANGLESON),1)
+include $(MACHINES_DIR)/addons/octree_ggg_omp_triangles/Makefile_octree_ggg_omp_triangles
+endif
+#
+
 # KDTREECUTEBOX
 # For computing 2pcf using cute_box methods
 ifeq ($(KDTREECUTEBOXON),1)
 include $(MACHINES_DIR)/addons/kdtree_cute_box/Makefile_kdtree_cute_box
+endif
+#
+
+# OCTREEKKKBALLS4OMP
+# For computing 3pcf using octree-kkk-balls4-omp
+ifeq ($(OCTREEKKKBALLS4OMPON),1)
+include $(MACHINES_DIR)/addons/octree_kkk_balls4_omp/Makefile_octree_kkk_balls4_omp
+endif
+#
+
+# OCTREEKKKBALLS4OMPTRIANGLES
+# For computing 3pcf using octree-kkk-balls4-omp-triangles
+ifeq ($(OCTREEKKKBALLS4OMPTRIANGLESON),1)
+include $(MACHINES_DIR)/addons/octree_kkk_balls4_omp_triangles/Makefile_octree_kkk_balls4_omp_triangles
 endif
 #
 

@@ -12,5 +12,6 @@
 #define _cballsio_cfitsio_09_h
 
 if (strcmp(outfmt_str,"fits") == 0)     *outfmt_int = OUTCFITSIO;
+if (strcmp(outfmt_str,"numpy-healpix") == 0) *outfmt_int = OUTNUMPYHEALPIX;
 
 #endif	// ! _cballsio_cfitsio_09_h

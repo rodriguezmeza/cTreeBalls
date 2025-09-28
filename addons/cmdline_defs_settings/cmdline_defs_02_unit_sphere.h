@@ -72,7 +72,9 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     //E
 
     //B Miscellaneous parameters
-    "script=",                          ";Scripts in shell or python that can be run in pre-processing or post-processing",
+//    "script=",                          ";Scripts in shell or python that can be run in pre-processing or post-processing",
+    "preScript=",                          ";Script in shell or python that can be run in pre-processing",
+    "posScript=",                          ";Script in shell or python that can be run in post-processing",
     "stepState=100000",                 ";number of steps to save a state-run info (pivot number completed in the log file)",
     "verbose=2",                        ";Option to activate the amount of information sent to standard output", ":verb",
     "verbose_log=2",                    ";Option to activate the amount of information sent to log file", ":verblog",

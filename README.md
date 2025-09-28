@@ -16,15 +16,15 @@ Author: Mario A. Rodriguez-Meza
 
 **c**orrelations function computation with **T**ree/**B**alls methods (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
 
-Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/).
+Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/). There is also a complete but brief html version the man (linux manual) version [man](https://github.com/rodriguezmeza/cTreeBalls/blob/main/docs/man/cballs.html).
 
 ## Compiling and getting started
 
 Download the code by cloning it from https://github.com/rodriguezmeza/cTreeBalls.
 
-Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Go to web page https://www.gnu.org/software/gsl/ for details or ask to your system administrator. Make necessary changes in `Makefile_machine` file and look up for `GSL`. But in case you have problems installing GSL just set it off (switched off: USEGSL = 0) in `Makefile_settings`, the basic distribution will run okey. I/O cfitsio library is set it OFF. Can be set it ON in `addons/Makefile_settings`.
+Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Sources are included. Therefore no need to make any changes. In case of problems go to web page https://www.gnu.org/software/gsl/ for details or ask to your system administrator. Make necessary changes in `Makefile_machine` file and look up for `GSL`. But in case you have problems installing GSL just set it off (switched off: USEGSL = 0) in `Makefile_settings`, the basic distribution will run okey. I/O cfitsio library is set it ON. Can be set it OFF in `addons/Makefile_settings`.
 
-Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make`). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: `-O4 -ffast-math`) and of the OpenMP flag (default: `-fopenmp`; this flag is facultative, you are free to compile without OpenMP if you don't want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with `-fopenmp`). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
+Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make`). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: `-O4 -ffast-math`) and of the OpenMP flag (default: `-fopenmp`; this flag is facultative, you are free to compile without OpenMP if you don't want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with `-fopenmp`). The code has been tested with gcc version 10 and 12 and would be working with version 11, and 13. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
 
 To check that the code runs, if you are in `cTreeBalls` directory, type:
 
@@ -77,7 +77,7 @@ cBalls can be configured by switching on/off several options. Configuration file
 | Option         | Description                                                                                                                                                   |
 |:--------------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `DEFDIMENSION`       | `= 3` select dimension of the run: 2 or 3                                                                                                                     |
-| `USEGSL`       | `= 0` switch on/off computation using GSL routines. Optional.                                                                                                                      |
+| `USEGSL`       | `= 1` switch on/off computation using GSL routines. Optional.                                                                                                                      |
 | `GSLINTERNAL`     | `= 1` for enabling GSL internal sources<br />(if `= 0`, specify the corresponding compiler flags in `Makefile_machine` file)                                                             |
 | `OPENMPMACHINE`     | `= 1` for enabling OpenMP parallelism<br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
 | `SINGLEPON`    | `= 0` for disabling single precision                                                                                                                             |
@@ -91,31 +91,25 @@ After changing `Makefile_settings` in order to have the new settings active in *
 
 The list of available command line parameters can be consulted using the `-h` or `--help` flags:
 
-    ../cballs --help
+    $ ../cballs --help
 
 See also the man page as explained above. If you execute:
 
-    ../cballs --clue
+    $ ../cballs --clue
 
 you will receive in response how **cBalls** should be executed using command line parameters. Just pick up the parameteres you need and, if necessary, modify their values according to your needs.
 
 ## Python
 
-To install cBalls python module (cballys) go to directory `python` and execute:
+To install cBalls python module (cballys) just execute (you already do it...):
 
-    python setup.py build
-    python setup.py install --user
-
-Note: make sure you create before cBalls library:
-
-    cd ../
-    make clean; make all
+    $ make clean; make all
 
 To test it go to directory `tests` and run:
 
-    python test_cython_balls.py
+    $ python test_cython_balls.py
 
-Note: this interface in Cython was tested in a python environment with `python3.7`.
+Note: this interface in Cython was tested in a python environment with `python3.12`.
 
 ## Plotting utilities
 

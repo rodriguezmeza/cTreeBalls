@@ -216,6 +216,26 @@ real degree(real radian)
 	return(radian * ((real) 180.0) / PI_D );
 }
 
+// consider using atan2: tan-1(y/x) = atan2(y,x)
+//  atan2() takes two arguments: x-coordinate and y-coordinate,
+//  and calculate the angle in radians for the quadrant.
+//  is defined in <math.h> header file.
+//  Caution while using atan2():
+//      The value of second argument passed should not be 0.
+//      If the second argument passed is 0, the program will not run correctly.
+// example:
+//  y = 2.53; x = -10.2; result = atan2(y, x); result = result * 180.0/PI;
+// will give:
+//      Tangent inverse for(x = -10.2, y = 2.53) is 166.1 degrees.
+// here is a routine to compute theta and phi from a vector:
+/*
+ void vec2ang(const double *vec, double *theta, double *phi)
+   {
+   *theta = atan2(sqrt(vec[0]*vec[0]+vec[1]*vec[1]),vec[2]);
+   *phi = atan2 (vec[1],vec[0]);
+   if (*phi<0.) *phi += twopi;
+   }
+ */
 real angle(real XI, real YI, real XF, real YF)
 {
 	real DX,DY, ang;
@@ -278,6 +298,14 @@ real angle_dxdy(real DX, real DY)
         return(ang);
     }
     return(ang);
+}
+
+bool cross_product(real DX, real DY)
+{
+    bool answer;
+
+
+    return(answer);
 }
 
 

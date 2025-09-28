@@ -217,7 +217,11 @@ local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
     CLRV(kd->cmpos);
 
     for (i = lo; i <= hi; ++i) {
+#ifdef KappaAvgON
         KappaAvg += KappaAvg(bptr[i]);
+#else
+        KappaAvg += Kappa(bptr[i]);
+#endif
         kd->weight += Mass(bptr[i]);
         MULVS(tmpv, Pos(bptr[i]), Mass(bptr[i]));
         ADDV(kd->cmpos, kd->cmpos, tmpv);

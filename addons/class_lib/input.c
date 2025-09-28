@@ -538,19 +538,38 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     //E
 
     //B Miscellaneous parameters
-    class_call(parser_read_string(pfc,"script",&string1,&flag1,errmsg),
+    class_call(parser_read_string(pfc,"preScript",&string1,&flag1,errmsg),
                errmsg,errmsg);
     char *script1;
     char *script2;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
-          if (strcmp(pfc->name[index],"script") == 0){
+          if (strcmp(pfc->name[index],"preScript") == 0){
               slen = strlen(pfc->value[index]);
-              cmd->script = (char*) malloc((slen-2)*sizeof(char));
+              cmd->preScript = (char*) malloc((slen-2)*sizeof(char));
               script1 = (char*) malloc(slen*sizeof(char));
               memcpy(script1,pfc->value[index],slen);
               script2 = strchr(script1, '"');
-              memcpy(cmd->script,script2+1,slen-2);
+              memcpy(cmd->preScript,script2+1,slen-2);
+              free(script1);
+            break;
+          }
+        }
+    }
+    class_call(parser_read_string(pfc,"posScript",&string1,&flag1,errmsg),
+               errmsg,errmsg);
+//    char *script1;
+//    char *script2;
+    if (flag1 == TRUE) {
+        for (index=0;index<pfc->size;++index){
+          if (strcmp(pfc->name[index],"posScript") == 0){
+              slen = strlen(pfc->value[index]);
+              cmd->posScript = (char*) malloc((slen-2)*sizeof(char));
+              script1 = (char*) malloc(slen*sizeof(char));
+              memcpy(script1,pfc->value[index],slen);
+              script2 = strchr(script1, '"');
+              memcpy(cmd->posScript,script2+1,slen-2);
+              free(script1);
             break;
           }
         }
@@ -672,7 +691,9 @@ int input_default_params(struct cmdline_data *cmd)
     //E
 
     //B Miscellaneous parameters
-    cmd->script = "";
+//    cmd->script = "";
+    cmd->preScript = "";
+    cmd->posScript = "";
     cmd->stepState = 10000;
     cmd->verbose = 1;
     cmd->verbose_log = 1;
@@ -785,7 +806,9 @@ local void testParameterFile(struct  cmdline_data* cmd,
     //E
 
     //B Miscellaneous parameters
-    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
+//    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->preScript,"preScript",MAXLENGTHOFSTRSCMD);
+    SPName(cmd->posScript,"posScript",MAXLENGTHOFSTRSCMD);
 #ifdef LONGINT
     LPName(cmd->stepState,"stepState");
 #else
@@ -836,6 +859,9 @@ local void testParameterFile(struct  cmdline_data* cmd,
             if (pequal == NULL)
                 continue;
             phash=strchr(line,'#');
+            if ((phash != NULL) && (phash-pequal<2))
+                continue;
+            phash=strchr(line,'%');
             if ((phash != NULL) && (phash-pequal<2))
                 continue;
 
@@ -898,17 +924,29 @@ local void testParameterFile(struct  cmdline_data* cmd,
                         *((double*)addr[j])=atof(value);
                         break;
                     case STRING:
-                        if (strcmp(name,"script") == 0){ // To remove both '"'
+                        if (strcmp(name,"preScript") == 0){ // To remove both '"'
                             int index;
                             size_t slen;
-                                  slen = strlen(value);
-                                  cmd->script = (char*) malloc((slen-2)*sizeof(char));
-                                  script1 = (char*) malloc(slen*sizeof(char));
-                                  memcpy(script1,value,slen);
-                                  script2 = strchr(script1, '"');
-                                  memcpy(cmd->script,script2+1,slen-2);
+                            slen = strlen(value);
+                            cmd->preScript = (char*) malloc((slen-2)*sizeof(char));
+                            script1 = (char*) malloc(slen*sizeof(char));
+                            memcpy(script1,value,slen);
+                            script2 = strchr(script1, '"');
+                            memcpy(cmd->preScript,script2+1,slen-2);
+                            free(script1);
                         } else {
-                            strcpy(addr[j],value);
+                            if (strcmp(name,"posScript") == 0){ // To remove both '"'
+                                int index;
+                                size_t slen;
+                                slen = strlen(value);
+                                cmd->posScript = (char*) malloc((slen-2)*sizeof(char));
+                                script1 = (char*) malloc(slen*sizeof(char));
+                                memcpy(script1,value,slen);
+                                script2 = strchr(script1, '"');
+                                memcpy(cmd->posScript,script2+1,slen-2);
+                                free(script1);
+                            } else
+                                strcpy(addr[j],value);
                         }
                         break;
                     case INT:

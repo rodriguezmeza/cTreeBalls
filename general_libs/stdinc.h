@@ -228,8 +228,15 @@ void timer_kd(int i);
 void error(string, ...);
 void verb_print_q(int iq, int verbose, string fmt, ...);
 void verb_print(int verbose, string fmt, ...);
+void verb_print_warning(int verbose, string fmt, ...);
 void verb_print_debug(int verbose, string fmt, ...);
 void verb_log_print(int verbose, stream sout,  string fmt, ...);
+void verb_print_min_info(int verbose, int verbose_log, stream sout,
+                            string fmt, ...);
+void verb_print_normal_info(int verbose, int verbose_log, stream sout,
+                            string fmt, ...);
+void verb_print_debug_info(int verbose, int verbose_log, stream sout,
+                            string fmt, ...);
 void   endrun(int);
 												
 void eprintf(string, ...);						

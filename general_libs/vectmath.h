@@ -7,6 +7,7 @@
 #ifndef NDIM
 #define NDIM  3
 #endif
+// check if endif
 
 
 #define CLRV(v)									                        \
@@ -44,6 +45,13 @@
         (v)[_i] = (u)[_i] + (w)[_i];                                    \
 }
 
+#define ADDV_ext(v,u,w,dim)                                             \
+{                                                                       \
+    int _i;                                                             \
+    for (_i = 0; _i < dim; _i++)                                       \
+        (v)[_i] = (u)[_i] + (w)[_i];                                    \
+}
+
 #define ADD2VS(v,u,w,s)                                                 \
 {                                                                       \
     int _i;                                                             \
@@ -62,6 +70,13 @@
 {                                                                       \
     int _i;                                                             \
     for (_i = 0; _i < NDIM; _i++)                                       \
+        (v)[_i] = (u)[_i] * (s);                                        \
+}
+
+#define MULVS_ext(v,u,s,dim)                                            \
+{                                                                       \
+    int _i;                                                             \
+    for (_i = 0; _i < dim; _i++)                                       \
         (v)[_i] = (u)[_i] * (s);                                        \
 }
 
@@ -122,6 +137,8 @@
 }
 
 #endif
+// check if endif
+
 
 //B 2023.11.29
 //B
@@ -152,6 +169,7 @@
 }
 
 #endif
+// check if endif
 
 #if defined(TWODIM)
 
@@ -161,6 +179,7 @@
 }
 
 #endif
+// check if endif
 
 #if defined(THREEDIM)
 
@@ -172,6 +191,7 @@
 }
 
 #endif
+// check if endif
 
 
 #define CLRM(p)                                                         \
@@ -362,6 +382,7 @@
 }
 
 #endif
+// check if endif
 
 #if defined(TWODIM)
 
@@ -396,6 +417,7 @@
 }
 
 #endif
+// check if endif
 
 #if defined(ONEDIM)
 
@@ -425,6 +447,7 @@
 }
 
 #endif
+// check if endif
 
 #define DOTPSUBV2(s,u,v,w,z)                                            \
 {                                                                       \
@@ -459,7 +482,9 @@
             (p)[_i][_j] = (s);                                          \
 }
 
-#endif  
+//B old end of _vectmath_h
+//#endif
+//E
 
 // Check equivalences above...
 
@@ -504,6 +529,7 @@
    (v1)[2] = (v2)[2] - (v3)[2]
 
 #endif
+// check if endif
 
 #if NDIM == 2
 
@@ -535,6 +561,7 @@
    (v1)[1] = (v2)[1] - (v3)[1]
 
 #endif
+// check if endif
 
 #define VZero(v)  VSetAll (v, 0)
 #define VVAdd(v1, v2)  VAdd (v1, v1, v2)
@@ -549,3 +576,6 @@
 #define VVSub(v1, v2)  SUBV(v1, v1, v2)
 #define VLenSq(v)  VDot (v, v)
 #define VVSAdd(v1, s2, v2) ADD2VS(v1, v1, v2, s2)
+
+
+#endif // !_vectmath_h

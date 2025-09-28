@@ -185,6 +185,7 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
     int ifile=0;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bytes_tot += cmd->nbody*sizeof(body);
 
     mass = 1.0;
     weight = 1.0;
@@ -229,6 +230,7 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
     int ifile=0;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bytes_tot += cmd->nbody*sizeof(body);
 
     mass = 1.0;
     weight = 1.0;
@@ -312,57 +314,163 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
     gd->Box[0] = 2.0;
     gd->Box[1] = 2.0;
     gd->Box[2] = 2.0;
-    
-    cmd->sizeHistN =    20;
-    cmd->rangeN =       0.0633205;
-    cmd->rminHist =     0.00213811;
+
     verb_print(cmd->verbose,
-               "fixing sizeHistN, rangeN and rminHist for a unit-sphere to:");
+               "using sizeHistN, rangeN and rminHist for a unit-sphere:");
     verb_print(cmd->verbose,
                "%d %g %g\n",
                cmd->sizeHistN, cmd->rangeN, cmd->rminHist);
-
+    //E
 
     int ifile=0;
-    gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    int nbody = cmd->nbody;
 
     mass = 1.0;
     weight = 1.0;
     tmass=0.0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+    
+    bodyptr bodytabtmp;
+    bodytabtmp = (bodyptr) allocate(nbody * sizeof(body));
+    verb_print(cmd->verbose,
+               "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
+               nbody*sizeof(body)*INMB, nbody);
+
+    real xmin, ymin, zmin;
+    real xmax, ymax, zmax;
+    xmin=0., ymin=0., zmin=0.;
+    xmax=0., ymax=0., zmax=0.;
+
+    INTEGER i;
+    INTEGER iselect = 0;
+
+    DO_BODY(p, bodytabtmp, bodytabtmp+nbody) {
+        Update(p) = FALSE;
         phi    = 2.0 * PI_D * xrandom(0.0, 1.0);
         theta    = racos(1.0 - 2.0 * xrandom(0.0, 1.0));
-        if (scanopt(cmd->options, "no-arfken")) {
-            ra = theta;
-            dec = PIO2 - phi;
-            Pos(p)[0] = rcos(dec)*rcos(ra);
-            Pos(p)[1] = rcos(dec)*rsin(ra);
-            Pos(p)[2] = rsin(dec);
-        } else {
-            ra = phi;
-            dec = theta;
-            // Standard transformation. See Arfken
-            Pos(p)[0] = rsin(dec)*rcos(ra);
-            Pos(p)[1] = rsin(dec)*rsin(ra);
-            Pos(p)[2] = rcos(dec);
+        if (scanopt(cmd->options, "patch")) {
+            //B
+            if (cmd->thetaL < theta && theta < cmd->thetaR) {
+                if (cmd->phiL < phi && phi < cmd->phiR) {
+                    iselect++;
+//                    spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
+                    coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+                    if (!scanopt(cmd->options, "kappa-constant")) {
+                        // a takahasi simulation with nside1024 gives:
+                        //  inputdata_ascii: average and std dev of kappa
+                        //  (12582912 particles) = 2.936728e-08 6.528639e-03
+                        Kappa(p) = grandom(2.936728e-08, 6.528639e-03);
+//                        Kappa(p) = grandom(1.0, 0.25);
+                    } else {
+                        Kappa(p) = 2.0;
+                        if (scanopt(cmd->options, "kappa-constant-one"))
+                            Kappa(p) = 1.0;
+                    }
+                    Type(p) = BODY;
+                    Mass(p) = mass;
+                    Weight(p) = weight;
+                    Id(p) = p-bodytabtmp+iselect;
+                    Update(p) = TRUE;
+                    xmin = Pos(p)[0];
+                    ymin = Pos(p)[1];
+                    zmin = Pos(p)[2];
+                    xmax = Pos(p)[0];
+                    ymax = Pos(p)[1];
+                    zmax = Pos(p)[2];
+                } // ! in phi range
+            } // in ! in theta range
+            //E
+        } else { // ! all
+            //B
+            iselect++;
+//            spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
+            coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+            if (!scanopt(cmd->options, "kappa-constant")) {
+                // a takahasi simulation with nside1024 gives:
+                //  inputdata_ascii: average and std dev of kappa
+                //  (12582912 particles) = 2.936728e-08 6.528639e-03
+                Kappa(p) = grandom(2.936728e-08, 6.528639e-03);
+                //                        Kappa(p) = grandom(1.0, 0.25);
+            } else {
+                Kappa(p) = 2.0;
+                if (scanopt(cmd->options, "kappa-constant-one"))
+                    Kappa(p) = 1.0;
+            }
+            Type(p) = BODY;
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytabtmp+iselect;
+            Update(p) = TRUE;
+            xmin = Pos(p)[0];
+            ymin = Pos(p)[1];
+            zmin = Pos(p)[2];
+            xmax = Pos(p)[0];
+            ymax = Pos(p)[1];
+            zmax = Pos(p)[2];
+            //E
+        } // ! all
+    } // ! end loop p
+
+    bodyptr q;
+    if (scanopt(cmd->options, "patch"))
+        cmd->nbody = iselect;
+
+    gd->nbodyTable[ifile] = cmd->nbody;
+    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bytes_tot += cmd->nbody*sizeof(body);
+
+    real kavg = 0;
+    INTEGER ij=0;
+    DO_BODY(q, bodytabtmp, bodytabtmp+nbody) {
+        if(Update(q)) {
+            p = bodytable[ifile]+ij;
+            Pos(p)[0] = Pos(q)[0];
+            Pos(p)[1] = Pos(q)[1];
+            Pos(p)[2] = Pos(q)[2];
+            Kappa(p) = Kappa(q);
+            Type(p) = Type(q);
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytable[ifile]+1;
+            xmin = MIN(xmin,Pos(p)[0]);
+            ymin = MIN(ymin,Pos(p)[1]);
+            zmin = MIN(zmin,Pos(p)[2]);
+            xmax = MAX(xmax,Pos(p)[0]);
+            ymax = MAX(ymax,Pos(p)[1]);
+            zmax = MAX(zmax,Pos(p)[2]);
+            ij++;
+            kavg += Kappa(p);
+            tmass += Mass(p);
         }
-        Id(p) = p-bodytable[ifile]+1;
-        Type(p) = BODY;
-        Mass(p) = mass;
-        Weight(p) = weight;
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;                         // use kapp-constant
-        else {
-            // a takahasi simulation with nside1024 gives:
-            //  inputdata_ascii: average and std dev of kappa
-            //  (12582912 particles) = 2.936728e-08 6.528639e-03
-            Kappa(p) = grandom(2.936728e-08, 6.528639e-03);
-//            Kappa(p) = grandom(1.0, 0.25);
-        }
-        tmass += Mass(p);
     }
-    
+
+    verb_print(cmd->verbose,
+               "\n\ttestdata_unit_sphere_random: min and max of x = %f %f\n",
+               xmin, xmax);
+    verb_print(cmd->verbose,
+               "\ttestdata_unit_sphere_random: min and max of y = %f %f\n",
+               ymin, ymax);
+    verb_print(cmd->verbose,
+               "\ttestdata_unit_sphere_random: min and max of z = %f %f\n",
+               zmin, zmax);
+
+    free(bodytabtmp);
+    verb_print(cmd->verbose,
+            "\nFreed %g MByte for temporal particle (%ld) storage.\n",
+               nbody*sizeof(body)*INMB,nbody);
+
+    if (scanopt(cmd->options, "all"))
+        verb_print(cmd->verbose,
+            "\n\ttestdata_unit_sphere_random: selected read points and nbody: %ld %ld\n",
+            iselect, cmd->nbody);
+    else
+        verb_print(cmd->verbose,
+            "\n\ttestdata_unit_sphere_random: selected read points = %ld\n",iselect);
+
+    verb_print(cmd->verbose,
+            "testdata_unit_sphere_random: average of kappa (%ld particles) = %le\n",
+            cmd->nbody, kavg/((real)cmd->nbody) );
+
+
     verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
 
     return SUCCESS;
