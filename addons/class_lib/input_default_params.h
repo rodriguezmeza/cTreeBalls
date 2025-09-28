@@ -70,8 +70,8 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->preScript = "";
     cmd->posScript = "";
     cmd->stepState = 100000;
-    cmd->verbose = 2;
-    cmd->verbose_log = 2;
+    cmd->verbose = 1;
+    cmd->verbose_log = 1;
 #ifdef OPENMPCODE
     cmd->numthreads = 16;
 #endif

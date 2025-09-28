@@ -16,7 +16,7 @@ Author: Mario A. Rodriguez-Meza
 
 **c**orrelations function computation with **T**ree/**B**alls methods (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
 
-Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/). There is also a complete but brief html version the man (linux manual) version [man](https://github.com/rodriguezmeza/cTreeBalls/blob/main/docs/man/cballs.html).
+Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/). There is also a complete but brief html version the man (linux manual) version man. Look for it an open it with a web explorer.
 
 ## Compiling and getting started
 

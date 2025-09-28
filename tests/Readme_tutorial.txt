@@ -1,13 +1,18 @@
 
-cBalls: 1, 2, 3... for people in a hurry... boys and girls only want plug and play... SNI's under the siege of an evaluation year...
+cBalls: 1, 2, 3... for people in a hurry... boys and girls just want it plug and play... peladito y en la boca... SNI's under the siege of an evaluation year...
 
-It is assuming that you are in the cTreeBalls directory (where there is a git clon of the code).
+(
+Some where in your computer $HOME do
+$ git clone https://github.com/rodriguezmeza/cTreeBalls.git
+)
+
+1. It is assuming that you are in the cTreeBalls directory (where there is a git cloned version of the code).
 
 First:
 
 $ make clean; make all
 
-Then (after many seconds...)
+Then (after too many seconds... a price must be paid to not look for the root administration and get him done some tasks for you...)
 
 $ mkdir deleteme; cd deleteme
 
@@ -15,7 +20,8 @@ Run
 
 $ ../cballs
 
-Then you will have an Output folder just created by cBalls filled with all the files resulted of the run. There is a file named "parameters_null-cballs-usedvalues"
+A distribution of uniformly points in the unit sphere is generated with a gaussian values of convergence field. The (2,3)-point correlation functions are computed and saved as histograms in a folder name Output just created by cBalls. Also you will find a 
+file named "parameters_null-cballs-usedvalues". Do
 
 $ more Output/parameters_null-cballs-usedvalues
 
@@ -27,14 +33,11 @@ and an extended description is gotten by
 
 $ man ../doc/man/cballs.1
 
+Read as thoroughly as needed in particular follow the examples at the end for reading files.
 
+2. To test cBalls:
 
-1. Seeing all the parameters:
-
-2. Reading files
-
-3. To test cBalls:
-
+$ cd ../tests
 $ ./run_all_tests
 
 or test individual cases:
