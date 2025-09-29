@@ -16,7 +16,7 @@ Author: Mario A. Rodriguez-Meza
 
 **c**orrelations function computation with **T**ree/**B**alls methods (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
 
-Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/). There is also a complete but brief html version the man (linux manual) version man. Look for it an open it with a web explorer.
+Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/). There is also a complete but brief html version the man (linux manual) version man. Look for it (`docs/man/cballs.html`) an open it with a web explorer.
 
 ## Compiling and getting started
 
@@ -28,25 +28,25 @@ Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make
 
 To check that the code runs, if you are in `cTreeBalls` directory, type:
 
-    make clean; make all
-    cd tests
-    ../cballs
+    $ make clean; make all
+    $ cd tests
+    $ ../cballs
 
 It will run using all default values and a directory named `Output` will be created under `tests`. **cBalls** will save all histograms files and a log file in `Output/tmp`. A file with the parameter values use in the run named `parameters_null-usedvalues` will also be saved. You may use it as a template to create your own parameter files.
 
 If you execute:
 
-    ../cballs options=post-processing script="python scripts/plot2pcf.py"
+    $ ../cballs options=post-processing script="python scripts/plot2pcf.py"
 
 will do the same but now will plot the 2pcf and save it as a pdf file. Now, let us use a parameter file, execute:
 
-    ../cballs parameters_explained
+    $ ../cballs ./In/parameters_explained
 
 Directory `Output` is already created then **cBalls** will overwritte all histograms files, parameter file as was run, and the log file. The parameters_explained file is a reference input file, containing (and explaining) the use of all possible input parameters. In this case as can be seen in `parameters_explained` file a catalog of points is read from the file `kappa_nres12_zs9NS256r000.bin`.
 
 To see a plot of the 2pcf, edit parameters_explained and set option to "post-processing" and execute again:
  
-    ../cballs parameters_explained
+    $ ../cballs parameters_explained
 
 At the end of the run you will, as before, have a pdf file of the plot.
 
@@ -57,17 +57,17 @@ By default **cBalls** reads/writes catalog of points to analyzed files in 4-colu
 
 Try running:
 
-    ../cballs nbody=6480 o=points_on_sphere testmodel=unit-sphere-random options=stop
+    $ ../cballs nbody=6480 o=points_on_sphere testmodel=unit-sphere-random options=stop
 
 In the `Output` directory you will have a file: `points_on_sphere.txt`. View its contents to see the two lines header and the 4 columns structure of data. You can plot this file:
 
-    python scripts/plot3D_points-on-sphere.py
+    $ python scripts/plot3D_points-on-sphere.py
 
 Note: in the above example `points_on_sphere` was not given an extension. By default **cBalls** gives to the output files the extension `.txt`.
 
 You may also consult the code´s man page for more detailed information on how to run **cBalls**:
 
-    man ../docs/man/cballs.m
+    $ man ../docs/man/cballs.m
 
 
 ## Configuration
@@ -107,7 +107,7 @@ To install cBalls python module (cballys) just execute (you already do it...):
 
 To test it go to directory `tests` and run:
 
-    $ python test_cython_balls.py
+    $ python ./In/test_cython_balls.py
 
 Note: this interface in Cython was tested in a python environment with `python3.12`.
 

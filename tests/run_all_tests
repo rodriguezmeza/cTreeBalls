@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 #CBALLS=$HOME/Research/Codigos/NagBody_pkg/NagBody_sources/perturbations/cTreeBalls/git_cosmoinin/test/cTreeBalls/cballs
-CBALLS=cballs
+#CBALLS=cballs
+CBALLS=../cballs
 PYTHON='python'
 InDir='./In'
 scriptsDir='./scripts'
