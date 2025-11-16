@@ -9,25 +9,34 @@
 #ifndef _protodefs_include_h
 #define _protodefs_include_h
 
-#ifdef BALLS
-#include "protodefs_balls_omp.h"
-#endif
-
-#ifdef PXD
-#include "protodefs_pxd.h"
+#ifdef OCTREEGGGOMP
+#include "protodefs_octree_ggg_omp.h"
 #endif
 
 #ifdef KDTREEOMP
 #include "protodefs_kdtree_omp.h"
 #endif
 
-#ifdef OCTREEKKKOMP
-#include "protodefs_octree_kkk_omp.h"
+#ifdef KDTREEBOXOMP
+#include "protodefs_kdtree_box_omp.h"
 #endif
 
-#ifdef OCTREEGGGOMP
-#include "protodefs_octree_ggg_omp.h"
+#ifdef NEIGHBORBOXESOMP
+#include "protodefs_neighbor_boxes_omp.h"
 #endif
+
+#ifdef KDTREECUTEBOX
+#include "protodefs_kdtree_cute_box.h"
+#endif
+
+#ifdef PXD
+#include "protodefs_pxd.h"
+#endif
+
+#ifdef DIRECTMETHODSIMPLE
+#include "protodefs_direct_method_simple.h"
+#endif
+
 
 /*
  Add your addon item here
@@ -47,16 +56,8 @@
 #include "protodefs_direct_method.h"
 #endif
 
-#ifdef DIRECTMETHODSIMPLE
-#include "protodefs_direct_method_simple.h"
-#endif
-
 #ifdef SAVERESTORE
 #include "protodefs_save_restore.h"
-#endif
-
-#ifdef KDTREECUTEBOX
-#include "protodefs_kdtree_cute_box.h"
 #endif
 
 #ifdef OCTREEGGGOMPTRIANGLES
@@ -73,6 +74,38 @@
 
 /*
  #E Addendum of some not important
+ ############################
+*/
+
+
+/*
+ ############################
+ #B Addendum of some important
+ #   modules that will not be part
+ #       any longer of the public version
+ # Normally they will be switched OFF
+ ############################
+ */
+
+#ifdef OCTREESINCOSOMP
+#include "protodefs_octree_sincos_omp.h"
+#endif
+
+#ifdef BALLS
+#include "protodefs_balls_omp.h"
+#endif
+
+#ifdef OCTREEKKKOMP
+#include "protodefs_octree_kkk_omp.h"
+#endif
+
+#ifdef OCTREEBOXOMP
+#include "protodefs_octree_box_omp.h"
+#endif
+
+/*
+ #E Addendum of some not important
+ #  no longer part of the public version
  ############################
 */
 

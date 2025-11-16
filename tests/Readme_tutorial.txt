@@ -1,5 +1,5 @@
 
-cBalls: 1, 2, 3... for people in a hurry... boys and girls just want it plug and play... peladito y en la boca... SNI's under the siege of an evaluation year...
+cBalls: 1, 2, 3... for people in a hurry... boys and girls just want it plug and play... peladito y en la boca (as mom-bird feeds her baby-birds)... SNI's under the siege of an evaluation year...
 
 (
 Some where in your computer $HOME do

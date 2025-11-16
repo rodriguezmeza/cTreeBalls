@@ -10,6 +10,10 @@
 $(info )
 $(info =====================================================)
 
+# OCTREESINCOSOMP
+# For computing (2,3)pcf using octree-omp
+OCTREESINCOSOMPON = 1
+
 # BALLSOMP
 # For computing 3pcf using balls method
 BALLSON = 1
@@ -97,7 +101,9 @@ KDTREEOMPON = 1
 
 # OCTREEKKKOMP
 # For computing 3pcf using octree-kkk-omp
+ifeq ($(DEFDIMENSION),3)
 OCTREEKKKOMPON = 1
+endif
 
 #E Set of settings
 
@@ -146,10 +152,57 @@ NOSTANDARNORMHISTON = 0
 CMDLINE_DEFS_UNITSPHERE_ON = 1
 
 #B for some addons will be useful this switches
+DEFINEFLAGS =
 OPT2 += -DTWOPCF
 OPT2 += -DTHREEPCFCONVERGENCE
 #OPT2 += -DTHREEPCFSHEAR
-#OPT2 += -DBALLS4SCANLEV
+# THETA control (activated with options=behavior-ball):
+#   the fraction of a bin width (deltaR) by which it is ok to let the pairs miss the correct bin.
+#   the default is to use 1 if deltaR <= 0.1, or 0.1/deltaR if deltaR > 0.1.
+# logscale: goodTHETA = 0.1 / deltaR
+# normal scale: goodTHETA = 0.1 * (rminHist + deltaR/2) / deltaR
+# THETA = MIN(goodTHETA, 1.0)
+#THETA = 0 # will give no behavior-ball
+THETA = 1 # the bin will incorrect by 1 bin width
+#THETA = 1.5
+DEFINEFLAGS += -DTHETA=$(THETA)
+# will give the two balls condition...
+#   needs that ORIGINALCBON = 0 see below...
+BALLS4SCANLEVON = 0
+NORMALHISTSCALEON = 0
+#
+#B several definitions from/to cute-box Makefile
+_DEBUGON_ = 0
+LOGBINON = 0
+# remember to use "options=smooth-pivot"
+SMOOTHPIVOTON = 0
+ORIGINALCBON = 1
+ifeq ($(LOGBINON),1)
+DEFINEFLAGS += -D_LOGBIN_
+endif
+# neighbor-boxes-omp run faster with this option
+DEFINEFLAGS += -DLOGBINCBON
+ifeq ($(_DEBUGON_),1)
+DEFINEFLAGS += -D_DEBUG_
+endif
+ifeq ($(ORIGINALCBON),1)
+DEFINEFLAGS += -DORIGINALCB
+else
+ifeq ($(SMOOTHPIVOTON),1)
+DEFINEFLAGS += -DSMOOTHPIVOT
+endif
+ifeq ($(BALLS4SCANLEVON),1)
+DEFINEFLAGS += -DBALLS4SCANLEV
+endif
+endif
+#
+ifeq ($(NORMALHISTSCALEON),1)
+DEFINEFLAGS += -DNORMALHISTSCALE
+endif
+#
+OPT2 += $(DEFINEFLAGS)
+#E
+#
 # not used anymore
 #OPT2 += -DMASKED
 #
@@ -213,9 +266,21 @@ $(info To compile with OCTREEGGGOMPTRIANGLES needs USEGSL = 1, deactivating...)
 OCTREEGGGOMPTRIANGLESON = 0
 endif
 
+# OCTREEBOXBOX
+# For computing 2pcf using octree-box-omp methods
+OCTREEBOXOMPON = 1
+
+# KDTREEBOXBOX
+# For computing 2pcf using kdtree-box-omp methods
+KDTREEBOXOMPON = 1
+
+# NEIGHBORBOXESOMP
+# For computing 2pcf using neighbor-boxes-omp method
+NEIGHBORBOXESOMPON = 1
+
 # KDTREECUTEBOX
-# For computing 2pcf using cute_box methods
-KDTREECUTEBOXON = 0
+# For computing 2pcf using cute-box methods
+KDTREECUTEBOXON = 1
 
 # OCTREEKKKBALLS4OMP
 # For computing 3pcf using octree-kkk-balls4-omp
@@ -240,6 +305,19 @@ OCTREEKKKBALLS4OMPTRIANGLESON = 0
 endif
 
 #E
+############################
+
+
+############################
+#B Addendum of some important
+#   modules that will not be part
+#       any longer of the public version
+# Normally they will be switched OFF
+############################
+
+
+#E Addendum of some not important
+#  no longer part of the public version
 ############################
 
 

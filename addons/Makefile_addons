@@ -11,6 +11,13 @@ include $(MACHINES_DIR)/addons/Makefile_addons_settings
 
 #B Here insert AddOns´ Makefile modules
 
+# OCTREESINCOSOMP
+# For computing (2,3)pcf using octree-sincos-omp
+ifeq ($(OCTREESINCOSOMPON),1)
+include $(MACHINES_DIR)/addons/octree_sincos_omp/Makefile_octree_sincos_omp
+endif
+#
+
 # BALLSOMP
 # For computing 3pcf using balls method
 ifeq ($(BALLSON),1)
@@ -219,6 +226,27 @@ endif
 # For computing 3pcf using octree-ggg-omp-triangles
 ifeq ($(OCTREEGGGOMPTRIANGLESON),1)
 include $(MACHINES_DIR)/addons/octree_ggg_omp_triangles/Makefile_octree_ggg_omp_triangles
+endif
+#
+
+# OCTREEBOXOMP
+# For computing 2pcf using octree_box_omp methods
+ifeq ($(OCTREEBOXOMPON),1)
+include $(MACHINES_DIR)/addons/octree_box_omp/Makefile_octree_box_omp
+endif
+#
+
+# KDTREEBOXOMP
+# For computing 2pcf using kdtree_box_omp methods
+ifeq ($(KDTREEBOXOMPON),1)
+include $(MACHINES_DIR)/addons/kdtree_box_omp/Makefile_kdtree_box_omp
+endif
+#
+
+# NEIGHBORBOXESOMP
+# For computing 2pcf using neighbor-boxes-omp method
+ifeq ($(NEIGHBORBOXESOMPON),1)
+include $(MACHINES_DIR)/addons/neighbor_boxes_omp/Makefile_neighbor_boxes_omp
 endif
 #
 

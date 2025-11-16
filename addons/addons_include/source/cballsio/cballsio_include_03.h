@@ -4,6 +4,10 @@
 #ifndef _cballsio_include_03_h
 #define _cballsio_include_03_h
 
+#ifdef IOLIB
+#include "cballsio_iolib_03.h"
+#endif
+
 #ifdef CFITSIO
 #include "cballsio_cfitsio_03.h"
 #endif

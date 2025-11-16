@@ -1,6 +1,8 @@
 // Use:
 //#include "cballsio_cfitsio_08.h"
 
+// included in: addons/addons_include/source/cballsio/cballsio_indlude_08.h
+
 #ifndef _cballsio_cfitsio_08_h
 #define _cballsio_cfitsio_08_h
 

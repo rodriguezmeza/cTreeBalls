@@ -2,6 +2,8 @@
 //=============================================================================
 //        1          2          3          4        ^ 5          6          7
 
+// included in: addons/addons_include/source/cballsio/cballsio_indlude_11b.h
+
 #ifndef _cballsio_cfitsio_07_h
 #define _cballsio_cfitsio_07_h
 

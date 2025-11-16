@@ -4,6 +4,10 @@
 #ifndef _cballs_include_03_h
 #define _cballs_include_03_h
 
+#ifdef OCTREESINCOSOMP
+#include "cballs_print_octree_sincos_omp.h"
+#endif
+
 #ifdef BALLS
 #include "cballs_print_balls_omp.h"
 #endif
@@ -16,7 +20,9 @@
 #include "cballs_print_octree_kkk_omp.h"
 #endif
 
-
+//#ifdef NEIGHBORBOXESOMP
+//#include "cballs_print_neighbor_boxes_omp.h"
+//#endif
 
 /*
  Add your addon item here
@@ -39,6 +45,14 @@
 
 #ifdef KDTREECUTEBOX
 #include "cballs_print_kdtree_cute_box.h"
+#endif
+
+#ifdef KDTREEBOXOMP
+#include "cballs_print_kdtree_box_omp.h"
+#endif
+
+#ifdef OCTREEBOXOMP
+#include "cballs_print_octree_box_omp.h"
 #endif
 
 /*

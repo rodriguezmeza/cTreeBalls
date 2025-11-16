@@ -1,8 +1,15 @@
 ####################################################
 ###          User definable stuff
 #Monopole
-NB_R = 128
-R_MAX = 100.
+#B Original definitions:
+#NB_R = 128
+#R_MAX = 100.
+# good agreement with cBalls...
+#   halos: plotNN.py with params_halo.txt and parameters_to-test_data.txt
+#NB_R = 118
+NB_R = 60
+R_MAX = 150.
+#E
 #Logarithmic binning
 N_LOGINT = 5
 #Behavior options

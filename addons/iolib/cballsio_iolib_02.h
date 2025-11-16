@@ -225,6 +225,7 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
 local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
+    string routineName = "inputdata_ascii_mcolumns";
     stream instr;
     int ndim;
     bodyptr p;
@@ -232,6 +233,11 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     real weight=1;
 
     gd->input_comment = "Multi-column position input file";
+
+    verb_print_warning(cmd->verbose, "\nWarning!! %s\n\t%s... \t%s\n",
+                       "need to use \"columns\" option to give positions columns correctly",
+                       "not doing so, may result in wrong results ",
+                       "(and even get segmentation fault)");
 //
 // Upgrade to cross-correlations: kappa-gamma
 //
@@ -241,9 +247,11 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
               "'pos-and-convergence' and 'pos-and-shear'");
 
     int vnpoint;
+
 #if NDIM == 3
     if (scanopt(cmd->options, "only-pos")) {
-        InputData_3c(filename, gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint);
+        InputData_3c(filename,
+                     gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint);
     } else {
         if (scanopt(cmd->options, "pos-and-convergence")) {
             InputData_4c(filename,
@@ -256,7 +264,10 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
                              gd->columns[0], gd->columns[1], gd->columns[2],
                              gd->columns[3], gd->columns[4],
                              &vnpoint);
-            }
+            } else
+                error("\n\t%s: options need one of: \n\t%s, %s or %s\n",
+                      routineName,
+                      "only-pos", "pos-and-convergence", "pos-and-shear");
         }
     }
 #else
@@ -438,5 +449,143 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     return SUCCESS;
 }
 
+// Routine to read ra-dec ascii files
+//  by default:
+//      ra is column 1
+//      dec is column 2
+//      kappa is column 3
+local int inputdata_ascii_ra_dec(struct cmdline_data* cmd, struct  global_data* gd,
+                               string filename, int ifile)
+{
+    string routineName = "inputdata_ascii_ra_dec";
+    stream instr;
+    int ndim;
+    bodyptr p;
+    real mass=1;
+    real weight=1;
+    real phi, theta;
+
+    gd->input_comment = "ra-dec-kappa input file";
+
+    int vnpoint;
+
+#if NDIM == 2
+    error("\n%s only works in 3D", routineName);
+#endif
+
+    InputData_3c(filename,
+                 gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint);
+
+    cmd->nbody = vnpoint;
+    gd->nbodyTable[ifile] = cmd->nbody;
+
+    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        Id(p) = p-bodytable[ifile]+1;
+        phi = inout_xval[Id(p)-1];
+        theta = inout_yval[Id(p)-1];
+        if (scanopt(cmd->options, "in-degrees")) {
+            phi = radian(phi);
+            theta = radian(theta);
+        }
+        coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+        Kappa(p) = inout_zval[Id(p)-1];
+    }
+
+    free(inout_xval);
+    free(inout_yval);
+    free(inout_zval);
+
+//B Set (0,0,...) as the center of the box
+// By now it is only working with boxes centered at (0,0,...)
+    cellptr root;                                   // Set it up a temporal root
+    root = (cellptr) allocate(1 * sizeof(body));
+
+    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    CLRV(Pos(root));
+//E
+    gd->rSizeTable[ifile] = 1.0;
+    expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    free(root);
+
+    real xmin, ymin, zmin;
+    real xmax, ymax, zmax;
+    xmin = Pos(bodytable[ifile])[0];
+    ymin = Pos(bodytable[ifile])[1];
+    zmin = Pos(bodytable[ifile])[2];
+    xmax = Pos(bodytable[ifile])[0];
+    ymax = Pos(bodytable[ifile])[1];
+    zmax = Pos(bodytable[ifile])[2];
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        xmin = MIN(xmin,Pos(p)[0]);
+        ymin = MIN(ymin,Pos(p)[1]);
+        zmin = MIN(zmin,Pos(p)[2]);
+        xmax = MAX(xmax,Pos(p)[0]);
+        ymax = MAX(ymax,Pos(p)[1]);
+        zmax = MAX(zmax,Pos(p)[2]);
+    }
+    gd->Box[0] = xmax-xmin;
+    gd->Box[1] = ymax-ymin; gd->Box[2] = zmax-zmin;
+    verb_print_q(2, cmd->verbose,
+                 "\tinputdata_ascii_mcolumns: nbody and ndim: %d %d...\n",
+                 cmd->nbody, ndim);
+    verb_print_q(2, cmd->verbose,
+                 "\tinputdata_ascii_mcolumns: Lx, Ly, Lz: %g %g %g...\n",
+               gd->Box[0], gd->Box[1], gd->Box[2]);
+
+    real kavg=0.0;
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        Type(p) = BODY;
+        Mass(p) = mass;
+        Weight(p) = weight;
+        if (scanopt(cmd->options, "kappa-constant")) {
+            if (scanopt(cmd->options, "kappa-constant-one"))
+                Kappa(p) = 1.0;
+            else
+                Kappa(p) = 2.0;
+        }
+        kavg += Kappa(p);
+    }
+    verb_print_q(2, cmd->verbose,
+               "inputdata_ascii_mcolumns: average of kappa (%ld particles) = %le\n",
+               cmd->nbody, kavg/((real)cmd->nbody) );
+
+    //B If needed locate particles with same position.
+    //  This is a slow process, use if it necessary...
+    if (scanopt(cmd->options, "check-eq-pos")) {
+        bodyptr q;
+        real dist2;
+        vector distv;
+        INTEGER pqequals=0;
+        bool flag=0;
+        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody-1) {
+            DO_BODY(q, p+1, bodytable[ifile]+cmd->nbody) {
+                if (p != q) {
+                    DOTPSUBV(dist2, distv, Pos(p), Pos(q));
+                    if (dist2 == 0.0) {
+                        flag=1;
+                        pqequals++;
+                        verb_print(cmd->verbose,
+                                   "%s: (p,q) = %ld %ld :: %g %g %g :: %g %g %g\n",
+                                   routineName, Id(p), Id(q),
+                                   Pos(p)[0], Pos(p)[1], Pos(p)[2],
+                                   Pos(q)[0], Pos(q)[1], Pos(q)[2]);
+                    }
+                }
+            }
+        }
+        verb_print(cmd->verbose,
+        "%s: Total equal pairs: %ld\n",
+                   routineName, pqequals);
+        if (flag)
+        error("inputdata_ascii_mcolumns: at least two bodies have same position\n");
+    }
+    //E
+
+    return SUCCESS;
+}
 
 #endif	// ! _cballsio_iolib_02_h

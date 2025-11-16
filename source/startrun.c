@@ -159,14 +159,14 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->cputotalinout = 0.;
     gd->cputotal = 0.;
     gd->bytes_tot = 0;
-//    gd->flagPrint = TRUE;
+    gd->sameposcount = 0;
 
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
     if (*(cmd->paramfile)=='-')
         error("bad parameter %s\n", cmd->paramfile);
     if (!strnull(cmd->paramfile)) {
-        class_call_cballs(input_find_file(cmd, cmd->paramfile, &fc, errmsg),
+        class_call_cballs(input_find_file(cmd, gd, cmd->paramfile, &fc, errmsg),
                           errmsg, errmsg);
         class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
@@ -175,10 +175,12 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     }
 
 #else
-    class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg), 
+    // this segment must be checked!!! (used when GETPARMON = 0)
+    class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg),
                       errmsg, errmsg);
     class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
     class_call_cballs(parser_free(&fc), errmsg, errmsg);
+    //E
 #endif
 
     if (!strnull(cmd->paramfile))
@@ -314,7 +316,6 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
     //E
 
     //B Miscellaneous parameters
-//    cmd->script = GetParam("script");
     cmd->preScript = GetParam("preScript");
     cmd->posScript = GetParam("posScript");
 #ifdef LONGINT
@@ -340,7 +341,10 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
 local void ReadParametersCmdline_short(struct  cmdline_data* cmd, struct  global_data* gd)
 {
 //B Here add parameters needed to be read after reading parameter file
-//    cmd->script = GetParam("script");
+    //B Miscellaneous parameters
+//    cmd->preScript = GetParam("preScript");
+//    cmd->posScript = GetParam("posScript");
+    //E
 //E
 }
 
@@ -362,6 +366,7 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 #define MAXTAGS 300
 #define MAXCHARBUF 1024
 
+    string routineName = "ReadParameterFile";
     FILE *fd;
 
   int  i,j,nt;
@@ -369,6 +374,9 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
   void *addr[MAXTAGS];
   char tag[MAXTAGS][50];
   int  errorFlag=0;
+
+    int input_verbose = 2;
+    verb_print(input_verbose, "\nparsing input parameters...\n");
 
   nt=0;
 
@@ -552,10 +560,31 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
                             int index;
                             size_t slen;
                             slen = strlen(value);
+                            //B
+                            script1 = (char*) malloc(1*sizeof(char));
+                            memcpy(script1,value,1);
+                            script2 = strchr(script1, '"');
+                            if (script2 == NULL)
+                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                      value);
+                            free(script1);
+                            //E
+                            //B
+                            script1 = (char*) malloc((slen-1)*sizeof(char));
+                            memcpy(script1,value+1,slen-1);
+                            script2 = strchr(script1, '"');
+                            if (script2 == NULL)
+                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                      value);
+                            free(script1);
+                            //E
                             cmd->preScript = (char*) malloc((slen-2)*sizeof(char));
                             script1 = (char*) malloc(slen*sizeof(char));
                             memcpy(script1,value,slen);
                             script2 = strchr(script1, '"');
+                            if (script2 == NULL)
+                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                      script1);
                             memcpy(cmd->preScript,script2+1,slen-2);
                             free(script1);
                         } else {
@@ -563,10 +592,31 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
                                 int index;
                                 size_t slen;
                                 slen = strlen(value);
+                                //B
+                                script1 = (char*) malloc(1*sizeof(char));
+                                memcpy(script1,value,1);
+                                script2 = strchr(script1, '"');
+                                if (script2 == NULL)
+                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                          value);
+                                free(script1);
+                                //E
+                                //B
+                                script1 = (char*) malloc((slen-1)*sizeof(char));
+                                memcpy(script1,value+1,slen-1);
+                                script2 = strchr(script1, '"');
+                                if (script2 == NULL)
+                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                          value);
+                                free(script1);
+                                //E
                                 cmd->posScript=(char*) malloc((slen-2)*sizeof(char));
                                 script1 = (char*) malloc(slen*sizeof(char));
                                 memcpy(script1,value,slen);
                                 script2 = strchr(script1, '"');
+                                if (script2 == NULL)
+                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                          script1);
                                 memcpy(cmd->posScript,script2+1,slen-2);
                                 free(script1);
                             } else
@@ -591,10 +641,10 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
                         break;
                 }
             } else {
-                fprintf(stdout, "Error in file %s: Tag '%s' %s %s.\n",
-                        fname, name,
-                        "not allowed or multiple defined...\n",
-                        "look at saved parameter file which value was used");
+                fprintf(stdout, "\n%s: Error in file %s: Tag '%s' %s\n",
+                        routineName, fname, name,
+                        "not allowed or multiple defined...");
+//                        "look at saved parameter file which value was used");
                 errorFlag=1;
             }
         } // ! while loop
@@ -604,6 +654,9 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
         errorFlag=2;
         exit(0);
     }
+
+    if (errorFlag==1)
+        error("%s: going out\n", routineName);
 
     for(i=0;i<nt;i++) {
         if(*tag[i]) {
@@ -684,17 +737,13 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
      class_call_cballs(startrun_memoryAllocation(cmd, gd), errmsg, errmsg);
 
     coordinate_string_to_int(cmd, gd);              // set coordTag
-//    verb_print(cmd->verbose, "coordTag: %d\n", gd->coordTag);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "\n%s: coordTag: %d\n", routineName, gd->coordTag);
 
 //B Pre-processing necessary for reading data files:
-//    double cpustart;
     char buf[200];
     if (scanopt(cmd->options, "pre-processing")) {
-//        cpustart = CPUTIME;
         cpustartMiddle = CPUTIME;
-//        sprintf(buf,"%s",cmd->script);
         sprintf(buf,"%s",cmd->preScript);
         verb_print(cmd->verbose,
                    "\n%s: pre-processing: executing %s...\n",
@@ -703,7 +752,6 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         verb_print(cmd->verbose, " done.\n");
         gd->cputotalinout += CPUTIME - cpustart;
         verb_print(cmd->verbose, "%s: cpu time expended in this script %g\n\n",
-//                   CPUTIME - cpustart);
                    routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
         if (scanopt(cmd->options, "stop")) {
             verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
@@ -769,10 +817,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         gd->ninfiles = 1;
         verb_print_warning(cmd->verbose,
                            "Warning! ninfile has been set to 1.\n\n");
-    } /*else {
-        for (ifile=0; ifile<gd->ninfiles; ifile++) {
-        }
-    } */
+    }
 
     search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
 
@@ -893,24 +938,33 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                         "deltaR=%lf normal scale):\n",gd->deltaR);
     } // ! useLogHist
 
-        real Vol = 1.0;
-        int k;
-        DO_COORD(k)
-            Vol = Vol*gd->Box[k];
-        
-        gd->i_deltaR = 1.0/gd->deltaR;              // This is gd->i_r_max
+    real Vol = 1.0;
+    int k;
+    DO_COORD(k)
+        Vol = Vol*gd->Box[k];
+
+    gd->i_deltaR = 1.0/gd->deltaR;                  // This is gd->i_r_max
                                                     //  change...
-        verb_log_print(cmd->verbose_log, gd->outlog,
+    verb_log_print(cmd->verbose_log, gd->outlog,
                        "\nRcut, deltaR: %g %g\n",gd->Rcut,gd->deltaR);
 #if NDIM == 3
 // CHECK!!! gd->Box[1]
-        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "lbox: %g %g %g\n",gd->Box[0],gd->Box[1],gd->Box[2]);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: lbox: %g %g %g\n",
+                            routineName, gd->Box[0],gd->Box[1],gd->Box[2]);
+    DO_COORD(k)
+        gd->Box[k] = cmd->lengthBox;
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "%s: Warning!! lbox size was changed!! %s\n",
+                        routineName, "\n... make sure lengthBox was given right!!");
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: lbox: %g %g %g\n",
+                           routineName, gd->Box[0],gd->Box[1],gd->Box[2]);
 #else
-        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "lbox: %g %g\n",gd->Box[0],gd->Box[1]);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "lbox: %g %g\n",gd->Box[0],gd->Box[1]);
 #endif
-        verb_log_print(cmd->verbose_log, gd->outlog, "Box volume = %e\n",Vol);
+    verb_log_print(cmd->verbose_log, gd->outlog, "Box volume = %e\n",Vol);
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd->nbody,1.0/3.0));
     real avgDistance = rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0);
@@ -1284,8 +1338,14 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
 
     INTEGER bytes_tot_local=0;
     //B PXD functions
+#ifdef PXD
+    gd->vecPXD = dvector(1,cmd->sizeHistN);
+    gd->matPXD = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local += cmd->sizeHistN*sizeof(real);
+    bytes_tot_local += cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
     gd->rBins = dvector(1,cmd->sizeHistN);
     gd->histZetaMFlatten = dvector(1,cmd->sizeHistN*cmd->sizeHistN);
+#endif
     //E PXD functions
     gd->histNN = dvector(1,cmd->sizeHistN);
     gd->histCF = dvector(1,cmd->sizeHistN);
@@ -1685,7 +1745,7 @@ local int print_make_info(struct cmdline_data* cmd,
 #ifdef TWODIMCODE
     verb_print(cmd->verbose, "TWODIMCODE\n");
 #endif
-#if THREEDIMCODE
+#ifdef THREEDIMCODE
     verb_print(cmd->verbose, "THREEDIMCODE\n");
 #endif
 

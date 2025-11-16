@@ -589,6 +589,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #ifdef SINGLEP
     float dr1;
     float dr[NDIM];
+    float drpq2;
 #else
     real dr1;
     real drpq2;

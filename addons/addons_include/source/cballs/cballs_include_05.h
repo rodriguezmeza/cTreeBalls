@@ -13,7 +13,6 @@
 #include "cballs_octree_kkk_omp_05.h"
 #endif
 
-
 /*
  Add your addon item here
  */

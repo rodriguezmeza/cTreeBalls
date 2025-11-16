@@ -76,8 +76,8 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "preScript=",                          ";Script in shell or python that can be run in pre-processing",
     "posScript=",                          ";Script in shell or python that can be run in post-processing",
     "stepState=100000",                 ";number of steps to save a state-run info (pivot number completed in the log file)",
-    "verbose=1",                        ";Option to activate the amount of information sent to standard output", ":verb",
-    "verbose_log=1",                    ";Option to activate the amount of information sent to log file", ":verblog",
+    "verbose=0",                        ";Option to activate the amount of information sent to standard output", ":verb",
+    "verbose_log=0",                    ";Option to activate the amount of information sent to log file", ":verblog",
 #ifdef OPENMPCODE
     "numberThreads=16",                 ";To set the number of threads to use (OpenMP)", ":nthreads",
 #endif

@@ -1661,7 +1661,7 @@ int StartOutput(struct cmdline_data *cmd, struct  global_data* gd)
 
     outfilefmt_string_to_int(cmd->outfilefmt, &outfilefmt_int);
 
-    if (cmd->verbose>=VERBOSENORMALINFO)
+    if (cmd->verbose>=VERBOSEMININFO)
         if (! strnull(cmd->options))
             verb_print(cmd->verbose, "\n\toptions: %s\n", cmd->options);
 
@@ -2136,8 +2136,14 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
     free_dvector(gd->histCF,1,cmd->sizeHistN);
     free_dvector(gd->histNN,1,cmd->sizeHistN);
 
+    //B Histogram arrays PXD versions
+#ifdef PXD
     free_dvector(gd->histZetaMFlatten,1,cmd->sizeHistN*cmd->sizeHistN);
     free_dvector(gd->rBins,1,cmd->sizeHistN);
+    free_dmatrix(gd->matPXD,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dvector(gd->vecPXD,1,cmd->sizeHistN);
+#endif
+    //E Histogram arrays PXD versions
 
 //B Set gsl uniform random :: If not needed globally
 //      this line have to go to testdata

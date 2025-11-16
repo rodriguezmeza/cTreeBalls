@@ -13,6 +13,8 @@ This module defines a class called cballs.
 
 import numpy as np
 cimport numpy as np
+# is better this way...?
+#cimport numpy as cnp
 from libc.stdlib cimport *
 from libc.stdio cimport *
 from libc.string cimport *
@@ -323,6 +325,7 @@ cdef class cballs:
 #
 #B Interfaces to PXD functions
 #
+#B parameters
     def theta(self):
         self.Run(["input"])
         return self.cmd.theta
@@ -346,6 +349,27 @@ cdef class cballs:
         out_sizeHistN = sizeHistN
         return out_sizeHistN
 
+    def getVersion(self):
+        cdef char *param
+        cdef char *out_param
+        cdef int buffer_size = 20 # Allocate enough space
+        # Allocate memory for the destination string
+        param = <char*> malloc(buffer_size * sizeof(char))
+        out_param = <char*> malloc(buffer_size * sizeof(char))
+        if out_param is NULL:
+            raise MemoryError("Failed to allocate memory")
+        
+        if get_version(&self.cmd,param)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+#        print(f"param: {<bytes>param}.decode('utf-8')")
+
+        # Copy the string using strcpy (be careful with buffer overflows)
+        strcpy(out_param, param)
+        return out_param
+#E parameters
+
+#B histograms
     def getrBins(self):
         cdef int sizeHistN
         cdef int index_r
@@ -354,8 +378,6 @@ cdef class cballs:
             raise cBallsSevereErrorDummy()
 
         cdef np.ndarray[DTYPE_t, ndim=1] out_rBins = np.zeros(sizeHistN,'float64')
-#        cdef np.ndarray[float, ndim=1] out_rBins = np.zeros(sizeHistN,'float64')
-#        cdef ndarray[DTYPE_t, ndim=1] out_rBins = np.zeros(sizeHistN,'float64')
 
         if get_rBins(&self.cmd, &self.gd)==FAILURE:
             raise cBallsSevereErrorDummy()
@@ -365,6 +387,83 @@ cdef class cballs:
 
         return out_rBins
 
+    def getHistNN(self):
+        cdef int sizeHistN
+        cdef int index_r
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        cdef np.ndarray[DTYPE_t, ndim=1] out_HistNN = np.zeros(sizeHistN,'float64')
+
+        if get_HistNN(&self.cmd, &self.gd)==FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        for index_r in range(sizeHistN):
+            out_HistNN[index_r] = self.gd.vecPXD[index_r+1]
+
+        return out_HistNN
+
+    def getHistCF(self):
+        cdef int sizeHistN
+        cdef int index_r
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        cdef np.ndarray[DTYPE_t, ndim=1] out_hist = np.zeros(sizeHistN,'float64')
+
+        if get_HistCF(&self.cmd, &self.gd)==FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        for index_r in range(sizeHistN):
+            out_hist[index_r] = self.gd.vecPXD[index_r+1]
+
+        return out_hist
+
+    def getHistXi2pcf(self):
+        cdef int sizeHistN
+        cdef int index_r
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        cdef np.ndarray[DTYPE_t, ndim=1] out_hist = np.zeros(sizeHistN,'float64')
+
+        if get_HistXi2pcf(&self.cmd, &self.gd)==FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        for index_r in range(sizeHistN):
+            out_hist[index_r] = self.gd.vecPXD[index_r+1]
+
+        return out_hist
+
+    def getHistZetaMsincos(self, int m, int type):
+        cdef int sizeHistN
+        cdef int index_r
+        cdef int sizesqr
+        cdef ErrorMsg errmsg
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        
+        sizesqr = sizeHistN*sizeHistN
+
+        rows = sizeHistN
+        cols = sizeHistN
+        cdef np.ndarray[np.float64_t, ndim=2] matrix = np.zeros((rows, cols), dtype=np.float64)
+        
+        if get_HistZetaMsincos(&self.cmd, &self.gd, m, type, errmsg)==FAILURE:
+            raise cBallsSevereError(errmsg)
+
+        # You can then populate the matrix
+        for i in range(1,rows):
+            for j in range(1,cols):
+                matrix[i, j] = self.gd.matPXD[i][j]
+
+        return matrix
+
+#B this routine will be not necessary any more... delete it
     def getHistZetaM_sincos(self, int m, int type):
         cdef int sizeHistN
         cdef int index_r
@@ -377,8 +476,7 @@ cdef class cballs:
         sizesqr = sizeHistN*sizeHistN
 
         cdef np.ndarray[DTYPE_t, ndim=1] out_ZM = np.zeros(sizesqr,'float64')
-#        cdef ndarray[DTYPE_t, ndim=1] out_ZM = np.zeros(sizesqr,'float64')
-
+        
         if get_HistZetaM_sincos(&self.cmd, &self.gd, m, type, errmsg)==FAILURE:
             raise cBallsSevereError(errmsg)
 
@@ -386,6 +484,9 @@ cdef class cballs:
             out_ZM[index_r] = self.gd.histZetaMFlatten[index_r+1]
 
         return out_ZM
+#E
+
+#E histograms
 
 #
 #E Interfaces to PXD functions

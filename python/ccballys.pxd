@@ -13,11 +13,18 @@ cdef extern from "cballs.h":
         int sizeHistN
         double rangeN
         double rminHist
+        char * preScript
+        char * posScript
 
     cdef struct global_data:
 #B PXD functions
+        double *vecPXD
+        double **matPXD
         double *rBins
+        double *histNN
+        double *histNNPXD
         double *histZetaMFlatten
+        double ***histZetaMcos
 #E
         double Rcut
         double* histN
@@ -50,8 +57,17 @@ cdef extern from "cballs.h":
     int MainLoop(void*, void*);
     int EndRun(void*, void*);
 
+#B parameters
     int get_theta(void*, double*)
     int get_sizeHistN(void*, int*)
+    int get_version(void*, char*)
+#B parameters
+#B histograms
     int get_rBins(void*, void*)
+    int get_HistNN(void*, void*)
+    int get_HistCF(void*, void*)
+    int get_HistXi2pcf(void*, void*)
+    int get_HistZetaMsincos(void*, void*, int, int, char*)
     int get_HistZetaM_sincos(void*, void*, int, int, char*)
+#E histograms
 

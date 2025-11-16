@@ -45,10 +45,13 @@ global int search_init_sincos_omp(struct  cmdline_data* cmd,
         hist->histXithreadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         hist->histXithreadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         
-        hist->histZetaMthreadcos = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-        hist->histZetaMthreadsin = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->histZetaMthreadcos = dmatrix3D(1,cmd->mChebyshev+1,
+                                             1,cmd->sizeHistN,1,cmd->sizeHistN);
+        hist->histZetaMthreadsin = dmatrix3D(1,cmd->mChebyshev+1,
+                                             1,cmd->sizeHistN,1,cmd->sizeHistN);
         hist->histZetaMthreadsincos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,cmd->mChebyshev+1,
+                      1,cmd->sizeHistN,1,cmd->sizeHistN);
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
         hist->histZetaMthreadcossin =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -154,16 +157,25 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
             xi = NbRmin(p)*xi_2p;
         }
         //E
-#else
+#else // ! NOSTANDARNORMHIST
+
         xi = Kappa(p)/nbody;
-        xi_2p = Kappa(p);
+#ifdef BALLS4SCANLEV
+        xi_2p = (Weight(p)/Nb(p))*Kappa(p);
+#else
+//        xi_2p = Kappa(p);
+        xi_2p = Weight(p)*Kappa(p);
+#endif
         //B kappa Avg Rmin
         if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef BALLS4SCANLEV
             xi_2p = KappaRmin(p);
+#endif
             xi = NbRmin(p)*xi_2p/nbody;
         }
         //E
-#endif // ! NONORMHIST
+
+#endif // ! NOSTANDARNORMHIST
     } else if (Type(p) == BODY3) {
 #ifdef BODY3ON
         xi = Nbb(p)*Kappa(p)/nbody;
@@ -208,9 +220,11 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
             // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
             MULMS_ext(hist->histZetaMtmpcossin,hist->xiOUTVPcossin,xi,cmd->sizeHistN);
             ADDM_ext(hist->histZetaMthreadcos[m],
-                     hist->histZetaMthreadcos[m],hist->histZetaMtmpcos,cmd->sizeHistN);
+                     hist->histZetaMthreadcos[m],
+                     hist->histZetaMtmpcos,cmd->sizeHistN);
             ADDM_ext(hist->histZetaMthreadsin[m],
-                     hist->histZetaMthreadsin[m],hist->histZetaMtmpsin,cmd->sizeHistN);
+                     hist->histZetaMthreadsin[m],
+                     hist->histZetaMtmpsin,cmd->sizeHistN);
             ADDM_ext(hist->histZetaMthreadsincos[m],
                      hist->histZetaMthreadsincos[m],
                      hist->histZetaMtmpsincos,cmd->sizeHistN);
@@ -298,12 +312,23 @@ global int search_init_gd_hist_sincos(struct  cmdline_data* cmd, struct  global_
 //    xi=(V/v(r))*(DD(r)/N^2)
 // where v(r)=4*pi*((r+dr/2)^3-(r-dr/2)^3)/3, V=box_size^3 and N is the
 // total # particles.
-local int search_compute_Xi(struct  cmdline_data* cmd, struct  global_data* gd, int nbody)
+//
+// Note: only rminHistN = 0 works and agree with CUTE_BOX
+//  you may try options=cute-box-rmin to correct a bit the results...
+//      but for biger values of rminHistN differences grow...
+//
+local int search_compute_Xi(struct  cmdline_data* cmd,
+                            struct  global_data* gd, int nbody)
 {
     int k;
     int n;
     real normFac;
     real Vol;
+    //B correct cute-box-rmin
+    real deltaR;
+    if ((scanopt(cmd->options, "cute-box-rmin")))
+        deltaR = cmd->rangeN/cmd->sizeHistN;
+    //E
 
     Vol = 1.0;
     DO_COORD(k)
@@ -342,8 +367,14 @@ if (!cmd->useLogHist) {
                     r1 = rpow(10.0, rlog10(cmd->rminHist) + ((real)(n+1))*gd->deltaR );
                 }
             } else {
-                r0=(real)n*gd->deltaR;
-                r1=(real)(n+1)*gd->deltaR;
+                //B correct cute-box-rmin
+                if ((scanopt(cmd->options, "cute-box-rmin"))) {
+                    r0=(real)n*deltaR;
+                    r1=(real)(n+1)*deltaR;
+                } else {
+                    r0=(real)n*gd->deltaR;
+                    r1=(real)(n+1)*gd->deltaR;
+                }
             }
 
 #if (NDIM==3)
@@ -357,11 +388,24 @@ if (!cmd->useLogHist) {
                 gd->histCF[n] = corr[n];            // Original line
                 //E
             } else {
-                normFac = Vol/(2.0*PI*rpow(gd->deltaR,3.0)*nbody*nbody);
+                if (cmd->useLogHist) {
+                    vr=4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
+// rho_r/rho_av = ( histNN[n]/(nbody*vr) ) / (nbody/Vol)
+                    normFac = Vol/(vr*((real)(nbody*nbody)));
+                    gd->histCF[n] = gd->histNN[n] * normFac - 1.0;
+                } else {
+                    //B correct cute-box-rmin
+                    if ((scanopt(cmd->options, "cute-box-rmin"))) {
+                        normFac = Vol/(2.0*PI*rpow(deltaR,3.0)*nbody*nbody);
+                    } else {
+                        normFac = Vol/(2.0*PI*rpow(gd->deltaR,3.0)*nbody*nbody);
 // This line gives results for rdf (radial distribution function):
 //                gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5);
 // This line gives results in agreement with CB:
-                gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5) -1.0;
+                    }
+                    gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5) -1.0;
+                    //E
+                }
             }
 #else
             if (scanopt(cmd->options, "cute-box")) {
@@ -393,11 +437,15 @@ global int search_compute_HistN(struct  cmdline_data* cmd,
     int n;
     real normFac;
 
-// Check this factor is correct
+//B Check this factor is correct...
+// to agree with cute_box normalization commented out these lines
+//B these does not work!!
+//    normFac = 1.0;
+//E
     normFac = 0.5;
-
     for (n = 1; n <= cmd->sizeHistN; n++)
         gd->histNN[n] *= normFac;
+//E
 
     if (scanopt(cmd->options, "and-CF"))
         search_compute_Xi(cmd, gd, nbody);
@@ -425,6 +473,7 @@ global bool reject_cell(struct  cmdline_data* cmd, struct
     else
         return (FALSE);
 }
+
 
 //B 2023.11.22
 global bool reject_balls(struct  cmdline_data* cmd,
@@ -466,7 +515,8 @@ global bool reject_cell_balls(struct  cmdline_data* cmd,
         return (FALSE);
 }
 
-global bool reject_bodycell(struct  cmdline_data* cmd, struct  global_data* gd, nodeptr p, nodeptr q)
+global bool reject_bodycell(struct  cmdline_data* cmd,
+                            struct  global_data* gd, nodeptr p, nodeptr q)
 {
     real drpq, drpq2;
     vector dr;

@@ -26,12 +26,8 @@ typedef struct _node {
     short type;
     bool update;
     bool update2;
-//#ifdef MASKED
-//    bool mask;
     short mask;                                     // 1: unmasked body
                                                     // 0: masked body
-//#endif
-
 //B look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
     bool updatepivot;
@@ -39,17 +35,26 @@ typedef struct _node {
 //E
 
     REAL mass;                                      // to weight counts...
+#ifdef SINGLEP
+    float kappa;
+#else
     REAL kappa;                                     // scalar field of interest
-
-#ifdef THREEPCFSHEAR
-//B shear
-    REAL gamma1;
-    REAL gamma2;
-//E
 #endif
 
+#ifdef THREEPCFSHEAR
+    REAL gamma1;
+    REAL gamma2;
+#endif
+
+#ifdef SINGLEP
+    float weight;                                    // to weight fields...
+//    float pos[NDIM];
+#else
     REAL weight;                                    // to weight fields...
+//    vector pos;
+#endif
     vector pos;
+
     struct _node *next;
 #ifdef bhistON
     int *bhistNsub;

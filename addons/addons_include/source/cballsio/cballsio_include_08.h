@@ -9,7 +9,7 @@
 #endif
 
 #ifdef IOLIB
-#include "cballsio_iolib_03.h"
+#include "cballsio_iolib_08.h"
 #endif
 
 #ifdef CFITSIO

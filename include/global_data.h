@@ -24,9 +24,12 @@
 struct global_data{
 
     //B PXD functions
+    // need be public, not use "#ifdef PXD" directive
     real *rBins;
+    real *vecPXD;
+    real **matPXD;
     real *histZetaMFlatten;
-    //E
+    //E PXD functions
 
     real cpuinit;
     long cpurealinit;                               // get time of the day
@@ -98,6 +101,10 @@ struct global_data{
 #endif
 
 // -----------------------------------
+    //B Histogram arrays PXD versions
+    realptr histNNPXD;
+    //E Histogram arrays PXD versions
+
 //B Histogram arrays
     realptr histNN;
     realptr histCF;

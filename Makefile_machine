@@ -43,7 +43,11 @@ OPT2LIB =
 # your C compiler: Comment/uncomment as convenient
 #
 # GNU c
+# default is gcc-15,
+# cballys module is working with python 3.13 and gcc-15
+#   check with: 'python -c "import cballys"'
 CC       = gcc
+#CC       = gcc-15
 # With icc (Intel):
 #CC       = icc
 #

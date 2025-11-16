@@ -22,7 +22,7 @@
 #ifdef THREEPCFSHEAR
 #define mpOffSet        3
 int local mCheb;                                    // mCheb =
-                                                    //  cmd->mChebyshev + mpOffSet
+                                                    // cmd->mChebyshev + mpOffSet
 #endif
 
 #ifdef THREEPCFCONVERGENCE
@@ -455,9 +455,11 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
 local int search_compute_Xi_ggg(struct  cmdline_data* cmd,
-                                struct  global_data* gd, int nbody);
+                                struct  global_data* gd, int nbody,
+                                gdlptr_sincos_omp_ggg gdl);
 local int search_compute_HistN_ggg(struct  cmdline_data* cmd,
-                               struct  global_data* gd, int nbody);
+                               struct  global_data* gd, int nbody,
+                                   gdlptr_sincos_omp_ggg gdl);
 local int PrintHistNN(struct cmdline_data* cmd, struct  global_data* gd,
                       gdlptr_sincos_omp_ggg gdl);
 local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd,
@@ -525,6 +527,150 @@ local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
 local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                       struct  global_data* gd,
                                       gdlptr_sincos_omp_ggg);
+//B POLARAXIS
+//      check NDIM and periodic...
+local int polarix_init(struct  cmdline_data* cmd,
+                               struct  global_data* gd,
+                               bodyptr p, gdhistptr_sincos_omp_ggg hist);
+
+local int polarix_init(struct  cmdline_data* cmd,
+                               struct  global_data* gd,
+                               bodyptr p, gdhistptr_sincos_omp_ggg hist)
+{
+    //B Set reference axis...
+#ifdef POLARAXIS
+    //B check NDIM and periodic...
+    hist->q0[0] = 0.0;
+    hist->q0[1] = 0.0;
+    hist->q0[2] = 1.0;
+    DOTPSUBV(hist->drpq2, hist->dr0, Pos(p), hist->q0);
+    hist->drpq = rsqrt(hist->drpq2);
+    real b = 2.0*rasin(hist->drpq/2.0);
+    hist->cosb = rcos(b);
+    hist->sinb = rsin(b);
+    if (hist.drpq2==0) continue;
+    //E
+#else // ! POLARAXIS
+    //B check NDIM and periodic...
+    dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist->q0);
+    DOTPSUBV(hist->drpq2, hist->dr0, Pos(p), hist->q0);
+#ifdef SINGLEP
+    hist->drpq = sqrt(hist->drpq2);
+#else
+    hist->drpq = rsqrt(hist->drpq2);
+#endif
+    //E
+#endif // ! POLARAXIS
+    //E
+
+    return SUCCESS;
+}
+
+#ifdef POLARAXIS
+#if NDIM == 3
+#ifdef NOLIMBER
+#define POLARAXIS_MAIN                              \
+{                                                   \
+    real a, c, c2;                                  \
+    vector vc;                                      \
+    DOTPSUBV(c2, vc, Pos(q), hist->q0);             \
+    a = 2.0*rasin(dr1/2.0);                         \
+    real cosc;                                      \
+    cosc = Pos(q)[2];                               \
+    cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)  \
+              /(a*hist->sinb);                      \
+    if (rabs(cosphi) <= 1.0)                        \
+        sinphi = rsqrt(1.0 - rsqr(cosphi));         \
+    else                                            \
+        sinphi = 0.0;                               \
+    if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))\
+        sinphi *= -1.0;                             \
+}
+#else // ! NOLIMBER
+#define POLARAXIS_MAIN                              \
+{                                                   \
+    real a, c, c2;                                  \
+    vector vc;                                      \
+    DOTPSUBV(c2, vc, Pos(q), hist->q0);             \
+    a = dr1;                                        \
+    real cosc;                                      \
+    cosc = Pos(q)[2];                               \
+    cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)  \
+              /(a*hist->sinb);                      \
+    if (rabs(cosphi) <= 1.0)                        \
+        sinphi = rsqrt(1.0 - rsqr(cosphi));         \
+    else                                            \
+        sinphi = 0.0;                               \
+    if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))\
+        sinphi *= -1.0;                             \
+}
+#endif // ! NOLIMBER
+#else // ! NDIM == 3
+// work to do in 2D....
+#endif // ! NDIM == 3
+
+#else // ! POLARAXIS
+
+#if NDIM == 3
+#ifdef SINGLEP
+#define POLARAXIS_MAIN                              \
+{                                                   \
+    float s, sy; float pr0[NDIM];                   \
+    DOTVP(s, dr, hist->dr0);                        \
+    cosphi = s/(dr1*hist->drpq);                    \
+    CROSSVP(pr0,hist->dr0,Pos(p));                  \
+    DOTVP(sy, dr, pr0);                             \
+    if (rabs(cosphi)>1.0)                           \
+        sinphi = 0.0;                               \
+    else                                            \
+        sinphi = sqrt(1.0 - cosphi*cosphi);         \
+    if (sy < 0) sinphi *= -1.0;                     \
+    if (cosphi>1.0) cosphi = 1.0;                   \
+    if (cosphi<-1.0) cosphi = -1.0;                 \
+}
+#else // ! SINGLEP
+//B DEFINITION USE BY DEFAULT...
+#define POLARAXIS_MAIN                              \
+{                                                   \
+    real s, sy; vector pr0;                         \
+    DOTVP(s, dr, hist->dr0);                        \
+    cosphi = s/(dr1*hist->drpq);                    \
+    CROSSVP(pr0,hist->dr0,Pos(p));                  \
+    DOTVP(sy, dr, pr0);                             \
+    sinphi = rsqrt(1.0 - rsqr(cosphi));             \
+    if (sy < 0) sinphi *= -1.0;                     \
+    if (rabs(cosphi)>1.0)                           \
+    verb_log_print(cmd->verbose, gd->outlog,        \
+    "sumenode: Warning!... cossphi must be in (-1,1): %g\n", \
+                    cosphi);                        \
+}
+//E
+#endif // ! SINGLEP
+#else // ! NDIM == 3 ... 2 dimensions...
+#ifdef SINGLEP
+#define POLARAXIS_MAIN                              \
+{                                                   \
+    cosphi = -dr[0]/dr1;                            \
+    sinphi = -dr[1]/dr1;                            \
+    if (cosphi>1.0) cosphi = 1.0;                   \
+    if (cosphi<-1.0) cosphi = -1.0;                 \
+}
+#else // ! SINGLEP
+#define POLARAXIS_MAIN                              \
+{                                                   \
+    cosphi = -dr[0]/dr1;                            \
+    sinphi = -dr[1]/dr1;                            \
+    if (rabs(cosphi)>1.0)                           \
+    verb_log_print(cmd->verbose, gd->outlog,        \
+    "sumenode: Warning!... cossphi must be in (-1,1): %g\n", \
+                    cosphi);                        \
+}
+#endif // ! SINGLEP
+#endif // ! NDIM == 3 ... 2 dimensions...
+
+#endif // ! POLARAXIS
+//E POLARAXIS
+
 
 // NMultipoles precedes NONORMHIST?... Not necessarily.
 //  Check consistency!!!
@@ -634,6 +780,13 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
     cpustart = CPUTIME;
     print_info(cmd, gd);
+    if (cmd->useLogHist==FALSE &&
+        (strcmp(cmd->searchMethod,"octree-ggg-omp") == 0))
+//        error("%s: can´t have loghist false and octree-ggg-omp (%d %s)\n",
+//              routineName, cmd->useLogHist, cmd->searchMethod);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: can´t have loghist false and octree-ggg-omp (%d %s)\n",
+                            routineName, cmd->useLogHist, cmd->searchMethod);
 
 #ifdef THREEPCFSHEAR
     mCheb =cmd->mChebyshev + mpOffSet;
@@ -774,17 +927,19 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
            gdl, gdlN, main_thread_id)
 #endif // ! BALLS4SCANLEV
 #else // ! NMultipoles
+
 #ifndef BALLS4SCANLEV
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap,gdl)
+           icountNbRmin,icountNbRminOverlap,gdl, main_thread_id)
 #else // ! BALLS4SCANLEV
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap,gdl)
+           icountNbRmin,icountNbRminOverlap,gdl, main_thread_id)
 #endif // ! BALLS4SCANLEV
+
 #endif // ! NMultipoles
 #endif // ! ADDPIVOTNEIGHBOURS
 #endif // ! DEBUG
@@ -890,6 +1045,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                        cmd->mChebyshev+1, cmd->sizeHistN);
 #endif
 
+#ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
           //B 3pcf convergence & shear counting
           for (n = 1; n <= cmd->sizeHistN; n++)
@@ -899,6 +1055,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           CLRM_ext_ext(histN.histXithreadsin,
                        cmd->mChebyshev+1, cmd->sizeHistN);
           //E
+#endif
 #endif
 
 #ifdef THREEPCFSHEAR
@@ -913,29 +1070,15 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif
           //E
 
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
           //B 3pcf convergence & shear
-          //B Set reference axis...
-#ifdef POLARAXIS
-          hist.q0[0] = 0.0;
-          hist.q0[1] = 0.0;
-          hist.q0[2] = 1.0;
-          DOTPSUBV(hist.drpq2, hist.dr0, Pos(p), hist.q0);
-          hist.drpq = rsqrt(hist.drpq2);
-          real b = 2.0*rasin(hist.drpq/2.0);
-          hist.cosb = rcos(b);
-          hist.sinb = rsin(b);
-          if (hist.drpq2==0) continue;
-#else // ! POLARAXIS
-          dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
-          DOTPSUBV(hist.drpq2, hist.dr0, Pos(p), hist.q0);
-#ifdef SINGLEP
-          hist.drpq = sqrt(hist.drpq2);
+#ifndef BALLS4SCANLEV
+          polarix_init(cmd, gd, p, &hist);
 #else
-          hist.drpq = rsqrt(hist.drpq2);
+          polarix_init(cmd, gd, (bodyptr)p, &hist);
 #endif
-#endif // ! POLARAXIS
-          //E
           //E 3pcf convergence & shear
+#endif
 //E segment to be included below...
 
 #ifdef NMultipoles
@@ -985,10 +1128,14 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           //E
 #endif
 
+//          computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
+//                                           ipmax[cat1]-ipmin+1, &hist);
+//          computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
+//                                             ipmax[cat1]-ipmin+1, &histN);
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
-                                           ipmax[cat1]-ipmin+1, &hist);
+                                           gd->nnodescanlevTableB4[cat1], &hist);
           computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
-                                             ipmax[cat1]-ipmin+1, &histN);
+                                             gd->nnodescanlevTableB4[cat1], &histN);
 #endif // ! BALLS4SCANLEV
 
 #ifdef PIVOTLOOP
@@ -1028,25 +1175,13 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                cmd->mChebyshev+1, cmd->sizeHistN);
                   //E
 //B Set reference axis...
-#ifdef POLARAXIS
-                  hist.q0[0] = 0.0;
-                  hist.q0[1] = 0.0;
-                  hist.q0[2] = 1.0;
-                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
-                  hist.drpq = rsqrt(hist.drpq2);
-                  real b = 2.0*rasin(hist.drpq/2.0);
-                  hist.cosb = rcos(b);
-                  hist.sinb = rsin(b);
-                  if (hist.drpq2==0) continue;
+                  //E 3pcf convergence & shear
+#ifndef BALLS4SCANLEV
+          polarix_init(cmd, gd, p, &hist);
 #else
-                  dRotation3D(Pos(q), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
-                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
-#ifdef SINGLEP
-                hist.drpq = sqrt(hist.drpq2);
-#else
-                  hist.drpq = rsqrt(hist.drpq2);
+          polarix_init(cmd, gd, (bodyptr)p, &hist);
+                  //E 3pcf convergence & shear
 #endif
-#endif // ! POLARAXIS
 //E
                   sumnode_nblist_omp(cmd, gd, btable, ipmin, ipmax, cat1, cat2,
                                      q, &hist, intList);
@@ -1101,8 +1236,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           //E
 #endif
 
+//          computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
+//                                           ipmax[cat1]-ipmin+1, &hist);
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
-                                           ipmax[cat1]-ipmin+1, &hist);
+                                           gd->nnodescanlevTableB4[cat1], &hist);
 #endif // ! BALLS4SCANLEV
 
 #ifdef ADDPIVOTNEIGHBOURS
@@ -1124,25 +1261,13 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                cmd->mChebyshev+1, cmd->sizeHistN);
                   //E
 //B Set reference axis...
-#ifdef POLARAXIS
-                  hist.q0[0] = 0.0;
-                  hist.q0[1] = 0.0;
-                  hist.q0[2] = 1.0;
-                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
-                  hist.drpq = rsqrt(hist.drpq2);
-                  real b = 2.0*rasin(hist.drpq/2.0);
-                  hist.cosb = rcos(b);
-                  hist.sinb = rsin(b);
-                  if (hist.drpq2==0) continue;
+                  //E 3pcf convergence & shear
+#ifndef BALLS4SCANLEV
+          polarix_init(cmd, gd, p, &hist);
 #else
-                  dRotation3D(Pos(q), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
-                  DOTPSUBV(hist.drpq2, hist.dr0, Pos(q), hist.q0);
-#ifdef SINGLEP
-                hist.drpq = sqrt(hist.drpq2);
-#else
-                  hist.drpq = rsqrt(hist.drpq2);
+          polarix_init(cmd, gd, (bodyptr)p, &hist);
+                  //E 3pcf convergence & shear
 #endif
-#endif // ! POLARAXIS
 //E
                   sumnode_nblist_omp(cmd, gd, btable, ipmin, ipmax, cat1, cat2,
                                      q, &hist, intList);
@@ -1223,6 +1348,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         gd->nbbcalc += hist.nbbcalcthread;
         gd->nbccalc += hist.nbccalcthread;
 
+#ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
         //B 3pcf convergence & shear
         for (m=1; m<=cmd->mChebyshev+1; m++) {
@@ -1236,6 +1362,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                      histN.histZetaMthreadcossin[m],cmd->sizeHistN);
         }
         //E 3pcf convergence & shear
+#endif
 #endif
 
         if (scanopt(cmd->options, "read-mask"))
@@ -1262,8 +1389,14 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     real xi, den, num;
     int mm;
     if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef BALLS4SCANLEV
+        num = (real)gd->nnodescanlevTableB4[cat1];
+        den = (real)(gd->nnodescanlevTableB4[cat1]-ipfalse);
+#else
         num = (real)nbody[cat1];
         den = (real)(nbody[cat1]-ipfalse);
+#endif
+
 #ifdef NONORMHIST
         xi = 1.0;
 #else
@@ -1289,6 +1422,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         }
 #endif
 
+#ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
             MULMS_ext(gdlN.histZetaMcos[mm],
@@ -1300,6 +1434,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
             MULMS_ext(gdlN.histZetaMcossin[mm],
                       gdlN.histZetaMcossin[mm],xi,cmd->sizeHistN);
         }
+#endif
 #endif
 
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1379,9 +1514,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
     if (scanopt(cmd->options, "compute-HistN")) {
         if (scanopt(cmd->options, "smooth-pivot")) {
-            search_compute_HistN_ggg(cmd, gd, nbody[cat1]-ipfalse);
+            search_compute_HistN_ggg(cmd, gd, nbody[cat1]-ipfalse, &gdl);
         } else {
-            search_compute_HistN_ggg(cmd, gd, nbody[cat1]);
+            search_compute_HistN_ggg(cmd, gd, nbody[cat1], &gdl);
         }
     }
 #endif
@@ -1459,12 +1594,40 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //E Saving histograms section: case GGGCORRELATION
 // ===============================================
 
+// ===============================================
+//B Making histograms public (cballys PXD) section
+// ===============================================
+#ifdef PXD
+    int m, n, n1, n2;
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        gd->histNN[n] = gdl.histNN[n];
+        gd->histCF[n] = gdl.histCF[n];
+        gd->histXi2pcf[n] = gdl.histXi2pcf[n];
+    }
 
-
-#ifdef NMultipoles
-    search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);// free memory
+#ifdef THREEPCFCONVERGENCE
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                gd->histZetaMcos[m][n1][n2] = gdl.histZetaMcos[m][n1][n2];
+                gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
+                gd->histZetaMsincos[m][n1][n2] = gdl.histZetaMsincos[m][n1][n2];
+                gd->histZetaMcossin[m][n1][n2] = gdl.histZetaMcossin[m][n1][n2];
+            }
+        }
+    }
 #endif
-    search_free_gd_sincos_omp_ggg(cmd, gd, &gdl); // free memory
+#endif
+// ===============================================
+//E Making histograms public (cballys PXD) section
+// ===============================================
+
+//B free memory
+#ifdef NMultipoles
+    search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+    search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+//E
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1495,8 +1658,10 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
         if (Type(q) == CELL) {
             if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
                 if (!scanopt(cmd->options, "no-one-ball")) {
-                    accept_body(cmd, gd,
-                                    p, (nodeptr)q, &dr1, dr);
+                    accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
+
+#ifndef NORMALHISTSCALE
+//B useLogHist section
                     if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
                         sumnode_sincos_cell(cmd, gd, btable, cat2, p,
                                             ((cellptr) q), ((cellptr) q+1), hist,
@@ -1506,13 +1671,26 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                             normal_walktree_sincos(cmd, gd, btable, cat2,
                                                    p,l,qsize/2, hist,
                                                    nbList, intList);
-                } else {
+//E useLogHist section
+#else // ! NORMALHISTSCALE
+                    if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
+                        sumnode_sincos_cell(cmd, gd, btable, cat2, p,
+                                            ((cellptr) q), ((cellptr) q+1), hist,
+                                            nbList, intList);
+                    else
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            normal_walktree_sincos(cmd, gd, btable, cat2,
+                                                   p,l,qsize/2, hist,
+                                                   nbList, intList);
+#endif // ! NORMALHISTSCALE
+
+                } else { // ! no-one-ball
                     for (l = More(q); l != Next(q); l = Next(l))
                         normal_walktree_sincos(cmd, gd, btable, cat2,
                                                p,l,qsize/2, hist,
                                                nbList, intList);
-                }
-            }
+                } // ! no-one-ball
+            } // ! !reject_cell
         } else { // ! Type(q) == CELL
             sumnode_sincos(cmd, gd, btable, cat2,
                            p, ((cellptr)q), ((cellptr)q+1), hist,
@@ -1559,7 +1737,7 @@ local void sumnode_nblist_omp(struct cmdline_data* cmd,
 #endif
 #ifdef TWOPCF
 #endif
-
+                //B check NDIM and periodic...
                 DOTVP(s, dr, hist->dr0);
                 cosphi = s/(dr1*hist->drpq);
                 CROSSVP(pr0,hist->dr0,Pos(p));
@@ -1570,6 +1748,7 @@ local void sumnode_nblist_omp(struct cmdline_data* cmd,
                     verb_log_print(cmd->verbose, gd->outlog,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                         cosphi);
+                //E
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPSINCOSANY
                 } else {
@@ -1638,6 +1817,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
             }
         }
         //E
+
+
+#ifndef NORMALHISTSCALE
+//B useLogHist section
         if(dr1>cmd->rminHist) {
 #ifdef ADDPIVOTNEIGHBOURS
             if (scanopt(cmd->options, "smooth-pivot")) {
@@ -1674,64 +1857,9 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-
-                //B 3pcf convergence
-#ifdef POLARAXIS
-                real a, c, c2;
-                vector vc;
-                DOTPSUBV(c2, vc, Pos(q), hist->q0);
-#ifdef NOLIMBER
-                a = 2.0*rasin(dr1/2.0);
-#else
-                a = dr1;
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
 #endif
-                real cosc;
-                cosc = Pos(q)[2];
-                cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)
-                        /(a*hist->sinb);
-                if (rabs(cosphi) <= 1.0)
-                    sinphi = rsqrt(1.0 - rsqr(cosphi));
-                else
-                    sinphi = 0.0;
-                if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
-                    sinphi *= -1.0;
-#else // ! POLARAXIS
-#if NDIM == 3
-                REAL s, sy;
-#ifdef SINGLEP
-                        float pr0[NDIM];
-#else
-                vector pr0;
-#endif
-                DOTVP(s, dr, hist->dr0);
-                cosphi = s/(dr1*hist->drpq);
-                CROSSVP(pr0,hist->dr0,Pos(p));
-                DOTVP(sy, dr, pr0);
-#ifdef SINGLEP
-                if (rabs(cosphi)>1.0)
-                    sinphi = 0.0;
-                else
-                    sinphi = sqrt(1.0 - cosphi*cosphi);
-#else
-                sinphi = rsqrt(1.0 - rsqr(cosphi));
-#endif
-                if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                cosphi = -dr[0]/dr1;
-                sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-#ifdef SINGLEP
-                if (cosphi>1.0) cosphi = 1.0;
-                if (cosphi<-1.0) cosphi = -1.0;
-#else
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd->verbose, gd->outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                        cosphi);
-#endif
-#endif // ! POLARAXIS
-                //E 3pcf convergence
-
 #ifdef THREEPCFCONVERGENCE
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPSINCOSANY;
@@ -1746,10 +1874,67 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
-
                 hist->nbbcalcthread += 1;
             } // ! 1 < n < sizeHistN
         } // ! dr1>cmd->rminHist
+//E useLogHist section
+#else // ! NORMALHISTSCALE
+
+        if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            if (scanopt(cmd->options, "smooth-pivot")) {
+                iq = (bodyptr)q-btable[cat2];
+                activeInt[*intList]=iq;
+                *intList +=1;
+                if (*intList > actlenInt)
+                    error("intList: too many neighbors\n");
+            }
+#endif
+            n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
+            if (n<=cmd->sizeHistN && n>=1) {
+
+#ifdef TWOPCF
+                hist->histNthread[n] = hist->histNthread[n] + 1.;
+                hist->histNNSubXi2pcfthread[n] =
+                                            hist->histNNSubXi2pcfthread[n] + 1.;
+                //B kappa Avg Rmin
+                hist->histNNSubXi2pcfthreadp[n] =
+                                            hist->histNNSubXi2pcfthreadp[n] + 1.;
+                //E
+#endif
+
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+
+                // needs to multiply xi by Weight(p)
+                xi = Weight(q)*Kappa(q);
+
+#ifdef THREEPCFSHEAR
+                gamma1 = Gamma1(q);
+                gamma2 = Gamma2(q);
+#endif
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
+#endif
+#ifdef THREEPCFCONVERGENCE
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPSINCOSANY;
+                } else {
+                    CHEBYSHEVTUOMP;
+                }
+#endif
+
+#ifdef THREEPCFSHEAR
+                CHEBYSHEVTUOMPGGGANY;
+#endif
+#ifdef TWOPCF
+                hist->histXi2pcfthreadsub[n] += xi;
+#endif
+                hist->nbbcalcthread += 1;
+            } // ! 1 < n < sizeHistN
+        } // ! dr1>cmd->rminHist
+
+#endif // ! NORMALHISTSCALE
+
     } // ! accept_body
 }
 
@@ -1783,6 +1968,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
         if (Mask(q)==FALSE) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
+        
+
+#ifndef NORMALHISTSCALE
+//B useLogHist section
         if(dr1>cmd->rminHist) {
 #ifdef ADDPIVOTNEIGHBOURS
             INTEGER iq;
@@ -1839,65 +2028,9 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-
-                //B 3pcf convergence
-#ifdef POLARAXIS
-                real a, c, c2;
-                vector vc;
-                DOTPSUBV(c2, vc, Pos(q), hist->q0);
-#ifdef NOLIMBER
-                a = 2.0*rasin(dr1/2.0);
-#else
-                a = dr1;
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
 #endif
-                real cosc;
-                cosc = Pos(q)[2];
-                cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)
-                        /(a*hist->sinb);
-                if (rabs(cosphi) <= 1.0)
-                    sinphi = rsqrt(1.0 - rsqr(cosphi));
-                else
-                    sinphi = 0.0;
-                if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
-                    sinphi *= -1.0;
-#else // ! POLARAXIS
-
-#if NDIM == 3
-                REAL s, sy;
-#ifdef SINGLEP
-                float pr0[NDIM];
-#else
-                vector pr0;
-#endif
-                DOTVP(s, dr, hist->dr0);
-                cosphi = s/(dr1*hist->drpq);
-                CROSSVP(pr0,hist->dr0,Pos(p));
-                DOTVP(sy, dr, pr0);
-#ifdef SINGLEP
-                if (rabs(cosphi)>1.0)
-                    sinphi = 0.0;
-                else
-                    sinphi = sqrt(1.0 - cosphi*cosphi);
-#else
-                sinphi = rsqrt(1.0 - rsqr(cosphi));;
-#endif
-                if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                cosphi = -dr[0]/dr1;
-                sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-#ifdef SINGLEP
-                if (cosphi>1.0) cosphi = 1.0;
-                if (cosphi<-1.0) cosphi = -1.0;
-#else
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
-#endif
-#endif // ! POLARAXIS
-                //E 3pcf convergence
-
 #ifdef THREEPCFCONVERGENCE
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPSINCOSANY
@@ -1916,6 +2049,85 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 hist->nbccalcthread += 1;
             } // ! 1 < n < sizeHistN
         } // ! dr1 > rminHist
+//E useLogHist section
+#else // ! NORMALHISTSCALE
+
+        if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            INTEGER iq;
+            iq = (bodyptr)q-btable[cat2];
+            activeInt[*intList]=iq;
+            *intList +=1;
+            if (*intList > actlenInt)
+                error("intList: too many neighbors\n");
+#endif
+            n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
+            if (n<=cmd->sizeHistN && n>=1) {
+
+#ifdef TWOPCF
+                hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+                hist->histNNSubXi2pcfthread[n] =
+                                            hist->histNNSubXi2pcfthread[n] + 1.0;
+                //B kappa Avg Rmin
+                hist->histNNSubXi2pcfthreadp[n] =
+                                            hist->histNNSubXi2pcfthreadp[n] + 1.;
+                //E
+#endif
+
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+
+//B needs to multiply xi by Weight(p) of the cell q
+#ifdef NONORMHIST
+                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+                    xi = Nb(q)*Kappa(q);
+                } else {
+#ifdef KappaAvgON
+                    xi = KappaAvg(q)/Nb(q);
+#else
+#ifdef NMultipole
+                    xi = Kappa(q);
+#else
+                    xi = Nb(q)*Kappa(q);
+#endif
+#endif
+                }
+#else // ! NONORMHIST
+#ifdef KappaAvgON
+                xi = KappaAvg(q)/Nb(q);
+#else
+                xi = Kappa(q);
+#endif
+#endif // ! NONORMHIST
+//E
+
+#ifdef THREEPCFSHEAR
+                gamma1 = Gamma1(q);
+                gamma2 = Gamma2(q);
+#endif
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
+#endif
+#ifdef THREEPCFCONVERGENCE
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMP;
+                }
+#endif
+
+#ifdef THREEPCFSHEAR
+                CHEBYSHEVTUOMPGGGANY;
+#endif
+#ifdef TWOPCF
+                hist->histXi2pcfthreadsub[n] += xi;
+#endif
+
+                hist->nbccalcthread += 1;
+            } // ! 1 < n < sizeHistN
+        } // ! dr1 > rminHist
+
+#endif // ! NORMALHISTSCALE
+
     } // ! accept_body
 }
 
@@ -1933,36 +2145,76 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 // check Weight factor... must be an average of Weights
 #ifdef NONORMHIST
-    xi = Weight(p)*Kappa(p);
-#ifdef TWOPCF
-    xi_2p = Weight(p)*Kappa(p);
+
+#ifdef BALLS4SCANLEV
+    xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
     if (scanopt(cmd->options, "smooth-pivot")) {
-//        xi_2p = KappaRmin(p)/NbRmin(p);
-        xi_2p = KappaRmin(p);
+        xi = Nb(p)*KappaRmin(p)/NbRmin(p);
     }
-#endif
+#else
+    xi = Weight(p)*Kappa(p);
     if (scanopt(cmd->options, "smooth-pivot")) {
         xi = KappaRmin(p)/NbRmin(p);
     }
-#else // ! NONORMHIST
-#ifdef ADDPIVOTNEIGHBOURS
-    xi = Weight(p)*Kappa(p)/nbody;
-#else
-    xi = Weight(p)*Kappa(p)/nbody;
+#endif
+
 #ifdef TWOPCF
+#ifdef BALLS4SCANLEV
+    xi_2p = (Weight(p)/Nb(p))*Kappa(p);
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        xi_2p = KappaRmin(p);
+    }
+#else
     xi_2p = Weight(p)*Kappa(p);
     if (scanopt(cmd->options, "smooth-pivot")) {
-//        xi_2p = (KappaRmin(p)/NbRmin(p));
-        xi_2p = (KappaRmin(p));
+        xi_2p = KappaRmin(p);
     }
+#endif // ! BALLS4SCANLEV
 #endif
-    //B kappa Avg Rmin
+
+#else // ! NONORMHIST
+
+#ifdef ADDPIVOTNEIGHBOURS
+    //B not finished yet
+    xi = Weight(p)*Kappa(p)/nbody;
+    //E
+#else
+
+#ifdef BALLS4SCANLEV
+//    xi = Weight(p)*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
+    xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
+    if (scanopt(cmd->options, "smooth-pivot")) {
+//        xi = Nb(p)*KappaRmin(p)/NbRmin(p)/nbody;
+//        xi = Nb(p)*KappaRmin(p)/nbody;
+        xi = KappaRmin(p)/NbRmin(p)/nbody;
+    }
+#else
+    //B Not working yet
+    xi = Weight(p)*Kappa(p)/nbody;
     if (scanopt(cmd->options, "smooth-pivot")) {
         xi = (KappaRmin(p)/NbRmin(p))/nbody;
     }
     //E
 #endif
+
+#ifdef TWOPCF
+#ifdef BALLS4SCANLEV
+    xi_2p = (Weight(p)/Nb(p))*Kappa(p);
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        xi_2p = KappaRmin(p);
+    }
+#else
+    xi_2p = Weight(p)*Kappa(p);
+    if (scanopt(cmd->options, "smooth-pivot")) {
+        xi_2p = (KappaRmin(p));
+    }
+#endif
+#endif
+
+#endif // ! ADDPIVOTNEIGHBOURS
+
 #endif // ! NONORMHIST
+
 
 #ifndef NONORMHIST
 #ifdef THREEPCFCONVERGENCE
@@ -2066,8 +2318,13 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     int *nbList, int *intList)
 {
     nodeptr l;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
 
     if (Update(p)==FALSE) return;
     if ( ((nodeptr) p) != q ) {
@@ -2075,6 +2332,9 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
             if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
                 if (!scanopt(cmd->options, "no-one-ball")) {
                     accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
+
+#ifndef NORMALHISTSCALE
+//B useLogHist section
                     if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
                         sumnode_sincos_cell_N(cmd, gd, btable, cat2,
                                               p, ((cellptr) q),
@@ -2086,6 +2346,21 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                                      p,l,qsize/2,
                                                      hist, histN,
                                                      nbList, intList);
+//E useLogHist section
+#else // ! NORMALHISTSCALE
+                    if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
+                        sumnode_sincos_cell_N(cmd, gd, btable, cat2,
+                                              p, ((cellptr) q),
+                                              ((cellptr) q+1), hist, histN,
+                                              nbList, intList);
+                    else
+                        for (l = More(q); l != Next(q); l = Next(l))
+                            normal_walktree_sincos_N(cmd, gd, btable, cat2,
+                                                     p,l,qsize/2,
+                                                     hist, histN,
+                                                     nbList, intList);
+#endif // ! NORMALHISTSCALE
+
                 } else { // ! no-one-ball
                     for (l = More(q); l != Next(q); l = Next(l))
                         normal_walktree_sincos_N(cmd, gd, btable, cat2,
@@ -2111,8 +2386,13 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                             int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     real xiN;
@@ -2148,6 +2428,10 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
             }
         } // ! smooth-pivot
         //E
+
+
+#ifndef NORMALHISTSCALE
+//B useLogHist section
         if(dr1>cmd->rminHist) {
 #ifdef ADDPIVOTNEIGHBOURS
             iq = (bodyptr)q-btable[cat2];
@@ -2184,43 +2468,9 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-
-                //B 3pcf convergence
-#ifdef POLARAXIS
-                real a, c, c2;
-                vector vc;
-                DOTPSUBV(c2, vc, Pos(q), hist->q0);
-#ifdef NOLIMBER
-                a = 2.0*rasin(dr1/2.0);
-#else
-                a = dr1;
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
 #endif
-                real cosc;
-                cosc = Pos(q)[2];
-                cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)
-                        /(a*hist->sinb);
-                if (rabs(cosphi) <= 1.0)
-                    sinphi = rsqrt(1.0 - rsqr(cosphi));
-                else
-                    sinphi = 0.0;
-                if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
-                    sinphi *= -1.0;
-#else // ! POLARAXIS
-                REAL s, sy;
-                vector pr0;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = s/(dr1*hist->drpq);
-                CROSSVP(pr0,hist->dr0,Pos(p));
-                DOTVP(sy, dr, pr0);
-                sinphi = rsqrt(1.0 - rsqr(cosphi));
-                if (sy < 0) sinphi *= -1.0;
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd->verbose, gd->outlog,
-                    "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                    cosphi);
-#endif // ! POLARAXIS
-                //E 3pcf convergence
-
 #ifdef THREEPCFCONVERGENCE
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPNANY;
@@ -2241,6 +2491,67 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 hist->nbbcalcthread += 1;
             } // ! n <= sizeHistN && n >= 1
         } // ! dr1 > rminHist
+
+//E useLogHist section
+#else // ! NORMALHISTSCALE
+
+        if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            iq = (bodyptr)q-btable[cat2];
+            activeInt[*intList]=iq;
+            *intList +=1;
+            if (*intList > actlenInt)
+                error("intList: too many neighbors\n");
+#endif
+            n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
+            if (n<=cmd->sizeHistN && n>=1) {
+
+#ifdef TWOPCF
+                hist->histNthread[n] = hist->histNthread[n] + 1.;
+                hist->histNNSubXi2pcfthread[n] =
+                                            hist->histNNSubXi2pcfthread[n] + 1.;
+                //B kappa Avg Rmin
+                hist->histNNSubXi2pcfthreadp[n] =
+                                            hist->histNNSubXi2pcfthreadp[n] + 1.;
+                //E
+#endif
+
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+                histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.;
+
+                xi = Weight(q)*Kappa(q);
+                xiN = Weight(q);
+
+#ifdef THREEPCFSHEAR
+                gamma1 = Gamma1(q);
+                gamma2 = Gamma2(q);
+#endif
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
+#endif
+#ifdef THREEPCFCONVERGENCE
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPNANY;
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMPN;
+                    CHEBYSHEVTUOMP;
+                }
+#endif
+
+#ifdef THREEPCFSHEAR
+                CHEBYSHEVTUOMPGGGANY;
+#endif
+#ifdef TWOPCF
+                hist->histXi2pcfthreadsub[n] += xi;
+#endif
+
+                hist->nbbcalcthread += 1;
+            } // ! n <= sizeHistN && n >= 1
+        } // ! dr1 > rminHist
+
+#endif // ! NORMALHISTSCALE
+
     } // ! accept_body
 }
 
@@ -2253,8 +2564,13 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                                  int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     real xiN;
@@ -2268,6 +2584,9 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
         if (Mask(q)==FALSE) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
+
+#ifndef NORMALHISTSCALE
+//B useLogHist section
         if(dr1>cmd->rminHist) {
 #ifdef ADDPIVOTNEIGHBOURS
             INTEGER iq;
@@ -2330,43 +2649,9 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-
-                //B 3pcf convergence
-#ifdef POLARAXIS
-                real a, c, c2;
-                vector vc;
-                DOTPSUBV(c2, vc, Pos(q), hist->q0);
-#ifdef NOLIMBER
-                a = 2.0*rasin(dr1/2.0);
-#else
-                a = dr1;
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
 #endif
-                real cosc;
-                cosc = Pos(q)[2];
-                cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)
-                        /(a*hist->sinb);
-                if (rabs(cosphi) <= 1.0)
-                    sinphi = rsqrt(1.0 - rsqr(cosphi));
-                else
-                    sinphi = 0.0;
-                if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))
-                    sinphi *= -1.0;
-#else // ! POLARAXIS
-                REAL s, sy;
-                vector pr0;
-                DOTVP(s, dr, hist->dr0);
-                cosphi = s/(dr1*hist->drpq);
-                CROSSVP(pr0,hist->dr0,Pos(p));
-                DOTVP(sy, dr, pr0);
-                sinphi = rsqrt(1.0 - rsqr(cosphi));;
-                if (sy < 0) sinphi *= -1.0;
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
-#endif // ! POLARAXIS
-                //E 3pcf convergence
-
 #ifdef THREEPCFCONVERGENCE
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPNANY;
@@ -2395,6 +2680,102 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 hist->nbccalcthread += 1;
             } // ! n <= sizeHistN && n >= 1
         } // ! dr1 > rminHist
+//E useLogHist section
+
+#else // ! NORMALHISTSCALE
+
+        if(dr1>cmd->rminHist) {
+#ifdef ADDPIVOTNEIGHBOURS
+            INTEGER iq;
+            iq = (bodyptr)q-btable[cat2];
+            activeInt[*intList]=iq;
+            *intList +=1;
+            if (*intList > actlenInt)
+                error("intList: too many neighbors\n");
+#endif
+            n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
+            if (n<=cmd->sizeHistN && n>=1) {
+
+#ifdef TWOPCF
+                hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+                hist->histNNSubXi2pcfthread[n] =
+                                            hist->histNNSubXi2pcfthread[n] + 1.0;
+                //B kappa Avg Rmin
+                hist->histNNSubXi2pcfthreadp[n] =
+                                        hist->histNNSubXi2pcfthreadp[n] + 1.0;
+                //E
+#endif
+
+                //B 3pcf convergence
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+                histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.0;
+                //E
+
+#ifdef NONORMHIST
+                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+//B begin corrections
+                    xi = Nb(q)*Kappa(q);            // Kappa is cell average
+                    xiN = Weight(q);                // Weight sum in cell
+                } else {
+#ifdef KappaAvgON
+                    xi = KappaAvg(q)/Nb(q);         // Weight(q)?
+#else
+//                    xi = Weight(q)*Kappa(q);
+                    xi = Kappa(q);                  // original line
+#endif
+                    xiN = 1.0;                      // original line
+//                    xiN = Weight(q);              // average of weights
+                }
+#else // ! NONORMHIST
+#ifdef KappaAvgON
+                xi = KappaAvg(q)/Nb(q);             // Weight(q)
+#else
+                xi = Kappa(q);                      // original line
+//                xi = Weight(q)*Kappa(q);
+#endif
+                xiN = 1.0;                          // original line
+//                xiN = Weight(q);                  // average of weights
+#endif // ! NONORMHIST
+//E
+
+#ifdef THREEPCFSHEAR
+                gamma1 = Gamma1(q);
+                gamma2 = Gamma2(q);
+#endif
+#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+                POLARAXIS_MAIN;
+#endif
+#ifdef THREEPCFCONVERGENCE
+                if (cmd->mChebyshev<7) {
+                    CHEBYSHEVTUOMPNANY;
+                    CHEBYSHEVTUOMPSINCOSANY
+                } else {
+                    CHEBYSHEVTUOMPN;
+                    CHEBYSHEVTUOMP;
+                }
+#endif
+
+#ifdef THREEPCFSHEAR
+                CHEBYSHEVTUOMPGGGANY;
+#endif
+#ifdef TWOPCF
+#ifdef NONORMHIST
+                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+                    hist->histXi2pcfthreadsub[n] += xi/Nb(q);
+                } else {
+                    hist->histXi2pcfthreadsub[n] += xi;
+                }
+#else
+                hist->histXi2pcfthreadsub[n] += xi;
+#endif
+#endif
+
+                hist->nbccalcthread += 1;
+            } // ! n <= sizeHistN && n >= 1
+        } // ! dr1 > rminHist
+
+#endif // ! NORMALHISTSCALE
+
     } // ! accept_body
 }
 
@@ -2424,6 +2805,8 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
     }
 #endif
 
+
+#ifdef THREEPCFCONVERGENCE
     for (m=1; m<=cmd->mChebyshev+1; m++) {
         OUTVP_ext(hist->xiOUTVPcos,
             hist->histXithreadcos[m], hist->histXithreadcos[m], cmd->sizeHistN);
@@ -2475,6 +2858,7 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
             hist->histZetaMtmpcossin,cmd->sizeHistN);
 #endif
     }
+#endif
 
     return SUCCESS;
 }
@@ -3146,7 +3530,9 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 //    xi=(V/v(r))*(DD(r)/N^2)
 // where v(r)=4*pi*((r+dr/2)^3-(r-dr/2)^3)/3, V=box_size^3 and N is the
 // total # particles.
-local int search_compute_Xi_ggg(struct  cmdline_data* cmd, struct  global_data* gd, int nbody)
+local int search_compute_Xi_ggg(struct  cmdline_data* cmd,
+                                struct  global_data* gd, int nbody,
+                                gdlptr_sincos_omp_ggg gdl)
 {
     int k;
     int n;
@@ -3159,7 +3545,7 @@ local int search_compute_Xi_ggg(struct  cmdline_data* cmd, struct  global_data* 
 
 if (!cmd->useLogHist) {
     if ((scanopt(cmd->options, "cute-box"))) {
-        gd->histNN[1]-=nbody;
+        gdl->histNN[1]-=nbody;
     }
 }
     real *edd;
@@ -3171,10 +3557,10 @@ if (!cmd->useLogHist) {
     real rho_av=(real)nbody/Vol;
 
     for (n = 1; n <= cmd->sizeHistN; n++)
-        edd[n] = 1./rsqrt(gd->histNN[n]);
+        edd[n] = 1./rsqrt(gdl->histNN[n]);
 
     for (n = 1; n <= cmd->sizeHistN; n++) {
-        if(gd->histNN[n]==0) {
+        if(gdl->histNN[n]==0) {
             corr[n]=0;
             ercorr[n]=0;
         } else {
@@ -3199,29 +3585,29 @@ if (!cmd->useLogHist) {
                 //B this version does not give same results as CB
                 //      although the programming is the same...
                 vr=4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
-                rho_r=gd->histNN[n]/((real)nbody*vr);
+                rho_r=gdl->histNN[n]/((real)nbody*vr);
                 corr[n]=rho_r/rho_av-1;             // Correlation function
                 ercorr[n]=(1+corr[n])*edd[n];       // Poisson errors
-                gd->histCF[n] = corr[n];            // Original line
+                gdl->histCF[n] = corr[n];            // Original line
                 //E
             } else {
                 normFac = Vol/(2.0*PI*rpow(gd->deltaR,3.0)*nbody*nbody);
 // This line gives results for rdf (radial distribution function):
 //                gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5);
 // This line gives results in agreement with CB:
-                gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5) -1.0;
+                gdl->histCF[n] = gdl->histNN[n] * normFac / rsqr((int)n-0.5) -1.0;
             }
 #else
             if (scanopt(cmd->options, "cute-box")) {
                 // This should be CB version...
                 normFac = Vol/(PI*rpow(gd->deltaR,2.0)*nbody*nbody);
-                gd->histCF[n] = gd->histNN[n] * normFac / ((int)n-0.5) - 1.0;
+                gdl->histCF[n] = gdl->histNN[n] * normFac / ((int)n-0.5) - 1.0;
             } else {
                 normFac = Vol/(PI*rpow(gd->deltaR,2.0)*nbody*nbody);
 // This line gives results for rdf (radial distribution function):
 //                gd->histCF[n] = gd->histNN[n] * normFac / ((int)n-0.5);
 // This line gives results in agreement with CB:
-                gd->histCF[n] = gd->histNN[n] * normFac / ((int)n-0.5) - 1.0;
+                gdl->histCF[n] = gdl->histNN[n] * normFac / ((int)n-0.5) - 1.0;
             }
 #endif // ! NDIM
         }
@@ -3236,7 +3622,8 @@ if (!cmd->useLogHist) {
 
 
 local int search_compute_HistN_ggg(struct  cmdline_data* cmd,
-                                struct  global_data* gd, int nbody)
+                                struct  global_data* gd, int nbody,
+                                   gdlptr_sincos_omp_ggg gdl)
 {
     int n;
     real normFac;
@@ -3245,10 +3632,10 @@ local int search_compute_HistN_ggg(struct  cmdline_data* cmd,
     normFac = 0.5;
 
     for (n = 1; n <= cmd->sizeHistN; n++)
-        gd->histNN[n] *= normFac;
+        gdl->histNN[n] *= normFac;
 
     if (scanopt(cmd->options, "and-CF"))
-        search_compute_Xi_ggg(cmd, gd, nbody);
+        search_compute_Xi_ggg(cmd, gd, nbody, gdl);
 
     return SUCCESS;
 }
@@ -3260,6 +3647,8 @@ local int search_compute_HistN_ggg(struct  cmdline_data* cmd,
 local int print_info(struct cmdline_data* cmd,
                                   struct  global_data* gd)
 {
+    string routineName = "print_info";
+
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "searchcalc: Using octree-ggg-omp... \n");
 
@@ -3269,20 +3658,34 @@ local int print_info(struct cmdline_data* cmd,
 
 
     if (cmd->usePeriodic==TRUE)
-        error("CheckParameters: can´t have periodic boundaries and OCTREEGGGOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
-            cmd->usePeriodic);
+//        error("CheckParameters: can´t have periodic boundaries and OCTREEGGGOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
+//            cmd->usePeriodic);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+    "%s: warning!! can´t have periodic boundaries and OCTREEGGGOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
+                            routineName,cmd->usePeriodic);
+
     if (cmd->useLogHist==FALSE)
-        error("CheckParameters: can´t have normal scale hist and OCTREEGGGOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
-            cmd->useLogHist);
+//        error("CheckParameters: can´t have normal scale hist and OCTREEGGGOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
+//            cmd->useLogHist);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+"%s: warning!! can´t have normal scale hist and OCTREEGGGOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
+                        routineName,cmd->useLogHist);
+
     if (cmd->computeTPCF==FALSE)
-        error("CheckParameters: can´t have computeTPCF=false and OCTREEGGGOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
-            cmd->computeTPCF);
+//        error("CheckParameters: can´t have computeTPCF=false and OCTREEGGGOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
+//            cmd->computeTPCF);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+"%s: warning!! can´t have computeTPCF=false and OCTREEGGGOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
+                        routineName,cmd->computeTPCF);
 
 #ifdef TWOPCF
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with 2pcf computation... \n");
 #endif
 #ifdef THREEPCFCONVERGENCE
+    if (cmd->computeTPCF==FALSE)
+    error("\ncan´t have computeTPCF=false and THREEPCFCONVERGENCE definition\n",
+          routineName);
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with 3pcf convergence computation... \n");
 #endif
@@ -3292,7 +3695,9 @@ local int print_info(struct cmdline_data* cmd,
 #endif
 
 #if NDIM == 2
-error("CheckParameters: OCTREEGGGOMP definition works only in a 3D unit sphere")
+//error("CheckParameters: OCTREEGGGOMP definition works only in a 3D unit sphere");
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "OCTREEGGGOMP definition working in a 2D box... \n");
 #endif
 
 #ifdef NMultipoles
@@ -3375,6 +3780,11 @@ error("CheckParameters: OCTREEGGGOMP definition works only in a 3D unit sphere")
 #ifdef BALLS4SCANLEV
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with BALLS4SCANLEV... \n");
+#endif
+
+#ifdef NORMALHISTSCALE
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "with NORMALHISTSCALE... \n");
 #endif
 
     if (scanopt(cmd->options, "read-mask"))
@@ -3950,6 +4360,8 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 
 
 #ifdef NMultipoles
+
+#ifdef THREEPCFCONVERGENCE
 // Saves matrix ZetaM for each m multipole
 local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
                                 struct  global_data* gd,
@@ -4151,6 +4563,7 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
 
     return SUCCESS;
 }
+#endif // ! THREEPCFCONVERGENCE
 
 
 #ifdef NONORMHIST

@@ -15,6 +15,8 @@
 
 #include "globaldefs.h"
 
+#if THREEDIMCODE
+
 typedef struct {
     realptr histNthread;
     // 2pcf
@@ -631,8 +633,13 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   int *nbList, int *intList)
 {
     nodeptr l;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
 
     if (Update(p)) {
         if ( ((nodeptr) p) != q ) {
@@ -678,8 +685,13 @@ local void sumnode_nblist_omp(struct cmdline_data* cmd,
                               gdhistptr_sincos_omp_nn hist, int intList)
 {
     bodyptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int i;
     int n;
     real xi;
@@ -719,8 +731,13 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                           int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     int iq;
@@ -787,8 +804,13 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     REAL cosphi,sinphi;
@@ -967,3 +989,5 @@ local int print_info(struct cmdline_data* cmd,
 #undef FACTIVENB
 #undef FACTIVEINT
 #endif
+
+#endif // ! THREEDIMCODE

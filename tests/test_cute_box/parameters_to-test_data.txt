@@ -40,7 +40,7 @@ useLogHist = false
 usePeriodic = true
 #
 # conflict with columns above
-script = "python plotCF.py"
+posScript = "python plotCF.py"
 #
 
 

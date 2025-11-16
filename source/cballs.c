@@ -82,8 +82,6 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->flagSetNbNoSel = FALSE;
 
     if (scanopt(cmd->options, "smooth-min-cell")) {
-//        verb_print(cmd->verbose,
-//                  "\n\t%s: smooth cell min: try making tree...\n\n", routineName);
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "\n\t%s: smooth cell min: try making tree...\n\n", routineName);
         DO_BODY(p,bodytable[gd->iCatalogs[0]],
@@ -99,11 +97,6 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
                     (bodyptr) allocate(gd->nnodescanlevTable[gd->iCatalogs[0]]
                     * sizeof(body));
         gd->bytes_tot += gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body);
-/*        verb_print(cmd->verbose,
-"Allocated %g MByte for final (smoothCellMin) particle (%ld) storage (%ld).\n",
-                   gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body)*INMB,
-                   gd->nnodescanlevTable[gd->iCatalogs[0]],
-                   gd->nnodescanlevTable[gd->iCatalogs[0]]); */
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
     "Allocated %g MByte for final (smoothCellMin) particle (%ld) storage (%ld).\n",
                         gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body)*INMB,
@@ -118,20 +111,12 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
             kavg += Kappa(p);
             in++;
         }
-//        verb_print(cmd->verbose,"%ld %d %ld %lg %ld %lg\n",
-//                   in,Type(p-1),Id(p-1),Mass(p-1),Nb(p-1),Kappa(p-1));
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "%ld %d %ld %lg %ld %lg\n",
                     in,Type(p-1),Id(p-1),Mass(p-1),Nb(p-1),Kappa(p-1));
 //E
-//        verb_print(cmd->verbose,
-//                   "smoothCellMin: %ld particles in nodetable\n", in);
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "smoothCellMin: %ld particles in nodetable\n", in);
-/*        verb_print(cmd->verbose,
-                   "smoothCellMin: Average of kappa (%ld particles) = %le\n",
-                   gd->nnodescanlevTable[gd->iCatalogs[0]],
-                   kavg/((real)gd->nnodescanlevTable[gd->iCatalogs[0]]) ); */
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "smoothCellMin: Average of kappa (%ld particles) = %le\n",
                     gd->nnodescanlevTable[gd->iCatalogs[0]],
@@ -222,7 +207,6 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     } // ! smooth && set-Nb-noSel
 
     if ( scanopt(cmd->options, "make-tree") ) {
-//    verb_print(cmd->verbose, "\n\tMainLoop: make-tree: try making tree...\n\n");
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n\t%s: make-tree: try making tree...\n\n",
                             routineName);
@@ -232,9 +216,8 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     }
 
     if (scanopt(cmd->options, "stop")) {
-        if (!strnull(cmd->outfile))
+        if (!strnull(cmd->outfile)&&!scanopt(cmd->options, "save-ra-dec"))
             OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
-//        verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\t%s: stopping...\n\n", routineName);
         exit(1);
@@ -258,17 +241,12 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     if (scanopt(cmd->options, "post-processing")) {
         cpustart = CPUTIME;
         sprintf(buf,"%s",cmd->posScript);
-//        verb_print(cmd->verbose,
-//                   "\npost-processing: executing '%s'...", cmd->script);
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\npost-processing: executing '%s'...", cmd->posScript);
         system(buf);
-//        verb_print(cmd->verbose, "done.\n");
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "done.\n");
         gd->cputotal += CPUTIME - cpustart;
-//        verb_print(cmd->verbose, "cpu time expended in this script %g\n\n",
-//                   CPUTIME - cpustart);
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "cpu time expended in this script %g\n\n",
                             CPUTIME - cpustart);
@@ -296,8 +274,6 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 
     switch(gd->searchMethod_int) {
         case TREEOMPMETHODSINCOS:                   // search=tree-omp-sincos
-//            verb_print(cmd->verbose,
-//                    "\n\tEvalHist: with normal tree method (sincos-omp)\n\n");
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\n\t%s: with normal tree method (sincos-omp)\n\n",
                         routineName);
@@ -316,9 +292,6 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 #include "cballs_include_02.h"
 #else
         case SEARCHNULL:
-//            verb_print(cmd->verbose, "\n\tEvalHist: null search method.\n");
-//            verb_print(cmd->verbose,
-//                    "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\t%s: null search method.\n",
                                    routineName);
@@ -333,9 +306,6 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
                         gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
             break;
         default:
-//            verb_print(cmd->verbose, "\n\tEvalHist: dafault search method.\n");
-//            verb_print(cmd->verbose,
-//                    "\n\tevalHist: with normal tree method (sincos-omp)\n\n");
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\t%s: dafault search method.\n",
                                    routineName);
@@ -363,8 +333,6 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
     if (!scanopt(cmd->options, "no-out-Hist")) {
     switch(gd->searchMethod_int) {
         case TREEOMPMETHODSINCOS:
-//            verb_print(cmd->verbose,
-//            "\n\t%s: printing normal tree method (omp-sincos)\n\n", routineName);
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n\t%s: printing normal tree method (omp-sincos)\n\n",
                             routineName);
@@ -381,8 +349,6 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             }
             break;
         case SEARCHNULL:
-//            verb_print(cmd->verbose,
-//                       "\n\t%s: printing null search method.\n\n", routineName);
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\n\t%s: printing null search method.\n\n",
                         routineName);
@@ -399,8 +365,6 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             }
             break;
         default:
-//            verb_print(cmd->verbose,
-//                     "\n\t%s: printing dafault search method.\n\n", routineName);
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\t%s: printing dafault search method.\n\n",
                                    routineName);
@@ -515,6 +479,11 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
     real rBin, rbinlog;
     int n;
     stream outstr;
+    //B correct cute-box-rmin
+    real deltaR;
+    if ((scanopt(cmd->options, "cute-box-rmin")))
+        deltaR = cmd->rangeN/cmd->sizeHistN;
+    //E
 
     outstr = stropen(gd->fpfnamehistCFFileName, "w!");
 
@@ -530,7 +499,14 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
             }
             rBin=rpow(10.0,rbinlog);
         } else {
-            rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
+            //B correct cute-box-rmin
+            if ((scanopt(cmd->options, "cute-box-rmin"))) {
+                deltaR = cmd->rangeN/cmd->sizeHistN;
+                rBin = ((real)n-0.5)*deltaR;
+            } else {
+                rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
+            }
+            //E
         }
         fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histCF[n]);
     }

@@ -897,7 +897,7 @@ global void searchcalc_balls_omp(struct cmdline_data* cmd,
     }
 #else
       if (scanopt(cmd->options, "compute-HistN")) {
-              search_compute_HistN_balls(cmd, gd, nbody[cat1]);
+          search_compute_HistN_balls(cmd, gd, nbody[cat1]);
       }
 #endif
 
@@ -3157,14 +3157,14 @@ local int search_compute_Xi_balls(struct cmdline_data* cmd, struct  global_data*
         DO_COORD(k)
             Vol = Vol*gd->Box[k];
 
-    #ifdef RAPHISTNVER
+#ifdef RAPHISTNVER
     // Check for log-scale value of deltaR
         if (NDIM == 3)
             normFac = Vol / (2.0 * PI * rpow(gd->deltaR, 3.0) * nbody * nbody);
         else if (NDIM == 2)
             normFac = Vol / (PI * rpow(gd->deltaR, 2.0) * nbody * nbody);
         else error("\n\nWrong NDIM!\n\n");
-    #endif
+#endif
 
     //#ifdef TREENODE
     //    normFac *= 0.5;

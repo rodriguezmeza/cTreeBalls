@@ -617,8 +617,13 @@ local void sumnode_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
                               gdhistptr_sincos_omp_kk hist)
 {
     cellptr p;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     vector dr;
     real dr1;
+#endif
     nodeptr pb;
     INTEGER ibodycount=0;
     int n;
@@ -703,8 +708,13 @@ local void sumcell_balls6_omp(struct cmdline_data* cmd, struct  global_data* gd,
                               gdhistptr_sincos_omp_kk hist)
 {
     cellptr p;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     vector dr;
     real dr1;
+#endif
     nodeptr pb;
     INTEGER ibodycount=0;
     int n;
@@ -778,8 +788,13 @@ local void sumcellcell_balls6_omp(struct cmdline_data* cmd,
                                   gdhistptr_sincos_omp_kk hist)
 {
     cellptr p;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     vector dr;
     real dr1;
+#endif
     nodeptr pb;
     INTEGER ibodycount=0;
     int n;

@@ -103,9 +103,14 @@ global int searchcalc_direct_simple_sincos(struct cmdline_data* cmd,
                                            int cat1, int cat2)
 {
     bodyptr p, q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
-    int k, n;
     vector dr;
+#endif
+    int k, n;
     double cpustart;
     real cosphi, sinphi;
     gdhist_sincos_direct hist;

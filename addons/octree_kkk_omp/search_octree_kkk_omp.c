@@ -15,6 +15,8 @@
 
 #include "globaldefs.h"
 
+#if THREEDIMCODE
+
 //B correction 2025-04-06
 #define CHEBYSHEVTUOMP                                            \
 {REAL xicosmphi,xisinmphi; int m;                                 \
@@ -1091,8 +1093,13 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   int *nbList, int *intList)
 {
     nodeptr l;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
 
     if (Update(p)==FALSE) return;
         if ( ((nodeptr) p) != q ) {
@@ -1191,8 +1198,13 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                           int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     REAL cosphi,sinphi;
@@ -1292,8 +1304,13 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     REAL cosphi,sinphi;
@@ -1492,8 +1509,13 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     int *nbList, int *intList)
 {
     nodeptr l;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
 
     if (Update(p)==FALSE) return;
     if ( ((nodeptr) p) != q ) {
@@ -1537,8 +1559,13 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                             int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     real xiN;
@@ -1642,8 +1669,13 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                                  int *nbList, int *intList)
 {
     cellptr q;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
     real dr1;
     vector dr;
+#endif
     int n;
     real xi;
     real xiN;
@@ -3538,6 +3570,8 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
 
 //E Saving histograms section: case KKKCORRELATION:
 
+
+#endif // ! THREEDIMCODE
 
 
 

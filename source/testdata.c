@@ -78,8 +78,14 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                 testdata_sc_random(cmd, gd);
             } else {
                 if (cmd->computeTPCF==TRUE) {
+#if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
                     testdata_unit_sphere_random(cmd, gd);
+#else
+                    verb_print(cmd->verbose,
+                               "\nUsing unit sphere random test model %s\n",
+                               "is only valid in 3D...");
+#endif
                 } else {
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                     testdata_sc_random(cmd, gd);
@@ -97,9 +103,15 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                 testdata_sc_random(cmd, gd);
             } else {
                 if (cmd->computeTPCF==TRUE) {
+#if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model");
                     verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
                     testdata_unit_sphere_random(cmd, gd);
+#else
+                    verb_print(cmd->verbose,
+                               "\nUsing unit sphere random test model %s",
+                               "is valid only in 3D");
+#endif
                 } else {
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                     testdata_sc_random(cmd, gd);
@@ -114,8 +126,14 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                 testdata_sc_random(cmd, gd);
             } else {
                 if (cmd->computeTPCF==TRUE) {
+#if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
                     testdata_unit_sphere_random(cmd, gd);
+#else
+                    verb_print(cmd->verbose,
+                               "\nUsing unit sphere random test model %s\n",
+                               "is only valid in 3D");
+#endif
                 } else {
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                     testdata_sc_random(cmd, gd);

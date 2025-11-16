@@ -1,4 +1,6 @@
 
+// included in: addons/addons_include/source/cballsio/cballsio_include_03.h
+
 #ifndef _cballsio_cfitsio_03_h
 #define _cballsio_cfitsio_03_h
 

@@ -8,11 +8,6 @@
 
 // input in: addons/source/cballsio/cballsio_include_11a.h
 
-//B experimental, do not activate
-#define OPENMPCODELOCAL
-#undef OPENMPCODELOCAL
-//E
-
 local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
@@ -297,6 +292,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
                                    struct  global_data* gd,
                                    string filename, int ifile, fitsfile *fptr)
 {
+    string routineName = "searchcalc_octree_ggg_omp";
     bodyptr p;
     real mass=1;
     real weight=1;
@@ -407,7 +403,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
                     DOTPSUBV(dist2, distv, Pos(p), Pos(q));
                     if (dist2 == 0.0) {
                         verb_print(cmd->verbose,
-                                   "\nIds: %ld and %ld have the same position\n",
+                        "\nIds: %ld and %ld have the same position\n",
                                    Id(p),Id(q));
                         DO_COORD(k)
                             verb_print(cmd->verbose,"Pos[k]: %le %le\n",
@@ -417,12 +413,17 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
                 }
         verb_print(cmd->verbose,
                    "inputdata_cfitsio: done.\n");
-        if (flag) error("inputdata_cfitsio: at least two bodies have same position\n");
+        if (flag)
+        error("inputdata_cfitsio: at least two bodies have same position\n");
     }
     //E
 #else
 // two dimension (ra,dec) is comming soon!
-#error `DEFDIMENSION` is not set to 3. Do so in Makefile_settings
+//#error `DEFDIMENSION` is not set to 3. Do so in Makefile_settings
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+        "\n%s: `DEFDIMENSION` is not set to 3. Do so in Makefile_settings\n",
+        routineName);
+
 #endif
 }
 
@@ -733,7 +734,8 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
 }
 
 // reading healpix map
-//  3D only
+#if THREEDIMCODE
+//  3D only... not anymore
 local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                                         struct  global_data* gd,
                                         string filename,
@@ -787,6 +789,15 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                npixel*sizeof(body)/(1024.0*1024.0),
                npixel);
 
+    //B save optional RA-DEC to a file... 3-columns: RA, DEC, Kappa
+    char namebuf[256];
+    stream outstr;
+    if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)) {
+        sprintf(namebuf, gd->fpfnameOutputFileName);
+        outstr = stropen(namebuf, "w!");
+    }
+    //E
+
     cmd->nbody=npixel;
 
     real xmin, ymin, zmin;
@@ -796,9 +807,6 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
     INTEGER i;
     INTEGER iselect = 0;
-#ifdef OPENMPCODELOCAL
-#pragma omp parallel for
-#endif
     for(ipix=0;ipix<npixel;ipix++) {                // RING loop order
         p = bodytabtmp+ipix;
         Update(p) = FALSE;
@@ -816,6 +824,14 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                         if (scanopt(cmd->options, "kappa-constant-one"))
                             Kappa(p) = 1.0;
                     }
+                    //B save optional RA-DEC to a file...
+                    if (scanopt(cmd->options, "save-ra-dec")
+                        &&!strnull(cmd->outfile)) {
+                        out_real_mar(outstr, phi);
+                        out_real_mar(outstr, theta);
+                        out_real(outstr, Kappa(p));
+                    }
+                    //E
                     Type(p) = BODY;
                     Mass(p) = mass;
                     Weight(p) = weight;
@@ -839,6 +855,14 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                 if (scanopt(cmd->options, "kappa-constant-one"))
                     Kappa(p) = 1.0;
             }
+            //B save optional RA-DEC to a file...
+            if (scanopt(cmd->options, "save-ra-dec")
+                &&!strnull(cmd->outfile)) {
+                out_real_mar(outstr, phi);
+                out_real_mar(outstr, theta);
+                out_real(outstr, Kappa(p));
+            }
+            //E
             Type(p) = BODY;
             Mass(p) = mass;
             Weight(p) = weight;
@@ -873,6 +897,14 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
         } // ! all
     } // ! end loop ipix
+
+    //B save optional RA-DEC to a file...
+    if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)
+                            &&scanopt(cmd->options, "stop")) {
+        fclose(outstr);
+        exit(1);            // need to free all mem allocation...
+    }
+    //E
 
     //B correction 2025-05-03 :: look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
@@ -979,6 +1011,273 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
+#else // !  THREEDIMCODE
+
+local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
+                                        struct  global_data* gd,
+                                        string filename,
+                                        int ifile, fitsfile *fptr)
+{
+    string routineName = "inputdata_cfitsio_healpix_map";
+    bodyptr p;
+    real mass=1;
+    real weight=1;
+
+    long ipix;
+    double theta;
+    double phi;
+    double thetamin, thetamax;
+    double phimin, phimax;
+
+    float *map;
+    long npixel, nside;
+    char order1[10];
+    char order2[10];
+    char coord[10];
+
+    verb_print(cmd->verbose, "\nWorking 2D map...\n");
+
+    npixel = get_fits_size(filename, &nside, order1);
+    verb_print(cmd->verbose,
+        "filename, ifile, nside, npixel, order1:");
+    verb_print(cmd->verbose,
+        "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
+    map = read_healpix_map(filename, &nside, coord, order2);
+    verb_print(cmd->verbose,
+               "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
+               npixel*sizeof(float)*INMB, npixel);
+
+    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
+    verb_print(cmd->verbose,
+               "%s: nbody = %d...\n",
+               routineName, npixel);
+    if (npixel < 1)
+        error("%s: npixel = %d is absurd\n", routineName, npixel);
+
+    bodyptr bodytabtmp;
+    bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
+    verb_print(cmd->verbose,
+               "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
+               npixel*sizeof(body)*INMB, npixel);
+
+    //B save optional RA-DEC to a file... 3-columns: RA, DEC, Kappa
+    char namebuf[256];
+    stream outstr;
+    if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)) {
+        sprintf(namebuf, gd->fpfnameOutputFileName);
+        outstr = stropen(namebuf, "w!");
+    }
+    //E
+
+    cmd->nbody=npixel;
+
+    real xmin, ymin;
+    real xmax, ymax;
+    xmin=0., ymin=0.;
+    xmax=0., ymax=0.;
+
+    INTEGER i;
+    INTEGER iselect = 0;
+    for(ipix=0;ipix<npixel;ipix++) {                // RING loop order
+        p = bodytabtmp+ipix;
+        Update(p) = FALSE;
+        Mask(p) = 1;                                // initialize body's Mask
+        pix2ang_ring(nside, ipix, &theta, &phi);
+        if (scanopt(cmd->options, "patch")) {
+            if (cmd->thetaL < theta && theta < cmd->thetaR) {
+                if (cmd->phiL < phi && phi < cmd->phiR) {
+                    iselect++;
+//                    coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+                    Pos(p)[0] = phi;
+                    Pos(p)[1] = theta;
+                    if (!scanopt(cmd->options, "kappa-constant"))
+                        Kappa(p) = map[ipix];
+                    else {
+                        Kappa(p) = 2.0;
+                        if (scanopt(cmd->options, "kappa-constant-one"))
+                            Kappa(p) = 1.0;
+                    }
+                    //B save optional RA-DEC to a file...
+                    if (scanopt(cmd->options, "save-ra-dec")
+                        &&!strnull(cmd->outfile)) {
+                        out_real_mar(outstr, Pos(p)[0]);
+                        out_real_mar(outstr, Pos(p)[1]);
+                        out_real(outstr, Kappa(p));
+                    }
+                    //E
+                    Type(p) = BODY;
+                    Mass(p) = mass;
+                    Weight(p) = weight;
+                    Id(p) = p-bodytabtmp+iselect;
+                    Update(p) = TRUE;
+                    xmin = Pos(p)[0];
+                    ymin = Pos(p)[1];
+                    xmax = Pos(p)[0];
+                    ymax = Pos(p)[1];
+                }
+            }
+        } else { // ! all
+            iselect++;
+//            coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+            Pos(p)[0] = phi;
+            Pos(p)[1] = theta;
+            if (!scanopt(cmd->options, "kappa-constant"))
+                Kappa(p) = map[ipix];
+            else {
+                Kappa(p) = 2.0;
+                if (scanopt(cmd->options, "kappa-constant-one"))
+                    Kappa(p) = 1.0;
+            }
+            //B save optional RA-DEC to a file...
+            if (scanopt(cmd->options, "save-ra-dec")
+                &&!strnull(cmd->outfile)) {
+                out_real_mar(outstr, Pos(p)[0]);
+                out_real_mar(outstr, Pos(p)[1]);
+                out_real(outstr, Kappa(p));
+            }
+            //E
+            Type(p) = BODY;
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytabtmp+iselect;
+            Update(p) = TRUE;
+            xmin = Pos(p)[0];
+            ymin = Pos(p)[1];
+            xmax = Pos(p)[0];
+            ymax = Pos(p)[1];
+            //B correction 2025-05-03 :: look for edge-effects
+            // activate a flag for this catalog, that it is using patch-with-all
+            //  and use it in EvalHist routine...
+    #if defined(NMultipoles) && defined(NONORMHIST)
+            if (scanopt(cmd->options, "patch-with-all")) {
+                UpdatePivot(p) = TRUE;
+                if (cmd->thetaL < theta && theta < cmd->thetaR) {
+                    if (cmd->phiL < phi && phi < cmd->phiR) {
+                        UpdatePivot(p) = TRUE;
+                        gd->pivotCount += 1;
+                    } else {
+                        UpdatePivot(p) = FALSE;
+                    }
+                } else {
+                    UpdatePivot(p) = FALSE;
+                }
+            }
+    #endif
+            //E
+        } // ! all
+    } // ! end loop ipix
+
+    //B save optional RA-DEC to a file...
+    if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)
+                            &&scanopt(cmd->options, "stop")) {
+        fclose(outstr);
+        exit(1);            // need to free all mem allocation...
+    }
+    //E
+
+    //B correction 2025-05-03 :: look for edge-effects
+#if defined(NMultipoles) && defined(NONORMHIST)
+    if (scanopt(cmd->options, "patch-with-all")) {
+        verb_print(cmd->verbose,
+                   "\n%s: total number of pixels to be pivots: %ld\n",
+                   routineName, gd->pivotCount);
+    }
+#endif
+    //E
+
+    free(map);
+    verb_print(cmd->verbose,
+               "\nFreed %g MByte for temporal map pixel (%ld) storage.\n",
+               npixel*sizeof(float)*INMB, npixel);
+
+    bodyptr q;
+    if (scanopt(cmd->options, "patch"))
+        cmd->nbody = iselect;
+
+    gd->nbodyTable[ifile] = cmd->nbody;
+    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+
+    real kavg = 0;
+    INTEGER ij=0;
+    for(ipix=0;ipix<npixel;ipix++){
+        q = bodytabtmp+ipix;
+        if(Update(q)) {
+            p = bodytable[ifile]+ij;
+            Pos(p)[0] = Pos(q)[0];
+            Pos(p)[1] = Pos(q)[1];
+            Kappa(p) = Kappa(q);
+            Type(p) = Type(q);
+            Mass(p) = mass;
+            Weight(p) = weight;
+            Id(p) = p-bodytable[ifile]+ipix;
+            Mask(p) = Mask(q);
+            xmin = MIN(xmin,Pos(p)[0]);
+            ymin = MIN(ymin,Pos(p)[1]);
+            xmax = MAX(xmax,Pos(p)[0]);
+            ymax = MAX(ymax,Pos(p)[1]);
+            ij++;
+            kavg += Kappa(p);
+        }
+    }
+
+    char file[180] = "outputmap.fits" ;
+    char fileforce[180] ;
+    if (scanopt(cmd->options, "plot-map-gif")) {
+        //B add ifile tag...
+        sprintf(fileforce, "!%s/%s",                // leading !
+                gd->outputDir, file);               //  to allow overwrite
+        //E
+        verb_print(cmd->verbose,
+                   "\t%s: %s %s...\n",
+                   routineName, "\n\t\tsaving map to a fits file:", fileforce);
+        map = (float *)malloc(npixel*sizeof(float));
+        for(ipix=0;ipix<npixel;ipix++){             // all pixels in
+                                                    //  the sphere are filled
+            q = bodytabtmp+ipix;
+            if(Update(q)) {
+                map[ipix] = Kappa(q);
+            } else {
+                map[ipix] = 0.0;
+            }
+        }
+        //B write healpix map in RING order: "0"
+        //      and
+        //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
+        write_healpix_map(map, nside, fileforce, 0, "C");  // choose COORDSYS...
+        fprintf(stdout,"\t\tfile written\n");
+        free(map);
+    }
+
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "\n\t%s: min and max of x = %f %f\n",
+                          routineName, xmin, xmax);
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "\t%s: min and max of y = %f %f\n",
+                          routineName, ymin, ymax);
+
+    free(bodytabtmp);
+    verb_print(cmd->verbose,
+            "\nFreed %g MByte for temporal particle (%ld) storage.\n",
+            npixel*sizeof(body)*INMB,npixel);
+
+    if (scanopt(cmd->options, "all"))
+        verb_print(cmd->verbose,
+            "\n\t%s: selected read points and nbody: %ld %ld\n",
+                   routineName, iselect, cmd->nbody);
+    else
+        verb_print(cmd->verbose,
+            "\n\t%s: selected read points = %ld\n", routineName, iselect);
+
+    verb_print(cmd->verbose,
+            "%s: average of kappa (%ld particles) = %le\n",
+               routineName, cmd->nbody, kavg/((real)cmd->nbody) );
+
+    return SUCCESS;
+}
+
+#endif // !  THREEDIMCODE
+
+
 
 //#ifdef MASKED
 // reading healpix mask map
@@ -1006,7 +1305,7 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n")
+    error("\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
     npixel = get_fits_size(filename, &nside, order1);
@@ -1087,7 +1386,7 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n")
+    error("\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
     npixel = get_fits_size(filename, &nside, order1);
@@ -1365,7 +1664,7 @@ local int inputdata_numpy_healpix(struct cmdline_data* cmd,
 }
 
 // reading numpy-healpix map
-//  3D only
+//  3D only...
 local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
                                         struct  global_data* gd,
                                         string filename,
@@ -1392,7 +1691,7 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n")
+    error("\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
     // info runing header_script.py and set it in cmd->nbody
@@ -1649,7 +1948,7 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n")
+    error("\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
     npixel = get_fits_size(filename, &nside, order1);
@@ -1728,7 +2027,7 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n")
+    error("\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
     npixel = get_fits_size(filename, &nside, order1);

@@ -191,6 +191,7 @@ void d1Rotation3D(real vec[], real alpha)
         vec[i] = vecp[i];
 }
 
+#if NDIM == 3
 // Cross vector product: vec2-vec1 vs vec3-vec1
 bool crossVecProdSign(real vec1[], real vec2[], real vec3[])
 {
@@ -205,6 +206,10 @@ bool crossVecProdSign(real vec1[], real vec2[], real vec3[])
     else
         return FALSE;
 }
+#else // ! NDIM == 3
+// work to do in 2D....
+#endif // ! NDIM == 3
+
 
 real radian(real degree)
 {

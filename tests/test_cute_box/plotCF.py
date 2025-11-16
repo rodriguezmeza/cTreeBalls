@@ -27,6 +27,7 @@ fig1 = plt.figure(figsize=(9,6))
 plt.plot(xd,xd*yd)
 plt.scatter(xd,xd*yd)
 plt.plot(xdvs,xdvs*ydvs)
+plt.scatter(xdvs,xdvs*ydvs)
 plt.xlabel("$r$")
 plt.ylabel("$r \\zeta$");
 plt.show()

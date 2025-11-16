@@ -307,7 +307,7 @@ global int MakeTree(struct  cmdline_data* cmd,
                routine_name, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED); */
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: scanLevelB4 CPU time: %lf %s\n",
-                routine_name, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
+                routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
 #endif
 
     smoothBodies(cmd, gd, btab, nbody);             // Smooth cells
@@ -902,7 +902,8 @@ global int expandbox(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-#define EPSILON 1.0E-7                              // Choose well.
+//#define EPSILON 1.0E-7                              // Choose well.
+#define EPSILON 1.0E-5                              // Choose well.
                                                     //  If not tdepth and
                                                     //  no. of cell will
                                                     //  grow badly...
@@ -937,12 +938,14 @@ startagain:
                                Pos(p)[k],Pos(Subp(q)[qind])[k]);
                 if (scanopt(cmd->options, "no-check-two-bodies-eq-pos")) {
                     DO_COORD(k) {
-                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
+//                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
+                        Pos(p)[k] += EPSILON*grandom(0.0, 1.0);
                         DO_COORD(k) {
                             verb_log_print(cmd->verbose_log,gd->outlog,
                             "CorrectedPos[k]: %g %g and correction: %le\n",
                             Pos(p)[k],Pos(Subp(q)[qind])[k],
-                            EPSILON*grandom(0.0, 0.01*qsize));
+                            EPSILON*grandom(0.0, 1.0));
+//                            EPSILON*grandom(0.0, 0.01*qsize));
                         }
                     }
                     Update(p) = FALSE;

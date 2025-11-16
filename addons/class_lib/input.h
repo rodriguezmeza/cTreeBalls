@@ -205,7 +205,8 @@ char string_temp[_ARGUMENT_LENGTH_MAX_]; int flag_temp;            \
 extern "C" {
 #endif
 
-int input_find_file(struct  cmdline_data* cmd, char *fname,
+int input_find_file(struct  cmdline_data* cmd, struct  global_data* gd,
+                    char *fname,
                     struct file_content * fc,
                     ErrorMsg errmsg);
 

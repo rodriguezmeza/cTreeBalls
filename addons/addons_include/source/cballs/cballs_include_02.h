@@ -9,6 +9,10 @@
 #ifndef _cballs_include_02_h
 #define _cballs_include_02_h
 
+#ifdef OCTREESINCOSOMP
+#include "cballs_octree_sincos_omp.h"
+#endif
+
 #ifdef BALLS
 #include "cballs_balls_omp.h"
 #endif
@@ -24,7 +28,6 @@
 #ifdef OCTREEGGGOMP
 #include "cballs_octree_ggg_omp.h"
 #endif
-
 
 
 /*
@@ -65,6 +68,19 @@
 #ifdef OCTREEKKKBALLS4OMPTRIANGLES
 #include "cballs_octree_kkk_balls4_omp_triangles.h"
 #endif
+
+#ifdef KDTREEBOXOMP
+#include "cballs_kdtree_box_omp.h"
+#endif
+
+#ifdef OCTREEBOXOMP
+#include "cballs_octree_box_omp.h"
+#endif
+
+#ifdef NEIGHBORBOXESOMP
+#include "cballs_neighbor_boxes_omp.h"
+#endif
+
 
 /*
  #E Addendum of some not important

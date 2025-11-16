@@ -8,7 +8,6 @@
 #include "global_data_octree_kkk_omp.h"
 #endif
 
-
 /*
  Add your addon item here
  */

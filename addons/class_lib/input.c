@@ -16,11 +16,12 @@
 #include "input.h"
 
 local void testParameterFile(struct  cmdline_data*,
-                             //struct  global_data*,
+                             struct  global_data*,
                              char *);
 
 
-int input_find_file(struct  cmdline_data* cmd, char *fname,
+int input_find_file(struct  cmdline_data* cmd, struct  global_data* gd,
+                    char *fname,
                     struct file_content * fc,
                     ErrorMsg errmsg){
 
@@ -36,7 +37,7 @@ int input_find_file(struct  cmdline_data* cmd, char *fname,
 
     //B test if cmd->paramfile exist...
     if (!strnull(fname)) {
-        testParameterFile(cmd, cmd->paramfile);
+        testParameterFile(cmd, gd, cmd->paramfile);
     }
     //E
 
@@ -695,8 +696,8 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->preScript = "";
     cmd->posScript = "";
     cmd->stepState = 10000;
-    cmd->verbose = 1;
-    cmd->verbose_log = 1;
+    cmd->verbose = 0;
+    cmd->verbose_log = 0;
 #ifdef OPENMPCODE
     cmd->numthreads = 4;
 #endif
@@ -721,7 +722,7 @@ int input_default_params(struct cmdline_data *cmd)
 
 //B parameter reading/testing from a file
 local void testParameterFile(struct  cmdline_data* cmd,
-                             //struct  global_data* gd,
+                             struct  global_data* gd,
                              char *fname)
 {
 // Every item in cmdline_defs.h must have an item here::
@@ -743,8 +744,10 @@ local void testParameterFile(struct  cmdline_data* cmd,
 
 //    printf("\nTesting input parameters file: %s...\n", fname);
 //    if (strnull(fname)) return;
-    int input_verbose = 1;
-    verb_print(input_verbose, "\nTesting input parameters...\n");
+    int input_verbose = 2;
+    verb_print(input_verbose, "\nparsing input parameters...\n");
+//    verb_print_normal_info(input_verbose, 0, gd->outlog,
+//                           "\nparsing input parameters...\n");
 
     nt=0;
 
@@ -806,7 +809,6 @@ local void testParameterFile(struct  cmdline_data* cmd,
     //E
 
     //B Miscellaneous parameters
-//    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
     SPName(cmd->preScript,"preScript",MAXLENGTHOFSTRSCMD);
     SPName(cmd->posScript,"posScript",MAXLENGTHOFSTRSCMD);
 #ifdef LONGINT
@@ -928,10 +930,30 @@ local void testParameterFile(struct  cmdline_data* cmd,
                             int index;
                             size_t slen;
                             slen = strlen(value);
+                            //B
+                            script1 = (char*) malloc(1*sizeof(char));
+                            memcpy(script1,value,1);
+                            script2 = strchr(script1, '"');
+                            if (script2 == NULL)
+                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                      value);
+                            free(script1);
+                            //E
+                            //B
+                            script1 = (char*) malloc((slen-1)*sizeof(char));
+                            memcpy(script1,value+1,slen-1);
+                            script2 = strchr(script1, '"');
+                            if (script2 == NULL)
+                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                      value);
+                            free(script1);
+                            //E
                             cmd->preScript = (char*) malloc((slen-2)*sizeof(char));
                             script1 = (char*) malloc(slen*sizeof(char));
                             memcpy(script1,value,slen);
                             script2 = strchr(script1, '"');
+                            if (script2 == NULL)
+                                error("preScript parameter needs enclosing script with \"\"!!\n\n");
                             memcpy(cmd->preScript,script2+1,slen-2);
                             free(script1);
                         } else {
@@ -939,10 +961,31 @@ local void testParameterFile(struct  cmdline_data* cmd,
                                 int index;
                                 size_t slen;
                                 slen = strlen(value);
+                                //B
+                                script1 = (char*) malloc(1*sizeof(char));
+                                memcpy(script1,value,1);
+                                script2 = strchr(script1, '"');
+                                if (script2 == NULL)
+                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                          value);
+                                free(script1);
+                                //E
+                                //B
+                                script1 = (char*) malloc((slen-1)*sizeof(char));
+                                memcpy(script1,value+1,slen-1);
+                                script2 = strchr(script1, '"');
+                                if (script2 == NULL)
+                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                          value);
+                                free(script1);
+                                //E
                                 cmd->posScript = (char*) malloc((slen-2)*sizeof(char));
                                 script1 = (char*) malloc(slen*sizeof(char));
                                 memcpy(script1,value,slen);
                                 script2 = strchr(script1, '"');
+                                if (script2 == NULL)
+                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
+                                          script1);
                                 memcpy(cmd->posScript,script2+1,slen-2);
                                 free(script1);
                             } else

@@ -611,7 +611,7 @@ void InputData_2c(string filename, int col1, int col2, int *npts)
     instr = stropen(filename, "r");
     
 //    fprintf(stdout,
-//            "\nReading columns %d and %d from file %s... ",col1,col2,filename);
+//    "\nReading columns %d and %d from file %s... ",col1,col2,filename);
     
     state = OUT;
     nl = nw = nc = 0;
@@ -706,7 +706,8 @@ void InputData_2c(string filename, int col1, int col2, int *npts)
 //    fprintf(stdout,"\n... done.\n");
 }
 
-void InputData_3c(string filename, int col1, int col2, int col3,
+void InputData_3c(string filename,
+                  int col1, int col2, int col3,
     int *npts)
 {
     stream instr;
@@ -717,8 +718,11 @@ void InputData_3c(string filename, int col1, int col2, int col3,
 
     instr = stropen(filename, "r");
 
-    fprintf(stdout,
-        "\nReading columns %d, %d, and %d from file %s... ",col1,col2,col3,filename);
+//    fprintf(stdout,
+//        "\nReading columns %d, %d, and %d from file %s... ",
+//            col1,col2,col3,filename);
+    verb_print(1, "\nReading columns %d, %d, and %d from file %s... ",
+                col1,col2,col3,filename);
 
     state = OUT;
     nl = nw = nc = 0;
@@ -733,8 +737,10 @@ void InputData_3c(string filename, int col1, int col2, int col3,
             ++nw;
         }
     }
-    printf("\n\nGeneral statistics : ");
-    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
+//    printf("\n\nGeneral statistics : ");
+//    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
+    verb_print(1, "\nGeneral statistics: %s %d %d %d",
+               "number of lines, words, and characters:", nl, nw, nc);
 
     rewind(instr);
 
@@ -783,8 +789,10 @@ void InputData_3c(string filename, int col1, int col2, int col3,
                 salto=NO;
             }
     }
-    printf("\nValid numbers statistics : ");
-    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
+//    printf("\nValid numbers statistics : ");
+//    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
+    verb_print(1, "\nValid numbers statistics:  %s %d %d %d",
+               "nrow, ncol, nvalues:", nl, nw, nc);
 
     if (ncol<3)
         error("\n\nInputData_4c: Error : ncol must be >=4\n");
@@ -815,7 +823,7 @@ void InputData_3c(string filename, int col1, int col2, int col3,
 
     fclose(instr);
 
-    fprintf(stdout,"\n... done.\n");
+    fprintf(stdout,"\t\n... done.\n");
 }
 
 void InputData_4c(string filename, int col1, int col2, int col3, int col4,

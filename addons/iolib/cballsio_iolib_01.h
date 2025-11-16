@@ -1,4 +1,6 @@
 
+// included in: addons/addons_include/source/cballsio/cballsio_indlude_01.h
+
 #ifndef _cballsio_iolib_01_h
 #define _cballsio_iolib_01_h
 
@@ -17,5 +19,8 @@ case INCOLUMNSPOS:
 case INMCOLUMNS:
     printf("\n\tInput in multiple ascii columns format...\n");
     inputdata_ascii_mcolumns(cmd, gd, filename, ifile); break;
+case INRADECCOLUMNS:
+    printf("\n\tInput in ra-dec ascii columns format...\n");
+inputdata_ascii_ra_dec(cmd, gd, filename, ifile); break;
 
 #endif	// ! _cballsio_iolib_01_h
