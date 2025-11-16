@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (octree_sincos_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(OCTREESINCOSOMPON),1)
+OPT2 += -DOCTREESINCOSOMP
+OCTREESINCOSOMP = ../addons/octree_sincos_omp/
+vpath %.c ./addons/octree_sincos_omp/
+INCLUDES += -I$(OCTREESINCOSOMP)
+HEADERFILES = $(wildcard $(OCTREESINCOSOMP)/*.h)
+EXTERNAL += search_octree_sincos_omp.o
+endif
+#
+#E
