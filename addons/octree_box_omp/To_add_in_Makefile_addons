@@ -1,0 +1,22 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# OCTREEBOXOMP
+# For computing 2pcf using octree-box-omp method
+#
+# This line is added to ../Makefile_addons_settings
+#OCTREEBOXOMPON = 1
+ifeq ($(OCTREEBOXOMPON),1)
+include $(MACHINES_DIR)/addons/octree_box_omp/Makefile_octree_box_omp
+endif
+#
+
+

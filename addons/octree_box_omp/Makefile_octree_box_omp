@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (octree_box_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(OCTREEBOXOMPON),1)
+OPT2 += -DOCTREEBOXOMP
+OCTREEBOXOMP = ../addons/octree_box_omp/
+vpath %.c ./addons/octree_box_omp/
+INCLUDES += -I$(OCTREEBOXOMP)
+HEADERFILES = $(wildcard $(OCTREEBOXOMP)/*.h)
+EXTERNAL += search_octree_box_omp.o
+endif
+#
+#E
