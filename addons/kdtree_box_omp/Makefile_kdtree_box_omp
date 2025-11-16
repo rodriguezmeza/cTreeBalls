@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (kdtree_box_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(KDTREEBOXOMPON),1)
+OPT2 += -DKDTREEBOXOMP
+KDTREEBOXOMP = ../addons/kdtree_box_omp/
+vpath %.c ./addons/kdtree_box_omp/
+INCLUDES += -I$(KDTREEBOXOMP)
+HEADERFILES = $(wildcard $(KDTREEBOXOMP)/*.h)
+EXTERNAL += kdtree_box.o search_kdtree_box_omp.o
+endif
+#
+#E
