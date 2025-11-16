@@ -1,0 +1,22 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# NEIGHBORBOXESOMP
+# For computing 2pcf using neighbor-boxes-omp method
+#
+# This line is added to ../Makefile_addons_settings
+#NEIGHBORBOXESOMPON = 1
+ifeq ($(NEIGHBORBOXESOMPON),1)
+include $(MACHINES_DIR)/addons/neighbor_boxes_omp/Makefile_neighbor_boxes_omp
+endif
+#
+
+

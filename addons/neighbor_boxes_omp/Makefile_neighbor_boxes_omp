@@ -1,0 +1,17 @@
+# ----- MAKE FILE machine definitions (neighbour_boxes_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(NEIGHBORBOXESOMPON),1)
+OPT2 += -DNEIGHBORBOXESOMP
+NEIGHBORBOXESOMP = ../addons/neighbor_boxes_omp/
+vpath %.c ./addons/neighbor_boxes_omp/
+INCLUDES += -I$(NEIGHBORBOXESOMP)
+HEADERFILES = $(wildcard $(NEIGHBORBOXESOMP)/*.h)
+EXTERNAL += search_neighbor_boxes_omp.o
+endif
+#
+#E
