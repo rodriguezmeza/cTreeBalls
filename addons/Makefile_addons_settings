@@ -176,7 +176,7 @@ _DEBUGON_ = 0
 LOGBINON = 0
 # remember to use "options=smooth-pivot"
 SMOOTHPIVOTON = 0
-ORIGINALCBON = 1
+ORIGINALCBON = 0
 ifeq ($(LOGBINON),1)
 DEFINEFLAGS += -D_LOGBIN_
 endif

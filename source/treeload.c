@@ -1687,7 +1687,7 @@ local void walktree_scan_lev_balls4(struct  cmdline_data* cmd,
     if ( lev+1 <= scanLevel ) {
         if (Type(q)==CELL) {
             for (l = More(q); l != Next(q); l = Next(l)) {
-                if (Radius(l) < gd->deltaRmin) {
+                if (Radius(l) < gd->deltaRmin*THETA) {
                     nodetablescanlevB4[ifile][inodelevB4] = l;
                     inodelevB4++;
                     ibodyleftoutB4++;

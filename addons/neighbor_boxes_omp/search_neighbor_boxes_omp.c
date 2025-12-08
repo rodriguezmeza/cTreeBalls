@@ -947,7 +947,19 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 local int print_info(struct cmdline_data* cmd,
                                   struct  global_data* gd)
 {
+    string routineName = "print_info";
+
     verb_print(cmd->verbose, "Search: Running ... (neighbor-boxes-omp) \n");
+
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "%s: warning!! fix lengthBox accordingly to catalog box you give %s\n",
+            routineName,
+            "otherwise you may get wrong results or even segmentation fault...");
+    if (!scanopt(cmd->options, "only-pos"))
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "%s: warning!! if catalog doesn´t have convergence field consider using 'only-pos' in options %s\n",
+            routineName,
+            "otherwise you may get wrong results or even segmentation fault...");
 
     if (scanopt(cmd->options, "smooth-pivot"))
         verb_print(cmd->verbose,

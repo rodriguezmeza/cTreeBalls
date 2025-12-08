@@ -35,10 +35,10 @@ GCCPATH = osp.normpath(osp.dirname(GCCPATH_STRING)).decode()
 
 #
 #B GSLINTERNAL = 0 and CFITSIOLIBON = 0 :: uncoment this line
-liblist = ["cballs","gsl","gslcblas","cfitsio"]
+#liblist = ["cballs","gsl","gslcblas","cfitsio"]
 #
 #B GSLINTERNAL = 1 and CFITSIOLIBON = 1 :: uncomment this line
-#liblist = ["cballs"]
+liblist = ["cballs"]
 #E
 #
 
@@ -85,8 +85,8 @@ cballys_ext = Extension("cballys", [os.path.join(cballys_folder, "cballys.pyx")]
 #   fix accordingly to your machine or comment if you have them in your environment...
 #B GSLINTERNAL = 1 and CFITSIOLIBON = 1 :: comment these two lines
 #B GSLINTERNAL = 0 and CFITSIOLIBON = 0 :: uncomment these two lines
-                            '/Users/mar/NagBody_pkg/local/cfitsio/lib/',
-                            '/Users/mar/NagBody_pkg/local/gsl/lib/'
+#                            '/Users/mar/NagBody_pkg/local/cfitsio/lib/',
+#                            '/Users/mar/NagBody_pkg/local/gsl/lib/'
                            ],
                            extra_link_args=['-lgomp', '-lz'],
 #B other possibilities:

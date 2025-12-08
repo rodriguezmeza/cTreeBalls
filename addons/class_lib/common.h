@@ -16,7 +16,7 @@
 #define __COMMON__
 
 //#define _VERSION_ "v3.2.1"
-#define _VERSION_ "v1.0.0"         // It must match version in cmdline_defs.h
+#define _VERSION_ "v1.0.1"         // It must match version in cmdline_defs.h
 
 /* @cond INCLUDE_WITH_DOXYGEN */
 

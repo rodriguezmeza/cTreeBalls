@@ -217,6 +217,7 @@ int local mCheb;                                    // mCheb =
 typedef struct {
 #ifdef TWOPCF
     real *histNN;                   // used
+    real *histWW;                   // used
     real *histCF;                   // used
     real *histNNSubXi2pcf;          // used
     //B kappa Avg Rmin
@@ -250,6 +251,8 @@ typedef struct {
 typedef struct {
 #ifdef TWOPCF
     realptr histNthread;            // used
+    realptr histWthread;            // used
+    realptr histWWthread;            // used
     realptr histNNSubXi2pcfthread;  // used
     //B kappa Avg Rmin
     realptr histNNSubXi2pcfthreadp; // used
@@ -321,6 +324,7 @@ typedef struct {
 typedef struct {
  #ifdef TWOPCF
      real *histNN;                   // used
+    real *histWW;                   // used
      real *histCF;                   // used
      real *histNNSubXi2pcf;          // used
      //B kappa Avg Rmin
@@ -353,6 +357,8 @@ typedef struct {
 typedef struct {
 #ifdef TWOPCF
     realptr histNthread;            // used
+    realptr histWthread;            // used
+    realptr histWWthread;            // used
     realptr histNNSubXi2pcfthread;  // used
     //B kappa Avg Rmin
     realptr histNNSubXi2pcfthreadp; // used
@@ -1315,6 +1321,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifdef TWOPCF
         for (n = 1; n <= cmd->sizeHistN; n++) {
             gdl.histNN[n] += hist.histNthread[n];
+            gdl.histWW[n] += hist.histWWthread[n];
             gdl.histNNSub[n] += hist.histNNSubthread[n];
             gdl.histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
 //B kappa Avg Rmin
@@ -1486,18 +1493,24 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     if (!scanopt(cmd->options, "asymmetric")) {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
             if (cmd->verbose>3)
-                printf("%d %e %e\n", nn,
-                   gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn]);
+                printf("%d %e %e %e\n", nn,
+                   gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn],
+                       gdl.histNN[nn]);
             gdl.histXi2pcf[nn] /= 2.0;
             gdl.histNNSubXi2pcf[nn] /= 2.0;
-//B kappa Avg Rmin
-            gdl.histNNSubXi2pcftotal[nn] /= 2.0;
-            if (scanopt(cmd->options, "smooth-pivot")) {
-                gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
+            if (scanopt(cmd->options, "weights-norm")) {
+//                gdl.histXi2pcf[nn] /= MAX(gdl.histNN[nn],1.0);
+                gdl.histXi2pcf[nn] /= MAX(gdl.histWW[nn],1.0);
             } else {
-                gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
+                //B kappa Avg Rmin
+                gdl.histNNSubXi2pcftotal[nn] /= 2.0;
+                if (scanopt(cmd->options, "smooth-pivot")) {
+                    gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
+                } else {
+                    gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
+                }
+                //E
             }
-//E
         }
     } else {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
@@ -1840,6 +1853,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] + 1.;
+                hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
                 //B kappa Avg Rmin
@@ -1895,6 +1909,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] + 1.;
+                hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
                 //B kappa Avg Rmin
@@ -1990,6 +2005,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+                hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
                 //B kappa Avg Rmin
@@ -2066,6 +2082,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+                hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
                 //B kappa Avg Rmin
@@ -2141,6 +2158,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     real xi;
 #ifdef TWOPCF
     real xi_2p;
+    real wi;
 #endif
 
 // check Weight factor... must be an average of Weights
@@ -2160,11 +2178,13 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
 #ifdef BALLS4SCANLEV
+    wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
     if (scanopt(cmd->options, "smooth-pivot")) {
         xi_2p = KappaRmin(p);
     }
 #else
+    wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
     if (scanopt(cmd->options, "smooth-pivot")) {
         xi_2p = KappaRmin(p);
@@ -2199,11 +2219,13 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
 #ifdef BALLS4SCANLEV
+    wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
     if (scanopt(cmd->options, "smooth-pivot")) {
         xi_2p = KappaRmin(p);
     }
 #else
+    wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
     if (scanopt(cmd->options, "smooth-pivot")) {
         xi_2p = (KappaRmin(p));
@@ -2302,6 +2324,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     for (n=1; n<=cmd->sizeHistN; n++) {
         hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
+        hist->histWWthread[n] += wi*hist->histWthread[n];
     }
 #endif
 
@@ -2450,6 +2473,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] + 1.;
+                hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
                 //B kappa Avg Rmin
@@ -2508,6 +2532,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] + 1.;
+                hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
                 //B kappa Avg Rmin
@@ -2605,6 +2630,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+                hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
                 //B kappa Avg Rmin
@@ -2698,6 +2724,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
+                hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
                 //B kappa Avg Rmin
@@ -2878,6 +2905,7 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
     gdl->histNN = dvector(1,cmd->sizeHistN);
+    gdl->histWW = dvector(1,cmd->sizeHistN);
     gdl->histCF = dvector(1,cmd->sizeHistN);
     gdl->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
     //B kappa Avg Rmin
@@ -2926,6 +2954,7 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     for (n = 1; n <= cmd->sizeHistN; n++) {
         gdl->histNN[n] = 0.0;
+        gdl->histWW[n] = 0.0;
         gdl->histCF[n] = 0.0;
         gdl->histNNSubXi2pcf[n] = 0.0;
 //B kappa Avg Rmin
@@ -3006,6 +3035,8 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
     hist->histNthread = dvector(1,cmd->sizeHistN);
+    hist->histWthread = dvector(1,cmd->sizeHistN);
+    hist->histWWthread = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthread = dvector(1,cmd->sizeHistN);
     //B kappa Avg Rmin
     hist->histNNSubXi2pcfthreadp = dvector(1,cmd->sizeHistN);
@@ -3082,6 +3113,8 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     for (n = 1; n <= cmd->sizeHistN; n++) {
         hist->histNthread[n] = 0.0;
+        hist->histWthread[n] = 0.0;
+        hist->histWWthread[n] = 0.0;
         hist->histNNSubXi2pcfthread[n] = 0.0;
 //B kappa Avg Rmin
         hist->histNNSubXi2pcfthreadp[n] = 0.0;
@@ -3193,6 +3226,8 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
     //E
     free_dvector(hist->histNNSubXi2pcfthread,1,cmd->sizeHistN);
     //
+    free_dvector(hist->histWWthread,1,cmd->sizeHistN);
+    free_dvector(hist->histWthread,1,cmd->sizeHistN);
     free_dvector(hist->histNthread,1,cmd->sizeHistN);
 #endif
 
@@ -3211,6 +3246,7 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
     gdl->histNN = dvector(1,cmd->sizeHistN);
+    gdl->histWW = dvector(1,cmd->sizeHistN);
     gdl->histCF = dvector(1,cmd->sizeHistN);
     gdl->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
     //B kappa Avg Rmin
@@ -3259,6 +3295,7 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     for (n = 1; n <= cmd->sizeHistN; n++) {
         gdl->histNN[n] = 0.0;
+        gdl->histWW[n] = 0.0;
         gdl->histCF[n] = 0.0;
         gdl->histNNSubXi2pcf[n] = 0.0;
 //B kappa Avg Rmin
@@ -3339,6 +3376,8 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
     hist->histNthread = dvector(1,cmd->sizeHistN);
+    hist->histWthread = dvector(1,cmd->sizeHistN);
+    hist->histWWthread = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthread = dvector(1,cmd->sizeHistN);
     //B kappa Avg Rmin
     hist->histNNSubXi2pcfthreadp = dvector(1,cmd->sizeHistN);
@@ -3406,6 +3445,8 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     for (n = 1; n <= cmd->sizeHistN; n++) {
         hist->histNthread[n] = 0.0;
+        hist->histWthread[n] = 0.0;
+        hist->histWWthread[n] = 0.0;
         hist->histNNSubXi2pcfthread[n] = 0.0;
 //B kappa Avg Rmin
         hist->histNNSubXi2pcfthreadp[n] = 0.0;
@@ -3515,6 +3556,8 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     //E
     free_dvector(hist->histNNSubXi2pcfthread,1,cmd->sizeHistN);
     //
+    free_dvector(hist->histWWthread,1,cmd->sizeHistN);
+    free_dvector(hist->histWthread,1,cmd->sizeHistN);
     free_dvector(hist->histNthread,1,cmd->sizeHistN);
 #endif
 
@@ -5204,6 +5247,8 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd,
     return SUCCESS;
 }
 
+// 180*60/Pi
+#define RADTOARCMIN   3437.74677
 local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd,
                           gdlptr_sincos_omp_ggg gdl)
 {
@@ -5230,12 +5275,18 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd,
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
+        if (scanopt(cmd->options, "rbin-arcmin"))
+            rBin = rBin*RADTOARCMIN;
+        else
+            if (scanopt(cmd->options, "rbin-degree"))
+                rBin = rBin*RADTOARCMIN/60.0;
         fprintf(outstr,"%16.8e %16.8e\n",rBin,gdl->histXi2pcf[n]);
     }
     fclose(outstr);
 
     return SUCCESS;
 }
+#undef RADTOARCMIN
 
 #endif // ! TWOPCF
 
