@@ -49,24 +49,11 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
-
-//B socket:
-#ifdef ADDONS
-#include "cmdline_defs_include_00.h"
-#else
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
-#endif
-//E
-
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
-    "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
+    "nsmooth=8",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
-    "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
-    "computeTPCF=true",                 ";If true, compute 3pcf", ":tpcf",
-    //B correction 2025-04-06
-    // Move this to addon that compute shear correlations
-//    "computeShearCF=true",              ";If true, compute shear cf", ":shearcf",
-    //E
+    "theta=1.05",                        ";Control tree search parameter, can be used to increase speed",
     "usePeriodic=false",                ";If false, don't use periodic boundary condition", ":periodic",
     //E
 
@@ -103,7 +90,6 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 
     //B Set of parameters needed to construct a test model
     "seed=123",                         ";Random number seed to test run or useful to change a random region in Takahasi simulations",
-//    "testmodel=simple-cubic-random",    ";Test model name to analyse", ":tstmodel",
     "testmodel=",                       ";Test model name to analyse: simple-cubic-random, unit-sphere-random,...", ":tstmodel",
     "nbody=16384",                      ";Number of points to test",
     "lengthBox=10000",                  ";Length of the box to test", ":lbox",
@@ -126,7 +112,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 #endif
 //E
 
-    "Version=1.0.0",			        ";Mario A. Rodríguez-Meza (2023-2024)",
+    "Version=1.0.1",			        ";Mario A. Rodríguez-Meza (2023-2026)",
     NULL,
 };
 

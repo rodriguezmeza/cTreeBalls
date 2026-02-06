@@ -26,22 +26,22 @@ global int search_init_sincos_omp(struct  cmdline_data* cmd,
     int n;
     int m;
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         hist->ChebsT = dvector(1,cmd->mChebyshev+1);
         hist->ChebsU = dvector(1,cmd->mChebyshev+1);
-    }
+#endif
     hist->histNthread = dvector(1,cmd->sizeHistN);
     hist->histNNSubthread = dvector(1,cmd->sizeHistN);
-// 2pcf
+//B 2pcf
     hist->histNNSubXi2pcfthread = dvector(1,cmd->sizeHistN);
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     hist->histNNSubXi2pcfthreadp = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthreadtotal = dvector(1,cmd->sizeHistN);
+#endif
 //E
-//
     hist->histXi2pcfthread = dvector(1,cmd->sizeHistN);
     hist->histXi2pcfthreadsub = dvector(1,cmd->sizeHistN);
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         hist->histXithreadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         hist->histXithreadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         
@@ -66,21 +66,21 @@ global int search_init_sincos_omp(struct  cmdline_data* cmd,
         hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
         hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    }
+#endif
 
    for (n = 1; n <= cmd->sizeHistN; n++) {
        hist->histNthread[n] = 0.0;
        hist->histNNSubthread[n] = 0.0;
        hist->histNNSubXi2pcfthread[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
        hist->histNNSubXi2pcfthreadp[n] = 0.0;
        hist->histNNSubXi2pcfthreadtotal[n] = 0.0;
-//E
+#endif
        hist->histXi2pcfthread[n] = 0.0;
        hist->histXi2pcfthreadsub[n] = 0.0;
    }
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
             CLRM_ext(hist->histZetaMthreadcos[m], cmd->sizeHistN);
             CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
@@ -88,7 +88,7 @@ global int search_init_sincos_omp(struct  cmdline_data* cmd,
             // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
             CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
         }
-    }
+#endif
 
     return SUCCESS;
 }
@@ -97,7 +97,7 @@ global int search_free_sincos_omp(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                   gdhistptr_sincos_omp hist)
 {
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
         free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -119,21 +119,21 @@ global int search_free_sincos_omp(struct  cmdline_data* cmd,
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
         free_dmatrix(hist->histXithreadsin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         free_dmatrix(hist->histXithreadcos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-    }
+#endif
     free_dvector(hist->histXi2pcfthreadsub,1,cmd->sizeHistN);
     free_dvector(hist->histXi2pcfthread,1,cmd->sizeHistN);
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     free_dvector(hist->histNNSubXi2pcfthreadtotal,1,cmd->sizeHistN);
     free_dvector(hist->histNNSubXi2pcfthreadp,1,cmd->sizeHistN);
-//E
+#endif
     free_dvector(hist->histNNSubXi2pcfthread,1,cmd->sizeHistN);
     free_dvector(hist->histNNSubthread,1,cmd->sizeHistN);
     free_dvector(hist->histNthread,1,cmd->sizeHistN);
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         free_dvector(hist->ChebsU,1,cmd->mChebyshev+1);
         free_dvector(hist->ChebsT,1,cmd->mChebyshev+1);
-    }
-    
+#endif
+
     return SUCCESS;
 }
 
@@ -151,30 +151,23 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
 #ifdef NOSTANDARNORMHIST
         xi = Kappa(p);
         xi_2p = Kappa(p);
-        //B kappa Avg Rmin
-        if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
             xi_2p = KappaRmin(p);
             xi = NbRmin(p)*xi_2p;
-        }
-        //E
+#endif
 #else // ! NOSTANDARNORMHIST
-
         xi = Kappa(p)/nbody;
 #ifdef BALLS4SCANLEV
         xi_2p = (Weight(p)/Nb(p))*Kappa(p);
 #else
-//        xi_2p = Kappa(p);
         xi_2p = Weight(p)*Kappa(p);
 #endif
-        //B kappa Avg Rmin
-        if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
 #ifdef BALLS4SCANLEV
             xi_2p = KappaRmin(p);
 #endif
             xi = NbRmin(p)*xi_2p/nbody;
-        }
-        //E
-
+#endif
 #endif // ! NOSTANDARNORMHIST
     } else if (Type(p) == BODY3) {
 #ifdef BODY3ON
@@ -184,7 +177,7 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     }
     //E Normalization of histograms
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         for (m=1; m<=cmd->mChebyshev+1; m++)
             //B Normalization of histograms
 #ifdef NOSTANDARNORMHIST
@@ -216,9 +209,11 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
             CLRM_ext(hist->histZetaMtmpcossin,cmd->sizeHistN);
             MULMS_ext(hist->histZetaMtmpcos,hist->xiOUTVPcos,xi,cmd->sizeHistN);
             MULMS_ext(hist->histZetaMtmpsin,hist->xiOUTVPsin,xi,cmd->sizeHistN);
-            MULMS_ext(hist->histZetaMtmpsincos,hist->xiOUTVPsincos,xi,cmd->sizeHistN);
+            MULMS_ext(hist->histZetaMtmpsincos,
+                      hist->xiOUTVPsincos,xi,cmd->sizeHistN);
             // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-            MULMS_ext(hist->histZetaMtmpcossin,hist->xiOUTVPcossin,xi,cmd->sizeHistN);
+            MULMS_ext(hist->histZetaMtmpcossin,
+                      hist->xiOUTVPcossin,xi,cmd->sizeHistN);
             ADDM_ext(hist->histZetaMthreadcos[m],
                      hist->histZetaMthreadcos[m],
                      hist->histZetaMtmpcos,cmd->sizeHistN);
@@ -233,7 +228,7 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
                      hist->histZetaMthreadcossin[m],
                      hist->histZetaMtmpcossin,cmd->sizeHistN);
         }
-    }
+#endif
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
@@ -242,33 +237,32 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-
 global int search_init_gd_hist(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
     int m;
     int n1, n2, l;
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
             CLRM_ext(gd->histZetaM[m], cmd->sizeHistN);
         }
-    }
+#endif
     for (n = 1; n <= cmd->sizeHistN; n++) {
         gd->histNN[n] = 0.0;
         gd->histNNSubXi2pcf[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         gd->histNNSubXi2pcftotal[n] = 0.0;
-//E
+#endif
         gd->histXi2pcf[n] = 0.0;
     }
     
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
             CLRM_ext(gd->histZetaGmRe[m], cmd->sizeHistN);
             CLRM_ext(gd->histZetaGmIm[m], cmd->sizeHistN);
         }
-    }
+#endif
 
     gd->actmax = gd->nbbcalc = gd->nbccalc = gd->ncccalc = 0;
 
@@ -280,7 +274,7 @@ global int search_init_gd_hist_sincos(struct  cmdline_data* cmd, struct  global_
     int n;
     int m;
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
             CLRM_ext(gd->histZetaMcos[m], cmd->sizeHistN);
             CLRM_ext(gd->histZetaMsin[m], cmd->sizeHistN);
@@ -288,19 +282,19 @@ global int search_init_gd_hist_sincos(struct  cmdline_data* cmd, struct  global_
             // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
             CLRM_ext(gd->histZetaMcossin[m], cmd->sizeHistN);
         }
-    }
+#endif
     for (n = 1; n <= cmd->sizeHistN; n++) {
         gd->histNN[n] = 0.0;
         gd->histNNSubXi2pcf[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         gd->histNNSubXi2pcftotal[n] = 0.0;
-//E
+#endif
         gd->histXi2pcf[n] = 0.0;
-        if (cmd->computeTPCF) {
+#ifdef TPCF
             for (m = 1; m <= cmd->mChebyshev+1; m++) {
                 // HERE MUST BE gd->histXicos and gd->histXisin
             }
-        }
+#endif
     }
     gd->actmax = gd->nbbcalc = gd->nbccalc = gd->ncccalc = 0;
 
@@ -446,7 +440,6 @@ global int search_compute_HistN(struct  cmdline_data* cmd,
     for (n = 1; n <= cmd->sizeHistN; n++)
         gd->histNN[n] *= normFac;
 //E
-
     if (scanopt(cmd->options, "and-CF"))
         search_compute_Xi(cmd, gd, nbody);
 
@@ -630,7 +623,6 @@ global int ThreadCount(struct  cmdline_data* cmd, struct  global_data* gd,
 #define GALACTIC            2
 #define ECLIPTIC            3
 #define CELESTIAL           4                   // also known as equatorial
-//#define NULLTRANSFORM       5
 
 //local int coordinate_string_to_int(string, int *);
 //local int transfmt_int;
@@ -650,17 +642,6 @@ local int celestial_to_cartesians(struct  cmdline_data* cmd,
 global int coordinate_string_to_int(struct cmdline_data* cmd,
                                     struct  global_data* gd)
 {
-/*
-    *transfmt_int=-1;
-    if (strcmp(transfmt_str,"arfken") == 0)         *transfmt_int = ARFKEN;
-    if (strcmp(transfmt_str,"no-arfken") == 0)      *transfmt_int = NOARFKEN;
-    if (strcmp(transfmt_str,"galactic") == 0)       *transfmt_int = GALACTIC;
-    if (strcmp(transfmt_str,"ecliptic") == 0)       *transfmt_int = ECLIPTIC;
-    if (strcmp(transfmt_str,"celestial") == 0)      *transfmt_int = CELESTIAL;
-    if (strcmp(transfmt_str,"equatorial") == 0)     *transfmt_int = CELESTIAL;
-    if (strnull(transfmt_str))                      *transfmt_int = OUTNULL;
-*/
-
     gd->coordTag = -1;
     gd->coordTag = ARFKEN;
     if (scanopt(cmd->options, "arfken")) gd->coordTag = ARFKEN;
@@ -675,9 +656,6 @@ global int coordinate_string_to_int(struct cmdline_data* cmd,
 global int coordinate_transformation(struct cmdline_data* cmd, struct  global_data* gd,
                                     real theta, real phi, vector xyz)
 {
-//    int transfmt_int;
-
-//    coordinate_string_to_int(coordTag, &transfmt_int);
     switch(gd->coordTag) {
         case ARFKEN:
             spherical_to_cartesians(cmd, gd, theta, phi, xyz); break;
@@ -689,8 +667,6 @@ global int coordinate_transformation(struct cmdline_data* cmd, struct  global_da
             spherical_to_cartesians(cmd, gd, theta, phi, xyz); break;
         case CELESTIAL:
             celestial_to_cartesians(cmd, gd, theta, phi, xyz); break;
-//        case NULLTRANSFORM:
-//            spherical_to_cartesians(cmd, gd, theta, phi, xyz); break;
         default:
             spherical_to_cartesians(cmd, gd, theta, phi, xyz); break;
     }
@@ -703,8 +679,6 @@ local int spherical_to_cartesians(struct  cmdline_data* cmd,
                                    real theta, real phi, vector xyz)
 {
     real ra, dec;
-
-//    verb_print(cmd->verbose, "\nspherical_to_cartesians: coordTag: %d\n", gd->coordTag);
 
     if (scanopt(cmd->options, "no-arfken")) {
         //B this would be a galactic->cartesian tranformation...
@@ -737,7 +711,8 @@ local int galactic_to_cartesians(struct  cmdline_data* cmd,
 {
     real phi, theta;
 
-    verb_print(cmd->verbose, "\ngalactic_to_cartesians: coordTag: %d\n", gd->coordTag);
+    verb_print(cmd->verbose, "\ngalactic_to_cartesians: coordTag: %d\n",
+               gd->coordTag);
 
     phi = longitud;
     theta = latitud;
@@ -756,7 +731,8 @@ local int ecliptic_to_cartesians(struct  cmdline_data* cmd,
 {
     real phi, theta;
 
-    verb_print(cmd->verbose, "\necliptic_to_cartesians: coordTag: %d\n", gd->coordTag);
+    verb_print(cmd->verbose, "\necliptic_to_cartesians: coordTag: %d\n",
+               gd->coordTag);
 
     if (scanopt(cmd->options, "ra-reversed")) {
         phi = TWOPI - RA;
@@ -783,8 +759,8 @@ local int celestial_to_cartesians(struct  cmdline_data* cmd,
 {
     real phi, theta;
 
-    verb_print(cmd->verbose, "\ncelestial_to_cartesians: coordTag: %d\n", gd->coordTag);
-
+    verb_print(cmd->verbose, "\ncelestial_to_cartesians: coordTag: %d\n",
+               gd->coordTag);
 
     if (scanopt(cmd->options, "ra-reversed")) {
         phi = TWOPI - RA;
@@ -848,7 +824,6 @@ global int spherical_periodic_condition(real *thetaL, real *thetaR,
 
 
 //B section of several routines to do pre/post processing
-
 
 #define MHISTZETA \
 "%16.8e %16.8e %16.8e %16.8e %16.8e %16.8e\n"
@@ -1351,7 +1326,6 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
 //E read realization files and compute std values
 //
 
-
 //
 //B read realization files and compute covariance matrices values
 //
@@ -1368,7 +1342,6 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
     mattmp = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     matCovMat =
             dmatrix3D(1,cmd->mChebyshev+1,1,Nv,1,Nv);
-
 
     CLRM_ext(mat1, cmd->sizeHistN);
     CLRM_ext(mat2, cmd->sizeHistN);
@@ -1467,7 +1440,6 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
             ZvAvg[m][i] = Zv[m][i]/((real)(NR-1));          // sample mean
         }
     }
-
 
 
     //B computing covariance matrices
@@ -1600,43 +1572,13 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
                 fprintf(outstr1,"\n");
             }
             fclose(outstr1);
-
-            /*
-            //B output file 2
-            sprintf(namebuf6, "%s%s%s_%s_%d%s",
-                    rootDirPath, "m", cmd->outfile, "CovMat", m, EXTFILES);
-            verb_print(cmd->verbose,
-                       "\n%s: opening file %s... to save statistics",
-                       routine_name, namebuf6);
-            outstr2 = stropen(namebuf6, "w!");
-            //E output file 2
-            fprintf(outstr2,MHISTZETAHEADERSTDDEV);
-            for (n1=1; n1<=Nv; n1++) {
-                Zeta = matCovMat[m][n1][n1];
-                Zeta2 = matCovMat[m][n1][(int)(Nbins/4.0)];
-                Zeta3 = matCovMat[m][n1][(int)(2.0*Nbins/4.0)];
-                Zeta4 = matCovMat[m][n1][(int)(3.0*Nbins/4.0)];
-                Zeta5 = matCovMat[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr2,MHISTZETASTDDEV,
-                        rBin[n1],Zeta,
-                        Zeta2,
-                        Zeta3,
-                        Zeta4,
-                        Zeta5
-                        );
-            }
-            fclose(outstr2);
-            */
-
         } // ! end m loop
     } // ! nrealization > 3
-    verb_print(cmd->verbose,
-               " done.\n");
+    verb_print(cmd->verbose," done.\n");
 
 //
 //E read realization files and compute covariance matrices values
 //
-
 
     free_dmatrix(Zv,1,cmd->mChebyshev+1,1,cmd->sizeHistN*cmd->sizeHistN);
     free_dmatrix(ZvAvg,1,cmd->mChebyshev+1,1,cmd->sizeHistN*cmd->sizeHistN);
@@ -1655,10 +1597,6 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd)
 
     return SUCCESS;
 }
-
-//local int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
-//                    double ***mat3, double ***mat4,
-//                    int n1, int n2, double ***mat5);
 
 // routine to compute edge corrections using two saved histZetaM histograms
 global int computeEdgeCorrections(struct cmdline_data* cmd,
@@ -1763,7 +1701,6 @@ global int computeEdgeCorrections(struct cmdline_data* cmd,
     // should know the size of the matrix
     mat1 = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     mat2 = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-
 
 //B read rBin file
     rBins = dvector(1,cmd->sizeHistN);
@@ -2094,7 +2031,6 @@ global int computeEdgeCorrections(struct cmdline_data* cmd,
     return SUCCESS;
 }
 
-
 #ifdef USEGSL
 global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                     double ***mat3, double ***mat4,
@@ -2137,7 +2073,6 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
             lmx = (l-1)+2-mx;
 //B PIVOTLOOP
         gsl_vector_set(bl, l, mat3[lmx][n1][n2]/mat4[1][n1][n2]);
-//        gsl_vector_set(bl, l, mat3[lmx][n1][n2]);
 //E
         if (l<=mx) {
             if (cmd->verbose_log>=3)
@@ -2154,7 +2089,6 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
             if (l-m>=-mx && l-m<0) {
 //B PIVOTLOOP
                 C1 = mat4[m-l+1][n1][n2]/mat4[1][n1][n2];
-//                C1 = mat4[m-l+1][n1][n2];
 //E
                 gsl_matrix_set(Clm, l, m, C1);
                 gsl_matrix_set( ClmChk, l, m, gsl_matrix_get(Clm, l, m) );
@@ -2306,10 +2240,7 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
         for (m=1; m<=neqs; m++) {
             if (l-m>=-mx && l-m<0) {
 
-                //B check indexs m-l+1 !!! m start at 1 and GSL version starts at 0
-//                C1 = (gdlN->histZetaMcos[m-l+1][n1][n2]
-//                      + gdlN->histZetaMsin[m-l+1][n1][n2]
-//                      )/gdlN->histZetaMcos[1][n1][n2];
+                //B check indexs m-l+1 !! m start at 1 and GSL version starts at 0
                 C1 = mat4[m-l+1][n1][n2]/mat4[1][n1][n2];
 
                 Clm[l][m] = C1;
@@ -2318,8 +2249,6 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                 //B
                 if (scanopt(cmd->options, "full-sky")) {
                     if (l!=m) {
-//                        gsl_matrix_set(Clm, l, m, 0.0);
-//                        gsl_matrix_set( ClmChk, l, m, 0.0);
                         Clm[l][m] = 0.0;
                         ClmChk[l][m] = 0.0;
                     }
@@ -2331,9 +2260,6 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                 continue;
             }
             if (l-m>=0 && l-m<=mx) {
-//                C1 = (gdlN->histZetaMcos[l-m+1][n1][n2]
-//                      +gdlN->histZetaMsin[l-m+1][n1][n2])
-//                      /gdlN->histZetaMcos[1][n1][n2];
                 C1 = mat4[l-m+1][n1][n2]/mat4[1][n1][n2];
 
                 Clm[l][m] = C1;
@@ -2342,8 +2268,6 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                 //B
                 if (scanopt(cmd->options, "full-sky")) {
                     if (l!=m) {
-//                        gsl_matrix_set(Clm, l, m, 0.0);
-//                        gsl_matrix_set( ClmChk, l, m, 0.0);
                         Clm[l][m] = 0.0;
                         ClmChk[l][m] = 0.0;
                     }
@@ -2391,17 +2315,8 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
 
 //B correction 2025-04-06
     for (l=1; l<=neqs; l++) {
-//        if (l<=mx+1)
-//            lmx = (mx-(l+1)+2) +1;
-//        else
-//            lmx = (l-2)+2-mx;
-//
-//        gdl->histZetaM[lmx][n1][n2] = bl[l];
-        
         if (l>=mx+2) {
-//            lmx = l+1-mx;
             lmx = (l-2)+2-mx;
-//            mat5[lmx][n1][n2] = gsl_vector_get(x, l);
             mat5[lmx][n1][n2] = bl[l];
             verb_log_print(cmd->verbose_log, gd->outlog,
                            "%g\n", mat5[lmx][n1][n2]);
@@ -2422,7 +2337,6 @@ global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
 }
 
 #endif // ! USEGSL
-
 
 #undef MHISTZETAHEADER
 #undef MHISTZETA

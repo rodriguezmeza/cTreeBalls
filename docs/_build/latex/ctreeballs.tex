@@ -64,7 +64,7 @@
 
 
 \title{cTreeBalls}
-\date{May 27, 2025}
+\date{Jan 12, 2026}
 \release{1.0.0}
 \author{Mario A.\@{} Rodriguez\sphinxhyphen{}Meza}
 \newcommand{\sphinxlogo}{\vbox{}}
@@ -115,7 +115,7 @@ Download the code by cloning it from \sphinxurl{https://github.com/rodriguezmeza
 Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Go to its web page \sphinxhref{https://www.gnu.org/software/gsl/}{GSL} for details or ask to your system administrator. Make necessary changes in \sphinxcode{\sphinxupquote{Makefile\_machine}} file and look up for \sphinxcode{\sphinxupquote{GSL}}. Can be switched off: USEGSL = 0 in \sphinxcode{\sphinxupquote{Makefile\_settings}}. I/O cfitsio library is set it OFF. Can be set it ON in \sphinxcode{\sphinxupquote{addons/Makefile\_settings}}.
 
 \sphinxAtStartPar
-Go to the \sphinxcode{\sphinxupquote{cTreeBalls}} directory (\sphinxcode{\sphinxupquote{cd cTreeBalls}}) and compile (\sphinxcode{\sphinxupquote{make clean; make}}). If the first compilation attempt fails, you may need to open the Makefile\_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: \sphinxcode{\sphinxupquote{\sphinxhyphen{}O4 \sphinxhyphen{}ffast\sphinxhyphen{}math}}) and of the OpenMP flag (default: \sphinxhyphen{}fopenmp; this flag is facultative, you are free to compile without OpenMP if you don\textquotesingle{}t want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with \sphinxcode{\sphinxupquote{\sphinxhyphen{}fopenmp}}). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac \textgreater{}= 10.9 despite of the clang incompatibility with OpenMP).
+Go to the \sphinxcode{\sphinxupquote{cTreeBalls}} directory (\sphinxcode{\sphinxupquote{cd cTreeBalls}}) and compile (\sphinxcode{\sphinxupquote{make clean; make}}). If the first compilation attempt fails, you may need to open the Makefile\_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: \sphinxcode{\sphinxupquote{\sphinxhyphen{}O4 \sphinxhyphen{}ffast\sphinxhyphen{}math}}) and of the OpenMP flag (default: \sphinxhyphen{}fopenmp; this flag is facultative, you are free to compile without OpenMP if you don’t want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with \sphinxcode{\sphinxupquote{\sphinxhyphen{}fopenmp}}). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac \textgreater{}= 10.9 despite of the clang incompatibility with OpenMP).
 
 \sphinxAtStartPar
 To check that the code runs, type:
@@ -192,7 +192,14 @@ or its short version:
 \section{Python}
 \label{\detokenize{overview:python}}
 \sphinxAtStartPar
-To install cBalls python module (cballys) go to directory \textquotesingle{}python\textquotesingle{} and execute:
+cBalls python module (cballys) will be installed if you use:
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{make} \PYG{n}{clean}\PYG{p}{;} \PYG{n}{make} \PYG{n+nb}{all}
+\end{sphinxVerbatim}
+
+\sphinxAtStartPar
+Note: if problems, you can go to python directory and execute:
 
 \begin{sphinxVerbatim}[commandchars=\\\{\}]
 \PYG{n}{python} \PYG{n}{setup}\PYG{o}{.}\PYG{n}{py} \PYG{n}{build}
@@ -200,14 +207,7 @@ To install cBalls python module (cballys) go to directory \textquotesingle{}pyth
 \end{sphinxVerbatim}
 
 \sphinxAtStartPar
-Note: make sure you create cBalls library: in directory cTreeBalls execute:
-
-\begin{sphinxVerbatim}[commandchars=\\\{\}]
-\PYG{n}{make} \PYG{n}{clean}\PYG{p}{;} \PYG{n}{make} \PYG{n+nb}{all}
-\end{sphinxVerbatim}
-
-\sphinxAtStartPar
-To test it go to directory tests and \textquotesingle{}run\textquotesingle{}:
+To test it go to directory tests and ‘run’:
 
 \begin{sphinxVerbatim}[commandchars=\\\{\}]
 \PYG{n}{python} \PYG{n}{test\PYGZus{}cython\PYGZus{}balls}\PYG{o}{.}\PYG{n}{py}
@@ -271,6 +271,43 @@ cBalls use/is based on the following codes or projects:
 \sphinxAtStartPar
 \sphinxhref{https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html}{CFITSIO}
 
+\item {} 
+\sphinxAtStartPar
+\sphinxhref{https://healpix.sourceforge.io}{HEALPix}
+
+\end{itemize}
+
+\sphinxAtStartPar
+Also author acknowledges for helpful discussion and testing to the following people:
+\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+Abraham Arvizu
+
+\item {} 
+\sphinxAtStartPar
+Alejandro Aviles
+
+\item {} 
+\sphinxAtStartPar
+Juan Carlos Hidalgo
+
+\item {} 
+\sphinxAtStartPar
+Eladio Moreno
+
+\item {} 
+\sphinxAtStartPar
+Gustavo Niz
+
+\item {} 
+\sphinxAtStartPar
+Axel Romero Tisnado
+
+\item {} 
+\sphinxAtStartPar
+Sofia Samario
+
 \end{itemize}
 
 \sphinxstepscope
@@ -305,17 +342,17 @@ what the searching process do:
 \sphinxlineitem{searchMethod}
 \sphinxAtStartPar
 (str or list) {[}alias: search{]}
-The searching method to use. Default is \sphinxcode{\sphinxupquote{tree\sphinxhyphen{}omp\sphinxhyphen{}sincos}}. Fastest method so far is \sphinxcode{\sphinxupquote{balls\sphinxhyphen{}omp}}.
+The searching method to use. Default is \sphinxcode{\sphinxupquote{tree\sphinxhyphen{}omp\sphinxhyphen{}sincos}}. Fastest method so far is \sphinxcode{\sphinxupquote{octree\sphinxhyphen{}ggg\sphinxhyphen{}omp}}.
 
 \sphinxAtStartPar
 Use it as:
 
 \begin{sphinxVerbatim}[commandchars=\\\{\}]
-\PYG{n}{searchMethod} \PYG{o}{=} \PYG{n}{balls}\PYG{o}{\PYGZhy{}}\PYG{n}{omp}
+\PYG{n}{searchMethod} \PYG{o}{=} \PYG{n}{octree}\PYG{o}{\PYGZhy{}}\PYG{n}{ggg}\PYG{o}{\PYGZhy{}}\PYG{n}{omp}
 \end{sphinxVerbatim}
 
 \sphinxAtStartPar
-In command line version do not use spaces before and after \sphinxcode{\sphinxupquote{=}} or it won\textquotesingle{}t be parsed correctly. In a parameter file you have more liberty.
+In command line version do not use spaces before and after \sphinxcode{\sphinxupquote{=}} or it won’t be parsed correctly. In a parameter file you have more liberty.
 
 \sphinxlineitem{mChebyshev}
 \sphinxAtStartPar
@@ -339,7 +376,7 @@ Default value is \sphinxcode{\sphinxupquote{7}}. As multipoles comes from a harm
 \label{\detokenize{params:parameters-to-control-the-i-o-file-s}}\begin{quote}\begin{description}
 \sphinxlineitem{infile}
 \sphinxAtStartPar
-(str, default="") {[}alias: in{]} File names with points to analyse.
+(str, default=””) {[}alias: in{]} File names with points to analyse.
 
 \sphinxlineitem{infileformat}
 \sphinxAtStartPar
@@ -419,7 +456,7 @@ The input columns for \sphinxcode{\sphinxupquote{columns\sphinxhyphen{}ascii}} f
 \label{\detokenize{params:miscellaneous-parameters}}\begin{quote}\begin{description}
 \sphinxlineitem{script}
 \sphinxAtStartPar
-(str, default="") Scripts in shell or python that can be run in pre\sphinxhyphen{}processing or post\sphinxhyphen{}processing.
+(str, default=””) Scripts in shell or python that can be run in pre\sphinxhyphen{}processing or post\sphinxhyphen{}processing.
 
 \sphinxlineitem{stepState}
 \sphinxAtStartPar
@@ -463,7 +500,7 @@ It is needed to switch on OpenMP: \sphinxcode{\sphinxupquote{OPENMPMACHINE = 1}}
 
 \sphinxlineitem{options}
 \sphinxAtStartPar
-(str, default="") {[}alias: opt{]} You may give here various code behavior options.
+(str, default=””) {[}alias: opt{]} You may give here various code behavior options.
 
 \sphinxAtStartPar
 Use it as:
@@ -529,9 +566,9 @@ The file(s) with the data to be correlated.
 \sphinxAtStartPar
 The file with data to be correlated in binary format.
 
-\sphinxlineitem{takahasi}
+\sphinxlineitem{takahashi}
 \sphinxAtStartPar
-The file with data to be correlated using Takahasi simulations format (Healpix).
+The file with data to be correlated using Takahashi etal simulations format (can be transformed to Healpix format).
 
 \end{description}\end{quote}
 
@@ -545,6 +582,10 @@ Gadget files can be read using this format. Catalog can be only one file or comp
 \sphinxlineitem{multi\sphinxhyphen{}columns\sphinxhyphen{}ascii}
 \sphinxAtStartPar
 This format is to be able to read any ascci file with values arrage in columns. Positions can be in any order and with/without header. For example, files with halo catalogs from Rockstar can be read.
+
+\sphinxlineitem{fits\sphinxhyphen{}healpix}
+\sphinxAtStartPar
+to read maps in Healpix format using cfitsio library. This format permits to apply a mask in the same format.
 
 \end{description}\end{quote}
 
@@ -566,7 +607,7 @@ what the \sphinxtitleref{cballs} before/after main processing:
 \sphinxstepscope
 
 
-\chapter{AddOn\textquotesingle{}s}
+\chapter{AddOn’s}
 \label{\detokenize{addons:addon-s}}\label{\detokenize{addons::doc}}
 \sphinxAtStartPar
 This section describes the mechanism to add more functionally to cBalls:
@@ -600,7 +641,7 @@ This section describes the mechanism to add more functionally to cBalls:
 This section describes a practical guide to use \sphinxstylestrong{cBalls}:
 
 \sphinxAtStartPar
-Let us test one of the \sphinxhref{https://arxiv.org/pdf/1706.01472}{Takahasi} realizations. We download the realization using unix \sphinxcode{\sphinxupquote{wget}} command in the terminal:
+Let us test one of the \sphinxhref{https://arxiv.org/pdf/1706.01472}{Takahashi} realizations. We download the realization using unix \sphinxcode{\sphinxupquote{wget}} command in the terminal:
 
 \begin{sphinxVerbatim}[commandchars=\\\{\}]
 \PYG{n}{wget} \PYG{n}{http}\PYG{p}{:}\PYG{o}{/}\PYG{o}{/}\PYG{n}{cosmo}\PYG{o}{.}\PYG{n}{phys}\PYG{o}{.}\PYG{n}{hirosaki}\PYG{o}{\PYGZhy{}}\PYG{n}{u}\PYG{o}{.}\PYG{n}{ac}\PYG{o}{.}\PYG{n}{jp}\PYG{o}{/}\PYG{n}{takahasi}\PYG{o}{/}\PYG{n}{allsky\PYGZus{}raytracing}\PYG{o}{/}\PYG{n}{sub1}\PYG{o}{/}\PYG{n}{nres12}\PYG{o}{/}\PYG{n}{allskymap\PYGZus{}nres12r000}\PYG{o}{.}\PYG{n}{zs9}\PYG{o}{.}\PYG{n}{mag}\PYG{o}{.}\PYG{n}{dat}

@@ -22,6 +22,10 @@
 #include "startrun_octree_sincos_omp_11.h"      // 74
 #endif
 
+#ifdef TREEOMPSINCOS
+#include "startrun_tree_omp_sincos_11.h"        // 75
+#endif
+
 
 #ifdef BALLS
 #include "startrun_balls_omp_06.h"              // 46

@@ -51,24 +51,11 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
-
-//B socket:
-#ifdef ADDONS
-#include "cmdline_defs_include_00.h"
-#else
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
-#endif
-//E
-
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
-    "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
+    "nsmooth=8",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
-    "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
-    "computeTPCF=true",                 ";If true, compute 3pcf", ":tpcf",
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//    "computeShearCF=true",              ";If true, compute shear cf", ":shearcf",
-    //E
+    "theta=1.05",                        ";Control tree search parameter, can be used to increase speed",
     "usePeriodic=false",                ";If false, don't use periodic boundary condition", ":periodic",
     //E
 
@@ -105,21 +92,19 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 
     //B Set of parameters needed to construct a test model
     "seed=123",                         ";Random number seed to test run or useful to change a random region in Takahasi simulations",
-//    "testmodel=simple-cubic-random",    ";Test model name to analyse", ":tstmodel",
     "testmodel=",                       ";Test model name to analyse: simple-cubic-random, unit-sphere-random,...", ":tstmodel",
     "nbody=16384",                      ";Number of points to test",
     "lengthBox=10000",                  ";Length of the box to test", ":lbox",
     //E
 
     //B Miscellaneous parameters
-//    "script=",                          ";Scripts in shell or python that can be run in pre-processing or post-processing",
     "preScript=",                          ";Script in shell or python that can be run in pre-processing",
     "posScript=",                          ";Script in shell or python that can be run in post-processing",
     "stepState=10000",                  ";number of steps to save a state-run info (pivot number completed in the log file)",
     "verbose=0",                        ";Option to activate the amount of information sent to standard output", ":verb",
     "verbose_log=0",                    ";Option to activate the amount of information sent to log file", ":verblog",
 #ifdef OPENMPCODE
-    "numberThreads=4",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
+    "numberThreads=16",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
 #endif
     "options=",                         ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
     //E
@@ -130,7 +115,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 #endif
 //E
 
-    "Version=1.0.1",			        ";Mario A. Rodríguez-Meza (2023-2025)",
+    "Version=1.0.1",			        ";Mario A. Rodríguez-Meza (2023-2026)",
     NULL,
 };
 

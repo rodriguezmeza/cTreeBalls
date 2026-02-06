@@ -335,7 +335,7 @@ int parser_read_string(struct file_content * pfc,
     index++;
 //E
 
-  if (index == pfc->size)                   // if parameter not found, return with
+  if (index == pfc->size)                 // if parameter not found, return with
     return SUCCESS;                       //  'found' flag still equal to false
 
   strcpy(*value,pfc->value[index]);         // read parameter value.

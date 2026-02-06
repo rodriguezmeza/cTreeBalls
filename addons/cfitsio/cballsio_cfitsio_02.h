@@ -589,6 +589,8 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
     char card[FLEN_CARD];
     int status = 0, nkeys, ii;                      // MUST initialize status
 
+    debug_tracking_s("001", routineName);
+
     gd->input_comment = "fits-healpix input file";
 
     //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
@@ -700,7 +702,7 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
     }
 
     if (scanopt(cmd->options, "read-mask")) {
-        if (ifile == 0) {                           // needs mask file be second... (?)
+        if (ifile == 0) {                 // needs mask file be second... (?)
             inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
         } else {
             if (ifile != 1)
@@ -713,7 +715,11 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
             inputdata_cfitsio_healpix_map_mask_inside(cmd, gd,
                                                       filename, ifile, fptr);
         } else {
+            debug_tracking("002");
+
             inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
+            debug_tracking("003");
+
         }
     }
 
@@ -729,6 +735,9 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
         fits_report_error(stderr, status);
     }
     //E
+
+    debug_tracking("004... final");
+
 
     return SUCCESS;
 }
@@ -960,7 +969,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     if (scanopt(cmd->options, "plot-map-gif")) {
         //B add ifile tag...
         sprintf(fileforce, "!%s/%s",                // leading !
-                gd->outputDir, file);               //  to allow overwrite
+                cmd->rootDir, file);                //  to allow overwrite
         //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
@@ -1087,9 +1096,10 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             if (cmd->thetaL < theta && theta < cmd->thetaR) {
                 if (cmd->phiL < phi && phi < cmd->phiR) {
                     iselect++;
-//                    coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+                    //B tranform coordinate if necesarry...
                     Pos(p)[0] = phi;
                     Pos(p)[1] = theta;
+                    //E
                     if (!scanopt(cmd->options, "kappa-constant"))
                         Kappa(p) = map[ipix];
                     else {
@@ -1118,9 +1128,10 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             }
         } else { // ! all
             iselect++;
-//            coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+            //B tranform coordinate if necesarry...
             Pos(p)[0] = phi;
             Pos(p)[1] = theta;
+            //E
             if (!scanopt(cmd->options, "kappa-constant"))
                 Kappa(p) = map[ipix];
             else {
@@ -1225,7 +1236,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     if (scanopt(cmd->options, "plot-map-gif")) {
         //B add ifile tag...
         sprintf(fileforce, "!%s/%s",                // leading !
-                gd->outputDir, file);               //  to allow overwrite
+                cmd->rootDir, file);               //  to allow overwrite
         //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
@@ -1279,7 +1290,6 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
 
 
-//#ifdef MASKED
 // reading healpix mask map
 //  3D only... and full-sky only
 local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
@@ -1355,8 +1365,6 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
     
     return SUCCESS;
 }
-//#endif
-
 
 
 // reading healpix map
@@ -1558,7 +1566,7 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
         sprintf(fileforce, "!%s/%s",                // leading !
-                gd->outputDir, file);               //  to allow overwrite
+                cmd->rootDir, file);               //  to allow overwrite
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
@@ -1870,7 +1878,7 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
         sprintf(fileforce, "!%s/%s",                // leading !
-                gd->outputDir, file);               //  to allow overwrite
+                cmd->rootDir, file);               //  to allow overwrite
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
@@ -2202,7 +2210,7 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
         sprintf(fileforce, "!%s/%s",                // leading !
-                gd->outputDir, file);               //  to allow overwrite
+                cmd->rootDir, file);               //  to allow overwrite
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);

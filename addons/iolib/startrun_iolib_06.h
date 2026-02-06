@@ -46,11 +46,10 @@ if (nitems==4) {
 }
 
 int ii;
-if (cmd->verbose_log>=3)
-    for (ii=0; ii< nitems; ii++)
+if (cmd->verbose_log>=2)
+    for (ii=0; ii<nitems; ii++)
         verb_log_print(cmd->verbose_log, gd->outlog,
-                   "\tscaniOptions: columns[%d]: %d...\n\n",
-                   ii, gd->columns[ii]);
-
+                       "\t%s: columns[%d]: %d...\n",
+                       routineName, ii, gd->columns[ii]);
 
 #endif	// ! _startrun_iolib_06_h

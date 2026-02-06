@@ -24,7 +24,7 @@
 struct global_data{
 
     //B PXD functions
-    // need be public, not use "#ifdef PXD" directive
+    // need to be public, not use "#ifdef PXD" directive
     real *rBins;
     real *vecPXD;
     real **matPXD;
@@ -56,7 +56,7 @@ struct global_data{
 //
     INTEGER nbccalc;
     INTEGER nbbcalc;
-    real rSize;                                     // Maximum r of the box
+    real rSize;                                     // Maximum r of the box,needed?
 
     real rSizeTable[MAXITEMS];                      // Maximum r of the box
     INTEGER ncellTable[MAXITEMS];
@@ -70,7 +70,6 @@ struct global_data{
     INTEGER nnodescanlevTableB4[MAXITEMS];
 //E
 
-
     real cputree;
 
 // Tree:
@@ -78,15 +77,6 @@ struct global_data{
      real RcutSq;
     real cpusearch;
 //
-
-//B correction 2025-04-06
-//#ifdef CELLMETHOD
-// // Cell search
-//     vectorI cells;
-//    INTEGER *cellList;
-// //
-//#endif
-//E
 
     int infilefmt_int;
 
@@ -111,9 +101,9 @@ struct global_data{
     realptr histNNSub;
 // 2pcf
     realptr histNNSubXi2pcf;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcftotal;
-//E
+#endif
     real *histXi2pcf;
 //B TPCF
     real ***histZetaMcos;
@@ -128,11 +118,7 @@ struct global_data{
     real ***histNNNSub;
     real *histXi2pcf_omp;
     real ***histXi3pcf;
-// TPCF
-    // array histXi is not used any more.
-    //  remove it from all the places...
-//    real **histXi;
-    //
+//
     real **histXicos;
     real **histXisin;
 #ifdef USEGSL
@@ -147,15 +133,6 @@ struct global_data{
     real ***histZetaGmRe;
     real ***histZetaGmIm;
 //E
-    
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//B To save total 3pcf shear
-//    real *histXitt;
-//    real *histXixx;
-//    real *histXitx;
-//E
-    //E
 
 //E Histograms arrays
 // -----------------------------------
@@ -172,7 +149,6 @@ struct global_data{
 
 //B File pointers:
     char logfilePath[MAXLENGTHOFFILES];
-    char outputDir[MAXLENGTHOFFILES];
     char tmpDir[MAXLENGTHOFFILES];
 
     char fpfnameOutputFileName[MAXLENGTHOFFILES];
@@ -188,7 +164,6 @@ struct global_data{
     char fpfnameCPUFileName[MAXLENGTHOFFILES];
 //E
 //E
-
     string model_comment;
     string input_comment;
     string output_comment;
@@ -206,18 +181,20 @@ struct global_data{
 //B To see the bodies belonging to a cell:
     INTEGER nbodySel;
 //E
-    INTEGER nbodysm;
-    INTEGER nbodybf;
-
     bool bh86, sw94;
 
     real i_deltaR;
 
-//B socket:
-#ifdef ADDONS
-#include "global_data_include.h"
+    // 2pcf
+    realptr histNNSubN2pcf;
+#ifdef SMOOTHPIVOT
+    realptr histNNSubN2pcftotal;
 #endif
-//E
+    real *histN2pcf;
+#ifdef ADDONS
+    char fpfnamehistN2pcfFileName[MAXLENGTHOFFILES];
+#endif
+    //
 
     char fnameData_kd[128];
     char fnameOut_kd[128];
@@ -231,48 +208,61 @@ struct global_data{
     float l_box_half_kd;
 
     int ninfiles;
-    char *infilenames[MAXITEMS];
-    char *infilefmtname[MAXITEMS];
+    char infilenames[MAXITEMS][MAXLENGTHOFFILES];
+    char infilefmtname[MAXITEMS][MAXLENGTHOFFMTFILES];
     int iCatalogs[MAXITEMS];
 
-    int nsmooth[MAXITEMS];
+    int nsmooth[MAXITEMS];          // deprecated, will be deleted
+
+    //B to control memory allocation/deallocation
+    bool cmd_allocated;
+    bool random_allocated;
+    bool gd_allocated;
+    bool gd_allocated_2;
+    bool histograms_allocated;
+    bool tree_allocated;
+    bool bodytable_allocated;
+    //E
+
     INTEGER nnode;
     INTEGER rnnode;
 
-    int scanLevelMin[MAXITEMS];
-
-    char nodesfilePath[MAXLENGTHOFFILES];
-    int nnodescanlev;
-// Root nodes:
-    int nnodescanlev_root;
 #define MAXLEVEL  32
     real Rcell[MAXLEVEL];           // used only in treeload's scanLevel routine
 #undef MAXLEVEL
-//
-    char bodiesfilePath[MAXLENGTHOFFILES];
 
-    bool flagSmoothCellMin;
-    bool flagSmooth;
-    bool flagSetNbNoSel;
-//B BUCKET
-    real rminCell[2];               // used only in treeload's scanLevel routine
-                                    //  and in search_balls_omp;
-                                    //      search_balls_kk_omp;
-                                    //      search_octree_kk_balls4_omp;
-                                    //      search_octree_kkk_balls4_omp;
-//E
+#ifdef BALLS4SCANLEV
+    bool flagBalls4Scanlevel;
+#endif
 
     real rsmooth[MAXITEMS];
     bool rsmoothFlag;
 
     int irsmooth;
 
+    //B to control memory allocation/deallocation
     bool flagPrint;
+    bool rootDirFlag;
+    bool searchMethodFlag;
+    bool infilefmtFlag;
+    bool infileFlag;
+    bool outfilefmtFlag;
+    bool outfileFlag;
+    bool rsmoothFlagFree;
+    bool rootDirFlagFree;
+    bool iCatalogsFlag;
+    bool histNNFileNameFlag;
+    bool histXi2pcfFileNameFlag;
+    bool histZetaFileNameFlag;
+    bool suffixOutFilesFlag;
+    bool testmodelFlag;
+    bool preScriptFlag;
+    bool posScriptFlag;
+    bool optionsFlag;
+    //E
 
 //B correction 2025-05-03 :: look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
-//    INTEGER NNCounts;
-//    INTEGER NNCountsN;
     INTEGER pivotCount;
 #endif
 //E

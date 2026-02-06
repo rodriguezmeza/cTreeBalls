@@ -124,31 +124,14 @@ global cellptr roottable[MAXITEMS];
 global nodeptr *nodetablescanlevB4[MAXITEMS];
 #endif
 
-//global bodyptr bodytab;
-global bodyptr bodytabbf;
-global bodyptr bodytabsm;
-global bodyptr bodytabSel;
-
-global nodeptr *nodetab;
-
-// BALLS
-global nodeptr *nodetabscanlev;
-// Root nodes:
-global nodeptr *nodetabscanlev_root;
-//
-
 // check this... it is repeated in global_data struct
 global real *histXi2pcf_omp;                        // Auxiliary array.
                                                     //  Used in OMP segments
-
 //B Tree
-//global cellptr root;
 // BALLS
 global cellptr rootnode;                            // To make treenodes
-global bodyptr nodetable;                           // To smooth minimum size 
-                                                    //  cells
-global bodyptr nodetable_root;
 //E
+
 
 #include "datastruc_hist.h"
 
@@ -235,7 +218,6 @@ int string_begins_with(char* thestring, char beginchar);
 }
 
 //E
-
 #endif // ! CLASSLIB
 //E
 

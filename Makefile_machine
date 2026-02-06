@@ -165,10 +165,10 @@ endif
 
 #
 #   will be deprecated...
-PTOPIVOTROTATIONON = 0
-ifeq ($(PTOPIVOTROTATIONON),1)
-OPT2 += -DPTOPIVOTROTATION
-endif
+#PTOPIVOTROTATIONON = 0
+#ifeq ($(PTOPIVOTROTATIONON),1)
+#OPT2 += -DPTOPIVOTROTATION
+#endif
 #
 
 #B ADDONS
@@ -178,9 +178,11 @@ endif
 #
 # To print some useful debuggin info set to 1. Else 0
 #   acts also as (thoroughly )DIAGNOSTICS flag...
+#   used in some engines, like search_octree_ggg_omp
 DEBUGON = 0
 DEBUGCOMPILINGON = 0
 DEBUGTREEON = 0
+DEBUGTRACKINGON = 0
 #
 #E
 #
@@ -192,6 +194,9 @@ OPT2 += -DDEBUG
 endif
 ifeq ($(DEBUGTREEON),1)
 OPT2 += -DDEBUGTREE
+endif
+ifeq ($(DEBUGTRACKINGON),1)
+OPT2 += -DDEBUGTRACKING
 endif
 #
 ifeq ($(ADDONSON),1)

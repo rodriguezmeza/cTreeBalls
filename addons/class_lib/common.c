@@ -100,18 +100,3 @@ int string_begins_with(char* thestring, char beginchar){
   return result;
 }
 
-/**
- * Get version number
- *
- * @param version  Output: The string to write the version number into
- * @return the error status
- */
-/*
-int class_version(
-                  char * version
-                  ) {
-
-  sprintf(version,"%s",_VERSION_);
-  return SUCCESS;
-}
-*/

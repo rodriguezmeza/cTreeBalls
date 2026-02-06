@@ -3,6 +3,8 @@
 #
 #
 
+# user not need to make any changes in this file
+
 #B Set of settings
 #
 # The AddOns are switched on/off here:
@@ -11,18 +13,31 @@ include $(MACHINES_DIR)/addons/Makefile_addons_settings
 
 #B Here insert AddOns´ Makefile modules
 
-# OCTREESINCOSOMP
-# For computing (2,3)pcf using octree-sincos-omp
-ifeq ($(OCTREESINCOSOMPON),1)
-include $(MACHINES_DIR)/addons/octree_sincos_omp/Makefile_octree_sincos_omp
+# KDTREEOMP
+# For computing 3pcf using kdtree-omp method
+ifeq ($(KDTREEOMPON),1)
+include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
 endif
 #
 
-# BALLSOMP
-# For computing 3pcf using balls method
-ifeq ($(BALLSON),1)
-include ./addons/balls_omp/Makefile_settings_balls_omp
-include $(MACHINES_DIR)/addons/balls_omp/Makefile_balls_omp
+# OCTREEGGGOMP
+# For computing 3pcf using octree-ggg-omp
+ifeq ($(OCTREEGGGOMPON),1)
+include $(MACHINES_DIR)/addons/octree_ggg_omp/Makefile_octree_ggg_omp
+endif
+#
+
+# KDTREEBOXOMP
+# For computing 2pcf using kdtree_box_omp methods
+ifeq ($(KDTREEBOXOMPON),1)
+include $(MACHINES_DIR)/addons/kdtree_box_omp/Makefile_kdtree_box_omp
+endif
+#
+
+# NEIGHBORBOXESOMP
+# For computing 2pcf using neighbor-boxes-omp method
+ifeq ($(NEIGHBORBOXESOMPON),1)
+include $(MACHINES_DIR)/addons/neighbor_boxes_omp/Makefile_neighbor_boxes_omp
 endif
 #
 
@@ -64,34 +79,6 @@ endif
 # For cython interfacing...
 ifeq ($(PXDON),1)
 include $(MACHINES_DIR)/addons/pxd/Makefile_pxd
-endif
-#
-
-# KDTREEOMP
-# For computing 3pcf using kdtree-omp method
-ifeq ($(KDTREEOMPON),1)
-include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
-endif
-#
-
-# OCTREEKKKOMP
-# For computing 3pcf using octree-kkk-omp
-ifeq ($(OCTREEKKKOMPON),1)
-include $(MACHINES_DIR)/addons/octree_kkk_omp/Makefile_octree_kkk_omp
-endif
-#
-
-# COMPLEXLIB
-# Library for complex computation
-ifeq ($(COMPLEXLIBON),1)
-include $(MACHINES_DIR)/addons/complex_lib/Makefile_complex_lib
-endif
-#
-
-# OCTREEGGGOMP
-# For computing 3pcf using octree-ggg-omp
-ifeq ($(OCTREEGGGOMPON),1)
-include $(MACHINES_DIR)/addons/octree_ggg_omp/Makefile_octree_ggg_omp
 endif
 #
 
@@ -229,27 +216,6 @@ include $(MACHINES_DIR)/addons/octree_ggg_omp_triangles/Makefile_octree_ggg_omp_
 endif
 #
 
-# OCTREEBOXOMP
-# For computing 2pcf using octree_box_omp methods
-ifeq ($(OCTREEBOXOMPON),1)
-include $(MACHINES_DIR)/addons/octree_box_omp/Makefile_octree_box_omp
-endif
-#
-
-# KDTREEBOXOMP
-# For computing 2pcf using kdtree_box_omp methods
-ifeq ($(KDTREEBOXOMPON),1)
-include $(MACHINES_DIR)/addons/kdtree_box_omp/Makefile_kdtree_box_omp
-endif
-#
-
-# NEIGHBORBOXESOMP
-# For computing 2pcf using neighbor-boxes-omp method
-ifeq ($(NEIGHBORBOXESOMPON),1)
-include $(MACHINES_DIR)/addons/neighbor_boxes_omp/Makefile_neighbor_boxes_omp
-endif
-#
-
 # KDTREECUTEBOX
 # For computing 2pcf using cute_box methods
 ifeq ($(KDTREECUTEBOXON),1)
@@ -268,6 +234,57 @@ endif
 # For computing 3pcf using octree-kkk-balls4-omp-triangles
 ifeq ($(OCTREEKKKBALLS4OMPTRIANGLESON),1)
 include $(MACHINES_DIR)/addons/octree_kkk_balls4_omp_triangles/Makefile_octree_kkk_balls4_omp_triangles
+endif
+#
+
+# OCTREESMOOTHING
+# some utils and definitions useful to smooth octree cells
+ifeq ($(OCTREESMOOTHINGON),1)
+include $(MACHINES_DIR)/addons/octree_smoothing/Makefile_octree_smoothing
+endif
+#
+
+# TREEOMPSINCOS
+# First developed searching engine
+# For computing (2,3)pcf using tree-omp-sincos
+ifeq ($(TREEOMPSINCOSON),1)
+include $(MACHINES_DIR)/addons/tree_omp_sincos/Makefile_tree_omp_sincos
+endif
+#
+
+# OCTREESINCOSOMP
+# For computing (2,3)pcf using octree-sincos-omp
+ifeq ($(OCTREESINCOSOMPON),1)
+include $(MACHINES_DIR)/addons/octree_sincos_omp/Makefile_octree_sincos_omp
+endif
+#
+
+# BALLSOMP
+# For computing 3pcf using balls method
+ifeq ($(BALLSON),1)
+include ./addons/balls_omp/Makefile_settings_balls_omp
+include $(MACHINES_DIR)/addons/balls_omp/Makefile_balls_omp
+endif
+#
+
+# OCTREEKKKOMP
+# For computing 3pcf using octree-kkk-omp
+ifeq ($(OCTREEKKKOMPON),1)
+include $(MACHINES_DIR)/addons/octree_kkk_omp/Makefile_octree_kkk_omp
+endif
+#
+
+# OCTREEBOXOMP
+# For computing 2pcf using octree_box_omp methods
+ifeq ($(OCTREEBOXOMPON),1)
+include $(MACHINES_DIR)/addons/octree_box_omp/Makefile_octree_box_omp
+endif
+#
+
+# COMPLEXLIB
+# Library for complex computation
+ifeq ($(COMPLEXLIBON),1)
+include $(MACHINES_DIR)/addons/complex_lib/Makefile_complex_lib
 endif
 #
 

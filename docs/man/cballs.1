@@ -66,11 +66,8 @@ Note that parameter alias are not allowed in a parameter file. Also behaviour of
 .IP "\fBtheta\fR" 12
 control tree search parameter, can be used to increase/decrease computation speed. It has the effect of increasing ('theta<1') or decreasing ('theta>1') the radius of cells. Default value is 1. Experiment with 'theta=1.1' to see the speeding-up of the code. If 'theta=0' is used then computation will be done as it were the direct-2-loops method with complexity O(N^2), useful for testing but not for productions computations.
 
-.IP "\fBcomputeTPCF\fR" 12
-[a: tpcf] if true, compute 3pcf. If using 'octree-ggg-omp' searching method, this option is activated at compile time using flags defined in 'addons/Makefile_addons_settings'.
-
 .IP "\fBusePeriodic\fR" 12
-[a: periodic] if false, do not use periodic boundary condition. Useful to compute 2-point correlations functions of periodic boxes steaming from N-body simulations or to analyze halo catalogs from Rockstar for example. In such a case use in combinations with 'computeTPCF=false'. \fBcballs\fR is able to read Gadget format or multi-columns format files like the ones given by Rockstar. See below.
+[a: periodic] if false, do not use periodic boundary condition. Useful to compute 2-point correlations functions of periodic boxes steaming from N-body simulations or to analyze halo catalogs from Rockstar for example. \fBcballs\fR is able to read Gadget format or multi-columns format files like the ones given by Rockstar. See below.
 
 .IP "\fBinfile\fR" 12
 [a: in]  gives the name of file to input the data to analyse.
@@ -181,18 +178,6 @@ gives the frequency to save the the number of pivot computed. Useful to see the 
 .IP "\fBnumberThreads\fR" 12
 [a: nthreads] To set the number of threads to use (OpenMP).
 
-.IP "\fBscanLevel\fR" 12
-[a: scl] scan level to start the search (look at tdepth value, will be the maximum for this parameter).
-
-.IP "\fBscanLevelRoot\fR" 12
-[a: sclroot] scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter).
-
-.IP "\fBscanLevelMin\fR" 12
-[a: sclmin] scan level of size cells to stop the search. Integer negative values (look at tdepth value, will be tdepth-1+scanLevelMin+1).
-
-.IP "\fBntosave\fR" 12
-[a: ntsav] number of found bodies to save; use in combination with 'bodyfound', 'balls4' method.
-
 .IP "\fBcolumns\fR" 12
 [a: cols] columns to use as vector position and fields when using multi-columns-ascii or fits formats of point catalog.
 
@@ -272,7 +257,7 @@ Note: python version 3 was used with numpy and matplotlib modules installed. Als
 fkpt(1) mgpt(1) cballs(1)
 
 .SH COPYRIGHT
-Copyright (C) 2023--2025
+Copyright (C) 2023--2026
 .br
 Mario A. Rodriguez-Meza
 .br

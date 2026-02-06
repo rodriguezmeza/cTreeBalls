@@ -3,7 +3,7 @@
     :synopsis: Python wrapper around cTreeBalls
 .. moduleauthor:: Mario A. Rodriguez-Meza <marioalberto.rodriguezmeza@gmail.com>
 
-.. based on CLASS
+.. based on Julien Lesgourges' CLASS
 
 This module defines a class called cballs.
 
@@ -13,15 +13,13 @@ This module defines a class called cballs.
 
 import numpy as np
 cimport numpy as np
-# is better this way...?
-#cimport numpy as cnp
 from libc.stdlib cimport *
 from libc.stdio cimport *
 from libc.string cimport *
 import cython
 cimport cython
 
-#from numpy cimport ndarray
+import time
 
 import sys
 def viewdictitems(d):
@@ -32,10 +30,6 @@ def viewdictitems(d):
 
 ctypedef np.float64_t DTYPE_t
 ctypedef np.int32_t DTYPE_i
-#ctypedef np.float_t DTYPE_t
-#ctypedef np.int_t DTYPE_i
-#ctypedef np.float DTYPE_t
-#ctypedef np.int DTYPE_i
 
 from ccballys cimport *
 
@@ -86,27 +80,36 @@ cdef class cballs:
     cdef global_data gd
     cdef file_content fc
 
+    cdef int nthreads
+    cdef double cputime
+
     cdef int computed # Flag to see if cballys has already computed with the given pars
     cdef int allocated # Flag to see if cballys structs are allocated already
     cdef object _pars # Dictionary of the parameters
     cdef object ncp   # Keeps track of the structures initialized, in view of cleaning.
 
-    property pars:
-        def __get__(self):
-            return self._pars
-    property state:
-        def __get__(self):
-            return True
-    property theta:
-        def __get__(self):
-            return self.cmd.theta
-
     def set_default(self):
         _pars = {
-            "searchMethod":"tree-omp-sincos",}
+            "searchMethod":"octree-ggg-omp",
+            "rminHist":0.00213811,
+            "rangeN":0.0633205,
+            "sizeHistN":20,
+            "rootDir":"Output",
+            "infileformat":"fits-healpix",
+            "nsmooth":8,
+            "rsmooth":"\0",
+            "theta":1.05,
+            "iCatalogs":"1",
+            "columns":"1,2,3,4",
+            "stepState":1000000,
+            "numberThreads":16,
+            "verbose":0,
+            "verbose_log":0,
+            "options":"compute-HistN",
+            }
         self.set(**_pars)
 
-    def __cinit__(self, default=False):
+    def __cinit__(self, default=True):
         cdef char* dumc
         self.allocated = False
         self.computed = False
@@ -179,13 +182,24 @@ cdef class cballs:
     def struct_cleanup(self):
         if(self.allocated != True):
           return
-# Add necesary calls to free memory (bodytab, histograms...)
-#        if "EndRun" in self.ncp:
-#            EndRun_free(&self.th)
-#        if "StartRun_Common" in self.ncp:
-#            StartRun_Common_free(&self.ba)
+        EndRun_FreeMemory_tree(&(self.cmd), &(self.gd))
+        if self.gd.gd_allocated_2:
+            EndRun_FreeMemory_gd_2(&(self.cmd), &(self.gd))
+        EndRun_FreeMemory_bodytable(&(self.cmd), &(self.gd))
+        if self.gd.histograms_allocated:
+            EndRun_FreeMemory_histograms(&(self.cmd), &(self.gd))
+        if self.gd.gd_allocated:
+            EndRun_FreeMemory_gd(&(self.cmd), &(self.gd))
+        if self.gd.cmd_allocated:
+            EndRun_FreeMemory_cmd(&(self.cmd), &(self.gd))
+        self.ncp = set()
+
         self.allocated = False
         self.computed = False
+
+    def clean_all(self):
+        self.struct_cleanup()
+        self.clean()
 
     def _check_task_dependency(self, level):
         """
@@ -280,7 +294,11 @@ cdef class cballs:
         self.allocated = True
 
         if "input" in level:
-            if input_read_from_file(&self.cmd, &self.fc, errmsg) == FAILURE:
+#
+# tracking...
+#            print('Track step: input... (0000)')
+#
+            if input_read_from_file(&self.cmd, &self.gd, &self.fc, errmsg) == FAILURE:
                 raise cBallsSevereError(errmsg)
             self.ncp.add("input")
             problem_flag = False
@@ -295,13 +313,25 @@ cdef class cballs:
                     problematic_parameters))
 
         if "StartRun_Common" in level:
+#
+# tracking...
+#            print('Track step: StartRun_Common... (000)')
+#
             if StartRun_Common(&(self.cmd), &(self.gd)) == FAILURE:
                 self.struct_cleanup()
                 raise cBallsComputationError(self.op.error_message)
+#
+# tracking...
+#            print('Track step: StartRun_Common... (018)')
+#
             self.ncp.add("StartRun_Common")
 
         if "PrintParameterFile" in level:
-            if PrintParameterFile(&(self.cmd), "cballys_param.txt") == FAILURE:
+#
+# tracking...
+#            print('Track step: PrintParameterFile...')
+#
+            if PrintParameterFile(&(self.cmd), &(self.gd), "cballys_param.txt") == FAILURE:
                 self.struct_cleanup()
                 raise cBallsComputationError(self.op.error_message)
             self.ncp.add("PrintParameterFile")
@@ -311,35 +341,68 @@ cdef class cballs:
                 self.struct_cleanup()
                 raise cBallsComputationError(self.op.error_message)
             self.ncp.add("SetNumberThreads")
+            self.nthreads=self.getNThreads()
 
+# Consider process_time() as another good option...
         if "MainLoop" in level:
+#            start_wall_time = time.perf_counter()
+            start_wall_time_p = time.process_time()
             if MainLoop(&(self.cmd), &(self.gd)) == FAILURE:
                 self.struct_cleanup()
                 raise cBallsComputationError(self.op.error_message)
             self.ncp.add("MainLoop")
-
+            end_wall_time_p = time.process_time()
+#            end_wall_time = time.perf_counter()
+#            self.cputime = end_wall_time - start_wall_time
+            self.cputime = (end_wall_time_p - start_wall_time_p)/self.nthreads
+#
+# tracking...
+#        print('Track step: After MainLoop... (022a)')
+#
         self.computed = True
 
-        return
+        return self.cputime
 
 #
 #B Interfaces to PXD functions
 #
 #B parameters
-    def theta(self):
-        self.Run(["input"])
-        return self.cmd.theta
+#
+    def getNThreads(self):
+        cdef int value
+        cdef int out_value
+        if get_nthreads(&self.cmd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
 
-    def sizeHistN(self):
-        return self.cmd.sizeHistN
+    def getnMonopoles(self):
+        cdef int value
+        if get_nmonopoles(&self.cmd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        return value
 
     def getTheta(self):
-        cdef double theta
-        cdef double out_theta
-        if get_theta(&self.cmd,&theta)== FAILURE:
+        cdef double value
+        if get_theta(&self.cmd,&value)== FAILURE:
             raise cBallsSevereErrorDummy()
-        out_theta = theta
-        return out_theta
+        return value
+
+    def getrsmooth(self):
+        cdef double value
+        cdef double out_value
+        if get_rsmooth(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_theta = value
+        return out_value
+
+    def getCPUTime(self):
+        cdef double cputime
+        cdef double out_cputime
+        if get_cputime(&self.gd,&cputime)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_cputime = cputime
+        return out_cputime
 
     def getsizeHistN(self):
         cdef int sizeHistN
@@ -462,30 +525,7 @@ cdef class cballs:
                 matrix[i, j] = self.gd.matPXD[i][j]
 
         return matrix
-
-#B this routine will be not necessary any more... delete it
-    def getHistZetaM_sincos(self, int m, int type):
-        cdef int sizeHistN
-        cdef int index_r
-        cdef int sizesqr
-        cdef ErrorMsg errmsg
-
-        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
-            raise cBallsSevereErrorDummy()
-        
-        sizesqr = sizeHistN*sizeHistN
-
-        cdef np.ndarray[DTYPE_t, ndim=1] out_ZM = np.zeros(sizesqr,'float64')
-        
-        if get_HistZetaM_sincos(&self.cmd, &self.gd, m, type, errmsg)==FAILURE:
-            raise cBallsSevereError(errmsg)
-
-        for index_r in range(sizesqr):
-            out_ZM[index_r] = self.gd.histZetaMFlatten[index_r+1]
-
-        return out_ZM
-#E
-
+#
 #E histograms
 
 #

@@ -24,7 +24,7 @@ local int inputdata_bin(struct cmdline_data*, struct  global_data*,
                         string filename, int);
 local int inputdata_bin_all(struct cmdline_data*, struct  global_data*,
                         string filename, int);
-local int inputdata_takahasi(struct cmdline_data*, struct  global_data*,
+local int inputdata_takahashi(struct cmdline_data*, struct  global_data*,
                              string filename, int);
 
 local int outputdata(struct cmdline_data*, struct  global_data*,
@@ -37,7 +37,6 @@ local int outputdata_bin(struct cmdline_data*, struct  global_data*,
                          bodyptr, INTEGER);
 local int outputdata_bin_all(struct cmdline_data*, struct  global_data*,
                          bodyptr, INTEGER);
-local int EndRun_FreeMemory(struct cmdline_data*, struct  global_data*);
 
 //B socket:
 #ifdef ADDONS
@@ -76,29 +75,33 @@ int InputData(struct cmdline_data* cmd,
             "\n%s: reading data catalog...\n", routineName);
     switch(gd->infilefmt_int) {
         case INCOLUMNS:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                   "\n\tInput in columns (ascii) format...\n");
+            verb_print_normal_info(cmd->verbose,
+                                cmd->verbose_log, gd->outlog,
+                                "\n\tInput in columns (ascii) format...\n");
             inputdata_ascii(cmd, gd, filename, ifile); break;
         case INCOLUMNSALL:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                "\tInput in columns (ascii) all format...\n");
+            verb_print_normal_info(cmd->verbose,
+                            cmd->verbose_log, gd->outlog,
+                            "\tInput in columns (ascii) all format...\n");
             inputdata_ascii_all(cmd, gd, filename, ifile); break;
         case INNULL:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "\n\t(Null) Input in columns (ascii) format...\n");
+            verb_print_normal_info(cmd->verbose,
+                        cmd->verbose_log, gd->outlog,
+                        "\n\t(Null) Input in columns (ascii) format...\n");
             inputdata_ascii(cmd, gd, filename, ifile); break;
         case INCOLUMNSBIN:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            verb_print_normal_info(cmd->verbose,
+                                   cmd->verbose_log, gd->outlog,
                                    "\n\tInput in binary format...\n");
             inputdata_bin(cmd, gd, filename, ifile); break;
         case INCOLUMNSBINALL:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\tInput in binary-all format...\n");
             inputdata_bin_all(cmd, gd, filename, ifile); break;
-        case INTAKAHASI:
+        case INTAKAHASHI:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\tInput in takahashi format...\n");
-            class_call_cballs(inputdata_takahasi(cmd, gd, filename, ifile),
+            class_call_cballs(inputdata_takahashi(cmd, gd, filename, ifile),
                        errmsg, errmsg);
             break;
 
@@ -306,7 +309,8 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
         }
         kstd = rsqrt( sum/((real)gd->nbodyTable[0] - 1.0) );
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               "\t%s: average and std dev of kappa ", routineName);
+                               "\t%s: average and std dev of kappa ",
+                               routineName);
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "(%ld particles) = %le %le\n",
                                gd->nbodyTable[0], kavg, kstd);
@@ -317,8 +321,8 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
 
     free(bodytabtmp);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\n\tfreed %g MByte for tmp storage (%ld bodies).\n\n",
-                        cmd->nbody * sizeof(body)*INMB, cmd->nbody);
+                    "\n\tfreed %g MByte for tmp storage (%ld bodies).\n\n",
+                    cmd->nbody * sizeof(body)*INMB, cmd->nbody);
 
     for (i=0; i<gd->ninfiles; i++) {
         (gd->iCatalogs[i]) = 0;
@@ -866,10 +870,10 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
             real *xmin, real *xmax, real *ymin, real *ymax, int ifile);
 #endif
 
-local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
+local int inputdata_takahashi(struct cmdline_data* cmd, struct  global_data* gd,
                              string filename, int ifile)
 {
-    string routinename = "inputdata_takahasi";
+    string routinename = "inputdata_takahashi";
     FILE *fp;
     long i,j,npix,dummy;
     long jj[6]={536870908,1073741818,1610612728,2147483638,2684354547,3221225457};
@@ -879,7 +883,7 @@ local int inputdata_takahasi(struct cmdline_data* cmd, struct  global_data* gd,
 
     gd->input_comment = "Takahasi input file";
 
-//E Begin reading Takahasi file
+//E Begin reading Takahashi file
     fp = stropen(filename, "rb");
 
     if (scanopt(cmd->options, "header-info")){
@@ -1066,7 +1070,7 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
             dtheta_rot = 0.0;
             dphi_rot = 0.0;
             verb_print(cmd->verbose,
-"\tinputdata_takahasi: theta and phi of the center of the selected region = %f %f\n",
+"\tinputdata_takahashi: theta and phi of the center of the selected region = %f %f\n",
                        0.5*(thetaR + thetaL), 0.5*(phiR + phiL));
             verb_print(cmd->verbose,
                     "\t%s: radius of the selected region = %lf\n",
@@ -1312,10 +1316,6 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
 
                     coordinate_transformation(cmd, gd, theta, phi, Pos(p));
 
-/*                    if (!scanopt(cmd->options, "kappa-fix"))
-                        Kappa(p) = conv[i];
-                    else
-                        Kappa(p) = 2.0; */
                     if (!scanopt(cmd->options, "kappa-constant"))
                         Kappa(p) = conv[i];
                     else {
@@ -1432,21 +1432,21 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
             kavg += Kappa(p);
         }
     }
-    verb_print(cmd->verbose, "\n\tinputdata_takahasi: min and max of x = %f %f\n",*xmin, *xmax);
-    verb_print(cmd->verbose, "\tinputdata_takahasi: min and max of y = %f %f\n",*ymin, *ymax);
-    verb_print(cmd->verbose, "\tinputdata_takahasi: min and max of z = %f %f\n",*zmin, *zmax);
+    verb_print(cmd->verbose, "\n\tinputdata_takahashi: min and max of x = %f %f\n",*xmin, *xmax);
+    verb_print(cmd->verbose, "\tinputdata_takahashi: min and max of y = %f %f\n",*ymin, *ymax);
+    verb_print(cmd->verbose, "\tinputdata_takahashi: min and max of z = %f %f\n",*zmin, *zmax);
     free(bodytabtmp);
 
     if (scanopt(cmd->options, "patch"))
         verb_print(cmd->verbose,
-                   "\n\tinputdata_takahasi: selected read points = %ld\n",iselect);
+                   "\n\tinputdata_takahashi: selected read points = %ld\n",iselect);
     else
         verb_print(cmd->verbose,
-                   "\n\tinputdata_takahasi: selected read points and nbody: %ld %ld\n",
+                   "\n\tinputdata_takahashi: selected read points and nbody: %ld %ld\n",
                    iselect, cmd->nbody);
 
     verb_print(cmd->verbose, 
-               "inputdata_takahasi: average of kappa (%ld particles) = %le\n",
+               "inputdata_takahashi: average of kappa (%ld particles) = %le\n",
                cmd->nbody, kavg/((real)cmd->nbody) );
 
     return SUCCESS;
@@ -1591,16 +1591,16 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
         }
     }
     verb_print(cmd->verbose, 
-               "\n\tinputdata_takahasi: min and max of x = %f %f\n",
+               "\n\tinputdata_takahashi: min and max of x = %f %f\n",
                *xmin, *xmax);
     verb_print(cmd->verbose, 
-               "\tinputdata_takahasi: min and max of y = %f %f\n",
+               "\tinputdata_takahashi: min and max of y = %f %f\n",
                *ymin, *ymax);
 
     free(bodytabtmp);
     
     verb_print(cmd->verbose, 
-               "\n\tinputdata_takahasi: selected read points = %ld\n",iselect);
+               "\n\tinputdata_takahashi: selected read points = %ld\n",iselect);
 
     return SUCCESS;
 }
@@ -1644,7 +1644,7 @@ void pix2ang(long pix, int nside, double *theta, double *phi)
   *theta=acos(z);
 }
 
-//E End:: Reading Takahasi simulations
+//E End:: Reading Takahashi simulations
 
 
 int StartOutput(struct cmdline_data *cmd, struct  global_data* gd)
@@ -1652,9 +1652,6 @@ int StartOutput(struct cmdline_data *cmd, struct  global_data* gd)
     //B clear some char arrays
     gd->logfilePath[0] = '\0';
     gd->fpfnameOutputFileName[0] = '\0';
-    gd->nodesfilePath[0] = '\0';
-    gd->bodiesfilePath[0] = '\0';
-
     gd->fnameData_kd[0] = '\0';
     gd->fnameOut_kd[0] = '\0';
     //E
@@ -1754,8 +1751,6 @@ local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
 //B BALLS :: DIAGNOSTICS (DEBUG)
 #ifdef DEBUG
         out_bool_mar(outstr, HIT(p));
-//        out_bool_mar(outstr, Selected(p));
-//        out_bool_mar(outstr, Update(p));
 #endif
 //E
         fprintf(outstr,"\n");
@@ -1791,8 +1786,6 @@ local int outputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd
 //B BALLS :: DIAGNOSTICS (DEBUG)
 #ifdef DEBUG
         out_bool_mar(outstr, HIT(p));
-//        out_bool_mar(outstr, Selected(p));
-//        out_bool_mar(outstr, Update(p));
 #endif
 //E
         fprintf(outstr,"\n");
@@ -1875,7 +1868,7 @@ global int infilefmt_string_to_int(string infmt_str,int *infmt_int)
     if (strnull(infmt_str))                         *infmt_int = INNULL;
     if (strcmp(infmt_str,"binary") == 0)            *infmt_int = INCOLUMNSBIN;
     if (strcmp(infmt_str,"binary-all") == 0)        *infmt_int = INCOLUMNSBINALL;
-    if (strcmp(infmt_str,"takahasi") == 0)          *infmt_int = INTAKAHASI;
+    if (strcmp(infmt_str,"takahashi") == 0)          *infmt_int = INTAKAHASHI;
 
 //B socket:
 #ifdef ADDONS
@@ -1905,24 +1898,35 @@ local int outfilefmt_string_to_int(string outfmt_str,int *outfmt_int)
 }
 
 // I/O directories:
-global void setFilesDirs_log(struct cmdline_data* cmd, struct  global_data* gd)
+global void setFilesDirs_log(struct cmdline_data* cmd,
+                             struct  global_data* gd)
 {
-    char buf[200];
+    string routineName = "setFilesDirs_log";
+    char buf[BUFFERSIZE];
 
-    sprintf(gd->tmpDir,"%s/%s",cmd->rootDir,"tmp");
-
-    double cpustart = CPUTIME;
-    sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",gd->tmpDir,gd->tmpDir);
-    system(buf);
-    gd->cputotalinout += CPUTIME - cpustart;
-
-    sprintf(gd->logfilePath,"%s/cballs%s.log",gd->tmpDir,cmd->suffixOutFiles);
+    debug_tracking_s("001", routineName);
+    if (cmd->verbose_log>0) {           // gd->logfilePath is defined
+        debug_tracking_s("002", cmd->rootDir);
+        sprintf(gd->tmpDir,"%s/%s",cmd->rootDir,"tmp");
+        double cpustart = CPUTIME;
+        debug_tracking_s("003", gd->tmpDir);
+        sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",
+                gd->tmpDir,gd->tmpDir);
+        system(buf);
+        debug_tracking("004");
+        gd->cputotalinout += CPUTIME - cpustart;
+        sprintf(gd->logfilePath,"%s/cballs%s.log",
+                gd->tmpDir,cmd->suffixOutFiles);
+    }
+    debug_tracking("005... final");
 }
 
 global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "setFilesDirs";
-    char buf[200];
+    char buf[BUFFERSIZE];
+
+    char outputDir[MAXLENGTHOFFILES];
 
     double cpustart = CPUTIME;
 
@@ -1931,84 +1935,83 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     char *dp1, *dp2;
     int lenDir = strlen(cmd->rootDir);
     int i;
-    
-    int nslashs = MAXNSLASHS;
-    ipos = (int*) malloc((nslashs)*sizeof(int));
 
-    for (i=0; i< lenDir; i++) {
-        if(cmd->rootDir[i] == '/') {
-            ipos[ndefault] = i+1;
-            ndefault++;
+    debug_tracking_s("001", routineName);
+    debug_tracking_s("002: init", cmd->rootDir);
+
+    if (gd->rootDirFlag==TRUE) {
+        
+        int nslashs = MAXNSLASHS;
+        ipos = (int*) malloc((nslashs)*sizeof(int));
+        dp1 = (char*) malloc((lenDir)*sizeof(char));
+
+        for (i=0; i< lenDir; i++) {
+            if(cmd->rootDir[i] == '/') {
+                ipos[ndefault] = i+1;
+                ndefault++;
+            }
         }
-    }
-    if (ndefault>nslashs)
-        error(
-              "%s: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
-              routineName, nslashs, cmd->rootDir, nslashs);
-
-    if (ndefault == 0) {
-        sprintf(gd->outputDir,cmd->rootDir);
-        sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",gd->outputDir,gd->outputDir);
-        if (cmd->verbose >= 3)
-            verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
-        system(buf);
-    } else {
-        for (i=0; i<ndefault; i++) {
-        dp1 = (char*) malloc((ipos[i]-1)*sizeof(char));
-        strncpy(dp1, cmd->rootDir, ipos[i]-1);
-        dp2 = (char*) malloc((lenDir-ipos[i])*sizeof(char));
-        strncpy(dp2, cmd->rootDir + ipos[i], lenDir-ipos[i]);
-        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                              "%s: '/' counts %d pos %d and %s %s\n",
-                              routineName, ndefault, ipos[i], dp1, dp2);
-
-        sprintf(gd->outputDir,cmd->rootDir);
-        sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",dp1,dp1);
-        verb_print_q(3,cmd->verbose_log,"\nsystem: %s\n",buf);
-        system(buf);
-        sprintf(buf,"if [ ! -d %s ]; then mkdir %s/%s; fi",gd->outputDir,dp1,dp2);
-        verb_print_q(3,cmd->verbose_log,"\nsystem: %s\n",buf);
-        system(buf);
+        if (ndefault>nslashs)
+            error("%s: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
+                  routineName, nslashs, cmd->rootDir, nslashs);
+        
+        if (ndefault == 0) {
+            sprintf(outputDir,cmd->rootDir);
+            sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",
+                    outputDir,outputDir);
+            if (cmd->verbose >= 3)
+                verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
+            system(buf);
+        } else {
+            for (i=0; i<ndefault; i++) {
+                debug_tracking("003");
+                strncpy(dp1, cmd->rootDir, ipos[i]-1);
+                sprintf(buf,"if [ ! -d %s ]; then mkdir -p %s; fi",dp1,dp1);
+                verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
+                system(buf);
+                debug_tracking("004");
+            }
+            strncpy(dp1, cmd->rootDir, lenDir);
+            sprintf(buf,"if [ ! -d %s ]; then mkdir -p %s; fi",dp1,dp1);
+            verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
+            system(buf);
         }
-    }
-    gd->cputotalinout += CPUTIME - cpustart;
+        gd->cputotalinout += CPUTIME - cpustart;
+        
+        debug_tracking_s("005", cmd->rootDir);
 
-
-//B    fpfnameOutputFileName               = Output/.txt
-// Check thoroughly these lines of code!!!
-//    if (!strnull(gd->fpfnameOutputFileName)) {
         sprintf(gd->fpfnameOutputFileName,"%s/%s%s%s",
                 cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES);
-//    }
-//E
+        sprintf(gd->fpfnamehistNNFileName,"%s/%s%s%s",
+                cmd->rootDir,cmd->histNNFileName,cmd->suffixOutFiles,EXTFILES);
+        sprintf(gd->fpfnamehistCFFileName,"%s/%s%s%s",
+                cmd->rootDir,"histCF",cmd->suffixOutFiles,EXTFILES);
+        sprintf(gd->fpfnamehistrBinsFileName,"%s/%s%s%s",
+                cmd->rootDir,"rbins",cmd->suffixOutFiles,EXTFILES);
+        sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s",
+                cmd->rootDir,cmd->histXi2pcfFileName);
+        sprintf(gd->fpfnamehistZetaGFileName,"%s/%s%s%s",
+                cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
+        sprintf(gd->fpfnamehistZetaGmFileName,"%s/%s%s%s",
+                cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
+        sprintf(gd->fpfnamehistZetaMFileName,"%s/%s%s%s",
+                cmd->rootDir,cmd->histZetaFileName,"M",cmd->suffixOutFiles);
+        sprintf(gd->fpfnamemhistZetaMFileName,"%s/%s%s%s%s",
+                cmd->rootDir,"m",cmd->histZetaFileName,"M",cmd->suffixOutFiles);
+        sprintf(gd->fpfnameCPUFileName,"%s/cputime%s%s",
+                cmd->rootDir,cmd->suffixOutFiles,EXTFILES);
+        
+        free(ipos);
+        
 
-    sprintf(gd->fpfnamehistNNFileName,"%s/%s%s%s",
-            cmd->rootDir,cmd->histNNFileName,cmd->suffixOutFiles,EXTFILES);
-    sprintf(gd->fpfnamehistCFFileName,"%s/%s%s%s",
-            cmd->rootDir,"histCF",cmd->suffixOutFiles,EXTFILES);
-    sprintf(gd->fpfnamehistrBinsFileName,"%s/%s%s%s",
-            cmd->rootDir,"rbins",cmd->suffixOutFiles,EXTFILES);
-    sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s",
-        cmd->rootDir,cmd->histXi2pcfFileName);
-    sprintf(gd->fpfnamehistZetaGFileName,"%s/%s%s%s",
-            cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
-    sprintf(gd->fpfnamehistZetaGmFileName,"%s/%s%s%s",
-            cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
-    sprintf(gd->fpfnamehistZetaMFileName,"%s/%s%s%s",
-            cmd->rootDir,cmd->histZetaFileName,"M",cmd->suffixOutFiles);
-    sprintf(gd->fpfnamemhistZetaMFileName,"%s/%s%s%s%s",
-            cmd->rootDir,"m",cmd->histZetaFileName,"M",cmd->suffixOutFiles);
-    sprintf(gd->fpfnameCPUFileName,"%s/cputime%s%s",
-            cmd->rootDir,cmd->suffixOutFiles,EXTFILES);
-    
-    free(ipos);
-
-//B socket:
+        //B socket:
 #ifdef ADDONS
 #include "cballsio_include_09b.h"
 #endif
-//E
-
+        //E
+        free(dp1);
+    }
+    debug_tracking_s("006: final", cmd->rootDir);
 }
 
 
@@ -2031,16 +2034,15 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 {
     stream outstr;
 
-	fclose(gd->outlog);
+    if (cmd->verbose_log>0)
+        fclose(gd->outlog);
 
     if (cmd->verbose >= VERBOSENORMALINFO) {
-        //B only catalog 0 is consider... modify to include others
+        //B only catalog 0 is considered... modify to include others
         printf("\nrSize \t\t= %lf\n", gd->rSizeTable[0]);
         printf("nbbcalc \t= %ld\n", gd->nbbcalc);
         printf("nbccalc \t= %ld\n", gd->nbccalc);
-// BALLS
         printf("ncccalc \t= %ld\n", gd->ncccalc);
-//
         printf("tdepth \t\t= %d\n", gd->tdepthTable[0]);
         // Consider other tree cells, like kdtree
         printf("ncell\t\t= %ld\n", gd->ncellTable[0]);
@@ -2080,56 +2082,125 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 //
 // We must check the order of memory allocation and deallocation!!!
 //
-local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
+global int EndRun_FreeMemory(struct cmdline_data* cmd,
+                             struct  global_data* gd)
 {
+    if (gd->tree_allocated == TRUE)
+        EndRun_FreeMemory_tree(cmd, gd);
+
+    if (gd->gd_allocated_2 == TRUE)
+        EndRun_FreeMemory_gd_2(cmd, gd);
+
+    if (gd->bodytable_allocated == TRUE)
+        EndRun_FreeMemory_bodytable(cmd, gd);
+
+    if (gd->histograms_allocated == TRUE)
+        EndRun_FreeMemory_histograms(cmd, gd);
+
+    if (gd->gd_allocated == TRUE)
+        EndRun_FreeMemory_gd(cmd, gd);
+    if (gd->cmd_allocated == TRUE)
+        EndRun_FreeMemory_cmd(cmd, gd);
+
+    return SUCCESS;
+}
+
+global int EndRun_FreeMemory_tree(struct cmdline_data* cmd,
+                             struct  global_data* gd)
+{
+    int ifile;
+
+#ifdef BALLS4SCANLEV
+    if (scanopt(cmd->options, "read-mask")) {
+        ifile=0;
+        free(nodetablescanlevB4[ifile]);
+    } else {
+        for (ifile=0; ifile<gd->ninfiles; ifile++)
+            free(nodetablescanlevB4[ifile]);
+    }
+#endif
+
+    if (!scanopt(cmd->searchMethod, "kdtree-omp")
+        && !scanopt(cmd->searchMethod, "kdtree-box-omp") ) {
+        freeTree(cmd, gd);
+    }
+
+    gd->tree_allocated = FALSE;
+
+    return SUCCESS;
+}
+
+global int EndRun_FreeMemory_bodytable(struct cmdline_data* cmd,
+                             struct  global_data* gd)
+{
+    int ifile;
+
+    if (scanopt(cmd->options, "read-mask")) {
+        ifile=0;
+        free(bodytable[ifile]);
+    } else {
+        for (ifile=0; ifile<gd->ninfiles; ifile++)
+            free(bodytable[ifile]);
+    }
+
+    gd->bodytable_allocated = FALSE;
+
+    return SUCCESS;
+}
+
+global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
+                             struct  global_data* gd)
+{
+    free_dvector(gd->histN2pcf,1,cmd->sizeHistN);
+    // 2pcf
+#ifdef SMOOTHPIVOT
+    free_dvector(gd->histNNSubN2pcftotal,1,cmd->sizeHistN);
+#endif
+    free_dvector(gd->histNNSubN2pcf,1,cmd->sizeHistN);
+    //E
+
+
 //B socket:
 #ifdef ADDONS
-#include "cballsio_include_10.h"
+#include "cballsio_include_10.h"                    // this is empty and can
+                                                    //be remove these 3 lines
 #endif
 //E
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         free_dmatrix3D(gd->histZetaGmIm,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaGmRe,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-#ifdef USEGSL
-        //B Do not use anymore...
-        /*
-        int m;
-        for (m=1; m<=cmd->mChebyshev+1; m++)
-            gsl_matrix_complex_free(histZetaMatrix[m].histZetaM);
-        free(histZetaMatrix);
-        gsl_matrix_complex_free(gd->histXi_gsl);
-        */
-        //E
-#endif
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
         free_dmatrix3D(gd->histZetaMcossin,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaMsincos,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaMsin,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaMcos,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaM,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
         free_dmatrix(gd->histXisin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         free_dmatrix(gd->histXicos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-        // array histXi is not used any more.
-        //  remove it from all the places...
-//        free_dmatrix(gd->histXi,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-        //
-    }
+#endif
 
     free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
      
     free_dvector(gd->histNNN,1,cmd->sizeHistN);
     // 2pcf
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     free_dvector(gd->histNNSubXi2pcftotal,1,cmd->sizeHistN);
-    //E
+#endif
     free_dvector(gd->histNNSubXi2pcf,1,cmd->sizeHistN);
     //
     free_dvector(gd->histNNSub,1,cmd->sizeHistN);
@@ -2145,14 +2216,101 @@ local int EndRun_FreeMemory(struct cmdline_data* cmd, struct  global_data* gd)
 #endif
     //E Histogram arrays PXD versions
 
-//B Set gsl uniform random :: If not needed globally
-//      this line have to go to testdata
-#ifdef USEGSL
-    gsl_rng_free (gd->r);           // allocated by random_init routine in startrun.c
-#endif
+    gd->histograms_allocated = FALSE;
 
     return SUCCESS;
 }
+
+global int EndRun_FreeMemory_gd(struct cmdline_data* cmd,
+                             struct  global_data* gd)
+{
+    string routineName = "EndRun_FreeMemory_gd";
+    int ifile;
+
+    debug_tracking_s("001", routineName);
+    //B Set gsl uniform random :: If not needed globally
+    //      this line have to go to testdata
+    #ifdef USEGSL
+        gsl_rng_free (gd->r);           // allocated by random_init
+                                        //  routine in startrun.c
+    #endif
+    //E
+
+    gd->gd_allocated = FALSE;
+
+    return SUCCESS;
+}
+
+global int EndRun_FreeMemory_gd_2(struct cmdline_data* cmd,
+                             struct  global_data* gd)
+{
+    if (cmd->useLogHist) {
+        if (cmd->rminHist==0) {
+            free_dvector(gd->deltaRV,1,cmd->sizeHistN);
+        } else {
+            free_dvector(gd->deltaRV,1,cmd->sizeHistN);
+            free_dvector(gd->ddeltaRV,1,cmd->sizeHistN);
+        }
+    }
+
+    gd->gd_allocated_2 = FALSE;
+
+    return SUCCESS;
+}
+
+global int EndRun_FreeMemory_cmd(struct cmdline_data* cmd,
+                             struct  global_data* gd)
+{
+    string routineName = "EndRun_FreeMemory_cmd";
+    //B 2026-01: added to follow up: freeing several cmd strings variables:
+    // first one must be version, check!!
+    debug_tracking_s("001", routineName);
+#ifdef SAVERESTORE
+    if (cmd->restorefile!=NULL)
+    free(cmd->restorefile);
+    if (cmd->statefile!=NULL)
+    free(cmd->statefile);           // it uses strdup() function, check!!
+#endif
+#ifdef IOLIB
+    if (gd->columnsFlag==TRUE)
+        free(cmd->columns);
+#endif
+    debug_tracking("002");
+    if (cmd->options!=NULL)
+    free(cmd->options);
+    debug_tracking("003");
+//    free(cmd->posScript);
+    debug_tracking("004");
+//    free(cmd->preScript);
+//    free(cmd->testmodel);
+//    free(cmd->suffixOutFiles);
+    debug_tracking("005");
+// they all have assigned a string: "histNN", ...
+//    free(cmd->histZetaFileName);
+//    free(cmd->histXi2pcfFileName);
+//    free(cmd->histNNFileName);
+//    free(cmd->outfilefmt);
+//    free(cmd->outfile);
+    if (gd->rootDirFlagFree==TRUE)
+        free(cmd->rootDir);
+    if (gd->iCatalogsFlag==TRUE)
+        free(cmd->iCatalogs);
+    if (gd->infilefmtFlag==TRUE)
+        free(cmd->infilefmt);
+    if (gd->infileFlag==TRUE)
+        free(cmd->infile);
+    if (gd->rsmoothFlagFree==TRUE)
+        free(cmd->rsmooth);
+    if (gd->searchMethodFlag==TRUE)
+        free(cmd->searchMethod);
+        debug_tracking("006");
+    // last one must be paramfile, check!!
+
+    gd->cmd_allocated = FALSE;
+
+    return SUCCESS;
+}
+
 
 //B socket:
 #ifdef ADDONS

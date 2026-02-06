@@ -123,17 +123,11 @@
                    for productions computations.
 
 
-       <B>computeTPCF</B> [a: tpcf] if true, compute 3pcf. If using 'octree-ggg-omp'
-                   searching method, this option is activated at compile time
-                   using flags defined in 'addons/Makefile_addons_settings'.
-
-
        <B>usePeriodic</B> [a: periodic] if false, do not use periodic boundary
                    condition. Useful to compute 2-point correlations functions
                    of periodic boxes steaming from N-body simulations or to
-                   analyze halo catalogs from Rockstar for example. In such a
-                   case use in combinations with 'computeTPCF=false'. <B>cballs</B>
-                   is able to read Gadget format or multi-columns format files
+                   analyze halo catalogs from Rockstar for example. <B>cballs</B> is
+                   able to read Gadget format or multi-columns format files
                    like the ones given by Rockstar. See below.
 
 
@@ -326,26 +320,6 @@
                    [a: nthreads] To set the number of threads to use (OpenMP).
 
 
-       <B>scanLevel</B>   [a: scl] scan level to start the search (look at tdepth
-                   value, will be the maximum for this parameter).
-
-
-       <B>scanLevelRoot</B>
-                   [a: sclroot] scan level of root cells to start the search
-                   (look at tdepth value, will be the maximum for this
-                   parameter).
-
-
-       <B>scanLevelMin</B>
-                   [a: sclmin] scan level of size cells to stop the search.
-                   Integer negative values (look at tdepth value, will be
-                   tdepth-1+scanLevelMin+1).
-
-
-       <B>ntosave</B>     [a: ntsav] number of found bodies to save; use in
-                   combination with 'bodyfound', 'balls4' method.
-
-
        <B>columns</B>     [a: cols] columns to use as vector position and fields when
                    using multi-columns-ascii or fits formats of point catalog.
 
@@ -472,7 +446,7 @@
 
 </PRE>
 <H2>COPYRIGHT</H2><PRE>
-       Copyright (C) 2023--2025
+       Copyright (C) 2023--2026
        Mario A. Rodriguez-Meza
 
 UNIX                              April 2023                         <B><A HREF="cballs.html">cballs(1)</A></B>

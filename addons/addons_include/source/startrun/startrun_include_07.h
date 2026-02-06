@@ -4,13 +4,17 @@
 #ifndef _startrun_include_07_h
 #define _startrun_include_07_h
 
-#ifdef BALLS
-#include "startrun_balls_omp_03.h"
+#ifdef OCTREESMOOTHING
+#include "startrun_octree_smoothing_07.h"
 #endif
+
+debug_tracking("011");
 
 #ifdef IOLIB
 #include "startrun_iolib_03.h"
 #endif
+
+debug_tracking("012");
 
 
 /*

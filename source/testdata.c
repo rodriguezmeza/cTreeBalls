@@ -72,12 +72,11 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
             verb_print(cmd->verbose, 
                        "\nNull test model. Using default test model");
             verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
-//            testdata_sc_random(cmd, gd);
             if (cmd->usePeriodic==TRUE) {
                 verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                 testdata_sc_random(cmd, gd);
             } else {
-                if (cmd->computeTPCF==TRUE) {
+#ifdef TPCF
 #if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
                     testdata_unit_sphere_random(cmd, gd);
@@ -86,23 +85,22 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                                "\nUsing unit sphere random test model %s\n",
                                "is only valid in 3D...");
 #endif
-                } else {
+#else
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                     testdata_sc_random(cmd, gd);
-                }
+#endif
             }
             break;
         case UNKNOWN:
             verb_print(cmd->verbose,
                        "\nUnknown test model. Using default test model");
             verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
-//            testdata_sc_random(cmd, gd);
             verb_print(cmd->verbose, "\nDefault test model type %s", cmd->testmodel);
             if (cmd->usePeriodic==TRUE) {
                 verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                 testdata_sc_random(cmd, gd);
             } else {
-                if (cmd->computeTPCF==TRUE) {
+#ifdef TPCF
 #if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model");
                     verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
@@ -112,10 +110,10 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                                "\nUsing unit sphere random test model %s",
                                "is valid only in 3D");
 #endif
-                } else {
+#else
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                     testdata_sc_random(cmd, gd);
-                }
+#endif
             }
             break;
         default:
@@ -125,7 +123,7 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                 verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                 testdata_sc_random(cmd, gd);
             } else {
-                if (cmd->computeTPCF==TRUE) {
+#ifdef TPCF
 #if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
                     testdata_unit_sphere_random(cmd, gd);
@@ -134,10 +132,10 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
                                "\nUsing unit sphere random test model %s\n",
                                "is only valid in 3D");
 #endif
-                } else {
+#else
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
                     testdata_sc_random(cmd, gd);
-                }
+#endif
             }
     }
 
@@ -167,11 +165,8 @@ local int model_string_to_int(struct  cmdline_data* cmd,
         *model_int=UNKNOWN;
         gd->model_comment =
         "Unknown test model ... running deafult model";
-//        "Unknown test model ... running deafult (simple-cubic-random)";
         verb_log_print(cmd->verbose_log, gd->outlog,
             "\n\nmodel_string_to_int: Unknown test model... %s",cmd->testmodel);
-//        verb_log_print(cmd->verbose_log, gd->outlog,
-//            "\n\trunning default test model (simple-cubic-random)...\n");
         verb_log_print(cmd->verbose_log, gd->outlog,
             "\n\trunning default test model...\n");
     }
@@ -338,7 +333,6 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
     verb_print(cmd->verbose,
                "%d %g %g\n",
                cmd->sizeHistN, cmd->rangeN, cmd->rminHist);
-    //E
 
     int ifile=0;
     int nbody = cmd->nbody;
@@ -370,7 +364,6 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
             if (cmd->thetaL < theta && theta < cmd->thetaR) {
                 if (cmd->phiL < phi && phi < cmd->phiR) {
                     iselect++;
-//                    spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
                     coordinate_transformation(cmd, gd, theta, phi, Pos(p));
                     if (!scanopt(cmd->options, "kappa-constant")) {
                         // a takahasi simulation with nside1024 gives:
@@ -400,7 +393,6 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
         } else { // ! all
             //B
             iselect++;
-//            spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
             coordinate_transformation(cmd, gd, theta, phi, Pos(p));
             if (!scanopt(cmd->options, "kappa-constant")) {
                 // a takahasi simulation with nside1024 gives:
@@ -560,4 +552,3 @@ global int doBoxWrapping(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
-//E

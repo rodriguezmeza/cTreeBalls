@@ -4,8 +4,12 @@
 #ifndef _globaldefs_include_01_h
 #define _globaldefs_include_01_h
 
-#ifdef BALLS
-#include "globaldefs_balls_omp_01.h"
+//#ifdef BALLS
+//#include "globaldefs_balls_omp_01.h"
+//#endif
+
+#ifdef OCTREESMOOTHING
+#include "cmdline_data_octree_smoothing_01.h"
 #endif
 
 #ifdef IOLIB

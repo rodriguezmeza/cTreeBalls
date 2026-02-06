@@ -72,14 +72,14 @@ or its short version::
 Python
 ------
 
-To install cBalls python module (cballys) go to directory 'python' and execute::
+cBalls python module (cballys) will be installed if you use::
+
+    make clean; make all
+
+Note: if problems, you can go to python directory and execute::
 
     python setup.py build
     python setup.py install --user
-
-Note: make sure you create cBalls library: in directory cTreeBalls execute::
-
-    make clean; make all
 
 To test it go to directory tests and 'run'::
 
@@ -117,4 +117,14 @@ cBalls use/is based on the following codes or projects:
 * `GSL <https://www.gnu.org/software/gsl/>`_
 * `CLASS <https://github.com/lesgourg/class_public>`_
 * `CFITSIO <https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html>`_
+* `HEALPix <https://healpix.sourceforge.io>`_
 
+Also author acknowledges for helpful discussion and testing to the following people:
+
+* Abraham Arvizu
+* Alejandro Aviles
+* Juan Carlos Hidalgo
+* Eladio Moreno
+* Gustavo Niz
+* Axel Romero Tisnado
+* Sofia Samario

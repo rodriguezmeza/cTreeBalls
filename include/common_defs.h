@@ -23,12 +23,33 @@
 
 #define MAXITEMS                100
 #define MAXLENGTHOFFILES        1024
-#define MAXNSLASHS              5
+#define MAXLENGTHOFINDIVIDUALFILES        128
+#define BUFFERSIZE              2256
+#define MAXLENGTHOFFMTFILES     32
+#define MAXLENGTHOFREAL         32
+#define MAXNSLASHS              20
 
 #define VERBOSENOINFO           0
 #define VERBOSEMININFO          1
 #define VERBOSENORMALINFO       2
 #define VERBOSEDEBUGINFO        3
+
+// Debug tracking
+#ifdef DEBUGTRACKING
+#define debug_tracking(track_step)                              \
+  verb_print_debug(1, "Track step (%s)\n", track_step);
+#define debug_tracking_s(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %s\n", track_step, extra);
+#define debug_tracking_r(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
+#define debug_tracking_i(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
+#else // ! dummy...
+#define debug_tracking
+#define debug_tracking_s
+#define debug_tracking_r
+#define debug_tracking_i
+#endif
 
 #endif // ! _common_defs_h
 

@@ -16,7 +16,7 @@
                 PrintHistrBins(cmd, gd);
             PrintHistXi2pcf(cmd, gd);
 
-            if (cmd->computeTPCF) {
+#ifdef TPCF
                 PrintHistZetaM_sincos(cmd, gd);
                 if (scanopt(cmd->options, "out-m-HistZeta")) {
                     PrintHistZetaMm_sincos(cmd, gd);
@@ -24,7 +24,7 @@
                 if (scanopt(cmd->options, "out-HistZetaG")) {
                     PrintHistZetaMZetaGm_sincos(cmd, gd);
                 }
-            }
+#endif
             break;
 
 #endif	// ! _cballs_print_kdtree_omp_h

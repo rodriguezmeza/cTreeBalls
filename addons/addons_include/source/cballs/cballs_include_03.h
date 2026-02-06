@@ -8,6 +8,10 @@
 #include "cballs_print_octree_sincos_omp.h"
 #endif
 
+#ifdef TREEOMPSINCOS
+#include "cballs_print_tree_omp_sincos.h"
+#endif
+
 #ifdef BALLS
 #include "cballs_print_balls_omp.h"
 #endif

@@ -135,14 +135,14 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 
     search_init_gd_hist_sincos(cmd, gd);
 
+#ifdef SMOOTHPIVOT
     INTEGER ipfalse;
     ipfalse=0;
-//B kappa Avg Rmin
     INTEGER icountNbRmin;
     icountNbRmin=0;
     INTEGER icountNbRminOverlap;
     icountNbRminOverlap=0;
-//E
+#endif
 
     verb_print(cmd->verbose,
                "\nsearchcalc_balls: Total allocated %g MByte storage so far.\n",
@@ -153,7 +153,10 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         Update(p) = TRUE;
 //B Building kd-tree
     cpu_build_kdtree = CPUTIME;
-    nbucket = gd->nsmooth[0];
+    //B version 1.0.1
+//    nbucket = gd->nsmooth[0];
+    nbucket = cmd->nsmooth;
+    //E
     verb_print(cmd->verbose, "\nkdtree build: nbucket = %d\n",nbucket);
     kd = init_kdtree(cmd, gd, btab[cat2], nbody[cat2]);
     build_kdtree(cmd, gd, kd, nbucket);
@@ -162,9 +165,15 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 //E
     gd->ncellTable[cat1] = kd->nnode;               // Equivalent of octree cells
 
+#ifdef SMOOTHPIVOT
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
     rootnode, cat1, cat2, kd, ipfalse, icountNbRmin, icountNbRminOverlap)
+#else
+#pragma omp parallel default(none)   \
+    shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
+    rootnode, cat1, cat2, kd)
+#endif
     {
         bodyptr p;
         int n;
@@ -177,12 +186,12 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         INTEGER ipfalsethreads;
         ipfalsethreads = 0;
 
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         INTEGER icountNbRminthread;
         icountNbRminthread=0;
         INTEGER icountNbRminOverlapthread;
         icountNbRminOverlapthread=0;
-//E
+#endif
         ballnode *ntab = kd->ntab;
         bodyptr *bptr = kd->bptr;
         INTEGER cp;
@@ -190,26 +199,24 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #pragma omp for nowait schedule(dynamic)
     DO_BODY(p, btab[cat1]+ipmin-1, btab[cat1]+ipmax[cat1]) {
 // p and q are in differents node structures... cat1!=cat2...
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         NbRmin(p) = 1;
         NbRminOverlap(p) = 0;
         KappaRmin(p) = Kappa(p);
-        if (scanopt(cmd->options, "smooth-pivot")) {
             if (Update(p) == FALSE) {
                 ipfalsethreads++;
                 continue;
             }
-        }
-//E
+#endif
         for (n = 1; n <= cmd->sizeHistN; n++) {
             hist.histNNSubthread[n] = 0.0;          // Affects only 3pcf
             hist.histXi2pcfthreadsub[n] = 0.0;      // Affects only 2pcf
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
             hist.histNNSubXi2pcfthreadp[n] = 0.;    // Affects only 2pcf
-//E
+#endif
         }
-        if (cmd->computeTPCF) {
-            CLRM_ext_ext(hist.histXithreadcos, cmd->mChebyshev+1, 
+#ifdef TPCF
+            CLRM_ext_ext(hist.histXithreadcos, cmd->mChebyshev+1,
                          cmd->sizeHistN);
             CLRM_ext_ext(hist.histXithreadsin, cmd->mChebyshev+1, 
                          cmd->sizeHistN);
@@ -231,7 +238,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #endif
             //E
 #endif // ! NDIM
-        } // ! computeTPCF
+#endif
 
         real dr1;
         vector dr;
@@ -275,26 +282,25 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         } while (cp != KDROOT);
         //E Walking the kdtree
 
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         for (n = 1; n <= cmd->sizeHistN; n++) {
             hist.histNNSubXi2pcfthreadp[n] =
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
             hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
-            if (scanopt(cmd->options, "smooth-pivot"))
                 hist.histNNSubthread[n] =
                     ((real)NbRmin(p))*hist.histNNSubthread[n];
         }
-//E
+#endif
 
 //B Normalization of histograms
         computeBodyProperties_sincos(cmd, gd, p, nbody[cat1], &hist);
 //E
 
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         icountNbRminthread += NbRmin(p);
         icountNbRminOverlapthread += NbRminOverlap(p);
-//E
+#endif
         INTEGER ip;
         ip = p - btab[cat1] + 1;
         if (ip%cmd->stepState == 0) {
@@ -309,12 +315,12 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
                 gd->histNN[n] += hist.histNthread[n];
                 gd->histNNSub[n] += hist.histNNSubthread[n];
                 gd->histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 gd->histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
-//E
+#endif
                 gd->histXi2pcf[n] += hist.histXi2pcfthread[n];
             }
-            if (cmd->computeTPCF) {
+#ifdef TPCF
                 int m;
                 for (m=1; m<=cmd->mChebyshev+1; m++) {
                     ADDM_ext(gd->histZetaMcos[m],gd->histZetaMcos[m],
@@ -327,27 +333,25 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
                     ADDM_ext(gd->histZetaMcossin[m],gd->histZetaMcossin[m],
                              hist.histZetaMthreadcossin[m],cmd->sizeHistN);
                 }
-            }
+#endif
             gd->nbbcalc += nbbcalcthread;
             gd->nbccalc += nbccalcthread;
         }
 
         search_free_sincos_omp(cmd, gd, &hist);
 
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         ipfalse += ipfalsethreads;
         icountNbRmin += icountNbRminthread;
         icountNbRminOverlap += icountNbRminOverlapthread;
-//E
+#endif
     } // end pragma omp parallel
 
+#ifdef SMOOTHPIVOT
     real xi, den, num;
     int mm;
-    if (scanopt(cmd->options, "smooth-pivot")) {
         num = (real)nbody[cat1];
-//B kappa Avg Rmin
         den = (real)(nbody[cat1]-ipfalse);
-//E
 #ifdef NOSTANDARNORMHIST
         xi = 1.0;
 #else
@@ -356,7 +360,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "kdtree-omp: p falses found = %ld and %e %e %e\n",
                    ipfalse, num, den, xi);
-        if (cmd->computeTPCF) {
+#ifdef TPCF
             for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
                 MULMS_ext(gd->histZetaMcos[mm], gd->histZetaMcos[mm],
                           xi,cmd->sizeHistN);
@@ -368,50 +372,59 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
                 MULMS_ext(gd->histZetaMcossin[mm], gd->histZetaMcossin[mm],
                           xi,cmd->sizeHistN);
             }
-        }
-    } // ! smooth-pivot
+#endif
+#endif
 
     //B Normalization of histograms
         if (!scanopt(cmd->options, "asymmetric")) {
             for (n = 1; n <= cmd->sizeHistN; n++) {
+#ifdef SMOOTHPIVOT
                 if (cmd->verbose>3)
                     printf("%d %e %e\n", n,
                        gd->histNNSubXi2pcf[n], gd->histNNSubXi2pcftotal[n]);
+#else
+                if (cmd->verbose>3)
+                    printf("%d %e\n", n,
+                       gd->histNNSubXi2pcf[n]);
+#endif
                 gd->histXi2pcf[n] /= 2.0;
                 gd->histNNSubXi2pcf[n] /= 2.0;
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 gd->histNNSubXi2pcftotal[n] /= 2.0;
-                if (scanopt(cmd->options, "smooth-pivot")) {
                     gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcftotal[n],1.0);
-                } else {
+#else
                     gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcf[n],1.0);
-                }
+#endif
     //E
             }
         } else {
             for (n = 1; n <= cmd->sizeHistN; n++) {
+#ifdef SMOOTHPIVOT
                 if (cmd->verbose>3)
                 printf("%d %e %e\n", n,
                        gd->histNNSubXi2pcf[n], gd->histNNSubXi2pcftotal[n]);
-                if (scanopt(cmd->options, "smooth-pivot")) {
+#else
+                if (cmd->verbose>3)
+                printf("%d %e\n", n,
+                       gd->histNNSubXi2pcf[n]);
+#endif
+#ifdef SMOOTHPIVOT
                     gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcftotal[n],1.0);
-                } else {
+#else
                     gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcf[n],1.0);
-                }
+#endif
             }
         }
-    //E
-//E
 
     if (scanopt(cmd->options, "compute-HistN")) {
-        if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
             search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse);
-        } else {
+#else
             search_compute_HistN(cmd, gd, nbody[cat1]);
-        }
+#endif
     }
 
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         verb_print(cmd->verbose, "kdtree-omp: p falses found = %ld\n",ipfalse);
         //B kappa Avg Rmin
         verb_print(cmd->verbose,
@@ -435,7 +448,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         verb_print(cmd->verbose, "kdtree-omp: p true found = %ld\n",itruecount);
         verb_print(cmd->verbose, "kdtree-omp: total = %ld\n",itruecount+ifalsecount);
         //E
-    }
+#endif
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print(cmd->verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);
@@ -463,15 +476,11 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
     INTEGER pj;
 
-//#ifdef OPENMPCODE
-//  #pragma omp parallel for
-//#endif
     for (pj = ntab.first; pj <= ntab.last; ++pj) {
         q = bptr[pj];
         if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-            if (scanopt(cmd->options, "smooth-pivot"))
+#ifdef SMOOTHPIVOT
                 if (dr1<=gd->rsmooth[0]) {
-//B kappa Avg Rmin
                     if (Update(q)==TRUE) {
                         Update(q) = FALSE;
                         NbRmin(p) += 1;
@@ -480,7 +489,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         NbRminOverlap(p) += 1;
                     }
                 }
-//E
+#endif
             if (cmd->useLogHist) {
                 if(dr1>cmd->rminHist) {
                     if (cmd->rminHist==0)
@@ -492,13 +501,13 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         hist->histNthread[n] = hist->histNthread[n] + 1.;
                         hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] + 1.;
-                        //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                         hist->histNNSubXi2pcfthreadp[n] =
                         hist->histNNSubXi2pcfthreadp[n] + 1.;
-                        //E
+#endif
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
                         xi = Kappa(q);
-                        if (cmd->computeTPCF) {
+#ifdef TPCF
                         REAL cosphi,sinphi;
 #if NDIM == 3
                         REAL s, sy;
@@ -534,7 +543,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                                            cosphi);
 #endif
                         CHEBYSHEVTUOMPSINCOS;
-                        }
+#endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
                     }
@@ -548,7 +557,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         hist->histNNSubXi2pcfthread[n] + 1.;
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
                         xi = Kappa(q);
-                        if (cmd->computeTPCF) {
+#ifdef TPCF
                             real cosphi,sinphi;
 #if NDIM == 3
                             real s, sy;
@@ -568,7 +577,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                                cosphi);
                             CHEBYSHEVTUOMPSINCOS;
-                        }
+#endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
                     }
@@ -585,7 +594,6 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                                gdhistptr_sincos_omp hist)
 {
-//    bodyptr q;
 #ifdef SINGLEP
     float dr1;
     float dr[NDIM];
@@ -600,110 +608,105 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 
     int npoints;
     npoints = ntab.last - ntab.first + 1;
-//#ifdef OPENMPCODE
-//  #pragma omp parallel for
-//#endif
-        DOTPSUBV(drpq2, dr, Pos(p), ntab.cmpos);
-        dr1 = rsqrt(drpq2);
-        if (dr1 < cmd->rangeN) {
-            if (cmd->useLogHist) {
-                if(dr1>cmd->rminHist) {
-                    if (cmd->rminHist==0)
-                        n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
-                            - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
-                    else
-                        n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
-                    if (n<=cmd->sizeHistN && n>=1) {
-                        hist->histNthread[n] = hist->histNthread[n] +  npoints;
-                        hist->histNNSubXi2pcfthread[n] =
-                        hist->histNNSubXi2pcfthread[n] + 1.0;
-                        hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+    DOTPSUBV(drpq2, dr, Pos(p), ntab.cmpos);
+    dr1 = rsqrt(drpq2);
+    if (dr1 < cmd->rangeN) {
+        if (cmd->useLogHist) {
+            if(dr1>cmd->rminHist) {
+                if (cmd->rminHist==0)
+                    n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
+                        - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
+                else
+                    n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
+                if (n<=cmd->sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] +  npoints;
+                    hist->histNNSubXi2pcfthread[n] =
+                    hist->histNNSubXi2pcfthread[n] + 1.0;
+                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
                         
 #ifdef KappaAvgON
-                        xi = ntab.kappa;
+                    xi = ntab.kappa;
 #else
-                        xi = ntab.kappa;
+                    xi = ntab.kappa;
 #endif
 
-                        if (cmd->computeTPCF) {
-                        REAL cosphi,sinphi;
+#ifdef TPCF
+                    REAL cosphi,sinphi;
 #if NDIM == 3
-                        REAL s, sy;
+                    REAL s, sy;
 #ifdef SINGLEP
-                        float pr0[NDIM];
+                    float pr0[NDIM];
 #else
-                        vector pr0;
+                    vector pr0;
 #endif
-                        DOTVP(s, dr, hist->dr0);
-                        cosphi = s/(dr1*hist->drpq);
-                        CROSSVP(pr0,hist->dr0,Pos(p));
-                        DOTVP(sy, dr, pr0);
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = s/(dr1*hist->drpq);
+                    CROSSVP(pr0,hist->dr0,Pos(p));
+                    DOTVP(sy, dr, pr0);
 #ifdef SINGLEP
-                        if (rabs(cosphi)>1.0)
-                            sinphi = 0.0;
-                        else
-                            sinphi = sqrt(1.0 - cosphi*cosphi);
+                    if (rabs(cosphi)>1.0)
+                        sinphi = 0.0;
+                    else
+                        sinphi = sqrt(1.0 - cosphi*cosphi);
 #else
-                        sinphi = rsqrt(1.0 - rsqr(cosphi));;
+                    sinphi = rsqrt(1.0 - rsqr(cosphi));;
 #endif
-                        if (sy < 0) sinphi *= -1.0;
+                    if (sy < 0) sinphi *= -1.0;
 #else // ! NDIM
-                        cosphi = -dr[0]/dr1;
-                        sinphi = -dr[1]/dr1;
+                    cosphi = -dr[0]/dr1;
+                    sinphi = -dr[1]/dr1;
 #endif // ! NDIM
 #ifdef SINGLEP
-                        if (cosphi>1.0) cosphi = 1.0;
-                        if (cosphi<-1.0) cosphi = -1.0;
+                    if (cosphi>1.0) cosphi = 1.0;
+                    if (cosphi<-1.0) cosphi = -1.0;
 #else
-                        if (rabs(cosphi)>1.0)
-                            verb_log_print(cmd->verbose, gd->outlog,
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd->verbose, gd->outlog,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
+                                        cosphi);
 #endif
-                        CHEBYSHEVTUOMPSINCOS;
-                        } // ! computeTPCF
-                        hist->histXi2pcfthreadsub[n] += xi;
-                        *nbccalcthread += 1;
-                    } // ! n in (1,sizeHistN)
-                } // dr1 > rminHist
-            } else {  // ! useLogHist
-                if(dr1>cmd->rminHist) {
-                    n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
-                    if (n<=cmd->sizeHistN && n>=1) {
-                        hist->histNthread[n] = hist->histNthread[n] +  npoints;
-                        hist->histNNSubXi2pcfthread[n] =
-                        hist->histNNSubXi2pcfthread[n] + 1.0;
-                        hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
-                        xi = ntab.kappa;
-                        if (cmd->computeTPCF) {
-                        real cosphi, sinphi;
+                    CHEBYSHEVTUOMPSINCOS;
+#endif
+                    hist->histXi2pcfthreadsub[n] += xi;
+                    *nbccalcthread += 1;
+                } // ! n in (1,sizeHistN)
+            } // dr1 > rminHist
+        } else {  // ! useLogHist
+            if(dr1>cmd->rminHist) {
+                n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
+                if (n<=cmd->sizeHistN && n>=1) {
+                    hist->histNthread[n] = hist->histNthread[n] +  npoints;
+                    hist->histNNSubXi2pcfthread[n] =
+                    hist->histNNSubXi2pcfthread[n] + 1.0;
+                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+                    xi = ntab.kappa;
+#ifdef TPCF
+                    real cosphi, sinphi;
 #if NDIM == 3
-                        real s, sy;
-                        vector pr0;
-                        DOTVP(s, dr, hist->dr0);
-                        cosphi = s/(dr1*hist->drpq);
-                        CROSSVP(pr0,hist->dr0,Pos(p));
-                        DOTVP(sy, dr, pr0);
-                        sinphi = rsqrt(1.0 - rsqr(cosphi));;
-                        if (sy < 0) sinphi *= -1.0;
+                    real s, sy;
+                    vector pr0;
+                    DOTVP(s, dr, hist->dr0);
+                    cosphi = s/(dr1*hist->drpq);
+                    CROSSVP(pr0,hist->dr0,Pos(p));
+                    DOTVP(sy, dr, pr0);
+                    sinphi = rsqrt(1.0 - rsqr(cosphi));;
+                    if (sy < 0) sinphi *= -1.0;
 #else // ! NDIM
-                        cosphi = -dr[0]/dr1;
-                        sinphi = -dr[1]/dr1;
+                    cosphi = -dr[0]/dr1;
+                    sinphi = -dr[1]/dr1;
 #endif // ! NDIM
-                        if (rabs(cosphi)>1.0)
-                            verb_log_print(cmd->verbose, gd->outlog,
+                    if (rabs(cosphi)>1.0)
+                        verb_log_print(cmd->verbose, gd->outlog,
                         "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
                                            cosphi);
-                        CHEBYSHEVTUOMPSINCOS;
-                        } // computeTPCF
-                        hist->histXi2pcfthreadsub[n] += xi;
-                        *nbccalcthread += 1;
-                    } // ! n in (1, sizeHistN)
-                } // ! dr1 > rminHist
-            } // ! useLogHist
-        } // ! dr1 < rangeN
-//        } // ! accept_body
-//    } // ! loop pj
+                    CHEBYSHEVTUOMPSINCOS;
+#endif
+                    hist->histXi2pcfthreadsub[n] += xi;
+                    *nbccalcthread += 1;
+                } // ! n in (1, sizeHistN)
+            } // ! dr1 > rminHist
+        } // ! useLogHist
+    } // ! dr1 < rangeN
 }
 
 
@@ -717,11 +720,13 @@ local int print_info(struct cmdline_data* cmd,
         if (!cmd->useLogHist)
             error("behavior-ball and useLogHist=false are incompatible!");
     }
-    if (scanopt(cmd->options, "smooth-pivot"))
+#ifdef SMOOTHPIVOT
         verb_print(cmd->verbose,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
-    if (!cmd->computeTPCF)
+#endif
+#ifndef TPCF
         verb_print(cmd->verbose, "computing only 2pcf... \n");
+#endif
 #ifdef NOSTANDARNORMHIST
     verb_print(cmd->verbose, "warning!! histograms will not be normalized... \n");
 #endif

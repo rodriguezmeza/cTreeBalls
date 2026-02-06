@@ -50,14 +50,44 @@
  scanLevel=6                     Scan level to start the search (look at tdepth value, will be the maximum for this parameter) [a: scl]
  scanLevelRoot=0                 Scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter) [a: sclroot]
  scanLevelMin=-0                 Scan level of size cells to stop the search. Integer negative values (look at tdepth value, will be tdepth-1+scanLevelMin+1) [a: sclmin]
+// does not used... it was remove from all instances...
  ntosave=1000                    Number of found bodies to save; use in combination with 'bodyfound', balls4' method [a: ntsav]
+//
  columns=1,2,3,4                 Columns to use as vector position and fields when using multi-columns-ascii or fits formats of point catalog [a: cols]
- Version=1.0.0                   Mario A. Rodríguez-Meza (2023-2025)
+ Version=1.0.1                   Mario A. Rodríguez-Meza (2023-2025)
 
  */
+
+
+int get_nthreads(struct  cmdline_data* cmd, int *value)
+{
+    *value = cmd->numthreads;
+    return SUCCESS;
+}
+
+//B version 1.0.1
+int get_nmonopoles(struct  cmdline_data* cmd, int *value)
+{
+    *value = cmd->mChebyshev;
+    return SUCCESS;
+}
+//E
+
 int get_theta(struct  cmdline_data* cmd, real *theta)
 {
     *theta = cmd->theta;
+    return SUCCESS;
+}
+
+int get_rsmooth(struct  global_data* gd, real *value)
+{
+    *value = gd->rsmooth[0];
+    return SUCCESS;
+}
+
+int get_cputime(struct  global_data* gd, real *cputime)
+{
+    *cputime = gd->cpusearch;
     return SUCCESS;
 }
 
@@ -71,7 +101,7 @@ int get_sizeHistN(struct  cmdline_data* cmd, int *sizeHistN)
 //  see also setup.py
 int get_version(struct  cmdline_data* cmd, char *param)
 {
-    sprintf(param,"%s","1.0.0");
+    sprintf(param,"%s","1.0.1");
     return SUCCESS;
 }
 //E parameters section
@@ -195,87 +225,6 @@ int get_HistZetaMsincos(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-
-int get_HistZetaM_sincos(struct  cmdline_data* cmd,
-                                struct  global_data* gd,
-                                int m, int type, ErrorMsg errmsg)
-{
-    int n1, n2;
-    int n;
-
-    class_test((m <= 0 || m > cmd->mChebyshev + 1),
-               errmsg,
-               "\nget_HistZetaM_sincos: not allowed value of m = %d\n",
-               m);
-
-    switch(type) {
-        case _COS_:
-            n = 1;
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->histZetaMFlatten[n++] = gd->histZetaMcos[m][n1][n2];
-                }
-            }
-            if (cmd->verbose>=3)
-                verb_print(cmd->verbose,
-                        "\nget_HistZetaM_sincos: n = %d vs sqr(sizeHistN) = %d\n",
-                           n,cmd->sizeHistN);
-            break;
-        case _SIN_:
-            n = 1;
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->histZetaMFlatten[n++] = gd->histZetaMsin[m][n1][n2];
-                }
-            }
-            if (cmd->verbose>=3)
-                verb_print(cmd->verbose,
-                        "\nget_HistZetaM_sincos: n = %d vs sqr(sizeHistN) = %d\n",
-                           n,cmd->sizeHistN);
-            break;
-        case _SINCOS_:
-            n = 1;
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->histZetaMFlatten[n++] = gd->histZetaMsincos[m][n1][n2];
-                }
-            }
-            if (cmd->verbose>=3)
-                verb_print(cmd->verbose,
-                        "\nget_HistZetaM_sincos: n = %d vs sqr(sizeHistN) = %d\n",
-                           n,cmd->sizeHistN);
-            break;
-        case _COSSIN_:
-            n = 1;
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->histZetaMFlatten[n++] = gd->histZetaMcossin[m][n1][n2];
-                }
-            }
-            if (cmd->verbose>=3)
-                verb_print(cmd->verbose,
-                        "\nget_HistZetaM_sincos: n = %d vs sqr(sizeHistN) = %d\n",
-                           n,cmd->sizeHistN);
-            break;
-        default:
-            if (cmd->verbose>=3)
-                verb_print(cmd->verbose,
-                           "\nget_HistZetaM_sincos: default type...\n");
-            n = 1;
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->histZetaMFlatten[n++] = gd->histZetaMcos[m][n1][n2];
-                }
-            }
-            if (cmd->verbose>=3)
-                verb_print(cmd->verbose,
-                        "\nget_HistZetaM_sincos: n = %d vs sqr(sizeHistN) = %d\n",
-                           n,cmd->sizeHistN);
-            break;
-    }
-
-    return SUCCESS;
-}
 #undef _COS_
 #undef _SIN_
 #undef _SINCOS_

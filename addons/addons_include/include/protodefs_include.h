@@ -91,6 +91,10 @@
 #include "protodefs_octree_sincos_omp.h"
 #endif
 
+#ifdef TREEOMPSINCOS
+#include "protodefs_tree_omp_sincos.h"
+#endif
+
 #ifdef BALLS
 #include "protodefs_balls_omp.h"
 #endif

@@ -36,34 +36,15 @@ OBJS = main.o cballsio.o cballs.o startrun.o testdata.o treeload.o \
 	cballsutils.o search.o
 
 PYTHON_FILES = python/cballys.pyx python/setup.py python/ccballys.pxd
-#python/test_class.py
 
-#all: $(EXEC) lib$(EXEC).a
 all: $(EXEC) lib$(EXEC).a cballys
-# With cpython:
-#all: $(EXEC) lib$(EXEC).a $(EXEC)y
 
 lib$(EXEC).a: $(OBJS) $(EXTERNAL)
 	$(AR)  $@ $(addprefix build/, $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
 
-#B To work with cpp files...
-ifeq ($(NR3ON),1)
-include $(MACHINES_DIR)addons/nr3/Makefile_nr3
-endif
-#E
-
 $(EXEC): $(OBJS) $(EXTERNAL) $(MAIN)
 	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) -o $(EXEC) $(addprefix build/,$(notdir $^)) $(MLIBS) $(FITSIOLIBS)
 
-
-#$(EXEC)y: lib$(EXEC).a python/$(EXEC)y.pyx python/c$(EXEC)y.pxd
-#ifdef OMPFLAG
-#	cp python/setup.py python/autosetup.py
-#else
-#	grep -v "lgomp lgsl lgslcblas" python/setup.py > python/autosetup.py
-#endif
-#	cd python; export CC=$(CC); $(PYTHON) autosetup.py install || $(PYTHON) autosetup.py install --user
-#	rm python/autosetup.py
 
 cballys: libcballs.a python/cballys.pyx python/ccballys.pxd
 	export CC=$(CC); output=$$($(PYTHON) -m pip install . 2>&1); \
@@ -83,5 +64,3 @@ clean: .base
 	rm -f $(MDIR)/python/cballys.c
 	rm -rf $(MDIR)/python/build
 
-#	rm -f $(MDIR)/python/$(EXEC)y.c
-#	rm -rf $(MDIR)/python/build

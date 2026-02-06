@@ -215,17 +215,23 @@ int input_find_file(struct  cmdline_data* cmd, struct  global_data* gd,
                      struct file_content* pfc_setroot,
                      ErrorMsg errmsg);
 
-  int input_read_from_file(struct cmdline_data *cmd, struct file_content * pfc,
+int input_read_from_file(struct cmdline_data *cmd, struct  global_data* gd,
+                         struct file_content * pfc,
                            ErrorMsg errmsg);
 
 
-  int input_read_parameters(struct cmdline_data *cmd, struct file_content * pfc,
+  int input_read_parameters(struct cmdline_data *cmd,
+                            struct  global_data* gd,
+                            struct file_content * pfc,
                             ErrorMsg errmsg);
 
-    int input_read_parameters_general_free(struct file_content * pfc,
+int input_read_parameters_general_free(struct file_content * pfc,
+                                       
                                            ErrorMsg errmsg);
 
-  int input_read_parameters_general(struct cmdline_data *cmd, struct file_content * pfc,
+int input_read_parameters_general(struct cmdline_data *cmd,
+                                  struct  global_data* gd,
+                                    struct file_content * pfc,
                                     ErrorMsg errmsg);
 
   int input_default_params(struct cmdline_data *);

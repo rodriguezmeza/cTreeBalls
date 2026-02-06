@@ -51,10 +51,10 @@ typedef struct {
     realptr histNNSubthread;
 // 2pcf
     realptr histNNSubXi2pcfthread;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcfthreadp;
     realptr histNNSubXi2pcfthreadtotal;
-//E
+#endif
 //
     real **histXithreadcos;
     real **histXithreadsin;
@@ -94,10 +94,10 @@ typedef struct {
     realptr histNNSubthread;
 // 2pcf
     realptr histNNSubXi2pcfthread;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcfthreadp;
     realptr histNNSubXi2pcfthreadtotal;
-//E
+#endif
 //
 
     real **histXithreadcos;

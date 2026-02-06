@@ -12,6 +12,10 @@
 #include "globaldefs_balls_omp_04.h"
 #endif
 
+#ifdef OCTREESMOOTHING
+#include "globaldefs_octree_smoothing_04.h"
+#endif
+
 /*
  Add your addon item here
  */

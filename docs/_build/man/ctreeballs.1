@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "CTREEBALLS" "1" "May 27, 2025" "" "cTreeBalls"
+.TH "CTREEBALLS" "1" "Jan 12, 2026" "" "cTreeBalls"
 .SH NAME
 ctreeballs \- cTreeBalls 1.0.0
 .SH OVERVIEW
@@ -46,7 +46,7 @@ Download the code by cloning it from \X'tty: link https://github.com/rodriguezme
 .sp
 Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Go to its web page \X'tty: link https://www.gnu.org/software/gsl/'\fI\%GSL\fP\X'tty: link' for details or ask to your system administrator. Make necessary changes in \fBMakefile_machine\fP file and look up for \fBGSL\fP\&. Can be switched off: USEGSL = 0 in \fBMakefile_settings\fP\&. I/O cfitsio library is set it OFF. Can be set it ON in \fBaddons/Makefile_settings\fP\&.
 .sp
-Go to the \fBcTreeBalls\fP directory (\fBcd cTreeBalls\fP) and compile (\fBmake clean; make\fP). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: \fB\-O4 \-ffast\-math\fP) and of the OpenMP flag (default: \-fopenmp; this flag is facultative, you are free to compile without OpenMP if you don\(aqt want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with \fB\-fopenmp\fP). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
+Go to the \fBcTreeBalls\fP directory (\fBcd cTreeBalls\fP) and compile (\fBmake clean; make\fP). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: \fB\-O4 \-ffast\-math\fP) and of the OpenMP flag (default: \-fopenmp; this flag is facultative, you are free to compile without OpenMP if you don’t want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with \fB\-fopenmp\fP). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
 .sp
 To check that the code runs, type:
 .INDENT 0.0
@@ -127,7 +127,17 @@ or its short version:
 .UNINDENT
 .SS Python
 .sp
-To install cBalls python module (cballys) go to directory \(aqpython\(aq and execute:
+cBalls python module (cballys) will be installed if you use:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+make clean; make all
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Note: if problems, you can go to python directory and execute:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -138,17 +148,7 @@ python setup.py install \-\-user
 .UNINDENT
 .UNINDENT
 .sp
-Note: make sure you create cBalls library: in directory cTreeBalls execute:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.EX
-make clean; make all
-.EE
-.UNINDENT
-.UNINDENT
-.sp
-To test it go to directory tests and \(aqrun\(aq:
+To test it go to directory tests and ‘run’:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -189,6 +189,26 @@ cBalls use/is based on the following codes or projects:
 \X'tty: link https://github.com/lesgourg/class_public'\fI\%CLASS\fP\X'tty: link'
 .IP \(bu 2
 \X'tty: link https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html'\fI\%CFITSIO\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://healpix.sourceforge.io'\fI\%HEALPix\fP\X'tty: link'
+.UNINDENT
+.sp
+Also author acknowledges for helpful discussion and testing to the following people:
+.INDENT 0.0
+.IP \(bu 2
+Abraham Arvizu
+.IP \(bu 2
+Alejandro Aviles
+.IP \(bu 2
+Juan Carlos Hidalgo
+.IP \(bu 2
+Eladio Moreno
+.IP \(bu 2
+Gustavo Niz
+.IP \(bu 2
+Axel Romero Tisnado
+.IP \(bu 2
+Sofia Samario
 .UNINDENT
 .SH INSTALLATION
 .sp
@@ -205,19 +225,19 @@ what the searching process do:
 .TP
 .B searchMethod
 (str or list) [alias: search]
-The searching method to use. Default is \fBtree\-omp\-sincos\fP\&. Fastest method so far is \fBballs\-omp\fP\&.
+The searching method to use. Default is \fBtree\-omp\-sincos\fP\&. Fastest method so far is \fBoctree\-ggg\-omp\fP\&.
 .sp
 Use it as:
 .INDENT 7.0
 .INDENT 3.5
 .sp
 .EX
-searchMethod = balls\-omp
+searchMethod = octree\-ggg\-omp
 .EE
 .UNINDENT
 .UNINDENT
 .sp
-In command line version do not use spaces before and after \fB=\fP or it won\(aqt be parsed correctly. In a parameter file you have more liberty.
+In command line version do not use spaces before and after \fB=\fP or it won’t be parsed correctly. In a parameter file you have more liberty.
 .TP
 .B mChebyshev
 (positive int) [alias: mcheb]
@@ -239,7 +259,7 @@ Default value is \fB7\fP\&. As multipoles comes from a harmonic expansion, we ma
 .INDENT 0.0
 .TP
 .B infile
-(str, default=\(dq\(dq) [alias: in] File names with points to analyse.
+(str, default=””) [alias: in] File names with points to analyse.
 .TP
 .B infileformat
 (str, default=columns\-ascii) [alias: infmt] Data input files format (columns\-ascii, binary or takahasi)
@@ -293,7 +313,7 @@ The input columns for \fBcolumns\-ascii\fP format:
 .INDENT 0.0
 .TP
 .B script
-(str, default=\(dq\(dq) Scripts in shell or python that can be run in pre\-processing or post\-processing.
+(str, default=””) Scripts in shell or python that can be run in pre\-processing or post\-processing.
 .TP
 .B stepState
 (int, default=10000) number of steps to save a state\-run info (pivot number completed in the log file).
@@ -326,7 +346,7 @@ Amount of message information is controlled by the int given.
 It is needed to switch on OpenMP: \fBOPENMPMACHINE = 1\fP in \fBMakefile_settings\fP and recompile cBalls again.
 .TP
 .B options
-(str, default=\(dq\(dq) [alias: opt] You may give here various code behavior options.
+(str, default=””) [alias: opt] You may give here various code behavior options.
 .sp
 Use it as:
 .INDENT 7.0
@@ -376,8 +396,8 @@ The file(s) with the data to be correlated.
 .B binary
 The file with data to be correlated in binary format.
 .TP
-.B takahasi
-The file with data to be correlated using Takahasi simulations format (Healpix).
+.B takahashi
+The file with data to be correlated using Takahashi etal simulations format (can be transformed to Healpix format).
 .UNINDENT
 .SS Miscellaneous formats
 .INDENT 0.0
@@ -387,6 +407,9 @@ Gadget files can be read using this format. Catalog can be only one file or comp
 .TP
 .B multi\-columns\-ascii
 This format is to be able to read any ascci file with values arrage in columns. Positions can be in any order and with/without header. For example, files with halo catalogs from Rockstar can be read.
+.TP
+.B fits\-healpix
+to read maps in Healpix format using cfitsio library. This format permits to apply a mask in the same format.
 .UNINDENT
 .SH PRE/POST PROCESSING
 .sp
@@ -394,7 +417,7 @@ This section describes the various pre/pos processing for controlling
 what the \fIcballs\fP before/after main processing:
 .SS Pre\-processing
 .SS Post\-processing
-.SH ADDON'S
+.SH ADDON’S
 .sp
 This section describes the mechanism to add more functionally to cBalls:
 .SS Include files
@@ -408,7 +431,7 @@ This section describes the mechanism to add more functionally to cBalls:
 .sp
 This section describes a practical guide to use \fBcBalls\fP:
 .sp
-Let us test one of the \X'tty: link https://arxiv.org/pdf/1706.01472'\fI\%Takahasi\fP\X'tty: link' realizations. We download the realization using unix \fBwget\fP command in the terminal:
+Let us test one of the \X'tty: link https://arxiv.org/pdf/1706.01472'\fI\%Takahashi\fP\X'tty: link' realizations. We download the realization using unix \fBwget\fP command in the terminal:
 .INDENT 0.0
 .INDENT 3.5
 .sp

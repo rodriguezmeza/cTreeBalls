@@ -403,7 +403,7 @@ void verb_print_min_info(int verbose, int verbose_log, stream sout,
 }
 
 void verb_print_normal_info(int verbose, int verbose_log, stream sout,
-                  string fmt, ...)
+                            string fmt, ...)
 {
     va_list ap;
 

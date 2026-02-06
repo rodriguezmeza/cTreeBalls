@@ -8,6 +8,10 @@
 #include "globaldefs_balls_omp_02.h"
 #endif
 
+#ifdef OCTREESMOOTHING
+#include "globaldefs_octree_smoothing_03.h"
+#endif
+
 #ifdef IOLIB
 #include "global_data_iolib.h"
 #endif

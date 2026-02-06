@@ -1,24 +1,21 @@
+
+
 <!DOCTYPE html>
-<html class="writer-html5" lang="en">
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Catalog files &mdash; cTreeBalls 1.0.0 documentation</title>
-      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="_static/doctools.js"></script>
-        <script src="_static/sphinx_highlight.js"></script>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -88,11 +85,11 @@
            <div itemprop="articleBody">
              
   <section id="catalog-files">
-<h1>Catalog files<a class="headerlink" href="#catalog-files" title="Permalink to this heading"></a></h1>
+<h1>Catalog files<a class="headerlink" href="#catalog-files" title="Link to this heading"></a></h1>
 <p>This section describes the various formats of catalog points you need to compute correlation functions on them.</p>
 <p>They are given with the option: <code class="docutils literal notranslate"><span class="pre">infileformat</span></code>.</p>
 <section id="standard-formats">
-<h2>Standard formats<a class="headerlink" href="#standard-formats" title="Permalink to this heading"></a></h2>
+<h2>Standard formats<a class="headerlink" href="#standard-formats" title="Link to this heading"></a></h2>
 <dl class="field-list simple">
 <dt class="field-odd">columns-ascii<span class="colon">:</span></dt>
 <dd class="field-odd"><p>The file(s) with the data to be correlated.</p>
@@ -100,19 +97,22 @@
 <dt class="field-even">binary<span class="colon">:</span></dt>
 <dd class="field-even"><p>The file with data to be correlated in binary format.</p>
 </dd>
-<dt class="field-odd">takahasi<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The file with data to be correlated using Takahasi simulations format (Healpix).</p>
+<dt class="field-odd">takahashi<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The file with data to be correlated using Takahashi etal simulations format (can be transformed to Healpix format).</p>
 </dd>
 </dl>
 </section>
 <section id="miscellaneous-formats">
-<h2>Miscellaneous formats<a class="headerlink" href="#miscellaneous-formats" title="Permalink to this heading"></a></h2>
+<h2>Miscellaneous formats<a class="headerlink" href="#miscellaneous-formats" title="Link to this heading"></a></h2>
 <dl class="field-list simple">
 <dt class="field-odd">gadget<span class="colon">:</span></dt>
 <dd class="field-odd"><p>Gadget files can be read using this format. Catalog can be only one file or composed of several files.</p>
 </dd>
 <dt class="field-even">multi-columns-ascii<span class="colon">:</span></dt>
 <dd class="field-even"><p>This format is to be able to read any ascci file with values arrage in columns. Positions can be in any order and with/without header. For example, files with halo catalogs from Rockstar can be read.</p>
+</dd>
+<dt class="field-odd">fits-healpix<span class="colon">:</span></dt>
+<dd class="field-odd"><p>to read maps in Healpix format using cfitsio library. This format permits to apply a mask in the same format.</p>
 </dd>
 </dl>
 </section>

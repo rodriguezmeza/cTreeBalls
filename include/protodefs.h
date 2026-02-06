@@ -30,7 +30,7 @@ int StartRun(struct cmdline_data* cmd, struct  global_data* gd,
              string, string, string, string);
 
 int StartRun_Common(struct cmdline_data*, struct  global_data*);
-int PrintParameterFile(struct cmdline_data *, char *);
+int PrintParameterFile(struct cmdline_data *, struct  global_data*, char *);
 
 //B If uncommented there will be a warning in the setup.py process
 //#ifdef OPENMPCODE
@@ -39,11 +39,23 @@ int SetNumberThreads(struct cmdline_data *cmd);
 //E
 
 int StartOutput(struct cmdline_data *, struct  global_data*);
-//global void checkstop(void);
 int EndRun(struct cmdline_data* cmd, struct  global_data* gd);
-//global void savestate(string);
-//global int restorestate(string);
 global int startrun_memoryAllocation(struct cmdline_data* cmd, struct  global_data* gd);
+global int EndRun_FreeMemory(struct cmdline_data* cmd,
+                             struct  global_data* gd);
+global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd);
+global int EndRun_FreeMemory_cmd(struct cmdline_data* cmd,
+                             struct  global_data* gd);
+global int EndRun_FreeMemory_gd(struct cmdline_data* cmd,
+                             struct  global_data* gd);
+global int EndRun_FreeMemory_gd_2(struct cmdline_data* cmd,
+                             struct  global_data* gd);
+global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
+                             struct  global_data* gd);
+global int EndRun_FreeMemory_tree(struct cmdline_data* cmd,
+                             struct  global_data* gd);
+global int EndRun_FreeMemory_bodytable(struct cmdline_data* cmd,
+                             struct  global_data* gd);
 
 int TestData(struct cmdline_data* cmd, struct  global_data* gd);
 
@@ -60,15 +72,7 @@ global void setFilesDirs_log(struct cmdline_data*, struct  global_data* gd);
 global void setFilesDirs(struct cmdline_data*, struct  global_data* gd);
 //E
 
-/*
-// Column vector and matrix input
-//  offset as NR
-global int inout_InputDataVector(struct cmdline_data*, struct  global_data*,
-                                string, real *, int *);
-global int inout_InputDataMatrix(struct cmdline_data*, struct  global_data*,
-                                string, real **, int *);
-*/
-// routine to compute edge corrections using two saved histZetaM histograms
+//B routine to compute edge corrections using two saved histZetaM histograms
 global int computeEdgeCorrections(struct cmdline_data* cmd,
                                   struct  global_data* gd);
 global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
@@ -81,7 +85,7 @@ int EvalHist(struct cmdline_data* cmd, struct  global_data* gd);
 
 //B 3PCF section
 // Search methods:
-global int searchcalc_direct_omp(bodyptr, int, INTEGER, INTEGER);
+//global int searchcalc_direct_omp(bodyptr, int, INTEGER, INTEGER);
 
 
 //B Tree:
@@ -102,7 +106,6 @@ global int expandbox(struct  cmdline_data*, struct  global_data*,
 global int FindRootCenter(struct  cmdline_data* cmd, struct  global_data* gd,
                          bodyptr, int, int, cellptr);
 global int centerBodies(bodyptr, int, int, cellptr);
-//global cellptr makecell(struct  cmdline_data* cmd, struct  global_data* gd, int);
 //E
 
 //B cBalls utilities
@@ -126,11 +129,8 @@ global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
 global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
                         bodyptr, nodeptr, real *, vector);
 #endif
-//B Obsolete
-//global int compute_cosphi(real dr1, vector dr, real *cosphi, gdhist hist);
 
-//#ifdef OPENMPCODE
-global int search_init_sincos_omp(struct cmdline_data* cmd, 
+global int search_init_sincos_omp(struct cmdline_data* cmd,
                                   struct  global_data* gd,
                                   gdhistptr_sincos_omp hist);
 global int search_free_sincos_omp(struct cmdline_data* cmd, struct  global_data* gd,
@@ -139,8 +139,6 @@ global int computeBodyProperties_sincos(struct cmdline_data* cmd,
                                             struct  global_data* gd,
                                             bodyptr, int,
                                             gdhistptr_sincos_omp);
-//#endif
-
 
 global int search_init_gd_hist(struct cmdline_data* cmd, struct  global_data* gd);
 global int search_init_gd_hist_sincos(struct cmdline_data* cmd, struct  global_data* gd);
@@ -157,23 +155,10 @@ global int coordinate_string_to_int(struct cmdline_data* cmd,
 global int coordinate_transformation(struct cmdline_data* cmd,
                                    struct  global_data* gd,
                                    real, real, vector);
-/*global int spherical_to_cartesians(struct cmdline_data* cmd,
-                                   struct  global_data* gd,
-                                   real, real, vector);
-global int galactic_to_cartesians(struct cmdline_data* cmd,
-                                   struct  global_data* gd,
-                                   real, real, vector);
-global int celestial_to_cartesians(struct cmdline_data* cmd,
-                                   struct  global_data* gd,
-                                   real, real, vector);
-*/
 global int spherical_periodic_condition(real *, real *, real *, real *);
 
-
 global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd);
-
 //E
-
 
 //B socket:
 #ifdef ADDONS

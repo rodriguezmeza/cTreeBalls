@@ -71,140 +71,13 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
     int ifile = 0;
 
+    debug_tracking_s("001", routineName);
+
 //B socket:
 #ifdef ADDONS
 #include "cballs_include_01.h"
 #endif
 //E
-
-    gd->flagSmoothCellMin = FALSE;
-    gd->flagSmooth = FALSE;
-    gd->flagSetNbNoSel = FALSE;
-
-    if (scanopt(cmd->options, "smooth-min-cell")) {
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                    "\n\t%s: smooth cell min: try making tree...\n\n", routineName);
-        DO_BODY(p,bodytable[gd->iCatalogs[0]],
-                bodytable[gd->iCatalogs[0]]+gd->nbodyTable[gd->iCatalogs[0]])
-            Update(p) = TRUE;
-        MakeTree(cmd, gd, bodytable[gd->iCatalogs[0]],
-                 gd->nbodyTable[gd->iCatalogs[0]], gd->iCatalogs[0]);
-//B
-        free(bodytable[gd->iCatalogs[0]]);
-        gd->bytes_tot -= gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body);
-        gd->nbodyTable[gd->iCatalogs[0]] = gd->nnodescanlevTable[gd->iCatalogs[0]];
-        bodytable[ifile] =
-                    (bodyptr) allocate(gd->nnodescanlevTable[gd->iCatalogs[0]]
-                    * sizeof(body));
-        gd->bytes_tot += gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body);
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-    "Allocated %g MByte for final (smoothCellMin) particle (%ld) storage (%ld).\n",
-                        gd->nnodescanlevTable[gd->iCatalogs[0]]*sizeof(body)*INMB,
-                        gd->nnodescanlevTable[gd->iCatalogs[0]],
-                        gd->nnodescanlevTable[gd->iCatalogs[0]]);
-        kavg = 0;
-        q = nodetable;
-        bodytable[gd->iCatalogs[0]] = nodetable;
-        in = 0;
-        DO_BODY(p,bodytable[gd->iCatalogs[0]],
-            bodytable[gd->iCatalogs[0]]+gd->nnodescanlevTable[gd->iCatalogs[0]]) {
-            kavg += Kappa(p);
-            in++;
-        }
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                    "%ld %d %ld %lg %ld %lg\n",
-                    in,Type(p-1),Id(p-1),Mass(p-1),Nb(p-1),Kappa(p-1));
-//E
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               "smoothCellMin: %ld particles in nodetable\n", in);
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                    "smoothCellMin: Average of kappa (%ld particles) = %le\n",
-                    gd->nnodescanlevTable[gd->iCatalogs[0]],
-                    kavg/((real)gd->nnodescanlevTable[gd->iCatalogs[0]]));
-        gd->flagSmoothCellMin = TRUE;
-    } // ! smooth-min-cell
-
-    if (scanopt(cmd->options, "smooth")
-        && !scanopt(cmd->options, "set-Nb-noSel")) {
-        verb_print(cmd->verbose, "\n\tMainLoop: smooth: try making tree...\n\n");
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
-            Update(p) = TRUE;
-        MakeTree(cmd, gd, bodytable[ifile], cmd->nbody, 0);
-//B
-        free(bodytable[ifile]);
-        gd->bytes_tot -= cmd->nbody*sizeof(body);
-        cmd->nbody = gd->nbodysm;
-            bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-        gd->bytes_tot += cmd->nbody*sizeof(body);
-        verb_print(cmd->verbose,
-            "Allocated %g MByte for final (smooth) particle (%ld) storage.\n",
-            cmd->nbody*sizeof(body)*INMB, cmd->nbody);
-        kavg = 0;
-        q = bodytabsm;
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-            SETV(Pos(p),Pos(q));
-// BODY3
-            Type(p) = Type(q);
-#ifdef BODY3ON
-            Nbb(p) = Nbb(q);
-#endif
-            Mass(p) = Mass(q);
-            Kappa(p) = Kappa(q);
-            Id(p) = p-bodytable[ifile]+1;
-            Update(p) = TRUE;
-            q++;
-            kavg += Kappa(p);
-        }
-        free(bodytabsm);
-        gd->bytes_tot -= gd->nbodysm*sizeof(body);
-//E
-        verb_print(cmd->verbose,
-                   "smooth: Average of kappa (%ld particles) = %le\n",
-                   cmd->nbody, kavg/((real)cmd->nbody) );
-        gd->flagSmooth = TRUE;
-    } // ! smooth && set-Nb-noSel
-
-    if ( scanopt(cmd->options, "smooth")
-        && scanopt(cmd->options, "set-Nb-noSel") ) {
-        verb_print(cmd->verbose,
-               "\n\tMainLoop: smooth & set-Nb-noSel: try making tree...\n\n");
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
-            Update(p) = TRUE;
-        MakeTree(cmd, gd, bodytable[ifile], cmd->nbody, 0);
-//B
-        free(bodytable[ifile]);
-        gd->bytes_tot -= cmd->nbody*sizeof(body);
-        cmd->nbody = gd->nbodySel;
-        bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-        gd->bytes_tot += cmd->nbody*sizeof(body);
-        verb_print(cmd->verbose,
-        "Allocated %g MByte for final (smooth-noSel) particle (%ld) storage.\n",
-        cmd->nbody*sizeof(body)*INMB, cmd->nbody);
-        kavg = 0;
-        q = bodytabSel;
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-            SETV(Pos(p),Pos(q));
-// BODY3
-            Type(p) = Type(q);
-#ifdef BODY3ON
-            Nbb(p) = Nbb(q);
-#endif
-            Mass(p) = Mass(q);
-            Kappa(p) = Kappa(q);
-            Id(p) = p-bodytable[ifile]+1;
-            Update(p) = TRUE;
-            q++;
-            kavg += Kappa(p);
-        }
-        free(bodytabSel);
-        gd->bytes_tot -= gd->nbodySel*sizeof(body);
-//E
-        verb_print(cmd->verbose,
-            "smooth-set-Nb-noSel: Average of kappa (%ld particles) = %le\n",
-            cmd->nbody, kavg/((real)cmd->nbody) );
-        gd->flagSmooth = TRUE;
-        gd->flagSetNbNoSel = TRUE;
-    } // ! smooth && set-Nb-noSel
 
     if ( scanopt(cmd->options, "make-tree") ) {
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -226,7 +99,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     EvalHist(cmd, gd);
 
     if (!gd->stopflag) {
-        if (gd->flagPrint)
+        if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE)
             PrintEvalHist(cmd, gd);
     }
 
@@ -237,12 +110,13 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
 //B Post-processing:
     double cpustart;
-    char buf[200];
+    char buf[BUFFERSIZE];
     if (scanopt(cmd->options, "post-processing")) {
         cpustart = CPUTIME;
         sprintf(buf,"%s",cmd->posScript);
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "\npost-processing: executing '%s'...", cmd->posScript);
+                            "\npost-processing: executing '%s'...",
+                            cmd->posScript);
         system(buf);
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "done.\n");
@@ -252,6 +126,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
                             CPUTIME - cpustart);
     }
 //E
+    debug_tracking("002... final");
 
     return SUCCESS;
 }
@@ -273,17 +148,20 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
     correlation_string_to_int(cmd, gd, &correlation_int);
 
     switch(gd->searchMethod_int) {
-        case TREEOMPMETHODSINCOS:                   // search=tree-omp-sincos
+        case OCTREESINCOSOMPMETHOD:                   // search=octree-sincos-omp
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\n\t%s: with normal tree method (sincos-omp)\n\n",
+                        "\n\t%s: with normal octree method (sincos-omp)\n\n",
                         routineName);
             for (ifile=0; ifile<gd->ninfiles; ifile++) {
-                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
+                DO_BODY(p,bodytable[ifile],
+                        bodytable[ifile]+gd->nbodyTable[ifile])
                 Update(p) = TRUE;
-                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+                MakeTree(cmd, gd, bodytable[ifile],
+                         gd->nbodyTable[ifile], ifile);
             }
             class_call_cballs(searchcalc_normal_sincos(cmd, gd, bodytable,
-                            gd->nbodyTable, 1, gd->nbodyTable, gd->iCatalogs[0],
+                            gd->nbodyTable, 1,
+                            gd->nbodyTable, gd->iCatalogs[0],
                             gd->iCatalogs[1]), errmsg, errmsg);
             break;
 
@@ -332,21 +210,21 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
     double cpustart = CPUTIME;
     if (!scanopt(cmd->options, "no-out-Hist")) {
     switch(gd->searchMethod_int) {
-        case TREEOMPMETHODSINCOS:
+        case OCTREESINCOSOMPMETHOD:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n\t%s: printing normal tree method (omp-sincos)\n\n",
                             routineName);
             if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
             PrintHistrBins(cmd, gd);
             PrintHistXi2pcf(cmd, gd);
-            if (cmd->computeTPCF) {
+#ifdef TPCF
                 PrintHistZetaM_sincos(cmd, gd);
                 if (scanopt(cmd->options, "out-m-HistZeta"))
                     PrintHistZetaMm_sincos(cmd, gd);
                 if (scanopt(cmd->options, "out-HistZetaG")) {
                     PrintHistZetaMZetaGm_sincos(cmd, gd);
                 }
-            }
+#endif
             break;
         case SEARCHNULL:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -355,14 +233,14 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
             PrintHistrBins(cmd, gd);
             PrintHistXi2pcf(cmd, gd);
-            if (cmd->computeTPCF) {
+#ifdef TPCF
                 PrintHistZetaM_sincos(cmd, gd);
                 if (scanopt(cmd->options, "out-m-HistZeta"))
                     PrintHistZetaMm_sincos(cmd, gd);
                 if (scanopt(cmd->options, "out-HistZetaG")) {
                     PrintHistZetaMZetaGm_sincos(cmd, gd);
                 }
-            }
+#endif
             break;
         default:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -371,14 +249,14 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
             PrintHistrBins(cmd, gd);
             PrintHistXi2pcf(cmd, gd);
-            if (cmd->computeTPCF) {
-                PrintHistZetaM_sincos(cmd, gd);
-                if (scanopt(cmd->options, "out-m-HistZeta"))
-                    PrintHistZetaMm_sincos(cmd, gd);
-                if (scanopt(cmd->options, "out-HistZetaG")) {
-                    PrintHistZetaMZetaGm_sincos(cmd, gd);
-                }
+#ifdef TPCF
+            PrintHistZetaM_sincos(cmd, gd);
+            if (scanopt(cmd->options, "out-m-HistZeta"))
+                PrintHistZetaMm_sincos(cmd, gd);
+            if (scanopt(cmd->options, "out-HistZetaG")) {
+                PrintHistZetaMZetaGm_sincos(cmd, gd);
             }
+#endif
             break;
 
 //B socket:
@@ -423,12 +301,12 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
 
     if (*correlation_int == -1) {
         *correlation_int = KKKCORRELATION;
-        if (cmd->computeTPCF) {
+#ifdef TPCF
             verb_print(cmd->verbose,
                        "\nNot given a correlation type... running deafult ");
             verb_print(cmd->verbose,
                        "KKKCorrelation\n");
-        }
+#endif
         return SUCCESS;
     }
 
@@ -1157,8 +1035,6 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
 
     return SUCCESS;
 }
-
-
 
 
 //B socket:

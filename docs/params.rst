@@ -9,11 +9,11 @@ Parameters related to the searching method
 -------------------------------------------
 
 :searchMethod: (str or list) [alias: search]
-    The searching method to use. Default is ``tree-omp-sincos``. Fastest method so far is ``balls-omp``.
+    The searching method to use. Default is ``tree-omp-sincos``. Fastest method so far is ``octree-ggg-omp``.
 
     Use it as::
 
-        searchMethod = balls-omp
+        searchMethod = octree-ggg-omp
 
     In command line version do not use spaces before and after ``=`` or it won't be parsed correctly. In a parameter file you have more liberty.
 

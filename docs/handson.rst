@@ -6,7 +6,7 @@ This section describes a practical guide to use **cBalls**:
 
 
 
-Let us test one of the `Takahasi <https://arxiv.org/pdf/1706.01472>`_ realizations. We download the realization using unix ``wget`` command in the terminal::
+Let us test one of the `Takahashi <https://arxiv.org/pdf/1706.01472>`_ realizations. We download the realization using unix ``wget`` command in the terminal::
 
 	wget http://cosmo.phys.hirosaki-u.ac.jp/takahasi/allsky_raytracing/sub1/nres12/allskymap_nres12r000.zs9.mag.dat
 

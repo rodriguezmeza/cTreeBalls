@@ -5,8 +5,12 @@
 #define _startrun_include_08_h
 
 
-#ifdef BALLS
-#include "startrun_balls_omp_05.h"
+//#ifdef BALLS
+//#include "startrun_balls_omp_05.h"
+//#endif
+
+#ifdef OCTREESMOOTHING
+#include "startrun_octree_smoothing_08.h"
 #endif
 
 #ifdef IOLIB

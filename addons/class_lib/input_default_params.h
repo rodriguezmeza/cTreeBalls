@@ -9,33 +9,26 @@ int input_default_params(struct cmdline_data *cmd)
 // Every item in cmdline_defs.h must have an item here::
 
     //B Parameters related to the searching method
-#ifdef BALLS
-    cmd->searchMethod = "balls-omp";
-#else
     cmd->searchMethod = "tree-omp-sincos";
-#endif
     cmd->mChebyshev = 7;
-    cmd->nsmooth = "1";
-    cmd->rsmooth = "";
-    cmd->theta = 1.0;
-    cmd->computeTPCF = 1;
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//    cmd->computeShearCF = 0;
+    cmd->nsmooth = 8;
     //E
+    cmd->rsmooth = "\0";
+    cmd->theta = 1.05;
     cmd->usePeriodic = 0;
     //E
 
     //B Parameters about the I/O file(s)
     // Input catalog parameters
-    cmd->infile = "";
+    cmd->infile = "\0";
+    //E
     cmd->infilefmt = "columns-ascii";
     cmd->iCatalogs = "1";
     // Output parameters
     cmd->rootDir = "Output";
-    cmd->outfile = "";
+    cmd->outfile = "\0";
     cmd->outfilefmt = "columns-ascii";
-    // Parameters to set a region in the sky, for example for Takahasi data set
+    // Parameters to set a region in the sky, for example for Takahashi data
     cmd->thetaL = 1.279928;
     cmd->thetaR = 1.861664;
     cmd->phiL = 1.280107;
@@ -58,15 +51,14 @@ int input_default_params(struct cmdline_data *cmd)
     //E
 
     //B Set of parameters needed to construct a test model
-    cmd->seed=123;                                          // to always have
-                                                            //  defaults Check in gsl
+    cmd->seed=123;                                  // to always have
+                                                    //  defaults Check in gsl
     cmd->testmodel = "unit-sphere-random";
     cmd->nbody = 262144;
     cmd->lengthBox = 2.0;
     //E
 
     //B Miscellaneous parameters
-//    cmd->script = "";
     cmd->preScript = "";
     cmd->posScript = "";
     cmd->stepState = 100000;
@@ -75,7 +67,7 @@ int input_default_params(struct cmdline_data *cmd)
 #ifdef OPENMPCODE
     cmd->numthreads = 16;
 #endif
-    cmd->options = "out-m-HistZeta";
+    cmd->options = "\0";
     //E
 
 //B socket:

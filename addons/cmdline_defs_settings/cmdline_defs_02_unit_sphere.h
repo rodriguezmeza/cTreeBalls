@@ -11,24 +11,11 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
-
-//B socket:
-#ifdef ADDONS
-#include "cmdline_defs_include_00.h"
-#else
     "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
-#endif
-//E
-
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
-    "nsmooth=1",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
+    "nsmooth=8",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
-    "theta=1.0",                        ";Control tree search parameter, can be used to increase speed",
-    "computeTPCF=true",                 ";If true, compute 3pcf", ":tpcf",
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//    "computeShearCF=true",              ";If true, compute shear cf", ":shearcf",
-    //E
+    "theta=1.05",                        ";Control tree search parameter, can be used to increase speed",
     "usePeriodic=false",                ";If false, don't use periodic boundary condition", ":periodic",
     //E
 
@@ -72,7 +59,6 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     //E
 
     //B Miscellaneous parameters
-//    "script=",                          ";Scripts in shell or python that can be run in pre-processing or post-processing",
     "preScript=",                          ";Script in shell or python that can be run in pre-processing",
     "posScript=",                          ";Script in shell or python that can be run in post-processing",
     "stepState=100000",                 ";number of steps to save a state-run info (pivot number completed in the log file)",
@@ -81,7 +67,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 #ifdef OPENMPCODE
     "numberThreads=16",                 ";To set the number of threads to use (OpenMP)", ":nthreads",
 #endif
-    "options=out-m-HistZeta",           ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
+    "options=",           ";Various control options, i.e., no-one-ball (to not use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
     //E
 
 //B socket:
@@ -90,7 +76,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 #endif
 //E
 
-    "Version=1.0.1",			        ";Mario A. Rodríguez-Meza (2023-2025)",
+    "Version=1.0.1",			        ";Mario A. Rodríguez-Meza (2023-2026)",
     NULL,
 };
 

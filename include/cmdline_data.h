@@ -19,7 +19,6 @@
 
 #include "common_defs.h"
 
-
 struct cmdline_data{
 // Every item in cmdline_defs.h must have an item here::
 
@@ -29,18 +28,13 @@ struct cmdline_data{
     char ParameterFile[MAXLENGTHOFFILES];           // May be we should incrase
                                                     //  this number
 #endif
-
     //B Parameters related to the searching method
     string searchMethod;
     int mChebyshev;
-    string nsmooth;
+    int nsmooth;
+    //E
     string rsmooth;                                 // use to smooth pivot
     real theta;
-    bool computeTPCF;
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//    bool computeShearCF;
-    //E
     bool usePeriodic;
     //E
 
@@ -48,6 +42,7 @@ struct cmdline_data{
     // Input catalog parameters
     string infile;
     string infilefmt;
+    //E
     string iCatalogs;
     // Output parameters
     string rootDir;
@@ -72,7 +67,7 @@ struct cmdline_data{
     string histNNFileName;
     string histXi2pcfFileName;
     string histZetaFileName;
-    string suffixOutFiles;
+    string suffixOutFiles;                  // deprecate... in favor o no .txt
     //E
 
     //B Set of parameters needed to construct a test model
@@ -83,7 +78,6 @@ struct cmdline_data{
     //E
 
     //B Miscellaneous parameters
-//    string script;
     string preScript;
     string posScript;
     INTEGER stepState;
@@ -102,8 +96,6 @@ struct cmdline_data{
 #include "globaldefs_include_01.h"
 #endif
 //E
-
 };
 
 #endif // ! _cmdline_data_h
-

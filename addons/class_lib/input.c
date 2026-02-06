@@ -19,7 +19,6 @@ local void testParameterFile(struct  cmdline_data*,
                              struct  global_data*,
                              char *);
 
-
 int input_find_file(struct  cmdline_data* cmd, struct  global_data* gd,
                     char *fname,
                     struct file_content * fc,
@@ -51,7 +50,8 @@ int input_find_file(struct  cmdline_data* cmd, struct  global_data* gd,
 
     stream outstr;
     if (strnull(fname)) {
-        verb_print(1, "If you intend to use a parameter file call with <ParameterFileName>\n");
+        verb_print(1,
+        "If you intend to use a parameter file call with <ParameterFileName>\n");
         return FAILURE;
     } else {
         outstr = stropen(fname, "r");
@@ -61,15 +61,15 @@ int input_find_file(struct  cmdline_data* cmd, struct  global_data* gd,
     strcpy(input_file,fname);
 
     if (!strnull(input_file)) {
-        class_call(parser_read_file(input_file,&fc_input,errmsg), errmsg, errmsg);
+        class_call(parser_read_file(input_file,&fc_input,errmsg),
+                   errmsg, errmsg);
         class_call(input_set_root(input_file,&pfc_input,&fc_setroot,errmsg),
                errmsg, errmsg);
   }
 
   if ((input_file[0]!='\0') || (precision_file[0]!='\0')){
-      class_call(parser_cat(pfc_input, 
-                             &fc_precision,
-                            fc, errmsg), errmsg, errmsg);
+      class_call(parser_cat(pfc_input, &fc_precision, fc, errmsg),
+                 errmsg, errmsg);
   }
 
   class_call(parser_free(pfc_input), errmsg, errmsg);
@@ -90,22 +90,9 @@ int input_set_root(char* input_file,
 
   FileArg outfname;
 
-//  char tmp_file[_ARGUMENT_LENGTH_MAX_+26];          // 26 is enough to extend
-                                                    //  the file name [...] with
-                                                    //  the characters
-                                                // "output/[...]%02d_parameters.ini"
-                                                    //  (as done below)
   struct file_content fc_root;                      // Temporary structure with
                                                     //  only the root name
-
-  FileArg string1;                                  //Is ignored
-
-//B Dummy so far...
-//  int n_extensions = 7;                             // Keep this as the length
-                                                    //  of the below list
-//  char* output_extensions[7] = {"cl.dat","pk.dat","tk.dat","parameters.ini","background.dat","thermodynamics.dat","perturbations_k0.dat"};
-//E
-
+  FileArg string1;                                  //  Is ignored
   struct file_content * pfc = *ppfc_input;
 
   class_call(parser_read_string(pfc,"rootDir",&string1,&flag1,errmsg),
@@ -119,11 +106,6 @@ int input_set_root(char* input_file,
 
     if (flag1 == FALSE){
         memcpy(outfname, "Output", 7);
-//        memcpy(outfname, "Output/", 7);
-//B To behave as not class_lib parameter file
-//        memcpy(outfname+7, input_file, strlen(input_file)-4);
-//        outfname[7+strlen(input_file)-4] = '\0';
-//E
     } else {
         for (index_root_in_fc_input=0;index_root_in_fc_input<pfc->size;
              ++index_root_in_fc_input) {
@@ -133,103 +115,64 @@ int input_set_root(char* input_file,
             }
         }
     }
-/*
-    if(overwrite_root == FALSE) {                   // Segment no use so far...
-        found_filenum = TRUE;
-        for (filenum = 0; filenum < _N_FILEROOT_ && found_filenum; filenum++){
-            found_filenum = FALSE;
-            for(iextens = 0; iextens < n_extensions; ++iextens){
-                sprintf(tmp_file,"%s%02d_%s", outfname, filenum, 
-                        output_extensions[iextens]);
-                if (file_exists(tmp_file) == TRUE){
-                    found_filenum = TRUE;
-                }
-            }
-            if(found_filenum == FALSE){
-                break;
-            }
-        }
-        if(flag1 == FALSE){
-            class_call(parser_init(&fc_root, 1, pfc->filename, errmsg),
-                       errmsg,errmsg);
-            sprintf(fc_root.name[0],"rootDir");
-            sprintf(fc_root.value[0],"%s%02d_",outfname,filenum);
-            fc_root.read[0] = FALSE;
-            class_call(parser_cat(pfc, &fc_root, pfc_setroot, errmsg),
-                       errmsg, errmsg);
-            class_call(parser_free(pfc), errmsg, errmsg);
-            class_call(parser_free(&fc_root), errmsg, errmsg);
-            (*ppfc_input) = pfc_setroot;
-        } else {
-            sprintf(pfc->value[index_root_in_fc_input],"%s%02d_",outfname,filenum);
-            (*ppfc_input) = pfc;
-        }
-    } else { // ! overwrite_root */
-        if(flag1 == FALSE){
-            class_call(parser_init(&fc_root, 1, pfc->filename, errmsg),
-                       errmsg,errmsg);
-            sprintf(fc_root.name[0],"rootDir");
-//B To behave as not class_lib parameter file
-//            sprintf(fc_root.value[0],"%s_",outfname);
-            sprintf(fc_root.value[0],"%s",outfname);
-//E
-            fc_root.read[0] = FALSE;
-            class_call(parser_cat(pfc, &fc_root, pfc_setroot, errmsg),
-                       errmsg, errmsg);
-            class_call(parser_free(pfc), errmsg, errmsg);
-            class_call(parser_free(&fc_root), errmsg, errmsg);
-            (*ppfc_input) = pfc_setroot;
-        } else {
-            sprintf(pfc->value[index_root_in_fc_input],"%s",outfname);
-            (*ppfc_input) = pfc;
-        }
-//    }  // ! overwrite_root
+    if(flag1 == FALSE) {
+        class_call(parser_init(&fc_root, 1, pfc->filename, errmsg),
+                   errmsg,errmsg);
+        sprintf(fc_root.name[0],"rootDir");
+        sprintf(fc_root.value[0],"%s",outfname);
+        fc_root.read[0] = FALSE;
+        class_call(parser_cat(pfc, &fc_root, pfc_setroot, errmsg),
+                   errmsg, errmsg);
+        class_call(parser_free(pfc), errmsg, errmsg);
+        class_call(parser_free(&fc_root), errmsg, errmsg);
+        (*ppfc_input) = pfc_setroot;
+    } else {
+        sprintf(pfc->value[index_root_in_fc_input],"%s",outfname);
+        (*ppfc_input) = pfc;
+    }
 
   return SUCCESS;
 }
 
-
-int input_read_from_file(struct cmdline_data *cmd,
+int input_read_from_file(struct cmdline_data *cmd, struct  global_data* gd,
                          struct file_content * pfc,
                          ErrorMsg errmsg)
 {
-
     int input_verbose = 0;
 
+    gd->cmd_allocated = FALSE;
+
     class_read_int("verbose",input_verbose);
-//    if (!strnull(cmd->paramfile)) {
-//        testParameterFile(cmd, cmd->paramfile);
-//    }
     verb_print(input_verbose, "\nReading input parameters...\n");
 
-    class_call(input_read_parameters(cmd, pfc, errmsg),errmsg,errmsg);
+    class_call(input_read_parameters(cmd, gd, pfc, errmsg),errmsg,errmsg);
 
     return SUCCESS;
 }
 
-
-int input_read_parameters(struct cmdline_data *cmd, struct file_content * pfc,
+int input_read_parameters(struct cmdline_data *cmd,
+                          struct  global_data* gd,
+                          struct file_content * pfc,
                           ErrorMsg errmsg)
 {
     int input_verbose=0;
 
     class_call(input_default_params(cmd),errmsg,errmsg);
     class_read_int("input_verbose",input_verbose);
-    class_call(input_read_parameters_general(cmd, pfc,errmsg),errmsg,errmsg);
+    class_call(input_read_parameters_general(cmd, gd,  pfc,errmsg),errmsg,errmsg);
 
     return SUCCESS;
 }
 
-
 int input_read_parameters_general_free(struct file_content * pfc,
                                        ErrorMsg errmsg) {
-    
 }
 
 int input_read_parameters_general(struct cmdline_data *cmd,
+                                  struct  global_data* gd,
                                   struct file_content * pfc, ErrorMsg errmsg)
 {
-
+    string routineName = "input_read_parameters_general";
     int flag;
     int flag1,flag2;
     int param;
@@ -238,48 +181,48 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     double param1,param2;
     char string1[_ARGUMENT_LENGTH_MAX_];
 
-// All malloc have to be freed at the end of the run (EndRun)
+    // All malloc have to be freed at the end of the run (EndRun)
+    debug_tracking_s("001", routineName);
 
     //B Parameters related to the searching method
     class_call(parser_read_string(pfc,"searchMethod",&string1,&flag1,errmsg),
              errmsg,errmsg);
-
+    debug_tracking_i("002: searchMethod flag", flag1);
+    gd->searchMethodFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"searchMethod") == 0){
               slen = strlen(pfc->value[index]);
               cmd->searchMethod = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->searchMethod,pfc->value[index],slen+1);
+              debug_tracking_s("003: pfc-value", pfc->value[index]);
+              snprintf(cmd->searchMethod, slen+1,
+                       "%s", pfc->value[index]);
+              gd->searchMethodFlag=TRUE;
             break;
           }
         }
     }
 
-    class_call(parser_read_int(pfc,"mChebyshev",&param,&flag,errmsg),errmsg,errmsg);
+    class_call(parser_read_int(pfc,"mChebyshev",&param,&flag,errmsg),
+               errmsg,errmsg);
     if (flag == TRUE)
       cmd->mChebyshev = param;
 
-    class_call(parser_read_string(pfc,"nsmooth",&string1,&flag1,errmsg),
+    class_call(parser_read_int(pfc,"nsmooth",&param,&flag,errmsg),
                errmsg,errmsg);
-    if (flag1 == TRUE) {
-        for (index=0;index<pfc->size;++index){
-          if (strcmp(pfc->name[index],"nsmooth") == 0){
-              slen = strlen(pfc->value[index]);
-              cmd->nsmooth = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->nsmooth,pfc->value[index],slen+1);
-            break;
-          }
-        }
-    }
+    if (flag == TRUE)
+      cmd->nsmooth = param;
 
     class_call(parser_read_string(pfc,"rsmooth",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->rsmoothFlagFree=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"rsmooth") == 0){
               slen = strlen(pfc->value[index]);
               cmd->rsmooth = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->rsmooth,pfc->value[index],slen+1);
+              memcpy(cmd->rsmooth,pfc->value[index],slen+1);
+              gd->rsmoothFlagFree=TRUE;
             break;
           }
         }
@@ -289,27 +232,6 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     if (flag1 == TRUE){
       cmd->theta = param1;
     }
-
-    class_call(parser_read_string(pfc,"computeTPCF",&string1,&flag1,errmsg),
-             errmsg,errmsg);
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->computeTPCF=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->computeTPCF=0;
-    }
-
-    //B correction 2025-04-06
-    // Move this to addon that compute shear correlations
-//    class_call(parser_read_string(pfc,"computeShearCF",&string1,&flag1,errmsg),
-//             errmsg,errmsg);
-//    if (flag1 == TRUE) {
-//        if (strchr("tTyY1", *string1) != NULL)
-//            cmd->computeShearCF=1;
-//        if (strchr("fFnN0", *string1) != NULL)
-//            cmd->computeShearCF=0;
-//    }
-    //E
 
     class_call(parser_read_string(pfc,"usePeriodic",&string1,&flag1,errmsg),
              errmsg,errmsg);
@@ -325,13 +247,13 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     // Input catalog parameters
     class_call(parser_read_string(pfc,"infile",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->infileFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"infile") == 0){
-              cmd->infile = strdup(pfc->value[index]);  // Only check that
-                                                        //  is part of the current
-                                                        //  ISO C or it is part
-                                                        //  of POSIX...
+              cmd->infile = (char*) malloc(MAXLENGTHOFSTRSCMD*sizeof(char));
+              strcpy(cmd->infile,pfc->value[index]);
+              gd->infileFlag=TRUE;
             break;
           }
         }
@@ -339,12 +261,13 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 
     class_call(parser_read_string(pfc,"infileformat",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->infilefmtFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"infileformat") == 0){
-              slen = strlen(pfc->value[index]);
-              cmd->infilefmt = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->infilefmt,pfc->value[index],slen+1);
+              cmd->infilefmt = (char*) malloc(MAXLENGTHOFSTRSCMD*sizeof(char));
+              strcpy(cmd->infilefmt,pfc->value[index]);
+              gd->infilefmtFlag=TRUE;
             break;
           }
         }
@@ -352,25 +275,32 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 
     class_call(parser_read_string(pfc,"iCatalogs",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->iCatalogsFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"iCatalogs") == 0){
               slen = strlen(pfc->value[index]);
               cmd->iCatalogs = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->iCatalogs,pfc->value[index],slen+1);
+              memcpy(cmd->iCatalogs,pfc->value[index],slen+1);
+              gd->iCatalogsFlag=TRUE;
             break;
           }
         }
     }
+
     // Output parameters
     class_call(parser_read_string(pfc,"rootDir",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->rootDirFlagFree=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"rootDir") == 0){
               slen = strlen(pfc->value[index]);
-              cmd->rootDir = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->rootDir,pfc->value[index],slen+1);
+              cmd->rootDir = (char*) malloc(MAXLENGTHOFSTRSCMD*sizeof(char));
+              snprintf(cmd->rootDir, slen+1,
+                       "%s", pfc->value[index]);
+              debug_tracking_s("001: input rootDir", cmd->rootDir);
+              gd->rootDirFlagFree=TRUE;
             break;
           }
         }
@@ -378,12 +308,13 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 
     class_call(parser_read_string(pfc,"outfile",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->outfileFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"outfile") == 0){
-              slen = strlen(pfc->value[index]);
-              cmd->outfile = (char*) malloc(slen*sizeof(char));
-            memcpy(cmd->outfile,pfc->value[index],slen+1);
+              cmd->outfile = (char*) malloc(MAXLENGTHOFSTRSCMD*sizeof(char));
+              strcpy(cmd->outfile,pfc->value[index]);
+              gd->outfileFlag=TRUE;
             break;
           }
         }
@@ -392,17 +323,20 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     class_call(parser_read_string(pfc,"outfileformat",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
+    gd->outfilefmtFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"outfileformat") == 0){
               slen = strlen(pfc->value[index]);
               cmd->outfilefmt = (char*) malloc(slen*sizeof(char));
             memcpy(cmd->outfilefmt,pfc->value[index],slen+1);
+              gd->outfilefmtFlag=TRUE;
             break;
           }
         }
     }
-    // Parameters to set a region in the sky, for example for Takahasi data set
+
+    //B Parameters to set a region in the sky, for example for Takahashi data
     class_call(parser_read_double(pfc,"thetaL",&param1,&flag1,errmsg),
                errmsg,errmsg);
     if (flag1 == TRUE){
@@ -458,15 +392,18 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     if (flag == TRUE)
       cmd->sizeHistPhi = param;
     //
+
     class_call(parser_read_string(pfc,"histNNFileName",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
+    gd->histNNFileNameFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"histNNFileName") == 0){
               slen = strlen(pfc->value[index]);
               cmd->histNNFileName = (char*) malloc(slen*sizeof(char));
             memcpy(cmd->histNNFileName,pfc->value[index],slen+1);
+              gd->histNNFileNameFlag=TRUE;
             break;
           }
         }
@@ -474,12 +411,14 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     class_call(parser_read_string(pfc,"histXi2pcfFileName",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
+    gd->histXi2pcfFileNameFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"histXi2pcfFileName") == 0){
               slen = strlen(pfc->value[index]);
               cmd->histXi2pcfFileName = (char*) malloc(slen*sizeof(char));
             memcpy(cmd->histXi2pcfFileName,pfc->value[index],slen+1);
+              gd->histXi2pcfFileNameFlag=TRUE;
             break;
           }
         }
@@ -487,25 +426,30 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     class_call(parser_read_string(pfc,"histZetaFileName",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
+    gd->histZetaFileNameFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"histZetaFileName") == 0){
               slen = strlen(pfc->value[index]);
               cmd->histZetaFileName = (char*) malloc(slen*sizeof(char));
             memcpy(cmd->histZetaFileName,pfc->value[index],slen+1);
+              gd->histZetaFileNameFlag=TRUE;
             break;
           }
         }
     }
+
     class_call(parser_read_string(pfc,"suffixOutFiles",&string1,&flag1,
                                   errmsg),
                errmsg,errmsg);
+    gd->suffixOutFilesFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"suffixOutFiles") == 0){
               slen = strlen(pfc->value[index]);
               cmd->suffixOutFiles = (char*) malloc(slen*sizeof(char));
             memcpy(cmd->suffixOutFiles,pfc->value[index],slen+1);
+              gd->suffixOutFilesFlag=TRUE;
             break;
           }
         }
@@ -518,12 +462,14 @@ int input_read_parameters_general(struct cmdline_data *cmd,
       cmd->seed = param;
     class_call(parser_read_string(pfc,"testmodel",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->testmodelFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"testmodel") == 0){
               slen = strlen(pfc->value[index]);
               cmd->testmodel = (char*) malloc(slen*sizeof(char));
             memcpy(cmd->testmodel,pfc->value[index],slen+1);
+              gd->testmodelFlag=TRUE;
             break;
           }
         }
@@ -543,6 +489,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
                errmsg,errmsg);
     char *script1;
     char *script2;
+    gd->preScriptFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"preScript") == 0){
@@ -553,14 +500,15 @@ int input_read_parameters_general(struct cmdline_data *cmd,
               script2 = strchr(script1, '"');
               memcpy(cmd->preScript,script2+1,slen-2);
               free(script1);
+              gd->preScriptFlag=TRUE;
             break;
           }
         }
     }
+
     class_call(parser_read_string(pfc,"posScript",&string1,&flag1,errmsg),
                errmsg,errmsg);
-//    char *script1;
-//    char *script2;
+    gd->posScriptFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"posScript") == 0){
@@ -571,6 +519,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
               script2 = strchr(script1, '"');
               memcpy(cmd->posScript,script2+1,slen-2);
               free(script1);
+              gd->posScriptFlag=TRUE;
             break;
           }
         }
@@ -597,18 +546,13 @@ int input_read_parameters_general(struct cmdline_data *cmd,
 
     class_call(parser_read_string(pfc,"options",&string1,&flag1,errmsg),
                errmsg,errmsg);
+    gd->optionsFlag=FALSE;
     if (flag1 == TRUE) {
         for (index=0;index<pfc->size;++index){
           if (strcmp(pfc->name[index],"options") == 0){
-//B The use of memcpy to copy gives bad string on string options
-//      when we use parser_free(&fc) in StartRun
-//      memcpy is faster than strcpy...
-//              slen = strlen(pfc->value[index]);
-//              cmd->options = (char*) malloc(slen*sizeof(char));
-//              memcpy(cmd->options,pfc->value[index],slen+1);
               cmd->options = (char*) malloc(MAXLENGTHOFSTRSCMD);
               strcpy(cmd->options,pfc->value[index]);
-//E
+              gd->optionsFlag=TRUE;
             break;
           }
         }
@@ -626,10 +570,8 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     if (flag == TRUE)
       cmd->sizeHistPhi = param;
 
-
   return SUCCESS;
 }
-
 
 //B cTreeBalls default values
 #ifndef CMDLINE_DEFS_UNITSPHERE
@@ -641,27 +583,22 @@ int input_default_params(struct cmdline_data *cmd)
     //B Parameters related to the searching method
     cmd->searchMethod = "tree-omp-sincos";
     cmd->mChebyshev = 7;
-    cmd->nsmooth = "1";
-    cmd->rsmooth = "";
-    cmd->theta = 1.0;
-    cmd->computeTPCF = 1;
-    //B correction 2025-04-06
-    // Move this to addon that computes shear correlations
-//    cmd->computeShearCF = 0;
-    //E
+    cmd->nsmooth = 8;
+    cmd->rsmooth = "\0";
+    cmd->theta = 1.05;
     cmd->usePeriodic = 0;
     //E
 
     //B Parameters about the I/O file(s)
     // Input catalog parameters
-    cmd->infile = "";
+    cmd->infile = "\0";
     cmd->infilefmt = "columns-ascii";
     cmd->iCatalogs = "1";
     // Output parameters
     cmd->rootDir = "Output";
-    cmd->outfile = "";
+    cmd->outfile = "\0";
     cmd->outfilefmt = "columns-ascii";
-    // Parameters to set a region in the sky, for example for Takahasi data set
+    // Parameters to set a region in the sky, for example for Takahashi data
     cmd->thetaL = 1.279928;
     cmd->thetaR = 1.861664;
     cmd->phiL = 1.280107;
@@ -685,14 +622,13 @@ int input_default_params(struct cmdline_data *cmd)
 
     //B Set of parameters needed to construct a test model
     cmd->seed=123;                                          // to always have
-                                                            //  defaults Check in gsl
+                                                        // defaults Check in gsl
     cmd->testmodel = "simple-cubic-random";
     cmd->nbody = 16384;
     cmd->lengthBox = 10000.0;
     //E
 
     //B Miscellaneous parameters
-//    cmd->script = "";
     cmd->preScript = "";
     cmd->posScript = "";
     cmd->stepState = 10000;
@@ -701,7 +637,7 @@ int input_default_params(struct cmdline_data *cmd)
 #ifdef OPENMPCODE
     cmd->numthreads = 4;
 #endif
-    cmd->options = "";
+    cmd->options = "\0";
     //E
 
 //B socket:
@@ -742,26 +678,17 @@ local void testParameterFile(struct  cmdline_data* cmd,
   char tag[MAXTAGS][50];
   int  errorFlag=0;
 
-//    printf("\nTesting input parameters file: %s...\n", fname);
-//    if (strnull(fname)) return;
     int input_verbose = 2;
     verb_print(input_verbose, "\nparsing input parameters...\n");
-//    verb_print_normal_info(input_verbose, 0, gd->outlog,
-//                           "\nparsing input parameters...\n");
 
     nt=0;
 
     //B Parameters related to the searching method
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
     IPName(cmd->mChebyshev,"mChebyshev");
-    SPName(cmd->nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
+    IPName(cmd->nsmooth,"nsmooth");
     SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
-    BPName(cmd->computeTPCF,"computeTPCF");
-    //B correction 2025-04-06
-    // Move this to addon that compute shear correlations
-//    BPName(cmd->computeShearCF,"computeShearCF");
-    //E
     BPName(cmd->usePeriodic,"usePeriodic");
     //E
 
@@ -774,7 +701,7 @@ local void testParameterFile(struct  cmdline_data* cmd,
     SPName(cmd->rootDir,"rootDir",MAXLENGTHOFSTRSCMD);
     SPName(cmd->outfile,"outfile",MAXLENGTHOFSTRSCMD);
     SPName(cmd->outfilefmt,"outfileformat",MAXLENGTHOFSTRSCMD);
-    //B Parameters to set a region in the sky, for example for Takahasi data set.
+    //B Parameters to set a region in the sky, for example for Takahashi data
     RPName(cmd->thetaL,"thetaL");
     RPName(cmd->thetaR,"thetaR");
     RPName(cmd->phiL,"phiL");

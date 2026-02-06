@@ -5,5 +5,6 @@
 #define _global_data_iolib_h
 
     int columns[MAXITEMS];
+    bool columnsFlag;
 
 #endif	// ! _global_data_iolib_h

@@ -22,6 +22,7 @@ If we follow tutorial en youtube:
 
 sphinx-quickstart
 
+$ pip install sphinx
 
 Install additional themes or MkDocs
 pip install sphinx-rtd-theme
@@ -33,3 +34,9 @@ Other useful links
 https://sphinx-tutorial.readthedocs.io/step-1/
 https://github.com/kiith-sa/RestructuredText-tutorial/tree/master
 
+$ make
+
+$ make html
+$ make latexpdf
+$ make man
+$ make 

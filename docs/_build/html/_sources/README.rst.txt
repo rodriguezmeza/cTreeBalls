@@ -26,7 +26,20 @@ To check that the code runs, type::
 
 The parameters_explained file is a reference input file, containing and explaining the use of all possible input parameters.
 
-On top of that, if you wish to modify the code, you will find comments directly in the files in the folder ``addons``, and the modules you may add must go in this folder.
+By default **cBalls** reads/writes catalog of points to analyzed files in 4-column format with x, y, z columns first and then value of the convergence field. It has a two line header::
+
+    # nbody NDIM Lx Ly Lz
+    # nbody-value NDIM-value Lx Ly Lz - values
+
+Try running::
+
+    ../cballs nbody=6480 o=points_on_sphere testmodel=unit-sphere-random options=stop
+
+In the ``Output`` directory you will have a file: ``points_on_sphere.txt``. View its contents to see the two lines header and the 4 columns structure of data.
+
+Note: in the above example ``points_on_sphere`` was not given an extension. By default cBalls gives to the output files the extension ``.txt``.
+
+On top of that, if you wish to modify the code, you will find comments directly in the files in the folder ``addons``, and the modules you may add must go in this folder. See one of the most simple in ``addons/direct_method``.
 
 For the moment you may consult man page::
 
@@ -59,20 +72,20 @@ or its short version::
 Python
 ------
 
-To install cBalls python module (cballys) go to directory 'python' and execute::
+cBalls python module (cballys) will be installed if you use::
+
+    make clean; make all
+
+Note: if problems, you can go to python directory and execute::
 
     python setup.py build
     python setup.py install --user
-
-Note: make sure you create cBalls library: in directory cTreeBalls execute::
-
-    make clean; make all
 
 To test it go to directory tests and 'run'::
 
     python test_cython_balls.py
 
-Note: this interface in Cython was tested in a python environment with python3.7.
+Note: this interface in Cython was tested in a python environment with ``python3.7``.
 
 
 Plotting utilities
@@ -104,4 +117,14 @@ cBalls use/is based on the following codes or projects:
 * `GSL <https://www.gnu.org/software/gsl/>`_
 * `CLASS <https://github.com/lesgourg/class_public>`_
 * `CFITSIO <https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html>`_
+* `HEALPix <https://healpix.sourceforge.io>`_
 
+Also author acknowledges for helpful discussion and testing to the following people:
+
+* Abraham Arvizu
+* Alejandro Aviles
+* Juan Carlos Hidalgo
+* Eladio Moreno
+* Gustavo Niz
+* Axel Romero Tisnado
+* Sofia Samario

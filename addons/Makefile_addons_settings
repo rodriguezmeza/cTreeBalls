@@ -10,13 +10,34 @@
 $(info )
 $(info =====================================================)
 
-# OCTREESINCOSOMP
-# For computing (2,3)pcf using octree-omp
-OCTREESINCOSOMPON = 1
+# OCTREEGGGOMP
+# For computing 3pcf using octree-ggg-omp
+#   still is in development phase.
+ifeq ($(USEGSL),1)
+OCTREEGGGOMPON = 1
+else
+ifeq ($(COMPLEXLIBON),1)
+OCTREEGGGOMPON = 1
+else
+$(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+# Note:
+#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
+#OCTREEGGGOMPON = 0
+OCTREEGGGOMPON = 1
+endif
+endif
 
-# BALLSOMP
-# For computing 3pcf using balls method
-BALLSON = 1
+# KDTREEOMP
+# For computing 3pcf using kdtree-omp method
+KDTREEOMPON = 1
+
+# KDTREEBOXOMP
+# For computing 2pcf using kdtree-box-omp methods
+KDTREEBOXOMPON = 1
+
+# NEIGHBORBOXESOMP
+# For computing 2pcf using neighbor-boxes-omp method
+NEIGHBORBOXESOMPON = 1
 
 # Gadget I/O
 # For input data catalog in gadget format
@@ -53,7 +74,6 @@ else
 $(info To compile with PXD needs CLASSLIBON = 1, deactivating...)
 PXDON = 0
 endif
-
 
 # IOLIB
 # Several additional I/O routines
@@ -95,16 +115,6 @@ $(info To compile with CFITSIO needs IOLIBON = 1, deactivating...)
 CFITSIOON = 0
 endif
 
-# KDTREEOMP
-# For computing 3pcf using kdtree-omp method
-KDTREEOMPON = 1
-
-# OCTREEKKKOMP
-# For computing 3pcf using octree-kkk-omp
-ifeq ($(DEFDIMENSION),3)
-OCTREEKKKOMPON = 1
-endif
-
 #E Set of settings
 
 
@@ -112,6 +122,24 @@ endif
 #B Special behavior settings
 # In some searching methods
 #   it will be possible to set the following flags
+
+# smoothing pivot
+# remember to use "options=smooth-pivot" in some addons,
+#   like BALLSOMP, OCTREEKKKOMP, KDTREEBOXOMP, KDTREEOMP, NEIGHBORBOXOMP, OCTREEBOXOMP,
+#       OCTREESINCOSOMP, TREEOMPSINCOS
+# note that SMOOTHPIVOTON collide with ORIGINALCB (used in neighbor boxes method)
+#   needs that ORIGINALCBON = 0 see below...
+SMOOTHPIVOTON = 1
+ifeq ($(SMOOTHPIVOTON),1)
+OPT2 += -DSMOOTHPIVOT
+# Compute and add pivot neighbours. Only active if SMOOTHPIVOT is ON
+ADDPIVOTNEIGHBOURSON = 0
+endif
+#
+
+############################
+# Nothing to do below, unless it is explicitly asked for
+############################
 
 # NMultipoles switch (multipoles for counting).
 # Default is 1
@@ -130,16 +158,8 @@ POLARAXISON = 0
 # No Limber aproximation
 NOLIMBERON = 0
 
-# Compute and add pivot neighbours
-ADDPIVOTNEIGHBOURSON = 0
-
 # To remove overcounting pairs:
 OVERCOUNTINGON = 0
-
-# SAVERESTORE
-# For save/restore options
-#   is in development phase. Do not use.
-SAVERESTOREON = 0
 
 # NOSTANDARNORMHISTON switch
 #   If activated histograms are saved without normalization
@@ -153,29 +173,46 @@ CMDLINE_DEFS_UNITSPHERE_ON = 1
 
 #B for some addons will be useful this switches
 DEFINEFLAGS =
+#
 OPT2 += -DTWOPCF
+TPCFON = 1
+ifeq ($(TPCFON),1)
 OPT2 += -DTHREEPCFCONVERGENCE
+OPT2 += -DTPCF
+endif
+#
 #OPT2 += -DTHREEPCFSHEAR
+#
+PRUNEON = 1
+ifeq ($(PRUNEON),1)
+OPT2 += -DPRUNING
+endif
+#
+# will give the two balls condition...
+#   needs that ORIGINALCBON = 0 see below...
+BALLS4SCANLEVON = 0
+#
+#ifeq ($(BALLS4SCANLEVON),1)
+# used in octree-ggg-omp when NORMALHISTSCALE is on
 # THETA control (activated with options=behavior-ball):
 #   the fraction of a bin width (deltaR) by which it is ok to let the pairs miss the correct bin.
 #   the default is to use 1 if deltaR <= 0.1, or 0.1/deltaR if deltaR > 0.1.
 # logscale: goodTHETA = 0.1 / deltaR
 # normal scale: goodTHETA = 0.1 * (rminHist + deltaR/2) / deltaR
 # THETA = MIN(goodTHETA, 1.0)
-#THETA = 0 # will give no behavior-ball
-THETA = 1 # the bin will incorrect by 1 bin width
-#THETA = 1.5
+#THETA = 0 # will give no behavior-ball, but check 1/0 divergence
+#THETA = 1 # the bin will incorrect by 1 bin width
+THETA = 1.25
 DEFINEFLAGS += -DTHETA=$(THETA)
-# will give the two balls condition...
-#   needs that ORIGINALCBON = 0 see below...
-BALLS4SCANLEVON = 0
+#endif
+#
+# used in octree-ggg-omp, also THETA is used here
 NORMALHISTSCALEON = 0
 #
 #B several definitions from/to cute-box Makefile
 _DEBUGON_ = 0
 LOGBINON = 0
-# remember to use "options=smooth-pivot"
-SMOOTHPIVOTON = 0
+# this is to recover some tests results
 ORIGINALCBON = 0
 ifeq ($(LOGBINON),1)
 DEFINEFLAGS += -D_LOGBIN_
@@ -189,7 +226,8 @@ ifeq ($(ORIGINALCBON),1)
 DEFINEFLAGS += -DORIGINALCB
 else
 ifeq ($(SMOOTHPIVOTON),1)
-DEFINEFLAGS += -DSMOOTHPIVOT
+# defined above, independently
+#DEFINEFLAGS += -DSMOOTHPIVOT
 endif
 ifeq ($(BALLS4SCANLEVON),1)
 DEFINEFLAGS += -DBALLS4SCANLEV
@@ -211,12 +249,31 @@ OPT2 += $(DEFINEFLAGS)
 #E
 ############################
 
+############################
+# Nothing to do below...
+############################
 
 ############################
 #B Addendum of some not important
-#   modules or that are in
+#   modules/switches or that are in
 #   development phase
+#   and it is not for the public version
 # Normally they will be switched OFF
+
+# OCTREESMOOTHING
+# some utils and definitions useful to smooth octree cells
+OCTREESMOOTHINGON = 0
+
+#B This causes division by zero in MainLoop calling using cballys...
+# OCTREEKKKOMP
+# For computing 3pcf using octree-kkk-omp
+ifeq ($(DEFDIMENSION),3)
+OCTREEKKKOMPON = 0
+endif
+
+# BALLSOMP
+# For computing 3pcf using balls method
+BALLSON = 0
 
 # DIRECTMETHOD
 # For computing 3pcf using direct method
@@ -224,7 +281,7 @@ DIRECTMETHODON = 0
 
 # DIRECTMETHODSIMPLE
 # For computing 3pcf using direct method simple
-DIRECTMETHODSIMPLEON = 1
+DIRECTMETHODSIMPLEON = 0
 
 # For complex math use only one: USEGSL or COMPLEXLIB
 #   COMPLEXLIB is in development phase.
@@ -239,23 +296,6 @@ $(info Use only one: USEGSL or COMPLEXLIB, deactivating COMPLEXLIB...)
 COMPLEXLIBON = 0
 endif
 
-# OCTREEGGGOMP
-# For computing 3pcf using octree-ggg-omp
-#   is in development phase. Do not use.
-ifeq ($(USEGSL),1)
-OCTREEGGGOMPON = 1
-else
-ifeq ($(COMPLEXLIBON),1)
-OCTREEGGGOMPON = 1
-else
-$(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
-# Note:
-#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
-#OCTREEGGGOMPON = 0
-OCTREEGGGOMPON = 1
-endif
-endif
-
 # OCTREEGGGOMPTRIANGLES
 # For computing 3pcf using octree-ggg-omp-triangles
 #   is in development phase. Not included. Do not use.
@@ -266,21 +306,13 @@ $(info To compile with OCTREEGGGOMPTRIANGLES needs USEGSL = 1, deactivating...)
 OCTREEGGGOMPTRIANGLESON = 0
 endif
 
-# OCTREEBOXBOX
+# OCTREEBOXOMP
 # For computing 2pcf using octree-box-omp methods
-OCTREEBOXOMPON = 1
-
-# KDTREEBOXBOX
-# For computing 2pcf using kdtree-box-omp methods
-KDTREEBOXOMPON = 1
-
-# NEIGHBORBOXESOMP
-# For computing 2pcf using neighbor-boxes-omp method
-NEIGHBORBOXESOMPON = 1
+OCTREEBOXOMPON = 0
 
 # KDTREECUTEBOX
 # For computing 2pcf using cute-box methods
-KDTREECUTEBOXON = 1
+KDTREECUTEBOXON = 0
 
 # OCTREEKKKBALLS4OMP
 # For computing 3pcf using octree-kkk-balls4-omp
@@ -304,6 +336,11 @@ $(info To compile with OCTREEKKKBALLS4OMPTRIANGLES needs BALLSON = 1, deactivati
 OCTREEKKKBALLS4OMPTRIANGLESON = 0
 endif
 
+# SAVERESTORE
+# For save/restore options
+#   is in development phase. Do not use.
+SAVERESTOREON = 0
+
 #E
 ############################
 
@@ -315,6 +352,15 @@ endif
 # Normally they will be switched OFF
 ############################
 
+# TREEOMPSINCOS
+# First developed searching engine
+# For computing (2,3)pcf using tree-omp-sincos
+TREEOMPSINCOSON = 0
+
+# OCTREESINCOSOMP
+# Move to main source directory
+# For computing (2,3)pcf using octree-omp
+OCTREESINCOSOMPON = 0
 
 #E Addendum of some not important
 #  no longer part of the public version

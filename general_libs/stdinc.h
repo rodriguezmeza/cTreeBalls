@@ -157,6 +157,7 @@ typedef struct {
 
 
 #define streq(x,y) (strcmp((x), (y)) == 0)
+// should use param="\0" to avoid some calling problems in Cython interface...
 #define strnull(x) (strcmp((x), "") == 0)
 
 

@@ -77,6 +77,7 @@ local long saveidum;
 int StartRun(struct  cmdline_data* cmd, struct  global_data* gd, 
              string head0, string head1, string head2, string head3)
 {
+    string routineName = "StartRun";
     double cpustart = CPUTIME;
 
     gd->headline0 = head0; gd->headline1 = head1;
@@ -86,18 +87,15 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
            gd->headline0, gd->headline1, gd->headline2, gd->headline3);
     printf("Version = %s\n", getversion());
 
+    //B move all these to Startrun_Common... or make an appropriate change
+    gd->cmd_allocated = FALSE;
     gd->stopflag = 0;
     gd->cputotalinout = 0.;
     gd->cputotal = 0.;
     gd->bytes_tot = 0;
     gd->sameposcount = 0;
+    //E
 
-//B here capture a yaml parameter file
-//      must detect extension ".yaml"
-//      or the yaml type could be stated in options=yaml
-//      once detected run a python script to
-//          write parameters in yaml file to
-//          the standard cballs parameters file 
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
     if (*(cmd->paramfile)=='-')
@@ -109,13 +107,12 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #else
     startrun_parameterfile(cmd, gd);
 #endif
-//E
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                "\nStartRun: Total allocated %g MByte storage so far.\n",
-                gd->bytes_tot*INMB);
+                "\n%s: Total allocated %g MByte storage so far.\n",
+                        routineName, gd->bytes_tot*INMB);
 
 //B If uncommented there will be a warning in the setup.py process
 //#ifdef OPENMPCODE
@@ -124,27 +121,20 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 //E
     gd->cputotalinout += CPUTIME - cpustart;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nStartRun CPU time: %g %s\n",
-                        CPUTIME - cpustart, PRNUNITOFTIMEUSED);
+                        "\n%s CPU time: %g %s\n",
+                        routineName, CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 
     return SUCCESS;
 }
 
 #else // ! CLASSLIB
 
-/*
-#ifdef USEGSL
-#ifndef GSLINTER
-#error `USEGSL` and `CLASSLIB` can not used at the same time. Switched off one of them
-#endif
-#endif
-*/
-
 #include "input.h"
 
 int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
              string head0, string head1, string head2, string head3)
 {
+    string routineName = "StartRun";
     struct file_content fc;
 
     double cpustart = CPUTIME;
@@ -154,12 +144,15 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     printf("\n%s\n%s: %s\n\t %s\n",
            gd->headline0, gd->headline1, gd->headline2, gd->headline3);
     printf("Version = %s\n", getversion());
-    
+
+    //B move all these to Startrun_Common... or make an appropriate change
+    gd->cmd_allocated = FALSE;
     gd->stopflag = 0;
     gd->cputotalinout = 0.;
     gd->cputotal = 0.;
     gd->bytes_tot = 0;
     gd->sameposcount = 0;
+    //E
 
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
@@ -168,7 +161,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     if (!strnull(cmd->paramfile)) {
         class_call_cballs(input_find_file(cmd, gd, cmd->paramfile, &fc, errmsg),
                           errmsg, errmsg);
-        class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
+        class_call_cballs(input_read_from_file(cmd, gd, &fc, errmsg),
+                          errmsg, errmsg);
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
     } else {
         startrun_cmdline(cmd, gd);
@@ -178,7 +172,7 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     // this segment must be checked!!! (used when GETPARMON = 0)
     class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg),
                       errmsg, errmsg);
-    class_call_cballs(input_read_from_file(cmd, &fc, errmsg), errmsg, errmsg);
+    class_call_cballs(input_read_from_file(cmd, gd, &fc, errmsg), errmsg, errmsg);
     class_call_cballs(parser_free(&fc), errmsg, errmsg);
     //E
 #endif
@@ -186,33 +180,36 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     if (!strnull(cmd->paramfile))
         class_call_cballs(StartRun_Common(cmd, gd), errmsg, errmsg);
 
+//    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
 #ifdef GETPARAM
-    if (!strnull(cmd->paramfile))
-        PrintParameterFile(cmd, cmd->paramfile);
+        if (!strnull(cmd->paramfile))
+            PrintParameterFile(cmd, gd, cmd->paramfile);
 #else
-    PrintParameterFile(cmd, cmd->ParameterFile);
+        PrintParameterFile(cmd, gd, cmd->ParameterFile);
 #endif
+//    }
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
     verb_print(cmd->verbose,
-               "\nStartRun: Total allocated %g MByte storage so far.\n",
-               gd->bytes_tot*INMB);
+               "\n%s: Total allocated %g MByte storage so far.\n",
+               routineName, gd->bytes_tot*INMB);
 
 #ifdef OPENMPCODE
     class_call_cballs(SetNumberThreads(cmd), errmsg, errmsg);
 #endif
 
     gd->cputotalinout += CPUTIME - cpustart;
-    verb_print(cmd->verbose, "\nStartRun CPU time: %g %s\n",
-               CPUTIME - cpustart, PRNUNITOFTIMEUSED);
+    verb_print(cmd->verbose, "\n%s CPU time: %g %s\n",
+               routineName, CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 
     return SUCCESS;
 }
 #endif // ! CLASSLIB
 
 
-local int startrun_parameterfile(struct  cmdline_data* cmd, struct  global_data* gd)
+local int startrun_parameterfile(struct  cmdline_data* cmd,
+                                 struct  global_data* gd)
 {
 #ifdef GETPARAM
 	ReadParameterFile(cmd, gd, cmd->paramfile);
@@ -229,11 +226,13 @@ local int startrun_parameterfile(struct  cmdline_data* cmd, struct  global_data*
 #endif // ! GETPARAM
 
 	StartRun_Common(cmd, gd);
+//    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
 #ifdef GETPARAM
-	PrintParameterFile(cmd, cmd->paramfile);
+        PrintParameterFile(cmd, gd, cmd->paramfile);
 #else
-    PrintParameterFile(cmd, cmd->ParameterFile);
+        PrintParameterFile(cmd, gd, cmd->ParameterFile);
 #endif
+//    }
 
     return SUCCESS;
 }
@@ -248,7 +247,9 @@ local int startrun_cmdline(struct  cmdline_data* cmd, struct  global_data* gd)
 {
 	ReadParametersCmdline(cmd, gd);
 	StartRun_Common(cmd, gd);
-	PrintParameterFile(cmd, parameter_null);
+//    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
+        PrintParameterFile(cmd, gd, parameter_null);
+//    }
 
     return SUCCESS;
 }
@@ -261,14 +262,10 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
     //B Parameters related to the searching method
     cmd->searchMethod = GetParam("searchMethod");
     cmd->mChebyshev = GetiParam("mChebyshev");
-    cmd->nsmooth = GetParam("nsmooth");
+    cmd->nsmooth = GetiParam("nsmooth");
+    //E
     cmd->rsmooth = GetParam("rsmooth");
     cmd->theta = GetdParam("theta");
-    cmd->computeTPCF = GetbParam("computeTPCF");
-    //B correction 2025-04-06
-    // Move this to addon that compute shear correlations
-//    cmd->computeShearCF = GetbParam("computeShearCF");
-    //E
     cmd->usePeriodic = GetbParam("usePeriodic");
     //E
 
@@ -383,14 +380,10 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
     //B Parameters related to the searching method
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
     IPName(cmd->mChebyshev,"mChebyshev");
-    SPName(cmd->nsmooth,"nsmooth",MAXLENGTHOFSTRSCMD);
+    IPName(cmd->nsmooth,"nsmooth");
+    //E
     SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
-    BPName(cmd->computeTPCF,"computeTPCF");
-    //B correction 2025-04-06
-    // Move this to addon that compute shear correlations
-//    BPName(cmd->computeShearCF,"computeShearCF");
-    //E
     BPName(cmd->usePeriodic,"usePeriodic");
     //E
 
@@ -438,7 +431,6 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
     //E
 
     //B Miscellaneous parameters
-//    SPName(cmd->script,"script",MAXLENGTHOFSTRSCMD);
     SPName(cmd->preScript,"preScript",MAXLENGTHOFSTRSCMD);
     SPName(cmd->posScript,"posScript",MAXLENGTHOFSTRSCMD);
 #ifdef LONGINT
@@ -694,13 +686,25 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 }
 //E
 
-
 int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "StartRun_Common";
     int ifile;
     double cpustart;
     double cpustartMiddle;
+
+    gd->cmd_allocated = TRUE;
+    gd->histograms_allocated = FALSE;
+    gd->random_allocated = FALSE;
+    gd->gd_allocated = FALSE;
+    gd->gd_allocated_2 = FALSE;
+    gd->tree_allocated = FALSE;
+    gd->bodytable_allocated = FALSE;
+
+    if (strlen(cmd->rootDir)==0 || strnull(cmd->rootDir))
+        gd->rootDirFlag = FALSE;
+    else
+        gd->rootDirFlag = TRUE;
 
     gd->flagPrint = TRUE;
 
@@ -724,54 +728,78 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
     class_call_cballs(StartOutput(cmd, gd), errmsg, errmsg);
 
+    debug_tracking_s("001", routineName);
+
     setFilesDirs(cmd, gd);
+    debug_tracking("002");
+
     setFilesDirs_log(cmd, gd);
+    debug_tracking("003");
+
     strcpy(gd->mode,"w");
-            if(!(gd->outlog=fopen(gd->logfilePath, gd->mode)))
-                error("\n%s: error opening file '%s' \n",
-                      routineName, gd->logfilePath);
+    if (cmd->verbose_log>0) {               // gd->outlog is defined
+        if(!(gd->outlog=fopen(gd->logfilePath, gd->mode)))
+            error("\n%s: error opening file '%s' \n",
+                  routineName, gd->logfilePath);
+    }
 
      class_call_cballs(startrun_getParamsSpecial(cmd, gd), errmsg, errmsg);
+    debug_tracking("004");
+
      class_call_cballs(random_init(cmd, gd, cmd->seed), errmsg, errmsg);
+
      class_call_cballs(CheckParameters(cmd, gd), errmsg, errmsg);
+
      class_call_cballs(startrun_memoryAllocation(cmd, gd), errmsg, errmsg);
 
     coordinate_string_to_int(cmd, gd);              // set coordTag
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "\n%s: coordTag: %d\n", routineName, gd->coordTag);
 
+    debug_tracking("005");
+
 //B Pre-processing necessary for reading data files:
-    char buf[200];
+    char buf[BUFFERSIZE];
     if (scanopt(cmd->options, "pre-processing")) {
         cpustartMiddle = CPUTIME;
         sprintf(buf,"%s",cmd->preScript);
-        verb_print(cmd->verbose,
-                   "\n%s: pre-processing: executing %s...\n",
-                   routineName, cmd->preScript);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\n%s: pre-processing: executing %s...\n",
+                               routineName, cmd->preScript);
         system(buf);
-        verb_print(cmd->verbose, " done.\n");
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               " done.\n");
         gd->cputotalinout += CPUTIME - cpustart;
-        verb_print(cmd->verbose, "%s: cpu time expended in this script %g\n\n",
-                   routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%s: cpu time expended in this script %g\n\n",
+                               routineName, CPUTIME - cpustartMiddle,
+                               PRNUNITOFTIMEUSED);
         if (scanopt(cmd->options, "stop")) {
-            verb_print(cmd->verbose, "\n\tMainLoop: stopping...\n\n");
+            verb_print_normal_info(cmd->verbose,
+                                   cmd->verbose_log, gd->outlog,
+                                   "\n\tMainLoop: stopping...\n\n");
             exit(1);
         }
     }
     if (scanopt(cmd->options, "statistics-histograms")) {
         statHistogram(cmd, gd);
-        verb_print(cmd->verbose, "\n\tpre-processing: stopping...\n\n");
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\n\tpre-processing: stopping...\n\n");
         exit(1);
     }
 
     if (scanopt(cmd->options, "edge-corrections-from-files")) {
         computeEdgeCorrections(cmd, gd);
-        verb_print(cmd->verbose, "\n\tpre-processing: stopping...\n\n");
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\n\tpre-processing: stopping...\n\n");
         exit(1);
     }
 //E
 
-//B In this section update computation of rSize and center-of-mass if necessary
+    debug_tracking("006");
+
+//B In this section update computation of rSize
+//      and center-of-mass if necessary
 //      so we have a common root size and c-of-m
     if (scanopt(cmd->options, "read-mask")) {
         if (gd->ninfiles < 2)
@@ -789,20 +817,34 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                     errmsg, errmsg);
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
+            debug_tracking_s("007",gd->infilenames[ifile]);
+
             if (!strnull(cmd->infile)) {
-                class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
-                                                          &gd->infilefmt_int), errmsg, errmsg);
-                class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
-                                  errmsg, errmsg);
+                debug_tracking_i("008",ifile);
+                debug_tracking_s("009", gd->infilefmtname[ifile]);
+                debug_tracking("010");
+                class_call_cballs(
+                            infilefmt_string_to_int(gd->infilefmtname[ifile],
+                            &gd->infilefmt_int), errmsg, errmsg);
+                debug_tracking_i("011",gd->infilefmt_int);
+                class_call_cballs(InputData(cmd, gd,
+                                            gd->infilenames[ifile],ifile),
+                                            errmsg, errmsg);
                 gd->model_comment = "input data file";
+                debug_tracking("012");
             } else {
-                verb_print(cmd->verbose,"\nNo data catalog was given...");
-                verb_print(cmd->verbose,"creating a test model...\n");
+                verb_print_normal_info(cmd->verbose,
+                                       cmd->verbose_log, gd->outlog,
+                                       "\nNo data catalog was given...");
+                verb_print_normal_info(cmd->verbose,
+                                       cmd->verbose_log, gd->outlog,
+                                       "creating a test model...\n");
                 TestData(cmd, gd);
                 gd->input_comment = "no data file given";
             }
         }
     }
+    debug_tracking("013");
 
     //B consider moving below after computing rsize
     if (scanopt(cmd->options, "all-in-one")) {
@@ -816,49 +858,56 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         ifile = 0;
         gd->ninfiles = 1;
         verb_print_warning(cmd->verbose,
-                           "Warning! ninfile has been set to 1.\n\n");
+                           "%s: Warning! ninfile has been set to 1.\n\n",
+                           routineName);
     }
 
     search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
 
     if (scanopt(cmd->options, "read-mask")) {
         ifile=0;
-        cellptr root;                               // Set it up a temporal root
+        cellptr root;                            // Set it up a temporal root
         root = (cellptr) allocate(1 * sizeof(body));
         FindRootCenter(cmd, gd,
                        bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
         centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
         FindRootCenter(cmd, gd,
                        bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-        //E
         gd->rSizeTable[ifile] = 1.0;
-        expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+        expandbox(cmd, gd, bodytable[ifile],
+                  gd->nbodyTable[ifile], ifile, root);
         free(root);
         if (cmd->rangeN > gd->rSizeTable[ifile])
-            verb_print(cmd->verbose,
-    "\n%s: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
-                       routineName, cmd->rangeN, gd->rSizeTable[ifile]);
+        verb_print_warning(cmd->verbose,
+        "\n%s: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
+                           routineName, cmd->rangeN, gd->rSizeTable[ifile]);
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
+            debug_tracking("014");
             //B
-            cellptr root;                               // Set it up a temporal root
+            cellptr root;                        // Set it up a temporal root
             root = (cellptr) allocate(1 * sizeof(body));
             FindRootCenter(cmd, gd,
-                           bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-            centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+                           bodytable[ifile],
+                           gd->nbodyTable[ifile], ifile, root);
+            centerBodies(bodytable[ifile],
+                         gd->nbodyTable[ifile], ifile, root);
             FindRootCenter(cmd, gd,
-                           bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+                           bodytable[ifile],
+                           gd->nbodyTable[ifile], ifile, root);
             //E
             gd->rSizeTable[ifile] = 1.0;
             expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
                       ifile, root);
             free(root);
             if (cmd->rangeN > gd->rSizeTable[ifile])
-                verb_print(cmd->verbose,
+                verb_print_warning(cmd->verbose,
     "\n%s: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
                            routineName, cmd->rangeN, gd->rSizeTable[ifile]);
+            debug_tracking("015");
         }
     }
+    debug_tracking("016");
 
     //B set output comment
     if (! strnull(cmd->outfile)) {
@@ -867,6 +916,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         gd->output_comment = "no output data file was given";
     }
     //E
+    debug_tracking("017");
 
 //B Tree search:
     gd->Rcut = cmd->rangeN;                         // Maximum search radius
@@ -967,15 +1017,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     verb_log_print(cmd->verbose_log, gd->outlog, "Box volume = %e\n",Vol);
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "(V/N)^(1/3): %g\n\n",rpow(Vol/cmd->nbody,1.0/3.0));
-    real avgDistance = rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0);
+    real avgDistance =
+                rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0);
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "Unit sphere (Takahasi): (S/N)^(1/2): %g\n",
                    avgDistance);
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "and Nsmooth (Takahasi): (N*rs^2)/4: %g\n\n",
-                   gd->nbodyTable[gd->iCatalogs[0]]*rpow(avgDistance,2.0)*0.25);
+                gd->nbodyTable[gd->iCatalogs[0]]*rpow(avgDistance,2.0)*0.25);
 
 //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
 // 180*60/Pi
 #define RADTOARCMIN   3437.74677
     //B cell size threshold computed for gd->iCatalogs[0] only...
@@ -984,7 +1036,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     rSizeTmp = gd->rSizeTable[gd->iCatalogs[0]];
     for (i = 1; i <= idepth; i++) {
         rSizeTmp = rSizeTmp/2.0;
-        verb_log_print(cmd->verbose_log, gd->outlog, "Cell size = %e\n",rSizeTmp);
+        verb_log_print(cmd->verbose_log, gd->outlog, "Cell size = %e\n",
+                       rSizeTmp);
         if (rSizeTmp < rpow(2.0*TWOPI/gd->nbodyTable[gd->iCatalogs[0]],1.0/2.0)) {
             verb_log_print(cmd->verbose_log, gd->outlog,
                            "Cell size threshold = %d\n",i);
@@ -1001,6 +1054,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     }
     //E
 #undef RADTOARCMIN
+#endif
 //E
 
     gd->stepState = (INTEGER)(((real)cmd->stepState)/10.0);
@@ -1008,7 +1062,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->deltaPhi = TWOPI/cmd->sizeHistPhi;
     // Nyquist frecuency = 1/(2 deltaPhi)
     verb_log_print(cmd->verbose_log, gd->outlog,
-                   "\nNyquist frequency in phi bins = %g\n",0.5/gd->deltaPhi);
+                   "\nNyquist frequency in phi bins = %g\n",
+                   0.5/gd->deltaPhi);
 
 //B socket:
 #ifdef ADDONS
@@ -1016,10 +1071,14 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
+    gd->gd_allocated = TRUE;
+    gd->gd_allocated_2 = TRUE;
+    gd->bodytable_allocated = TRUE;
+
+    debug_tracking("018... final");
+
     return SUCCESS;
 }
-
-
 
 
 //B Section of parameter check
@@ -1028,11 +1087,14 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 // If it is necessary: an item in cmdline_defs.h must have an item here::
     string routineName = "CheckParameters";
 
+    debug_tracking_s("001", routineName);
+
     //B Parameters related to the searching method
-    if (cmd->useLogHist==FALSE && (strcmp(cmd->searchMethod,"balls-omp") == 0))
+    if (cmd->useLogHist==FALSE &&
+        (strcmp(cmd->searchMethod,"balls-omp") == 0))
         error("%s: can´t have loghist false and balls-omp (%d %s)\n",
               routineName, cmd->useLogHist, cmd->searchMethod);
-    if (cmd->computeTPCF) {
+#ifdef TPCF
 #ifndef USEGSL
         //  for recursivity needs that at least 3 multipoles be evaluated
         if (scanopt(cmd->options, "out-HistZetaG")) {
@@ -1055,22 +1117,32 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
         if (cmd->mChebyshev + 1 < 3)
             error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive\n", cmd->mChebyshev+1);
 #endif
-    }
+#endif
     if (cmd->mChebyshev + 1 > cmd->sizeHistPhi)
         error("CheckParameters: mChebyshev + 1 must be less than sizeHistPhi\n");
-    if (gd->nsmooth[0] < 1)
-        error("CheckParameters: absurd value for nsmooth\n");
-    if (gd->rsmooth[0] < 0 || gd->rsmoothFlag==FALSE)
-        error("CheckParameters: absurd value for rsmooth (%s)\n",cmd->rsmooth);
+    if (cmd->nsmooth < 1)
+        error("%s: absurd value for nsmooth: %d\n",
+              routineName, cmd->nsmooth);
+    debug_tracking("002");
+
+    if (!strnull(cmd->rsmooth)) {
+        if (gd->rsmooth[0] < 0.0 || gd->rsmoothFlag==FALSE)
+            error("CheckParameters: absurd value for rsmooth (%s, %g, %d)\n",
+                  cmd->rsmooth, gd->rsmooth[0], gd->rsmoothFlag);
+    } else {
+        gd->rsmooth[0] = 0.0;
+    }
     if (cmd->theta < 0)
         error("CheckParameters: absurd value for theta\n");
-    // We can get ride off one parameter if do sizeHistPhi = 2(mChebyshev + 1)
+    // We can get ride off one parameter if do sizeHistPhi = 2(mChebyshev+1)
     //E
+
+    debug_tracking("003");
 
     //B Parameters to control the I/O file(s)
     // Input catalog parameters
     // Output parameters
-    // Parameters to set a region in the sky, for example for Takahasi data set
+    // Parameters to set a region in the sky, for example for Takahashi data
     if (cmd->thetaL < 0 || cmd->thetaL > PI)
         error("CheckParameters: absurd value for thetaL (must be in the range 0--pi)\n");
     if (cmd->thetaR < 0 || cmd->thetaR > PI)
@@ -1084,6 +1156,8 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
     if (cmd->phiL > cmd->phiR)
         error("CheckParameters: absurd value for phiL (must be greater thatn phiR)\n");
     //E
+
+    debug_tracking("004");
 
     //B Parameters to control histograms and their output files
     if (cmd->useLogHist==TRUE && cmd->rminHist == 0)
@@ -1110,6 +1184,8 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 
     //E
 
+    debug_tracking("005");
+
     //B Miscellaneous parameters
     if (cmd->stepState <= 0)
         error("%s: absurd value for stepState must be an integer > 0\n",
@@ -1126,6 +1202,7 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
               routineName);
 #endif
     //E
+    debug_tracking("006");
 
     //
     gd->bh86 = scanopt(cmd->options, "bh86");       // Barnes, J. & Hut, P.
@@ -1135,15 +1212,20 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
                                                     //  Warren, M.S. 1994.
                                                     //  J. Comp. Phys. 111,
                                                     //  136
+    debug_tracking("007");
+
     if (gd->bh86 && gd->sw94)
         error("%s: incompatible options bh86 and sw94\n", routineName);
     //
+
+    debug_tracking("008... follows OCTREESMOOTHING and IOLIB...");
 
 //B socket:
 #ifdef ADDONS
 #include "startrun_include_07.h"
 #endif
 //E
+    debug_tracking("013... final");
 
     return SUCCESS;
 }
@@ -1157,17 +1239,20 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 #define FMTR	"%-35s = %g\n"
 
 //B Section of parameter writing to a file
-//local int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
-int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
+int PrintParameterFile(struct  cmdline_data *cmd,
+                       struct  global_data* gd, char *fname)
 {
 // Every item in cmdline_defs.h must have an item here::
-
     string routineName = "PrintParameterFile";
+
     FILE *fdout;
     char buf[200];
     int  errorFlag=0;
 
-//B Look for "/" if fname is composed: path and filename
+    debug_tracking_s("001", routineName);
+
+    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
+        //B Look for "/" if fname is composed: path and filename
         int ndefault = 0;
         int ipos;
         char *dp;
@@ -1188,105 +1273,108 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
                          ndefault, ipos, dp);
             sprintf(buf,"%s/%s%s",cmd->rootDir,dp,"-usedvalues");
         }
-//E
-
-    if(!(fdout=fopen(buf,"w"))) {
-        fprintf(stdout,"error opening file '%s' \n",buf);
-        errorFlag=1;
-    } else {
-        //B Parameters related to the searching method
-        fprintf(fdout,FMTT,"searchMethod",cmd->searchMethod);
-        fprintf(fdout,FMTI,"mChebyshev",cmd->mChebyshev);
-        fprintf(fdout,FMTT,"nsmooth",cmd->nsmooth);
-        fprintf(fdout,FMTT,"rsmooth",cmd->rsmooth);
-        fprintf(fdout,FMTR,"theta",cmd->theta);
-        fprintf(fdout,FMTT,"computeTPCF",cmd->computeTPCF ? "true" : "false");
-        //B correction 2025-04-06
-        // Move this to addon that compute shear correlations
-//        fprintf(fdout,FMTT,"computeShearCF",
-//                cmd->computeShearCF ? "true" : "false");
-        //E
-        fprintf(fdout,FMTT,"usePeriodic",cmd->usePeriodic ? "true" : "false");
-        //E
-
-        //B Parameters to control the I/O file(s)
-        // Input catalog parameters
-        fprintf(fdout,FMTT,"infile",cmd->infile);
-        fprintf(fdout,FMTT,"infileformat",cmd->infilefmt);
-        fprintf(fdout,FMTT,"iCatalogs",cmd->iCatalogs);
-        // Output parameters
-        fprintf(fdout,FMTT,"rootDir",cmd->rootDir);
-        fprintf(fdout,FMTT,"outfile",cmd->outfile);
-        fprintf(fdout,FMTT,"outfileformat",cmd->outfilefmt);
-        // Parameters to set a region in the sky, for example for Takahasi data set
-        fprintf(fdout,FMTR,"thetaL",cmd->thetaL);
-        fprintf(fdout,FMTR,"thetaR",cmd->thetaR);
-        fprintf(fdout,FMTR,"phiL",cmd->phiL);
-        fprintf(fdout,FMTR,"phiR",cmd->phiR);
-        //E
-
-        //B Parameters to control histograms and their output files
-        fprintf(fdout,FMTT,"useLogHist",cmd->useLogHist ? "true" : "false");
-        fprintf(fdout,FMTI,"logHistBinsPD",cmd->logHistBinsPD);
-        //
-        fprintf(fdout,FMTI,"sizeHistN",cmd->sizeHistN);
-        fprintf(fdout,FMTR,"rangeN",cmd->rangeN);
-        fprintf(fdout,FMTR,"rminHist",cmd->rminHist);
-        fprintf(fdout,FMTI,"sizeHistPhi",cmd->sizeHistPhi);
-        //
-        fprintf(fdout,FMTT,"histNNFileName",cmd->histNNFileName);
-        fprintf(fdout,FMTT,"histXi2pcfFileName",cmd->histXi2pcfFileName);
-        fprintf(fdout,FMTT,"histZetaFileName",cmd->histZetaFileName);
-        fprintf(fdout,FMTT,"suffixOutFiles",cmd->suffixOutFiles);
         //E
         
-        //B Set of parameters needed to construct a test model
-        fprintf(fdout,FMTI,"seed",cmd->seed);
-        fprintf(fdout,FMTT,"testmodel",cmd->testmodel);
+        if(!(fdout=fopen(buf,"w"))) {
+            fprintf(stdout,"error opening file '%s' \n",buf);
+            errorFlag=1;
+        } else {
+            //B Parameters related to the searching method
+            fprintf(fdout,FMTT,"searchMethod",cmd->searchMethod);
+            fprintf(fdout,FMTI,"mChebyshev",cmd->mChebyshev);
+            fprintf(fdout,FMTI,"nsmooth",cmd->nsmooth);
+            fprintf(fdout,FMTT,"rsmooth",cmd->rsmooth);
+            fprintf(fdout,FMTR,"theta",cmd->theta);
+            fprintf(fdout,FMTT,"usePeriodic",
+                    cmd->usePeriodic ? "true" : "false");
+            //E
+            
+            //B Parameters to control the I/O file(s)
+            // Input catalog parameters
+            fprintf(fdout,FMTT,"infile",cmd->infile);
+            fprintf(fdout,FMTT,"infileformat",cmd->infilefmt);
+            fprintf(fdout,FMTT,"iCatalogs",cmd->iCatalogs);
+            // Output parameters
+            fprintf(fdout,FMTT,"rootDir",cmd->rootDir);
+            fprintf(fdout,FMTT,"outfile",cmd->outfile);
+            fprintf(fdout,FMTT,"outfileformat",cmd->outfilefmt);
+            // Parameters to set a region in the sky,
+            //  for example for Takahashi data set
+            fprintf(fdout,FMTR,"thetaL",cmd->thetaL);
+            fprintf(fdout,FMTR,"thetaR",cmd->thetaR);
+            fprintf(fdout,FMTR,"phiL",cmd->phiL);
+            fprintf(fdout,FMTR,"phiR",cmd->phiR);
+            //E
+            
+            //B Parameters to control histograms and their output files
+            fprintf(fdout,FMTT,"useLogHist",cmd->useLogHist ? "true" : "false");
+            fprintf(fdout,FMTI,"logHistBinsPD",cmd->logHistBinsPD);
+            //
+            fprintf(fdout,FMTI,"sizeHistN",cmd->sizeHistN);
+            fprintf(fdout,FMTR,"rangeN",cmd->rangeN);
+            fprintf(fdout,FMTR,"rminHist",cmd->rminHist);
+            fprintf(fdout,FMTI,"sizeHistPhi",cmd->sizeHistPhi);
+            //
+            fprintf(fdout,FMTT,"histNNFileName",cmd->histNNFileName);
+            fprintf(fdout,FMTT,"histXi2pcfFileName",cmd->histXi2pcfFileName);
+            fprintf(fdout,FMTT,"histZetaFileName",cmd->histZetaFileName);
+            fprintf(fdout,FMTT,"suffixOutFiles",cmd->suffixOutFiles);
+            //E
+            
+            //B Set of parameters needed to construct a test model
+            fprintf(fdout,FMTI,"seed",cmd->seed);
+            fprintf(fdout,FMTT,"testmodel",cmd->testmodel);
 #ifdef LONGINT
-        fprintf(fdout,FMTIL,"nbody",cmd->nbody);
+            fprintf(fdout,FMTIL,"nbody",cmd->nbody);
 #else
-        fprintf(fdout,FMTI,"nbody",cmd->nbody);
+            fprintf(fdout,FMTI,"nbody",cmd->nbody);
 #endif
-        fprintf(fdout,FMTR,"lengthBox",cmd->lengthBox);
-        //E
-
-        //B Miscellaneous parameters
-//        fprintf(fdout,FMTTS,"script",cmd->script);
-        fprintf(fdout,FMTTS,"preScript",cmd->preScript);
-        fprintf(fdout,FMTTS,"posScript",cmd->posScript);
+            fprintf(fdout,FMTR,"lengthBox",cmd->lengthBox);
+            //E
+            
+            //B Miscellaneous parameters
+            fprintf(fdout,FMTTS,"preScript",cmd->preScript);
+            fprintf(fdout,FMTTS,"posScript",cmd->posScript);
 #ifdef LONGINT
-        fprintf(fdout,FMTIL,"stepState",cmd->stepState);
+            fprintf(fdout,FMTIL,"stepState",cmd->stepState);
 #else
-        fprintf(fdout,FMTI,"stepState",cmd->stepState);
+            fprintf(fdout,FMTI,"stepState",cmd->stepState);
 #endif
-        fprintf(fdout,FMTI,"verbose",cmd->verbose);
-        fprintf(fdout,FMTI,"verbose_log",cmd->verbose_log);
+            fprintf(fdout,FMTI,"verbose",cmd->verbose);
+            fprintf(fdout,FMTI,"verbose_log",cmd->verbose_log);
 #ifdef OPENMPCODE
-        fprintf(fdout,FMTI,"numberThreads",cmd->numthreads);
+            fprintf(fdout,FMTI,"numberThreads",cmd->numthreads);
 #endif
-        if (cmd->verbose>=VERBOSEDEBUGINFO) {
-            verb_print(cmd->verbose, "\n%s: PrintParamterFile: preScript: %s\n",
-                       routineName, cmd->preScript);
-            verb_print(cmd->verbose, "\n%s: PrintParamterFile: posScript: %s\n",
-                       routineName, cmd->posScript);
-        }
-        fprintf(fdout,FMTT,"options",cmd->options);
-        //E
-
-//B socket:
+            if (cmd->verbose>=VERBOSEDEBUGINFO) {
+                verb_print(cmd->verbose, "\n%s: PrintParamterFile: preScript: %s\n",
+                           routineName, cmd->preScript);
+                verb_print(cmd->verbose, "\n%s: PrintParamterFile: posScript: %s\n",
+                           routineName, cmd->posScript);
+            }
+            fprintf(fdout,FMTT,"options",cmd->options);
+            //E
+            
+            //B socket:
 #ifdef ADDONS
 #include "startrun_include_08.h"
 #endif
-//E
+            //E
+            
+            fprintf(fdout,"\n\n");
+        }
+        fclose(fdout);
+        
+        if(errorFlag) {
+            exit(0);
+        }
+        
+        if (ndefault != 0)
+            free(dp);
+        
+    } // ! gd->flagPrint==TRUE && gd->rootDirFlag==TRUE
 
-        fprintf(fdout,"\n\n");
-    }
-    fclose(fdout);
+    debug_tracking("002... final");
 
-    if(errorFlag) {
-        exit(0);
-    }
 
     return SUCCESS;
 }
@@ -1301,29 +1389,36 @@ int PrintParameterFile(struct  cmdline_data *cmd, char *fname)
 local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int seed)
 {
     string routineName = "random_init";
+
+    gd->random_allocated = FALSE;
+
 #ifdef USEGSL
     const gsl_rng_type * T;
     gsl_rng_env_setup();
     T = gsl_rng_default;
     gd->r = gsl_rng_alloc (T);                      // Deallocate at EndRun...
-    if (cmd->verbose>=3)
-        verb_print(cmd->verbose, "\n%s: gd->r and seed = %d %d\n",
-                   routineName, *(gd->r), seed);
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "\n%s: gd->r and seed = %d %d\n",
+                          routineName, *(gd->r), seed);
     gsl_rng_set(gd->r, seed);
-    if (cmd->verbose>=3)
-        verb_print(cmd->verbose, "\n%s: gd->r and seed = %d %d\n",
-                   routineName, *(gd->r), seed);
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "\n%s: gd->r and seed = %d %d\n",
+                          routineName, *(gd->r), seed);
     r_gsl = gd->r;
     gd->bytes_tot += (1)*sizeof(gsl_rng_type);
+
+    gd->random_allocated = TRUE;
+
 #else
     idum = (long)seed;
     saveidum=idum;
-    if (cmd->verbose>=3)
-        verb_print(cmd->verbose, "\n%s: idum and seed = %d %d\n",
-                   routineName, idum, seed);
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "\n%s: idum and seed = %d %d\n",
+                          routineName, idum, seed);
     xsrandom(idum);
-    if (cmd->verbose>=3)
-        verb_print(cmd->verbose, "\n%s: idum = %d\n",routineName, idum);
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "\n%s: idum = %d\n",
+                          routineName, idum);
 #endif
 
     return SUCCESS;
@@ -1352,9 +1447,9 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     gd->histNNSub = dvector(1,cmd->sizeHistN);
     // 2pcf
     gd->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     gd->histNNSubXi2pcftotal = dvector(1,cmd->sizeHistN);
-    //E
+#endif
     //
     gd->histNNN = dvector(1,cmd->sizeHistN);
     gd->histXi2pcf = dvector(1,cmd->sizeHistN);
@@ -1362,7 +1457,7 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     bytes_tot_local += 8*cmd->sizeHistN*sizeof(real);
     bytes_tot_local += cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
-    if (cmd->computeTPCF) {
+#ifdef TPCF
         gd->histXicos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         gd->histXisin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         bytes_tot_local += 2*(cmd->mChebyshev+1)*cmd->sizeHistN*sizeof(real);
@@ -1372,52 +1467,55 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
                 (cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
         gd->histZetaMcos =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                dmatrix3D(1,cmd->mChebyshev+1,1,
+                          cmd->sizeHistN,1,cmd->sizeHistN);
         gd->histZetaMsin =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                dmatrix3D(1,cmd->mChebyshev+1,1,
+                          cmd->sizeHistN,1,cmd->sizeHistN);
         gd->histZetaMsincos =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                dmatrix3D(1,cmd->mChebyshev+1,1,
+                          cmd->sizeHistN,1,cmd->sizeHistN);
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
         gd->histZetaMcossin =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                dmatrix3D(1,cmd->mChebyshev+1,1,
+                          cmd->sizeHistN,1,cmd->sizeHistN);
         bytes_tot_local +=
-                4*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-#ifdef USEGSL
-        //B Do not use anymore...
-        /*
-        gd->histXi_gsl = gsl_matrix_complex_calloc(cmd->mChebyshev+1,cmd->sizeHistN);
-        bytes_tot_local += (cmd->mChebyshev+1)*cmd->sizeHistN*2*sizeof(real);
-
-        histZetaMatrix = (mMatrix_ptr) allocate((cmd->mChebyshev+1) * sizeof(mMatrix));
-        int m;
-        for (m=0; m<=cmd->mChebyshev; m++){
-            histZetaMatrix[m].histZetaM =
-            gsl_matrix_complex_calloc(cmd->sizeHistN,cmd->sizeHistN);
-        }
-        bytes_tot_local += 
-                (cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*2*sizeof(real);
-        */
-        //E
-#endif
+            4*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
         gd->histZetaGmRe =
-                    dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                    dmatrix3D(1,cmd->mChebyshev+1,1,
+                              cmd->sizeHistN,1,cmd->sizeHistN);
         gd->histZetaGmIm =
-                    dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                    dmatrix3D(1,cmd->mChebyshev+1,1,
+                              cmd->sizeHistN,1,cmd->sizeHistN);
         bytes_tot_local +=
-                2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    } // ! computeTPCF
+            2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+#endif
 
 //B socket:
 #ifdef ADDONS
+    // this is empty and can be remove these 3 lines
 #include "startrun_include_10.h"                    // should be sync with
-                                                    //  "cballsio_include_10.h"
+                                                //  "cballsio_include_10.h"
 #endif
 //E
+
+    //B this were in startrun_include_10.h -> startrun_octree_kkk_omp_10.h above...
+    // problems with OCTREEKKKOMPON = 0
+    // 2pcf
+    gd->histNNSubN2pcf = dvector(1,cmd->sizeHistN);
+#ifdef SMOOTHPIVOT
+    gd->histNNSubN2pcftotal = dvector(1,cmd->sizeHistN);
+#endif
+    gd->histN2pcf = dvector(1,cmd->sizeHistN);
+    bytes_tot_local += 3*cmd->sizeHistN*sizeof(real);
+    //E
 
     gd->bytes_tot += bytes_tot_local;
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "\n%s: Allocated %g MByte for histograms storage.\n",
                            routineName, bytes_tot_local*INMB);
+
+    gd->histograms_allocated = TRUE;
 
     return SUCCESS;
 }
@@ -1428,8 +1526,8 @@ local void search_method_string_to_int(string method_str,int *method_int)
     *method_int=-1;
     if (strnull(method_str))
                 *method_int = SEARCHNULL;
-    if (strcmp(method_str,"tree-omp-sincos") == 0)
-                *method_int = TREEOMPMETHODSINCOS;
+    if (strcmp(method_str,"octree-sincos-omp") == 0)
+                *method_int = OCTREESINCOSOMPMETHOD;
 
 //B socket:
 #ifdef ADDONS
@@ -1455,121 +1553,133 @@ int SetNumberThreads(struct  cmdline_data *cmd)
 local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
                                     struct  global_data* gd)
 {
+    string routineName = "startrun_getParamsSpecial";
     char *pch;
     int nitems, ndummy=1;
     char inputnametmp[MAXLENGTHOFSTRSCMD];
     int i;
+    size_t slen;
+
+    debug_tracking_s("001", routineName);
 
     if (strnull(cmd->infile)) {
-        if (cmd->verbose_log>=3)
-       verb_log_print(cmd->verbose_log, gd->outlog,
-            "\nstartrun_getParamsSpecial: no inputfile was given, making data ...\n");
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\n%s: no inputfile was given, making data ...\n",
+                        routineName);
         gd->ninfiles=1;                              // To test data...
     } else {
         strcpy(inputnametmp,cmd->infile);
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "\nSplitting string \"%s\" in tokens:\n",inputnametmp);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "\n%s: Splitting string \"%s\" in tokens:\n",
+                              routineName, inputnametmp);
         gd->ninfiles=0;
         pch = strtok(inputnametmp," ,");
         while (pch != NULL) {
-            gd->infilenames[gd->ninfiles] = (string) malloc(MAXLENGTHOFFILES);
-            strcpy(gd->infilenames[gd->ninfiles],pch);
+            slen = strlen(pch);
+            snprintf(gd->infilenames[gd->ninfiles],
+                     slen+1, "%s", pch);
             ++gd->ninfiles;
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, "%s\n",
-                           gd->infilenames[gd->ninfiles-1]);
+            verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                  "%s: %s\n",
+                            routineName, gd->infilenames[gd->ninfiles-1]);
             pch = strtok (NULL, " ,");
         }
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "num. of files in infile %s =%d\n",cmd->infile,gd->ninfiles);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: num. of files in infile %s =%d\n",
+                            routineName, cmd->infile, gd->ninfiles);
     }
+    debug_tracking("002");
 
     if (!strnull(cmd->infilefmt)) {
         strcpy(inputnametmp,cmd->infilefmt);
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "\nSplitting string \"%s\" in tokens:\n",inputnametmp);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "\n%s: Splitting string \"%s\" in tokens:\n",
+                            routineName, inputnametmp);
         nitems=0;
         pch = strtok(inputnametmp," ,");
         while (pch != NULL) {
-            gd->infilefmtname[nitems] = (string) malloc(30);
-            strcpy(gd->infilefmtname[nitems],pch);
+            slen = strlen(pch);
+            debug_tracking_s("003: pch",pch);
+            snprintf(gd->infilefmtname[nitems],
+                     slen+1, "%s", pch);
             ++nitems;
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                           "%s\n",gd->infilefmtname[nitems-1]);
+            verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                  "%s: %s\n",
+                                routineName, gd->infilefmtname[nitems-1]);
             pch = strtok (NULL, " ,");
+            debug_tracking_i("004: not null infilefmt", nitems);
+            debug_tracking_s("...", gd->infilefmtname[nitems-1]);
         }
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog,
-                       "num. of items in infilefmt %s =%d\n",cmd->infilefmt,nitems);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: num. of items in infilefmt %s =%d\n",
+                            routineName, cmd->infilefmt, nitems);
+        if (nitems != gd->ninfiles)
+    error("\nstartrun_Common: nitems must be equal to number of files\n\n");
+        debug_tracking("005: not null infilefmt");
+
+    } else {
+        nitems=1;
+        pch = "columns-ascii";
+        strcpy(gd->infilefmtname[nitems],pch);
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: warning!! found null infilefmt:\n",
+                            routineName);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: %s\n",
+                            routineName, gd->infilefmtname[nitems-1]);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: num. of items in infilefmt %s =%d\n",
+                            routineName, cmd->infilefmt, nitems);
         if (nitems != gd->ninfiles)
             error("\nstartrun_Common: nitems must be equal to number of files\n\n");
+        debug_tracking("006: null infilefmt");
     }
 
-    scaniOption(cmd, gd, cmd->nsmooth, gd->nsmooth, &nitems, 1, 1, "nsmooth");
-
-#ifdef BALLS
-    verb_log_print(cmd->verbose_log, gd->outlog, 
-                   "\nSplitting string \"%s\" in tokens:\n",cmd->scanLevelMin);
-    scaniOption(cmd, gd, cmd->scanLevelMin, gd->scanLevelMin, &nitems, ndummy,
-                2, "scanLevelMin");
-
-    if (nitems==1)
-        gd->scanLevelMin[1]=gd->scanLevelMin[0]-1;
-    if (strnull(cmd->scanLevelMin)) {
-        gd->scanLevelMin[0]=0;
-        if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, "option: %d\n",
-                           gd->scanLevelMin[0]);
-        gd->scanLevelMin[1]=gd->scanLevelMin[0]-1;
-        if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, "option: %d\n",
-                           gd->scanLevelMin[1]);
-    }
-#endif
+    debug_tracking("007");
 
     scanrOption(cmd, gd, cmd->rsmooth, gd->rsmooth, &nitems, ndummy,
                 2, "rsmooth");
     gd->rsmoothFlag = TRUE;
     if (nitems!=1 && !strnull(cmd->rsmooth)) {
-        if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                           "option: rsmooth=%s is not valid... going out\n",
-                           cmd->rsmooth);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: option: rsmooth=%s is not valid... going out\n",
+                              routineName, cmd->rsmooth);
         gd->rsmoothFlag = FALSE;
     }
+
+    debug_tracking("008");
 
     scaniOption(cmd, gd, cmd->iCatalogs, gd->iCatalogs,
                 &nitems, gd->ninfiles, 0, "iCatalogs");
     if (gd->ninfiles==1) {
         (gd->iCatalogs[0]) = 0;
         if (cmd->verbose_log>=2)
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                        "option: iCatalogs final values: %d\n",
-                        gd->iCatalogs[0]);
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                       "%s: option: iCatalogs final values: %d\n",
+                       routineName, gd->iCatalogs[0]);
         (gd->iCatalogs[1]) = 0;
         if (cmd->verbose_log>=2)
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                        "option: iCatalogs final values: %d\n",
-                        gd->iCatalogs[1]);
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                       "%s: option: iCatalogs final values: %d\n",
+                       routineName, gd->iCatalogs[1]);
     } else {
         for (i=0; i<gd->ninfiles; i++) {
             (gd->iCatalogs[i])--;
             if (cmd->verbose_log>=2)
                 verb_log_print(cmd->verbose_log, gd->outlog,
-                        "option: iCatalogs final values: %d\n",
-                        gd->iCatalogs[i]);
+                               "%s:option: iCatalogs final values: %d\n",
+                               routineName, gd->iCatalogs[i]);
         }
     }
+
+    debug_tracking("009");
 
 //B socket:
 #ifdef ADDONS
 #include "startrun_include_12.h"
 #endif
 //E
+    debug_tracking("010... final");
 
     return SUCCESS;
 }
@@ -1578,40 +1688,39 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
                       string optionstr, int *option, int *noption,
                       int nfiles, int flag, string message)
 {
+    string routineName = "scaniOption";
     char *pch;
     char *poptionstr[30],  optiontmp[100];
     int i;
 
-    if (cmd->verbose_log>=3)
-    verb_log_print(cmd->verbose_log, gd->outlog, 
-                   "\nProcessing '%s' option:\n", message);
+    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\n%s: Processing '%s' option:\n",
+                        routineName, message);
 
     verb_log_print(cmd->verbose_log, gd->outlog,
-                   "\nSplitting string \"%s=%s\" in tokens:\n",
-                   message, optionstr);
+                           "%s: Splitting string \"%s=%s\" in tokens:\n",
+                        routineName, message, optionstr);
 
     if (!strnull(optionstr)) {
         strcpy(optiontmp,optionstr);
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog, 
-                       "\nSplitting string \"%s\" in tokens:\n",
-                       optiontmp);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%s: Splitting string \"%s\" in tokens:\n",
+                            routineName, optiontmp);
         *noption=0;
         pch = strtok(optiontmp," ,");
         while (pch != NULL) {
             poptionstr[*noption] = (string) malloc(10);
             strcpy(poptionstr[*noption],pch);
             ++(*noption);
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                           "%s\n",poptionstr[*noption-1]);
+            verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                  "%s: %s\n",
+                                routineName, poptionstr[*noption-1]);
             pch = strtok (NULL, " ,");
         }
 
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog, 
-                       "num. of tokens in option %s =%d\n", 
-                       optionstr,*noption);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%s: num. of tokens in option %s =%d\n",
+                            routineName, optionstr, *noption);
 
         if (flag == 0)
             if (*noption != nfiles)
@@ -1625,13 +1734,13 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
 
         for (i=0; i<*noption; i++) {
             option[i]=atoi(poptionstr[i]);
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, 
-                           "option: %d\n",option[i]);
+            verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "%s: option: %d\n",
+                                routineName, option[i]);
         }
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog, 
-                       "\nnoptions, nfiles: %d %d\n",*noption,nfiles);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%s: noptions, nfiles: %d %d\n\n",
+                            routineName, *noption,nfiles);
         if (flag == 1) {
             if (*noption > nfiles)
                 error("\nscanOption: noption = %d %s",
@@ -1640,19 +1749,31 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
             else {
                 for (i=*noption; i<nfiles; i++) {
                     option[i]=option[i-1]+1;
-                    if (cmd->verbose_log>=3)
-                    verb_log_print(cmd->verbose_log, gd->outlog, 
-                                   "option: %d\n",option[i]);
+                    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                           "%s: option: %d\n",
+                                        routineName, option[i]);
                 }
             }
         }
     } else {
-        for (i=0; i<nfiles; i++) {
-            option[i]=1;
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, 
-                           "option: %d\n",option[i]);
+        //B ask a question if optionstr is columns then fix columns to default values..
+        if (scanopt(message, "columns")) {
+            gd->columns[0] = 1;
+            gd->columns[1] = 2;
+            gd->columns[2] = 3;
+            gd->columns[3] = 4;
+            gd->columns[4] = 5;
+            gd->columns[5] = 6;
+            gd->columns[6] = 7;
+        } else {
+            for (i=0; i<nfiles; i++) {
+                option[i]=1;
+                verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                       "%s: option: %d\n",
+                                       routineName, option[i]);
+            }
         }
+        //E
     }
 
     return SUCCESS;
@@ -1662,36 +1783,39 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
                       string optionstr, double *option, int *noption,
     int nfiles, int flag, string message)
 {
+    string routineName = "scanrOption";
+
     char *pch;
     char *poptionstr[30],  optiontmp[100];
     int i;
 
-    if (cmd->verbose_log>=3)
-    verb_log_print(cmd->verbose_log, gd->outlog, 
-                   "\nProcessing '%s' option:\n", message);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                           "\n%s: Processing '%s' option:\n",
+                        routineName, message);
 
-    verb_log_print(cmd->verbose_log, gd->outlog, 
-                   "\nSplitting string \"%s\" in tokens:\n",message);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                           "%s: Splitting string \"%s\" in tokens:\n",
+                        routineName, message);
 
     if (!strnull(optionstr)) {
         strcpy(optiontmp,optionstr);
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog, 
-                       "\nSplitting string \"%s\" in tokens:\n",optiontmp);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\n%s: Splitting string \"%s\" in tokens:\n",
+                            routineName, optiontmp);
         *noption=0;
         pch = strtok(optiontmp," ,");
         while (pch != NULL) {
-            poptionstr[*noption] = (string) malloc(10);
+            poptionstr[*noption] = (string) malloc(MAXLENGTHOFREAL);
             strcpy(poptionstr[*noption],pch);
             ++(*noption);
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                           "%s\n",poptionstr[*noption-1]);
+            verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                  "%s: %s\n",
+                                routineName, poptionstr[*noption-1]);
             pch = strtok (NULL, " ,");
         }
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog, 
-                       "num. of tokens in option %s =%d\n", optionstr,*noption);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: num. of tokens in option %s =%d\n",
+                            routineName, optionstr, *noption);
 
         if (flag == 0)
             if (*noption != nfiles)
@@ -1707,9 +1831,9 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
             verb_log_print(cmd->verbose_log, gd->outlog, "option: %g\n",option[i]);
         }
 
-        if (cmd->verbose_log>=3)
-        verb_log_print(cmd->verbose_log, gd->outlog, 
-                       "\nnoptions, nfiles: %d %d\n",*noption,nfiles);
+        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "\n%s: noptions, nfiles: %d %d\n",
+                            routineName, *noption, nfiles);
         if (flag == 1) {
             if (*noption > nfiles)
     error("\nscanOption: noption = %d must be less or equal to number of files\n\n",
@@ -1723,11 +1847,17 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
                 }
             }
         }
+
+        for (i=0; i<*noption; i++) {
+            free(poptionstr[*noption]);
+        }
+
     } else {
         for (i=0; i<nfiles; i++) {
-            option[i]=0;                            // Be aware of this values
-            if (cmd->verbose_log>=3)
-            verb_log_print(cmd->verbose_log, gd->outlog, "option: %d\n",option[i]);
+            option[i]=0.0;                          // Be aware of this values
+            verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "%s: option: %d\n",
+                                routineName, option[i]);
         }
     }
 
@@ -1753,14 +1883,33 @@ local int print_make_info(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "using OpenMP\n");
 #endif
 
-//B correction 2025-04-06
-//#ifdef MANUALCHEBYSHEV
-//    verb_print(cmd->verbose, "MANUALCHEBYSHEV\n");
-//#endif
-//E correction 2025-04-06
-
 #ifdef SINGLEP
     verb_print(cmd->verbose, "SINGLEP\n");
+#endif
+
+#ifdef SMOOTHPIVOT
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                            "with option smooth-pivot...\n");
+#endif
+
+#ifdef BALLS4SCANLEV
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "with BALLS4SCANLEV... \n");
+#endif
+
+#ifdef TWOPCF
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "with 2pcf convergence computation... \n");
+#endif
+
+#ifdef THREEPCFCONVERGENCE
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "with 3pcf convergence computation... \n");
+#endif
+
+#ifdef THREEPCFSHEAR
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "with 3pcf shear computation... \n");
 #endif
 
 #ifdef KappaAvgON
@@ -1797,6 +1946,10 @@ local int print_make_info(struct cmdline_data* cmd,
 
 #ifdef BALLS
     verb_print(cmd->verbose, "with BALLS\n");
+#endif
+
+#ifdef OCTREESMOOTHING
+    verb_print(cmd->verbose, "with OCTREESMOOTHING\n");
 #endif
 
 #ifdef SINCOS
@@ -1841,6 +1994,10 @@ local int print_make_info(struct cmdline_data* cmd,
 
 #ifdef OCTREEKKKOMP
     verb_print(cmd->verbose, "with OCTREEKKKOMP\n");
+#endif
+
+#ifdef OCTREEGGGOMP
+    verb_print(cmd->verbose, "with OCTREEGGGOMP\n");
 #endif
 
 #ifdef NMultipoles

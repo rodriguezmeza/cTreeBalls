@@ -220,9 +220,9 @@ typedef struct {
     real *histWW;                   // used
     real *histCF;                   // used
     real *histNNSubXi2pcf;          // used
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcftotal;   // used
-    //E
+#endif
     real *histXi2pcf;               // used
 #endif
 
@@ -254,10 +254,10 @@ typedef struct {
     realptr histWthread;            // used
     realptr histWWthread;            // used
     realptr histNNSubXi2pcfthread;  // used
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcfthreadp; // used
     realptr histNNSubXi2pcfthreadtotal; // used
-    //E
+#endif
     real *histXi2pcfthread;         // used
     real *histXi2pcfthreadsub;      // used
 #endif
@@ -327,9 +327,9 @@ typedef struct {
     real *histWW;                   // used
      real *histCF;                   // used
      real *histNNSubXi2pcf;          // used
-     //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
      realptr histNNSubXi2pcftotal;   // used
-     //E
+#endif
      real *histXi2pcf;               // used
  #endif
 
@@ -360,10 +360,10 @@ typedef struct {
     realptr histWthread;            // used
     realptr histWWthread;            // used
     realptr histNNSubXi2pcfthread;  // used
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcfthreadp; // used
     realptr histNNSubXi2pcfthreadtotal; // used
-    //E
+#endif
     real *histXi2pcfthread;         // used
     real *histXi2pcfthreadsub;      // used
 #endif
@@ -719,7 +719,7 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
 #endif // ! NMultipoles
 //E
 
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
 #ifdef DEBUG
 local char pivotsfilePath[MAXLENGTHOFFILES];
 local FILE *outpivots;
@@ -742,9 +742,8 @@ local void sumnode_nblist_omp(struct cmdline_data* cmd,
                               int cat1, int cat2,
                               bodyptr p,
                               gdhistptr_sincos_omp_ggg hist, int);
-
 #endif
-//E
+#endif
 
 #include <pthread.h>
 
@@ -785,27 +784,31 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif
 
     cpustart = CPUTIME;
+    gd->cpusearch = 0.0;
     print_info(cmd, gd);
+    debug_tracking_s("001",routineName);
+
     if (cmd->useLogHist==FALSE &&
         (strcmp(cmd->searchMethod,"octree-ggg-omp") == 0))
-//        error("%s: can´t have loghist false and octree-ggg-omp (%d %s)\n",
-//              routineName, cmd->useLogHist, cmd->searchMethod);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: can´t have loghist false and octree-ggg-omp (%d %s)\n",
-                            routineName, cmd->useLogHist, cmd->searchMethod);
+            "%s: can´t have loghist false and octree-ggg-omp (%d %s)\n",
+            routineName, cmd->useLogHist, cmd->searchMethod);
 
 #ifdef THREEPCFSHEAR
     mCheb =cmd->mChebyshev + mpOffSet;
 #endif
 
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
 #ifdef DEBUG
-    sprintf(pivotsfilePath,"%s/pivot_info%s.txt",gd->tmpDir,cmd->suffixOutFiles);
+    sprintf(pivotsfilePath,"%s/pivot_info%s.txt",
+            gd->tmpDir,cmd->suffixOutFiles);
     if(!(outpivots=fopen(pivotsfilePath, "w")))
         error("\n%s: error opening file '%s' \n",
               routineName, pivotsfilePath);
 #endif
-//E
+#endif
+
+    debug_tracking("002");
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
@@ -819,22 +822,22 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     search_init_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
 
+    debug_tracking("003");
+
     //B Mask correction
     INTEGER ipmask;
     if (scanopt(cmd->options, "read-mask"))
         ipmask=0;
     //E
 
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     INTEGER ipfalse;
     ipfalse=0;
     INTEGER icountNbRmin;
     icountNbRmin=0;
     INTEGER icountNbRminOverlap;
     icountNbRminOverlap=0;
-
 #ifdef ADDPIVOTNEIGHBOURS
-    if (scanopt(cmd->options, "smooth-pivot")) {
         //B Alloc memory for neighbour lists
         int Nrsmooth;
         Nrsmooth = 0.25*nbody[cat2]*rsqr(gd->rsmooth[0]);
@@ -855,9 +858,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                        "%s: actlenInt = %ld\n", routineName, actlenInt);
         activeInt = (int *) allocate(actlenInt * sizeof(int));
         //E
-    }
 #endif
-    //E
+#endif
+
+    debug_tracking("004");
 
 #if defined(NMultipoles) && defined(NONORMHIST)
     if (scanopt(cmd->options, "patch-with-all")) {
@@ -877,7 +881,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                            "\n%s: Total allocated %g MByte storage so far.\n",
                            routineName, gd->bytes_tot*INMB);
 
-//B sometimes when running happens a "Floating point exception: 8" erreor
+//B sometimes when running happens a "Floating point exception: 8" error
 //      indicates a division by zero error within a program.
 //          numeric code "8" specifically points to integer division
 //          by zero as the root cause
@@ -888,66 +892,135 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\nRunning...\n - Completed pivot node:\n");
 
+    debug_tracking("005");
+
 //
 // Check that all posibilities are taken in to account...
 //
 #ifdef DEBUG
-//B In this segment there must be NMultipoles acting...
+#ifndef SMOOTHPIVOT
+    error("%s: DEBUG can not be used with SMOOTHPIVOT turned OFF.");
+#else
 #ifdef ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
            actlenNb,activeNb,actlenInt,activeInt,                           \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
 #else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
 #endif // ! ADDPIVOTNEIGHBOURS
-//E
+#endif // ! SMOOTHPIVOT
 #else // ! DEBUG
 
+//#ifdef ADDPIVOTNEIGHBOURS
+//#pragma omp parallel default(none)                                          \
+//    shared(cmd,gd,btable,nbody,roottable,                                   \
+//           actlenNb,activeNb,actlenInt,activeInt,                           \
+//           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
+//           icountNbRmin,icountNbRminOverlap, gdl)
+//#else // ! ADDPIVOTNEIGHBOURS
+
+#ifdef NMultipoles
+
+#ifndef BALLS4SCANLEV
+
+#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-//B In this segment there must be NMultipoles acting...
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            actlenNb,activeNb,actlenInt,activeInt,                           \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl)
-//E
+           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
 #else // ! ADDPIVOTNEIGHBOURS
-
-#ifdef NMultipoles
-#ifndef BALLS4SCANLEV
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap,                                \
            gdl, gdlN, main_thread_id)
+#endif // ! ADDPIVOTNEIGHBOURS
+#else // ! SMOOTHPIVOT
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,                                   \
+           ipmin,ipmax,cat1,cat2,ipmask,                            \
+           gdl, gdlN, main_thread_id)
+#endif // ! SMOOTHPIVOT
+
 #else // ! BALLS4SCANLEV
+
+#ifdef SMOOTHPIVOT
+#ifdef ADDPIVOTNEIGHBOURS
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
+           actlenNb,activeNb,actlenInt,activeInt,                           \
+           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
+           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
+#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap,                                \
-           gdl, gdlN, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
+#endif // ! ADDPIVOTNEIGHBOURS
+#else // ! SMOOTHPIVOT
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
+           ipmin,ipmax,cat1,cat2,ipmask, gdl, gdlN, main_thread_id)
+#endif // ! SMOOTHPIVOT
+
 #endif // ! BALLS4SCANLEV
+
 #else // ! NMultipoles
 
 #ifndef BALLS4SCANLEV
+
+#ifdef SMOOTHPIVOT
+#ifdef ADDPIVOTNEIGHBOURS
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
+           actlenNb,activeNb,actlenInt,activeInt,                           \
+           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap,gdl, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+#endif // ! ADDPIVOTNEIGHBOURS
+#else // ! SMOOTHPIVOT
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,                                   \
+           ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id)
+#endif // ! SMOOTHPIVOT
+
 #else // ! BALLS4SCANLEV
+
+#ifdef SMOOTHPIVOT
+#ifdef ADDPIVOTNEIGHBOURS
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
+           actlenNb,activeNb,actlenInt,activeInt,                           \
+           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap,gdl, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+#endif // ! ADDPIVOTNEIGHBOURS
+#else // ! SMOOTHPIVOT
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
+           ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id)
+#endif // ! SMOOTHPIVOT
+
 #endif // ! BALLS4SCANLEV
 
 #endif // ! NMultipoles
-#endif // ! ADDPIVOTNEIGHBOURS
+
+//#endif // ! ADDPIVOTNEIGHBOURS
 #endif // ! DEBUG
   {
       pthread_t current_thread_id = pthread_self();
@@ -960,6 +1033,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     bodyptr q;
     INTEGER n, m, ip;
     INTEGER i;
+
+      if (main_thread_id == current_thread_id)
+          debug_tracking("006");
 
     //B init:
     gdhist_sincos_omp_ggg hist;
@@ -978,7 +1054,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
       if (scanopt(cmd->options, "read-mask"))
           ipmaskthreads = 0;
 
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     INTEGER ipfalsethreads;
     ipfalsethreads = 0;
     INTEGER icountNbRminthread;
@@ -986,11 +1062,14 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     INTEGER icountNbRminOverlapthread;
     icountNbRminOverlapthread=0;
 
+#endif
 //#ifdef ADDPIVOTNEIGHBOURS
     int nbList;
     int intList;
 //#endif
-    //E
+
+      if (main_thread_id == current_thread_id)
+          debug_tracking("007");
 
 #pragma omp for nowait schedule(dynamic)
 #ifndef BALLS4SCANLEV
@@ -999,7 +1078,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
       for (INTEGER i=0; i< gd->nnodescanlevTableB4[cat1]; i++) {
           p = nodetablescanlevB4[cat1][i];
 #endif
-          //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
           NbRmin(p) = 1;
           NbRminOverlap(p) = 0;
           KappaRmin(p) = Kappa(p);
@@ -1007,13 +1086,11 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           nbList=0;
           intList=0;
 //#endif
-          if (scanopt(cmd->options, "smooth-pivot")) {
               if (Update(p) == FALSE) {
                   ipfalsethreads++;
                   continue;
               }
-          }
-          //E
+#endif
 
           if (scanopt(cmd->options, "read-mask")) {
             if (Mask(p) == FALSE) {
@@ -1033,10 +1110,11 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //B segment to be included below...
 #ifdef TWOPCF
           for (n = 1; n <= cmd->sizeHistN; n++) {
+              hist.histWthread[n] = 0.0;
               hist.histXi2pcfthreadsub[n] = 0.0;
-              //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
               hist.histNNSubXi2pcfthreadp[n] = 0.;
-              //E
+#endif
           }
 #endif
 
@@ -1096,16 +1174,17 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
 #ifdef TWOPCF
           //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-              if (scanopt(cmd->options, "smooth-pivot"))
                   hist.histNNSubthread[n] =
                                     ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
+#endif
           //E
 #endif
 
@@ -1120,24 +1199,20 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                    &nbList, &intList);
 
 #ifdef TWOPCF
-          //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-              if (scanopt(cmd->options, "smooth-pivot"))
                   hist.histNNSubthread[n] =
                                     ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
+#endif
           //E
 #endif
 
-//          computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
-//                                           ipmax[cat1]-ipmin+1, &hist);
-//          computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
-//                                             ipmax[cat1]-ipmin+1, &histN);
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
                                            gd->nnodescanlevTableB4[cat1], &hist);
           computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
@@ -1155,8 +1230,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif
 #endif
 
+//#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-          if (scanopt(cmd->options, "smooth-pivot")) {
               if (cmd->verbose_log>=3)
                   verb_log_print(cmd->verbose_log, gd->outlog,
                                  " - Summing nbList: %ld\n", nbList);
@@ -1196,8 +1271,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                   computeBodyProperties_sincos_ggg_N(cmd, gd, q,
                                                      ipmax[cat1]-ipmin+1, &histN);
               } // ! end i loop
-          } // ! scanoption smooth-pivot
 #endif // ! ADDPIVOTNEIGHBOURS
+//#endif // ! SMOOTHPIVOT
 
 #else // ! NMultipoles
 #ifndef BALLS4SCANLEV
@@ -1206,18 +1281,17 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                  gd->rSizeTable[cat2], &hist, &nbList, &intList);
 
 #ifdef TWOPCF
-          //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-              if (scanopt(cmd->options, "smooth-pivot"))
                   hist.histNNSubthread[n] =
                                     ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
-          //E
+#endif
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, p,
@@ -1228,28 +1302,25 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                  gd->rSizeTable[cat2], &hist, &nbList, &intList);
 
 #ifdef TWOPCF
-          //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-              if (scanopt(cmd->options, "smooth-pivot"))
                   hist.histNNSubthread[n] =
                                     ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
-          //E
+#endif
 #endif
 
-//          computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
-//                                           ipmax[cat1]-ipmin+1, &hist);
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
                                            gd->nnodescanlevTableB4[cat1], &hist);
 #endif // ! BALLS4SCANLEV
 
+//#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-          if (scanopt(cmd->options, "smooth-pivot")) {
               if (cmd->verbose_log>=3)
                   verb_log_print(cmd->verbose_log, gd->outlog,
                                  " - Summing nbList: %ld\n", nbList);
@@ -1280,8 +1351,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                   computeBodyProperties_sincos_ggg(cmd, gd, q,
                                                    ipmax[cat1]-ipmin+1, &hist);
               } // ! end i loop
-          } // ! scanoption smooth-pivot
 #endif // ! ADDPIVOTNEIGHBOURS
+//#endif // ! SMOOTHPIVOT
 
 #endif // ! NMultipoles
 
@@ -1290,7 +1361,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #else
           ip = i+1;
 #endif
-          //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
           icountNbRminthread += NbRmin(p);
           icountNbRminOverlapthread += NbRminOverlap(p);
 #ifdef DEBUG
@@ -1304,7 +1375,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                   KappaRmin(p)/NbRmin(p));
 #endif
 #endif
-          //E
+#endif
           if (ip%gd->stepState == 0)
           verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, ".");
           if (ip%cmd->stepState == 0)
@@ -1316,6 +1387,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "\n", ip);
 
+          if (main_thread_id == current_thread_id)
+              debug_tracking("008");
+
 #pragma omp critical
     {
 #ifdef TWOPCF
@@ -1324,9 +1398,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
             gdl.histWW[n] += hist.histWWthread[n];
             gdl.histNNSub[n] += hist.histNNSubthread[n];
             gdl.histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
             gdl.histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
-//E
+#endif
 
 // Check this line and the histogram array histXi2pcfthread
 //  in source search.c and correct if necessary
@@ -1375,12 +1449,15 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         if (scanopt(cmd->options, "read-mask"))
             ipmask += ipmaskthreads;
 
-        //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         ipfalse += ipfalsethreads;
         icountNbRmin += icountNbRminthread;
         icountNbRminOverlap += icountNbRminOverlapthread;
-        //E
+#endif
     } // ! critical
+
+          if (main_thread_id == current_thread_id)
+              debug_tracking("009");
 
 #ifdef NMultipoles
     search_free_sincos_omp_ggg_N(cmd, gd, &histN);  // free memory
@@ -1392,10 +1469,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n\n");
     //E
 
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     real xi, den, num;
     int mm;
-    if (scanopt(cmd->options, "smooth-pivot")) {
 #ifdef BALLS4SCANLEV
         num = (real)gd->nnodescanlevTableB4[cat1];
         den = (real)(gd->nnodescanlevTableB4[cat1]-ipfalse);
@@ -1446,14 +1522,14 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: p falses found = %ld\n", routineName, ipfalse);
-        //B kappa Avg Rmin
+//#ifdef SMOOTHPIVOT
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: count NbRmin found = %ld\n",
                                routineName, icountNbRmin);
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: count overlap found = %ld\n",
                                routineName, icountNbRminOverlap);
-        //E
+//#endif
 
         bodyptr pp;
         INTEGER ifalsecount;
@@ -1476,9 +1552,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: total = %ld\n",
                                routineName, itruecount+ifalsecount);
-
-        //E
-    } // ! smooth-pivot
+#endif
 
     if (scanopt(cmd->options, "read-mask"))
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1492,51 +1566,64 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     int nn;
     if (!scanopt(cmd->options, "asymmetric")) {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
+#ifdef SMOOTHPIVOT
             if (cmd->verbose>3)
                 printf("%d %e %e %e\n", nn,
                    gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn],
                        gdl.histNN[nn]);
-            gdl.histXi2pcf[nn] /= 2.0;
-            gdl.histNNSubXi2pcf[nn] /= 2.0;
+#else
+            if (cmd->verbose>3)
+                printf("%d %e %e\n", nn,
+                   gdl.histNNSubXi2pcf[nn],
+                       gdl.histNN[nn]);
+#endif
             if (scanopt(cmd->options, "weights-norm")) {
-//                gdl.histXi2pcf[nn] /= MAX(gdl.histNN[nn],1.0);
-                gdl.histXi2pcf[nn] /= MAX(gdl.histWW[nn],1.0);
+//           gdl.histXi2pcf[nn] /= MAX(gdl.histNN[nn],1.0);// gives same as below
+//                gdl.histXi2pcf[nn] /= MAX(gdl.histWW[nn],1.0);
+                gdl.histXi2pcf[nn] /= gdl.histWW[nn];   // gives same as above
             } else {
-                //B kappa Avg Rmin
+                gdl.histXi2pcf[nn] /= 2.0;
+                gdl.histNNSubXi2pcf[nn] /= 2.0;
+#ifdef SMOOTHPIVOT
                 gdl.histNNSubXi2pcftotal[nn] /= 2.0;
-                if (scanopt(cmd->options, "smooth-pivot")) {
                     gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
-                } else {
+#else
                     gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
-                }
-                //E
+#endif
             }
         }
     } else {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
+#ifdef SMOOTHPIVOT
             if (cmd->verbose>3)
             printf(0,"%d %e %e\n", nn,
                    gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn]);
-            if (scanopt(cmd->options, "smooth-pivot")) {
                 gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
-            } else {
+#else
+            if (cmd->verbose>3)
+            printf(0,"%d %e\n", nn,
+                   gdl.histNNSubXi2pcf[nn]);
                 gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
-            }
+#endif
         }
     }
 
     if (scanopt(cmd->options, "compute-HistN")) {
-        if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
             search_compute_HistN_ggg(cmd, gd, nbody[cat1]-ipfalse, &gdl);
-        } else {
+#else
             search_compute_HistN_ggg(cmd, gd, nbody[cat1], &gdl);
-        }
+#endif
     }
 #endif
+
+      debug_tracking("010");
 
 // ===============================================
 //B Saving histograms section: case GGGCORRELATION:
 // ===============================================
+
+      if (gd->rootDirFlag == TRUE) {
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "\n\t%s: printing octree-ggg-omp method...\n\n", routineName);
 
@@ -1602,10 +1689,14 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif // ! NMultipoles
 #endif // ! THREEPCFCONVERGENCE
 
-    gd->flagPrint = FALSE;
+          gd->flagPrint = FALSE;
+      }
+
 // ===============================================
 //E Saving histograms section: case GGGCORRELATION
 // ===============================================
+
+      debug_tracking("011");
 
 // ===============================================
 //B Making histograms public (cballys PXD) section
@@ -1635,6 +1726,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //E Making histograms public (cballys PXD) section
 // ===============================================
 
+      debug_tracking("012");
+
 //B free memory
 #ifdef NMultipoles
     search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
@@ -1646,6 +1739,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\nGoing out: CPU time = %lf %s\n",
                         CPUTIME-cpustart, PRNUNITOFTIMEUSED);
+
+      debug_tracking("013");
 
     return SUCCESS;
 }
@@ -1712,8 +1807,8 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
     } // ! p != q
 }
 
+//#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-//B kappa Avg Rmin
 local void sumnode_nblist_omp(struct cmdline_data* cmd,
                               struct  global_data* gd,
                               bodyptr *btable,
@@ -1778,8 +1873,8 @@ local void sumnode_nblist_omp(struct cmdline_data* cmd,
         } // ! dr1 > rminHist
     } // ! end loop i
 }
-//E
 #endif
+//#endif
 
 local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd,
@@ -1809,8 +1904,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
         if (Mask(q)==FALSE) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-        //B kappa Avg Rmin
-        if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
             if (dr1<=gd->rsmooth[0]) {
                 if (Update(q)==TRUE) {
 #ifdef ADDPIVOTNEIGHBOURS
@@ -1828,21 +1922,19 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                     NbRminOverlap(p) += 1;
                 }
             }
-        }
-        //E
-
+#endif
 
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
+#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-            if (scanopt(cmd->options, "smooth-pivot")) {
                 iq = (bodyptr)q-btable[cat2];
                 activeInt[*intList]=iq;
                 *intList +=1;
                 if (*intList > actlenInt)
                     error("intList: too many neighbors\n");
-            }
+#endif
 #endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
@@ -1856,10 +1948,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                             hist->histNNSubXi2pcfthreadp[n] + 1.;
-                //E
+#endif
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
@@ -1895,14 +1987,14 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #else // ! NORMALHISTSCALE
 
         if(dr1>cmd->rminHist) {
+#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-            if (scanopt(cmd->options, "smooth-pivot")) {
                 iq = (bodyptr)q-btable[cat2];
                 activeInt[*intList]=iq;
                 *intList +=1;
                 if (*intList > actlenInt)
                     error("intList: too many neighbors\n");
-            }
+#endif
 #endif
             n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
@@ -1912,10 +2004,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                             hist->histNNSubXi2pcfthreadp[n] + 1.;
-                //E
+#endif
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
@@ -2008,10 +2100,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                             hist->histNNSubXi2pcfthreadp[n] + 1.;
-                //E
+#endif
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
@@ -2085,10 +2177,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                             hist->histNNSubXi2pcfthreadp[n] + 1.;
-                //E
+#endif
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
@@ -2166,29 +2258,29 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #ifdef BALLS4SCANLEV
     xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi = Nb(p)*KappaRmin(p)/NbRmin(p);
-    }
+#endif
 #else
     xi = Weight(p)*Kappa(p);
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi = KappaRmin(p)/NbRmin(p);
-    }
+#endif
 #endif
 
 #ifdef TWOPCF
 #ifdef BALLS4SCANLEV
     wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi_2p = KappaRmin(p);
-    }
+#endif
 #else
     wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi_2p = KappaRmin(p);
-    }
+#endif
 #endif // ! BALLS4SCANLEV
 #endif
 
@@ -2203,17 +2295,17 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
 //    xi = Weight(p)*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
     xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
 //        xi = Nb(p)*KappaRmin(p)/NbRmin(p)/nbody;
 //        xi = Nb(p)*KappaRmin(p)/nbody;
         xi = KappaRmin(p)/NbRmin(p)/nbody;
-    }
+#endif
 #else
     //B Not working yet
     xi = Weight(p)*Kappa(p)/nbody;
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi = (KappaRmin(p)/NbRmin(p))/nbody;
-    }
+#endif
     //E
 #endif
 
@@ -2221,15 +2313,15 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
     wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi_2p = KappaRmin(p);
-    }
+#endif
 #else
     wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
-    if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
         xi_2p = (KappaRmin(p));
-    }
+#endif
 #endif
 #endif
 
@@ -2430,8 +2522,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
         if (Mask(q)==FALSE) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-        //B kappa Avg Rmin
-        if (scanopt(cmd->options, "smooth-pivot")) {
+#ifdef SMOOTHPIVOT
             if (dr1<=gd->rsmooth[0]) {
                 if (Update(q)==TRUE) {
 #ifdef ADDPIVOTNEIGHBOURS
@@ -2449,9 +2540,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                     NbRminOverlap(p) += 1;
                 }
             }
-        } // ! smooth-pivot
-        //E
-
+#endif
 
 #ifndef NORMALHISTSCALE
 //B useLogHist section
@@ -2476,10 +2565,10 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                             hist->histNNSubXi2pcfthreadp[n] + 1.;
-                //E
+#endif
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
@@ -2535,10 +2624,10 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] + 1.;
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                             hist->histNNSubXi2pcfthreadp[n] + 1.;
-                //E
+#endif
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
@@ -2633,10 +2722,10 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                         hist->histNNSubXi2pcfthreadp[n] + 1.0;
-                //E
+#endif
 #endif
 
                 //B 3pcf convergence
@@ -2727,10 +2816,10 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
                                             hist->histNNSubXi2pcfthread[n] + 1.0;
-                //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
                                         hist->histNNSubXi2pcfthreadp[n] + 1.0;
-                //E
+#endif
 #endif
 
                 //B 3pcf convergence
@@ -2908,9 +2997,9 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     gdl->histWW = dvector(1,cmd->sizeHistN);
     gdl->histCF = dvector(1,cmd->sizeHistN);
     gdl->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     gdl->histNNSubXi2pcftotal = dvector(1,cmd->sizeHistN);
-    //E
+#endif
     gdl->histXi2pcf = dvector(1,cmd->sizeHistN);
     bytes_tot_local += 5*cmd->sizeHistN*sizeof(real);
 #endif
@@ -2957,9 +3046,9 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
         gdl->histWW[n] = 0.0;
         gdl->histCF[n] = 0.0;
         gdl->histNNSubXi2pcf[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         gdl->histNNSubXi2pcftotal[n] = 0.0;
-//E
+#endif
         gdl->histXi2pcf[n] = 0.0;
     }
 #endif
@@ -3013,9 +3102,9 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
     free_dvector(gdl->histXi2pcf,1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     free_dvector(gdl->histNNSubXi2pcftotal,1,cmd->sizeHistN);
-    //E
+#endif
     free_dvector(gdl->histNNSubXi2pcf,1,cmd->sizeHistN);
     //
     free_dvector(gdl->histCF,1,cmd->sizeHistN);
@@ -3039,8 +3128,10 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
     hist->histWWthread = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthread = dvector(1,cmd->sizeHistN);
     //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     hist->histNNSubXi2pcfthreadp = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthreadtotal = dvector(1,cmd->sizeHistN);
+#endif
     //E
     hist->histXi2pcfthread = dvector(1,cmd->sizeHistN);
     hist->histXi2pcfthreadsub = dvector(1,cmd->sizeHistN);
@@ -3116,10 +3207,10 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
         hist->histWthread[n] = 0.0;
         hist->histWWthread[n] = 0.0;
         hist->histNNSubXi2pcfthread[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         hist->histNNSubXi2pcfthreadp[n] = 0.0;
         hist->histNNSubXi2pcfthreadtotal[n] = 0.0;
-//E
+#endif
         hist->histXi2pcfthread[n] = 0.0;
         hist->histXi2pcfthreadsub[n] = 0.0;
     }
@@ -3220,10 +3311,10 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     free_dvector(hist->histXi2pcfthread,1,cmd->sizeHistN);
     free_dvector(hist->histXi2pcfthreadsub,1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     free_dvector(hist->histNNSubXi2pcfthreadtotal,1,cmd->sizeHistN);
     free_dvector(hist->histNNSubXi2pcfthreadp,1,cmd->sizeHistN);
-    //E
+#endif
     free_dvector(hist->histNNSubXi2pcfthread,1,cmd->sizeHistN);
     //
     free_dvector(hist->histWWthread,1,cmd->sizeHistN);
@@ -3249,9 +3340,9 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     gdl->histWW = dvector(1,cmd->sizeHistN);
     gdl->histCF = dvector(1,cmd->sizeHistN);
     gdl->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     gdl->histNNSubXi2pcftotal = dvector(1,cmd->sizeHistN);
-    //E
+#endif
     gdl->histXi2pcf = dvector(1,cmd->sizeHistN);
     bytes_tot_local += 5*cmd->sizeHistN*sizeof(real);
 #endif
@@ -3298,9 +3389,9 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
         gdl->histWW[n] = 0.0;
         gdl->histCF[n] = 0.0;
         gdl->histNNSubXi2pcf[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         gdl->histNNSubXi2pcftotal[n] = 0.0;
-//E
+#endif
         gdl->histXi2pcf[n] = 0.0;
     }
 #endif
@@ -3354,9 +3445,9 @@ local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 
 #ifdef TWOPCF
     free_dvector(gdl->histXi2pcf,1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     free_dvector(gdl->histNNSubXi2pcftotal,1,cmd->sizeHistN);
-    //E
+#endif
     free_dvector(gdl->histNNSubXi2pcf,1,cmd->sizeHistN);
     //
     free_dvector(gdl->histCF,1,cmd->sizeHistN);
@@ -3379,10 +3470,10 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     hist->histWthread = dvector(1,cmd->sizeHistN);
     hist->histWWthread = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthread = dvector(1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     hist->histNNSubXi2pcfthreadp = dvector(1,cmd->sizeHistN);
     hist->histNNSubXi2pcfthreadtotal = dvector(1,cmd->sizeHistN);
-    //E
+#endif
     hist->histXi2pcfthread = dvector(1,cmd->sizeHistN);
     hist->histXi2pcfthreadsub = dvector(1,cmd->sizeHistN);
     bytes_tot_local += 6*cmd->sizeHistN*sizeof(real);
@@ -3448,10 +3539,10 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
         hist->histWthread[n] = 0.0;
         hist->histWWthread[n] = 0.0;
         hist->histNNSubXi2pcfthread[n] = 0.0;
-//B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
         hist->histNNSubXi2pcfthreadp[n] = 0.0;
         hist->histNNSubXi2pcfthreadtotal[n] = 0.0;
-//E
+#endif
         hist->histXi2pcfthread[n] = 0.0;
         hist->histXi2pcfthreadsub[n] = 0.0;
     }
@@ -3550,10 +3641,10 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 #ifdef TWOPCF
     free_dvector(hist->histXi2pcfthread,1,cmd->sizeHistN);
     free_dvector(hist->histXi2pcfthreadsub,1,cmd->sizeHistN);
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     free_dvector(hist->histNNSubXi2pcfthreadtotal,1,cmd->sizeHistN);
     free_dvector(hist->histNNSubXi2pcfthreadp,1,cmd->sizeHistN);
-    //E
+#endif
     free_dvector(hist->histNNSubXi2pcfthread,1,cmd->sizeHistN);
     //
     free_dvector(hist->histWWthread,1,cmd->sizeHistN);
@@ -3692,6 +3783,8 @@ local int print_info(struct cmdline_data* cmd,
 {
     string routineName = "print_info";
 
+    debug_tracking_s("001", routineName);
+
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "searchcalc: Using octree-ggg-omp... \n");
 
@@ -3701,36 +3794,27 @@ local int print_info(struct cmdline_data* cmd,
 
 
     if (cmd->usePeriodic==TRUE)
-//        error("CheckParameters: can´t have periodic boundaries and OCTREEGGGOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
-//            cmd->usePeriodic);
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
     "%s: warning!! can´t have periodic boundaries and OCTREEGGGOMP definition (usePeriodic=%d)\nSet usePeriodic=false\n",
                             routineName,cmd->usePeriodic);
 
     if (cmd->useLogHist==FALSE)
-//        error("CheckParameters: can´t have normal scale hist and OCTREEGGGOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
-//            cmd->useLogHist);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
 "%s: warning!! can´t have normal scale hist and OCTREEGGGOMP definition (useLogHist=%d)\nSet useLogHist=true\n",
                         routineName,cmd->useLogHist);
-
-    if (cmd->computeTPCF==FALSE)
-//        error("CheckParameters: can´t have computeTPCF=false and OCTREEGGGOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
-//            cmd->computeTPCF);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-"%s: warning!! can´t have computeTPCF=false and OCTREEGGGOMP definition (computeTPCF=%d)\nSet computeTPCF=true\n",
-                        routineName,cmd->computeTPCF);
-
 #ifdef TWOPCF
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "with 2pcf computation... \n");
+                        "with 2pcf convergence computation... \n");
 #endif
 #ifdef THREEPCFCONVERGENCE
-    if (cmd->computeTPCF==FALSE)
-    error("\ncan´t have computeTPCF=false and THREEPCFCONVERGENCE definition\n",
-          routineName);
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with 3pcf convergence computation... \n");
+#endif
+#ifdef THREEPCFCONVERGENCE
+#ifndef TPCF
+    error("\ncan´t have computeTPCF=false and THREEPCFCONVERGENCE definition\n",
+          routineName);
+#endif
 #endif
 #ifdef THREEPCFSHEAR
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -3796,18 +3880,20 @@ local int print_info(struct cmdline_data* cmd,
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with POLARAXIS... \n");
 #endif
+#ifdef SMOOTHPIVOT
 #ifdef ADDPIVOTNEIGHBOURS
-    if (scanopt(cmd->options, "smooth-pivot"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with ADDPIVOTNEIGHBOURS... \n");
+#endif
 #endif
     if (scanopt(cmd->options, "no-one-ball"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option no-one-ball... \n");
-    if (scanopt(cmd->options, "smooth-pivot"))
+#ifdef SMOOTHPIVOT
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option smooth-pivot... rsmooth=%g\n",
                             gd->rsmooth[0]);
+#endif
     if (scanopt(cmd->options, "default-rsmooth"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option default-rsmooth... \n");
@@ -3843,6 +3929,8 @@ local int print_info(struct cmdline_data* cmd,
     if (scanopt(cmd->options, "ra-reversed"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option ra-reversed... \n");
+
+    debug_tracking("002... final");
 
     return SUCCESS;
 }

@@ -4,8 +4,8 @@
 #ifndef _cmdline_defs_include_h
 #define _cmdline_defs_include_h
 
-#ifdef BALLS
-#include "cmdline_defs_balls_omp.h"
+#ifdef OCTREESMOOTHING
+#include "cmdline_defs_octree_smoothing.h"
 #endif
 
 #ifdef IOLIB

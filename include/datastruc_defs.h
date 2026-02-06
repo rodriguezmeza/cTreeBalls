@@ -16,12 +16,6 @@
 #ifndef _data_struc_defs_h
 #define _data_struc_defs_h
 
-//B experimental, do not activate
-//      do the same in treeload.c
-#define PRUNNING
-#undef PRUNNING
-//E
-
 typedef struct _node {
     short type;
     bool update;
@@ -86,12 +80,12 @@ typedef struct _node {
     INTEGER nb;
     REAL radius;
 
-    //B kappa Avg Rmin
+#ifdef SMOOTHPIVOT
     REAL kapparmin;                                 // Sum_p-in-rmin kappa_p
     REAL weightrmin;                                // to weight fields...
     INTEGER nbrmin;
     INTEGER nbrmin_overlap;
-    //E
+#endif
 //E
 
 #ifdef KappaAvgON
@@ -109,9 +103,7 @@ typedef struct _node {
 #define Type(x)   (((nodeptr) (x))->type)
 #define Update(x) (((nodeptr) (x))->update)
 #define Update2(x) (((nodeptr) (x))->update2)
-//#ifdef MASKED
 #define Mask(x) (((nodeptr) (x))->mask)
-//#endif
 
 //B correction 2025-05-03 :: look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
@@ -165,10 +157,12 @@ typedef struct _node {
 #define Nb(x) (((nodeptr) (x))->nb)
 #define Radius(x) (((nodeptr) (x))->radius)
 
+#ifdef SMOOTHPIVOT
 #define KappaRmin(x)   (((nodeptr) (x))->kapparmin) // Sum_p-in-rmin kappa_p
 #define WeightRmin(x)  (((nodeptr) (x))->weightrmin)// Sum_p-in-rmin weight_p
 #define NbRmin(x) (((nodeptr) (x))->nbrmin)
 #define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
+#endif
 //E
 
 #define BODY 00
@@ -207,9 +201,6 @@ typedef struct {
     INTEGER Id;
 #endif
     bool inside;
-#ifdef PRUNNING
-    REAL rmax;
-#endif
 } cell, *cellptr;
  
 //B To debug cells:
@@ -221,10 +212,6 @@ typedef struct {
 #define IdCell(x)   (((cellptr) (x))->Id)
 #endif
 #define Inside(x)   (((cellptr) (x))->inside)
-
-#ifdef PRUNNING
-#define RMAX(x)    (((cellptr) (x))->rmax)
-#endif
 
 
 //B socket:
@@ -310,7 +297,6 @@ typedef struct {
 
 // Same as above but to use in search=tree-omp-sincos only
 //B What if mChebyshev is less than 7... correct!
-//#ifdef MANUALCHEBYSHEV
 #define CHEBYSHEVTUOMPSINCOS                                    \
 {REAL xicosmphi,xisinmphi; int m;                               \
     REAL cosphi2, cosphi3, cosphi4;                             \
@@ -360,38 +346,6 @@ typedef struct {
         xisinmphi = xi * hist->ChebsU[m] * sinphi;              \
         hist->histXithreadsin[m][n] += xisinmphi;               \
     }}
-/*
-#else
-#define CHEBYSHEVTUOMPSINCOS                                    \
-{real xicosmphi,xisinmphi; int m;                               \
-    hist->ChebsT[1] = 1.0;                                      \
-    xicosmphi = xi * hist->ChebsT[1];                           \
-    hist->histXithreadcos[1][n] += xicosmphi;                   \
-    hist->ChebsT[2] = cosphi;                                   \
-    xicosmphi = xi * hist->ChebsT[2];                           \
-    hist->histXithreadcos[2][n] += xicosmphi;                   \
-    hist->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);            \
-    xicosmphi = xi * hist->ChebsT[3];                           \
-    hist->histXithreadcos[3][n] += xicosmphi;                   \
-    hist->ChebsU[1] = 0.0;                                      \
-    xisinmphi = xi * hist->ChebsU[1] * sinphi;                  \
-    hist->histXithreadsin[1][n] += xisinmphi;                   \
-    hist->ChebsU[2] = 1.0;                                      \
-    xisinmphi = xi * hist->ChebsU[2] * sinphi;                  \
-    hist->histXithreadsin[2][n] += xisinmphi;                   \
-    hist->ChebsU[3] = 2.0*cosphi;                               \
-    xisinmphi = xi * hist->ChebsU[3] * sinphi;                  \
-    hist->histXithreadsin[3][n] += xisinmphi;                   \
-    for (m=4; m<=cmd->mChebyshev+1; m++){                       \
-        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
-        xicosmphi = xi * hist->ChebsT[m];                       \
-        hist->histXithreadcos[m][n] += xicosmphi;               \
-        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
-        xisinmphi = xi * hist->ChebsU[m] * sinphi;              \
-        hist->histXithreadsin[m][n] += xisinmphi;               \
-    }}
-#endif
-*/
 
 //B Macro for any posible value of mChebyshev
 //  for recursivity needs that at least 3 multipoles be evaluated
@@ -442,7 +396,8 @@ typedef struct {
 #define INCOLUMNSBIN    2
 #define INCOLUMNSBINALL 11
 #define INNULL          1
-#define INTAKAHASI      3                           // Takahasi
+//B version 1.0.1
+#define INTAKAHASHI      3                           // Takahasi
 //E
 
 //B Output file formats:
@@ -456,7 +411,7 @@ typedef struct {
 
 //B Search options:
 #define SEARCHNULL              0
-#define TREEOMPMETHODSINCOS     24
+#define OCTREESINCOSOMPMETHOD     24
 //E
 
 //Rotation angle in radians. To use in a sphere (3D case)

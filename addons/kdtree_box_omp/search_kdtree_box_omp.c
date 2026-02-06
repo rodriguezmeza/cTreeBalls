@@ -246,7 +246,10 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
         Update(p) = TRUE;
 //B Building kd-tree
     cpu_build_kdtree = CPUTIME;
-    nbucket = gd->nsmooth[0];
+    //B version 1.0.1
+//    nbucket = gd->nsmooth[0];
+    nbucket = cmd->nsmooth;
+    //E
     verb_print(cmd->verbose, "\nkdtree build: nbucket = %d\n",nbucket);
     kd = init_kdtree(cmd, gd, btab[cat2], nbody[cat2]);
     build_kdtree(cmd, gd, kd, nbucket);
@@ -323,7 +326,9 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
     for (n = 1; n <= cmd->sizeHistN; n++) {
         gd->histXi2pcf[n] /= 2.0;
         gd->histNNSubXi2pcf[n] /= 2.0;
+#ifdef SMOOTHPIVOT
         gd->histNNSubXi2pcftotal[n] /= 2.0;
+#endif
         gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcf[n],1.0);
     }
     //E
@@ -380,11 +385,13 @@ local int print_info(struct cmdline_data* cmd,
         if (!cmd->useLogHist)
             error("behavior-ball and useLogHist=false are incompatible!");
     }
-    if (scanopt(cmd->options, "smooth-pivot"))
+#ifdef SMOOTHPIVOT
         verb_print(cmd->verbose,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
-    if (!cmd->computeTPCF)
+#endif
+#ifndef TPCF
         verb_print(cmd->verbose, "computing only 2pcf... \n");
+#endif
 #ifdef NOSTANDARNORMHIST
     verb_print(cmd->verbose, "warning!! histograms will not be normalized... \n");
 #endif
