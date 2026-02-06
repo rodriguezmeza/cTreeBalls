@@ -1,0 +1,52 @@
+#
+# -------------------------
+# To test tree-omp-sincos searching method
+# -------------------------
+#
+#
+# cd tests/test_cute_box
+# time ../../cballs ./parameters_to-test_data.txt
+# 
+# command line version:
+# time ../../cballs search=tree-omp-sincos in=./data.txt infmt=multi-columns-ascii options=compute-HistN,and-CF,post-processing,only-pos script="python plotCF.py" rangeN=100 rminHist=0.1 sizeHistN=30 nthreads=16 computeTPCF=false useLogHist=false usePeriodic=true
+#
+# -------------------------
+# -------------------------
+#
+searchMethod                       = neighbor-boxes-omp
+#
+options =                            compute-HistN,and-CF,only-pos,cute-box-fmt,post-processing
+infile =                             ./catalogs_working/l-picola/halos.txt
+infileformat =                      multi-columns-ascii
+columns = 1,2,3
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+# rminHist > 0 when LOGHISTON is set to 1
+#B cute-box
+#rangeN =                             100
+#rminHist =                          0.1
+#sizeHistN =                         30
+#
+rangeN =                             150
+rminHist =                          0.1
+sizeHistN =                         60
+#
+stepState =                          50000
+#
+verbose =                           2
+verbose_log =                       2
+numberThreads =                      16
+#
+useLogHist = false
+usePeriodic = true
+#
+#
+#posScript = "python ./scripts/plotCF.py"
+posScript = "python test_cute_box/plotCF.py"
+lengthBox = 512
+
+
+
+

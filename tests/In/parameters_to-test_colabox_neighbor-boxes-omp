@@ -1,0 +1,31 @@
+#
+# -------------------------
+# To test octree-sincos-omp searching method
+# -------------------------
+#
+# Run it as:
+# cd tests
+#
+# Version parameter file:
+# time ../cballs ./In/parameters_to-test_colabox_tree-omp-sincos
+#
+# command line version:
+# time ../cballs search=neighbor-boxes-omp in=./test_cute_box/example_cola/files_out_064/example_filename_z0p000 infmt=gadget options=compute-HistN,and-CF,post-processing posScript="python test_cute_box/plotCF_cola_064.py" rangeN=100 rminHist=0.1 sizeHistN=20 nthreads=16
+#
+searchMethod                       = neighbor-boxes-omp
+options                            = compute-HistN,and-CF,post-processing,cute-box-fmt
+infile                             = ./test_cute_box/example_cola/files_out_064/example_filename_z0p000
+infileformat                       = gadget
+rootDir                            = Output
+rangeN                             = 100
+rminHist                           = 0.1
+sizeHistN                          = 40
+stepState                          = 1000
+verbose                            = 2
+verbose_log                        = 2
+numberThreads                      = 16
+usePeriodic = true
+useLogHist = false
+posScript="python test_cute_box/plotCF_cola_064.py"
+lengthBox = 512
+

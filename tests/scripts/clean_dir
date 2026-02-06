@@ -1,0 +1,4 @@
+
+rm -fR Output
+rm *.pdf
+

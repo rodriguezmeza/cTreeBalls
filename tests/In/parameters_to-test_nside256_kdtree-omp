@@ -1,0 +1,40 @@
+#
+# -------------------------
+# To test kdtree-omp searching method
+# -------------------------
+#
+# Run it as:
+# cd tests
+# time ../cballs ./In/parameters_to-test_nside1024_kdree-omp
+# Or
+# time ../cballs search=kdtree-omp nsmooth=8 options=compute-HistN,and-CF,out-m-HistZeta rangeN=0.0633205 rminHist=0.00213811 sizeHistN=20 mChebyshev=7 stepState=50000 verb=2 verblog=2 nthreads=16 in=./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin infileformat=binary
+#
+# To plot Zeta matrix vs standard results:
+# python scripts/mZetaM_test_kkk_kdtree-omp.py
+#
+# -------------------------
+# -------------------------
+#
+searchMethod =                       kdtree-omp
+#
+nsmooth =                            8
+#
+options =                            compute-HistN,and-CF,out-m-HistZeta
+#
+infile =                            ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
+infileformat =                       binary
+#
+rootDir =                           Output
+#
+# Set of parameters to define histogram bins
+rangeN =                            0.0633205
+rminHist =                           0.00213811
+sizeHistN =                         20
+#
+mChebyshev =                         7
+stepState   =                       50000
+#
+verbose  =                          2
+verbose_log =                        2
+numberThreads =                      16
+#

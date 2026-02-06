@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+# Set cBalls exe PATH
+CBALLS=cballs
+#CBALLS=../cballs
+PYTHON='python'
+InDir='./In'
+scriptsDir='./scripts'
+
+#
+# All tests use 16 threads (OpenMP)
+#   CPU times are for MacBook Pro 16", apple M3 Max, 128 Gb, macOS 15.1.1
+#       gcc 12.4.0, python 3.7.12
+#
+# Plots are relative difference of the test results vs a reference results
+#
+
+# Test 01 :: (CPU real 0m1.475s)
+echo ""
+echo "===================="
+echo "Test 01 :: octree-sincos-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_octree-sincos-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_octree-sincos-omp.py || exit
+#mv ./Output ./Output_nside256_octree-sincos-omp
+
+# Test 02 :: (CPU real 0m1.246s)
+echo ""
+echo "===================="
+echo "Test 02 :: octree-sincos-omp_no-one-ball"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_octree-sincos-omp_no-one-ball || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_octree-sincos-omp_no-one-ball.py || exit
+#mv ./Output ./Output_nside256_octree-sincos-omp_no-one-ball
+
+# Test 03 :: (CPU real 0m3.401s)
+echo ""
+echo "===================="
+echo "Test 03 :: kdtree-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_kdtree-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_kdtree-omp.py || exit
+#mv ./Output ./Output_nside256_kdtree-omp
+
+# Test 04 :: (CPU real 0m1.749s)
+echo ""
+echo "===================="
+echo "Test 04 :: octree-ggg-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_octree-ggg-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_octree-ggg-omp.py || exit
+#mv ./Output ./Output_nside256_octree-ggg-omp
+
+# Test 05 :: (CPU real 0m1.829s.611s)
+echo ""
+echo "===================="
+echo "Test 05 :: cython_test"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $PYTHON $InDir/test_cython_octree-ggg-omp.py || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_cython_test.py || exit
+#mv ./Output ./Output_nside256_cython_octree-sincos-omp
+
+# Test 06 :: (CPU real 0m1.701s)
+# First check fits file header info:
+# cballs in=./catalogs/Takahasi/allskymap_nres08r081_zs9_mag.fits infmt=fits-healpix options=header-info,stop
+echo ""
+echo "===================="
+echo "Test 06 :: fits_octree-ggg-omp"
+echo "===================="
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_fits_octree-ggg-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_fits_octree-ggg-omp.py || exit
+#mv ./Output ./Output_nside256_fits_octree-sincos-omp
+
+
