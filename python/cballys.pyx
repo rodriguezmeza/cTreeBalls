@@ -182,16 +182,26 @@ cdef class cballs:
     def struct_cleanup(self):
         if(self.allocated != True):
           return
-        EndRun_FreeMemory_tree(&(self.cmd), &(self.gd))
+#        print('Flags (struct_cleanpup): ',self.gd.tree_allocated,self.gd.gd_allocated_2,
+#                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
+#                        self.gd.gd_allocated,self.gd.cmd_allocated)
+#B        if "MainLoop" in self.ncp:
+#B this memory freeing may cause segmentation fault (core dumped) in linux
+#   when using cballys in a python loop. Must be analysed and corrected
+#        if self.gd.tree_allocated:
+#            EndRun_FreeMemory_tree(&(self.cmd), &(self.gd))
+#E
         if self.gd.gd_allocated_2:
             EndRun_FreeMemory_gd_2(&(self.cmd), &(self.gd))
-        EndRun_FreeMemory_bodytable(&(self.cmd), &(self.gd))
+        if self.gd.bodytable_allocated:
+            EndRun_FreeMemory_bodytable(&(self.cmd), &(self.gd))
         if self.gd.histograms_allocated:
             EndRun_FreeMemory_histograms(&(self.cmd), &(self.gd))
         if self.gd.gd_allocated:
             EndRun_FreeMemory_gd(&(self.cmd), &(self.gd))
         if self.gd.cmd_allocated:
             EndRun_FreeMemory_cmd(&(self.cmd), &(self.gd))
+#E
         self.ncp = set()
 
         self.allocated = False
@@ -223,6 +233,12 @@ cdef class cballs:
         if "EndRun" in level:
             if "MainLoop" not in level:
                 level.append("MainLoop")
+#        if "EndRun" in level:
+#            if "EndRun_FreeMemory" not in level:
+#                level.append("EndRun_FreeMemory")
+#        if "EndRun_FreeMemory" in level:
+#            if "MainLoop" not in level:
+#                level.append("MainLoop")
         if "MainLoop" in level:
             if "StartRun_Common" not in level:
                 level.append("SetNumberThreads")
@@ -260,6 +276,7 @@ cdef class cballs:
         return False
 
 
+#    def Run(self, level=["EndRun_FreeMemory"]):
     def Run(self, level=["MainLoop"]):
         """
         Run(level=["MainLoop"])
@@ -278,12 +295,25 @@ cdef class cballs:
         """
         cdef ErrorMsg errmsg
 
+#
+# tracking...
+#        print('INIT: computed, allocated: ', self.computed, self.allocated)
+#
         level = self._check_task_dependency(level)
 
         if self.computed and self.ncp.issuperset(level):
             return
 
         if self.allocated:
+#            self.gd.tree_allocated=self.getTreeAllocated()
+#            self.gd.gd_allocated_2=self.getAllocated2()
+#            self.gd.bodytable_allocated=self.getBodytableAllocated()
+#            self.gd.histograms_allocated=self.getHistogramsAllocated()
+#            self.gd.gd_allocated=self.getGDAllocated()
+#            self.gd.cmd_allocated=self.getCMDAllocated()
+#            print('Flags (allocated): ',self.gd.tree_allocated,self.gd.gd_allocated_2,
+#                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
+#                        self.gd.gd_allocated,self.gd.cmd_allocated)
             self.struct_cleanup()
 
         self.computed = False
@@ -345,7 +375,11 @@ cdef class cballs:
 
 # Consider process_time() as another good option...
         if "MainLoop" in level:
-#            start_wall_time = time.perf_counter()
+#            print('rootDir: ',self.getRootDir())
+
+#            print('Flags (cleanpup): ',self.gd.tree_allocated,self.gd.gd_allocated_2,
+#                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
+#                        self.gd.gd_allocated,self.gd.cmd_allocated)
             start_wall_time_p = time.process_time()
             if MainLoop(&(self.cmd), &(self.gd)) == FAILURE:
                 self.struct_cleanup()
@@ -354,18 +388,104 @@ cdef class cballs:
             end_wall_time_p = time.process_time()
 #            end_wall_time = time.perf_counter()
 #            self.cputime = end_wall_time - start_wall_time
+#            print('tree_allocated',self.gd.tree_allocated)
+#            print('gd_allocated_2',self.gd.gd_allocated_2)
+#            print('bodytable_allocated',self.gd.bodytable_allocated)
+#            print('histograms_allocated',self.gd.histograms_allocated)
+#            print('gd_allocated',self.gd.gd_allocated)
+#            print('cmd_allocated',self.gd.cmd_allocated)
+            self.gd.tree_allocated=self.getTreeAllocated()
+            self.gd.gd_allocated_2=self.getAllocated2()
+            self.gd.bodytable_allocated=self.getBodytableAllocated()
+            self.gd.histograms_allocated=self.getHistogramsAllocated()
+            self.gd.gd_allocated=self.getGDAllocated()
+            self.gd.cmd_allocated=self.getCMDAllocated()
+#            print('Flags (MainLoop): ',self.gd.tree_allocated,self.gd.gd_allocated_2,
+#                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
+#                        self.gd.gd_allocated,self.gd.cmd_allocated)
             self.cputime = (end_wall_time_p - start_wall_time_p)/self.nthreads
 #
 # tracking...
 #        print('Track step: After MainLoop... (022a)')
 #
+
+#        if "EndRun_FreeMemory" in level:
+#            if EndRun_FreeMemory(&(self.cmd), &(self.gd)) == FAILURE:
+#                self.struct_cleanup()
+#                raise cBallsComputationError(self.op.error_message)
+#            self.ncp.add("EndRun_FreeMemory")
+
+
         self.computed = True
 
+#        print('tree_allocated',self.gd.tree_allocated)
+#        print('gd_allocated_2',self.gd.gd_allocated_2)
+#        print('bodytable_allocated',self.gd.bodytable_allocated)
+#        print('histograms_allocated',self.gd.histograms_allocated)
+#        print('gd_allocated',self.gd.gd_allocated)
+#        print('cmd_allocated',self.gd.cmd_allocated)
+
+#
+# tracking...
+#        print('END: computed, allocated: ', self.computed, self.allocated)
+#
         return self.cputime
 
 #
 #B Interfaces to PXD functions
 #
+#B flags
+#
+    def getTreeAllocated(self):
+        cdef short value
+        cdef short out_value
+        if get_tree_allocated(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
+
+    def getAllocated2(self):
+        cdef short value
+        cdef short out_value
+        if get_allocated_2(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
+
+    def getBodytableAllocated(self):
+        cdef short value
+        cdef short out_value
+        if get_bodytable_allocated(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
+
+    def getHistogramsAllocated(self):
+        cdef short value
+        cdef short out_value
+        if get_histograms_allocated(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
+
+    def getGDAllocated(self):
+        cdef short value
+        cdef short out_value
+        if get_gd_allocated(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
+
+    def getCMDAllocated(self):
+        cdef short value
+        cdef short out_value
+        if get_cmd_allocated(&self.gd,&value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        out_value = value
+        return out_value
+
+#E
+
 #B parameters
 #
     def getNThreads(self):
@@ -421,7 +541,7 @@ cdef class cballs:
         out_param = <char*> malloc(buffer_size * sizeof(char))
         if out_param is NULL:
             raise MemoryError("Failed to allocate memory")
-        
+
         if get_version(&self.cmd,param)== FAILURE:
             raise cBallsSevereErrorDummy()
 
@@ -430,6 +550,29 @@ cdef class cballs:
         # Copy the string using strcpy (be careful with buffer overflows)
         strcpy(out_param, param)
         return out_param
+
+# in common_defs.h:
+#define MAXLENGTHOFFILES        1024
+#
+    def getRootDir(self):
+        cdef char *value
+#        cdef char *out_value
+        cdef int buffer_size = 1024 # Allocate enough space
+        # Allocate memory for the destination string
+        value = <char*> malloc(buffer_size * sizeof(char))
+#        out_value = <char*> malloc(buffer_size * sizeof(char))
+#        if out_value is NULL:
+#            raise MemoryError("Failed to allocate memory")
+
+        if get_rootDir(&self.cmd,value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+#        print(f"param: {<bytes>param}.decode('utf-8')")
+
+        # Copy the string using strcpy (be careful with buffer overflows)
+#        strcpy(out_value, value)
+        return value
+
 #E parameters
 
 #B histograms

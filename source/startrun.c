@@ -1075,7 +1075,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->gd_allocated_2 = TRUE;
     gd->bodytable_allocated = TRUE;
 
-    debug_tracking("018... final");
+    debug_tracking_s("018... final", routineName);
 
     return SUCCESS;
 }
@@ -1225,7 +1225,7 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 #include "startrun_include_07.h"
 #endif
 //E
-    debug_tracking("013... final");
+    debug_tracking_s("013... final", routineName);
 
     return SUCCESS;
 }

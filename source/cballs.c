@@ -126,7 +126,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
                             CPUTIME - cpustart);
     }
 //E
-    debug_tracking("002... final");
+    debug_tracking_s("002... final", routineName);
 
     return SUCCESS;
 }

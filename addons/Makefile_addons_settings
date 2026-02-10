@@ -129,7 +129,7 @@ endif
 #       OCTREESINCOSOMP, TREEOMPSINCOS
 # note that SMOOTHPIVOTON collide with ORIGINALCB (used in neighbor boxes method)
 #   needs that ORIGINALCBON = 0 see below...
-SMOOTHPIVOTON = 1
+SMOOTHPIVOTON = 0
 ifeq ($(SMOOTHPIVOTON),1)
 OPT2 += -DSMOOTHPIVOT
 # Compute and add pivot neighbours. Only active if SMOOTHPIVOT is ON

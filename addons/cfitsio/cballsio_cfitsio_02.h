@@ -736,7 +736,8 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
     }
     //E
 
-    debug_tracking("004... final");
+//    debug_tracking("004... final");
+    debug_tracking_s("004... final", routineName);
 
 
     return SUCCESS;

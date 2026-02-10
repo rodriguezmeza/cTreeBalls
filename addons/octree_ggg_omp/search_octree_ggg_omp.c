@@ -1740,7 +1740,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         "\nGoing out: CPU time = %lf %s\n",
                         CPUTIME-cpustart, PRNUNITOFTIMEUSED);
 
-      debug_tracking("013");
+//      debug_tracking("013");
+      debug_tracking_s("013 ...final", routineName);
 
     return SUCCESS;
 }

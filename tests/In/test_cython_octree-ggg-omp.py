@@ -1,7 +1,9 @@
 #
 # Check settings in addons/Makefile_addons_settings 'CLASSLIBON' must be:
 #   CLASSLIBON = 1
-# If not, set it and execute in cBalls main directory: 'make clean; make all'
+#   also set TPCF = 1 in above file.
+#
+# If not, set them and execute in cBalls main directory: 'make clean; make all'
 #
 # Run as:
 # python test_cython_octree-ggg-omp.py
@@ -35,6 +37,8 @@ print('histXi2pcf = ', Balls.getHistXi2pcf())
 # getHistZetaM_sincos(m, type): m multipole,
 #   type: 1 - cos; 2 - sin; 3 - sincos; 4 - cossin
 # monopolo cos:
+# this line will give segmentation fault if TPCF = 0 in
+#   addons/Makefile_addons_settings
 print('ZetaM(1,1) = ', Balls.getHistZetaMsincos(1, 1))
 
 #B

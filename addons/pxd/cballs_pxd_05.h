@@ -58,6 +58,43 @@
 
  */
 
+//B flags
+int get_tree_allocated(struct global_data* gd, short *value)
+{
+    *value = gd->tree_allocated;
+    return SUCCESS;
+}
+
+int get_allocated_2(struct global_data* gd, short *value)
+{
+    *value = gd->gd_allocated_2;
+    return SUCCESS;
+}
+
+int get_bodytable_allocated(struct global_data* gd, short *value)
+{
+    *value = gd->bodytable_allocated;
+    return SUCCESS;
+}
+
+int get_histograms_allocated(struct global_data* gd, short *value)
+{
+    *value = gd->histograms_allocated;
+    return SUCCESS;
+}
+
+int get_gd_allocated(struct global_data* gd, short *value)
+{
+    *value = gd->gd_allocated;
+    return SUCCESS;
+}
+
+int get_cmd_allocated(struct global_data* gd, short *value)
+{
+    *value = gd->cmd_allocated;
+    return SUCCESS;
+}
+//E
 
 int get_nthreads(struct  cmdline_data* cmd, int *value)
 {
@@ -102,6 +139,12 @@ int get_sizeHistN(struct  cmdline_data* cmd, int *sizeHistN)
 int get_version(struct  cmdline_data* cmd, char *param)
 {
     sprintf(param,"%s","1.0.1");
+    return SUCCESS;
+}
+
+int get_rootDir(struct  cmdline_data* cmd, char *value)
+{
+    sprintf(value,"%s",cmd->rootDir);
     return SUCCESS;
 }
 //E parameters section

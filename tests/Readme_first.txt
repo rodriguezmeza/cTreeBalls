@@ -38,4 +38,8 @@ Read the readme files.
 
 
 
+Note: in some machines "make all" does not install cballys. Try:
+
+$ python3.xx setup.py build_ext --inplace
+$ python3.xx -c "from _cballys import cballys"
 

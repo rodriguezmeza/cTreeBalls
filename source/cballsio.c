@@ -2010,7 +2010,7 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 #endif
         //E
         free(dp1);
-    }
+    } // ! rootDirFlag
     debug_tracking_s("006: final", cmd->rootDir);
 }
 
@@ -2085,6 +2085,13 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 global int EndRun_FreeMemory(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
+//    printf("\n Flags: %d, %d, %d, %d, %d, %d\n", gd->tree_allocated,
+//           gd->gd_allocated_2,
+//           gd->bodytable_allocated,
+//           gd->histograms_allocated,
+//           gd->gd_allocated,
+//           gd->cmd_allocated);
+    
     if (gd->tree_allocated == TRUE)
         EndRun_FreeMemory_tree(cmd, gd);
 

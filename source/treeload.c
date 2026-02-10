@@ -148,6 +148,7 @@ global int MakeTree(struct  cmdline_data* cmd,
                     routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
 
     cpustartMiddle = CPUTIME;
+    debug_tracking("002");
     DO_BODY(p, btab, btab+nbody) {
 #ifdef BODY3ON
         Nbb(p) = 1;                                 // Check consistency with
@@ -179,6 +180,7 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     NTOT[0] = 0;                                    // Smooth(ing) section
     cpustartMiddle = CPUTIME;
+    debug_tracking("003");
     hackcellprop(cmd, gd, roottable[ifile], gd->rSizeTable[ifile], 0, ifile);
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: hackcellprop CPU time: %lf %s\n",
@@ -205,6 +207,7 @@ global int MakeTree(struct  cmdline_data* cmd,
     ip = 0;
 
     cpustartMiddle = CPUTIME;
+    debug_tracking("004");
     threadtree(cmd, gd, (nodeptr) roottable[ifile], NULL);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: threadtree CPU time: %lf %s\n",
@@ -218,6 +221,7 @@ global int MakeTree(struct  cmdline_data* cmd,
 #endif
 
     cpustartMiddle = CPUTIME;
+    debug_tracking("005");
     walktree_selected((nodeptr) roottable[ifile],   // Smooth(ing) section
                       gd->rSizeTable[ifile]);
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -238,6 +242,7 @@ global int MakeTree(struct  cmdline_data* cmd,
                 "tdepth = %d\n\n",gd->tdepthTable[ifile]);
 
     cpustartMiddle = CPUTIME;
+    debug_tracking("006");
     scanLevel(cmd, gd, ifile);                      // Scan pivot and root trees
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: scanLevel CPU time: %lf %s\n",
@@ -291,6 +296,7 @@ global int MakeTree(struct  cmdline_data* cmd,
     cpustartMiddle = CPUTIME;
     for (i = 0; i < NbMax; i++)
         cellhistNb[i] = cellRadius[i] = 0;
+    debug_tracking("007");
     pruningCells(cmd, gd, ifile, roottable[ifile], 0);
     verb_log_print(cmd->verbose_log,gd->outlog,
                    "\n%s: radius histogram (after pruning):\n", routineName);
@@ -328,7 +334,7 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     gd->tree_allocated = TRUE;
 
-    debug_tracking("002");
+    debug_tracking_s("008... final",routineName);
 
     return SUCCESS;
 }

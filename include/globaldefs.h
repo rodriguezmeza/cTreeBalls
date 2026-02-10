@@ -61,7 +61,7 @@
 #include "gsl_fft_halfcomplex.h"
 #include "gsl_fft_complex.h"
 #include "gsl_integration.h"
-#include "gsl_linalg.h"                           // Extract from sources...
+#include "gsl_linalg.h"                             // Extract from sources...
 #else // ! NOINTERNALGSL
 #include <stdio.h>
 #include <math.h>

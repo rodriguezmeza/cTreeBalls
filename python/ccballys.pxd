@@ -85,6 +85,15 @@ cdef extern from "cballs.h":
     int EndRun_FreeMemory(void*, void*);
     int freeTree(void*, void*);
 
+#B flags
+    int get_tree_allocated(void*, short*)
+    int get_allocated_2(void*, short*)
+    int get_bodytable_allocated(void*, short*)
+    int get_histograms_allocated(void*, short*)
+    int get_gd_allocated(void*, short*)
+    int get_cmd_allocated(void*, short*)
+#E
+
 #B parameters
     int get_cmdline(void*, void*)
     int get_nthreads(void*, int*)
@@ -95,6 +104,7 @@ cdef extern from "cballs.h":
     int getcputime(void*)
     int get_sizeHistN(void*, int*)
     int get_version(void*, char*)
+    int get_rootDir(void*, char*)
 #B parameters
 
 #B free memory
