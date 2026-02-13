@@ -1035,7 +1035,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     INTEGER i;
 
       if (main_thread_id == current_thread_id)
-          debug_tracking("006");
+          debug_tracking_search("006");
 
     //B init:
     gdhist_sincos_omp_ggg hist;
@@ -1069,7 +1069,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //#endif
 
       if (main_thread_id == current_thread_id)
-          debug_tracking("007");
+          debug_tracking_search("007");
 
 #pragma omp for nowait schedule(dynamic)
 #ifndef BALLS4SCANLEV
@@ -1120,6 +1120,11 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
           for (n = 1; n <= cmd->sizeHistN; n++)
               hist.histNNSubthread[n] = 0.0;
+          //B 3pcf convergence & shear counting
+#ifdef NMultipoles
+          for (n = 1; n <= cmd->sizeHistN; n++)
+              histN.histNNSubthread[n] = 0.0;
+#endif
 
           //B Set histograms to zero for the pivot
 #ifdef THREEPCFCONVERGENCE
@@ -1132,8 +1137,8 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
           //B 3pcf convergence & shear counting
-          for (n = 1; n <= cmd->sizeHistN; n++)
-              histN.histNNSubthread[n] = 0.0;
+//          for (n = 1; n <= cmd->sizeHistN; n++)
+//              histN.histNNSubthread[n] = 0.0;
           CLRM_ext_ext(histN.histXithreadcos,
                        cmd->mChebyshev+1, cmd->sizeHistN);
           CLRM_ext_ext(histN.histXithreadsin,
@@ -1181,11 +1186,18 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-                  hist.histNNSubthread[n] =
-                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
+//                  hist.histNNSubthread[n] =
+//                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
 #endif
           //E
+#endif
+
+#ifdef SMOOTHPIVOT
+          for (n = 1; n <= cmd->sizeHistN; n++)
+              // Check if these lines are needed!!!
+              hist.histNNSubthread[n] =
+                    ((real)NbRmin(p))*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, p,
@@ -1206,11 +1218,18 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-                  hist.histNNSubthread[n] =
-                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
+//                  hist.histNNSubthread[n] =
+//                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
 #endif
           //E
+#endif
+
+#ifdef SMOOTHPIVOT
+          for (n = 1; n <= cmd->sizeHistN; n++)
+              // Check if these lines are needed!!!
+                hist.histNNSubthread[n] =
+                                ((real)NbRmin(p))*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
@@ -1288,10 +1307,17 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-                  hist.histNNSubthread[n] =
-                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
+//                  hist.histNNSubthread[n] =
+//                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
 #endif
+#endif
+
+#ifdef SMOOTHPIVOT
+          for (n = 1; n <= cmd->sizeHistN; n++)
+              // Check if these lines are needed!!!
+                hist.histNNSubthread[n] =
+                            ((real)NbRmin(p))*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, p,
@@ -1309,10 +1335,17 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!!
-                  hist.histNNSubthread[n] =
-                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
+//                  hist.histNNSubthread[n] =
+//                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
 #endif
+#endif
+
+#ifdef SMOOTHPIVOT
+          for (n = 1; n <= cmd->sizeHistN; n++)
+              // Check if these lines are needed!!!
+              hist.histNNSubthread[n] =
+                        ((real)NbRmin(p))*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
@@ -1388,7 +1421,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                               "\n", ip);
 
           if (main_thread_id == current_thread_id)
-              debug_tracking("008");
+              debug_tracking_search("008");
 
 #pragma omp critical
     {
@@ -1396,7 +1429,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         for (n = 1; n <= cmd->sizeHistN; n++) {
             gdl.histNN[n] += hist.histNthread[n];
             gdl.histWW[n] += hist.histWWthread[n];
-            gdl.histNNSub[n] += hist.histNNSubthread[n];
+//            gdl.histNNSub[n] += hist.histNNSubthread[n];
             gdl.histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
 #ifdef SMOOTHPIVOT
             gdl.histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
@@ -1408,6 +1441,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //            gdl.histXi2pcf[n] += hist.histXi2pcfthreadsub[n];
         }
 #endif
+
+        for (n = 1; n <= cmd->sizeHistN; n++)
+            gdl.histNNSub[n] += hist.histNNSubthread[n];
 
 #ifdef THREEPCFCONVERGENCE
         for (m=1; m<=cmd->mChebyshev+1; m++) {
@@ -1615,7 +1651,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
             search_compute_HistN_ggg(cmd, gd, nbody[cat1], &gdl);
 #endif
     }
-#endif
+#endif // ! TWOPCF
 
       debug_tracking("010");
 
@@ -1703,11 +1739,13 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 // ===============================================
 #ifdef PXD
     int m, n, n1, n2;
+#ifdef TWOPCF
     for (n=1; n<=cmd->sizeHistN; n++) {
         gd->histNN[n] = gdl.histNN[n];
         gd->histCF[n] = gdl.histCF[n];
         gd->histXi2pcf[n] = gdl.histXi2pcf[n];
     }
+#endif
 
 #ifdef THREEPCFCONVERGENCE
     for (m=1; m<=cmd->mChebyshev+1; m++) {

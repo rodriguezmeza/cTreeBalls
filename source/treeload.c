@@ -522,12 +522,16 @@ local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int ifile)
 // deallocate memory tree
 global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "freeTree";
     nodeptr p;
     nodeptr freecell = NULL;
     int ifile;
+    INTEGER cellcounter=0;
 
     if (scanopt(cmd->options, "read-mask")) {
         ifile=0;
+        freecell = NULL;
+        cellcounter=0;
         p = (nodeptr) roottable[ifile];
         while (p != NULL)
             if (Type(p) == CELL) {
@@ -539,25 +543,47 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
 
         p = freecell;
         while (p != NULL) {
-            free(p);
-            p = Next(p);
+            if (Type(p) == CELL) {
+                free(p);
+                ++cellcounter;
+                p = Next(p);
+            } else
+                p = Next(p);
         }
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                              "%s: allocated cells vs freed cells: %ld %ld\n",
+                               routineName, gd->ncellTable[ifile], cellcounter);
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
+            freecell = NULL;
+            cellcounter=0;
             p = (nodeptr) roottable[ifile];
             while (p != NULL)
                 if (Type(p) == CELL) {
                     Next(p) = freecell;
                     freecell = p;
                     p = More(p);
-                } else
+                } else                              // p can be BODY type
                     p = Next(p);
             
             p = freecell;
             while (p != NULL) {
-                free(p);
-                p = Next(p);
+                if (Type(p) == CELL) {
+//                    if (cellcounter+1>=gd->ncellTable[ifile])
+//                    verb_print_debug(1, "CELL node:: %ld: %ld, %ld, %d, %d\n",
+//                        cellcounter+1,Id(p), Id(Next(p)), Type(p), Type(Next(p)));
+                    free(p);
+                    ++cellcounter;
+                    p = Next(p);
+                } else {
+//                    verb_print_debug(1, "BODY node: %ld, %ld, %d, %d\n",
+//                                     Id(p), Id(Next(p)), Type(p), Type(Next(p)));
+                    p = Next(p);
+                }
             }
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                  "%s: allocated cells vs freed cells: %ld %ld\n",
+                                   routineName, gd->ncellTable[ifile], cellcounter);
         }
     }
 

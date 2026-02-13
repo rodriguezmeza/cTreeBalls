@@ -34,8 +34,29 @@
 #define VERBOSENORMALINFO       2
 #define VERBOSEDEBUGINFO        3
 
-// Debug tracking
+//B Debug tracking
+#define TRACKONLYSEARCH
+//#undef TRACKONLYSEARCH
+
 #ifdef DEBUGTRACKING
+
+#ifdef TRACKONLYSEARCH
+#define debug_tracking_search(track_step)                              \
+  verb_print_debug(1, "Track step (%s)\n", track_step);
+#define debug_tracking_s_search(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %s\n", track_step, extra);
+#define debug_tracking_r_search(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
+#define debug_tracking_i_search(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
+
+#define debug_tracking
+#define debug_tracking_s
+#define debug_tracking_r
+#define debug_tracking_i
+
+#else // ! TRACKONLYSEARCH
+
 #define debug_tracking(track_step)                              \
   verb_print_debug(1, "Track step (%s)\n", track_step);
 #define debug_tracking_s(track_step, extra)                              \
@@ -44,12 +65,32 @@
   verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
 #define debug_tracking_i(track_step, extra)                              \
   verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
-#else // ! dummy...
+
+#define debug_tracking_search(track_step)                              \
+  verb_print_debug(1, "Track step (%s)\n", track_step);
+#define debug_tracking_s_search(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %s\n", track_step, extra);
+#define debug_tracking_r_search(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
+#define debug_tracking_i_search(track_step, extra)                              \
+  verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
+
+#endif // ! TRACKONLYSEARCH
+
+#else // ! DEBUGTRACKING :: dummies...
+
 #define debug_tracking
 #define debug_tracking_s
 #define debug_tracking_r
 #define debug_tracking_i
-#endif
+
+#define debug_tracking_search
+#define debug_tracking_s_search
+#define debug_tracking_r_search
+#define debug_tracking_i_search
+
+#endif // ! DEBUGTRACKING
+//E
 
 #endif // ! _common_defs_h
 

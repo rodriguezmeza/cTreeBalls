@@ -1943,7 +1943,8 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
         
         int nslashs = MAXNSLASHS;
         ipos = (int*) malloc((nslashs)*sizeof(int));
-        dp1 = (char*) malloc((lenDir)*sizeof(char));
+//        dp1 = (char*) malloc((lenDir)*sizeof(char));
+        dp1 = (char*) malloc((MAXLENGTHOFSTRSCMD)*sizeof(char));
 
         for (i=0; i< lenDir; i++) {
             if(cmd->rootDir[i] == '/') {
@@ -1965,13 +1966,15 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
         } else {
             for (i=0; i<ndefault; i++) {
                 debug_tracking("003");
-                strncpy(dp1, cmd->rootDir, ipos[i]-1);
+//                strncpy(dp1, cmd->rootDir, ipos[i]-1);
+                snprintf(dp1, ipos[i]+1, "%s", cmd->rootDir);
                 sprintf(buf,"if [ ! -d %s ]; then mkdir -p %s; fi",dp1,dp1);
                 verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
                 system(buf);
                 debug_tracking("004");
             }
-            strncpy(dp1, cmd->rootDir, lenDir);
+//            strncpy(dp1, cmd->rootDir, lenDir);
+            snprintf(dp1, lenDir+1, "%s", cmd->rootDir);
             sprintf(buf,"if [ ! -d %s ]; then mkdir -p %s; fi",dp1,dp1);
             verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
             system(buf);

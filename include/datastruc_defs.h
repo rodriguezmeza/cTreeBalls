@@ -36,8 +36,13 @@ typedef struct _node {
 #endif
 
 #ifdef THREEPCFSHEAR
+#ifdef SINGLEP
+    float gamma1;
+    float gamma2;
+#else
     REAL gamma1;
     REAL gamma2;
+#endif
 #endif
 
 #ifdef SINGLEP
@@ -47,9 +52,11 @@ typedef struct _node {
     REAL weight;                                    // to weight fields...
 //    vector pos;
 #endif
+
     vector pos;
 
     struct _node *next;
+
 #ifdef bhistON
     int *bhistNsub;
     REAL *bhistXi2pcfsub;

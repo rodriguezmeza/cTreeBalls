@@ -6,7 +6,7 @@
 #                   adapted to use cballys module
 #
 #
-import os, time, argparse, numpy as np
+import os, time, argparse, gc, numpy as np
 from astropy.io import fits
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -98,7 +98,10 @@ def wtheta_cballs(tmin_deg, tmax_deg, nbins, nthreads=16,
             th = rr                     # rr en rad
 
     print('Searching cputime=',cputime,' sec.')
-
+    print('cleaning all...')
+    Balls.clean_all()
+    print('done.')
+    gc.collect()
     return th, xi
 
 def load_kappa(path, field=0):

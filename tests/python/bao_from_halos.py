@@ -5,7 +5,7 @@
 #                   Python script by Tisnado
 #                   adapted to use cballys module
 #
-import os, re, time, glob, argparse, numpy as np
+import os, re, time, glob, argparse, gc, numpy as np
 import matplotlib as mpl; mpl.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
@@ -244,6 +244,11 @@ def run_bao_cballs(inpath, outdir, tag, box, rmin, rmax, nbins, nthreads,
         ax2.legend(loc="lower left", frameon=True)
     ax2.set_xlabel(r"$r\,[h^{-1}\mathrm{Mpc}]$"); ax2.set_ylabel(r"$r^2\,\xi(r)$"); ax2.set_title(ttl, pad=6)
     fig2.tight_layout(); fig2.savefig(os.path.join(outdir, f"xi_r2_{tag}_{engine}.png")); plt.close(fig2)
+    
+    print('cleaning all...')
+    Balls.clean_all()
+    print('done.')
+    gc.collect()
 #E cBalls
 
 def main():

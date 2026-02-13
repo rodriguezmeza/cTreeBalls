@@ -2,6 +2,7 @@
  MODULE: search_neighbor_boxes_omp.c        [cTreeBalls]
  Written by: M.A. Rodriguez-Meza
  Modified version of some routines from cute_box by David Alonso
+ See also Rapaport, The art of molecular dynamics simulations, 2nd edition (2004)
  Starting date:    april 2023
  Purpose: 2/3-point correlation functions computation
  Language: C

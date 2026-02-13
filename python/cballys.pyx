@@ -182,7 +182,8 @@ cdef class cballs:
     def struct_cleanup(self):
         if(self.allocated != True):
           return
-#        print('Flags (struct_cleanpup): ',self.gd.tree_allocated,self.gd.gd_allocated_2,
+#        print('Flags (struct_cleanpup: begining): ',
+#                        self.gd.tree_allocated,self.gd.gd_allocated_2,
 #                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
 #                        self.gd.gd_allocated,self.gd.cmd_allocated)
 #B        if "MainLoop" in self.ncp:
@@ -206,6 +207,16 @@ cdef class cballs:
 
         self.allocated = False
         self.computed = False
+        self.gd.tree_allocated=self.getTreeAllocated()
+        self.gd.gd_allocated_2=self.getAllocated2()
+        self.gd.bodytable_allocated=self.getBodytableAllocated()
+        self.gd.histograms_allocated=self.getHistogramsAllocated()
+        self.gd.gd_allocated=self.getGDAllocated()
+        self.gd.cmd_allocated=self.getCMDAllocated()
+#        print('Flags (struct_cleanpup: finished): ',
+#                        self.gd.tree_allocated,self.gd.gd_allocated_2,
+#                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
+#                        self.gd.gd_allocated,self.gd.cmd_allocated)
 
     def clean_all(self):
         self.struct_cleanup()
@@ -275,7 +286,7 @@ cdef class cballs:
             return True
         return False
 
-
+################# Begin Run ####################
 #    def Run(self, level=["EndRun_FreeMemory"]):
     def Run(self, level=["MainLoop"]):
         """
@@ -430,6 +441,7 @@ cdef class cballs:
 #        print('END: computed, allocated: ', self.computed, self.allocated)
 #
         return self.cputime
+################# End Run ####################
 
 #
 #B Interfaces to PXD functions

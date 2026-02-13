@@ -6,7 +6,7 @@
 #                   adapted to use cballys module
 #
 #
-import os, argparse, numpy as np
+import os, argparse, gc, numpy as np
 from pathlib import Path
 import healpy as hp
 #B for cBalls
@@ -25,7 +25,8 @@ def cballs_corr(tmin_deg, tmax_deg, nbins, nthreads=16, outdir='Output',
     rmin=np.radians(tmin_deg)
     rmax=np.radians(tmax_deg)
     print('rmin, rmax in degrees', np.degrees(rmin), np.degrees(rmax))
-    print('rmin, rmax in arcmin', np.degrees(rmin)*60, np.degrees(rmax)*60)
+    print('rmin, rmax in arcmin', np.degrees(rmin)*60,
+                                    np.degrees(rmax)*60)
 
     Balls = cballs()
     if mask == None:
@@ -77,6 +78,10 @@ def cballs_corr(tmin_deg, tmax_deg, nbins, nthreads=16, outdir='Output',
     xi = Balls.getHistXi2pcf()
     nn = Balls.getHistNN()
     print('Searching cputime=',cputime,' sec.')
+    print('cleaning all...')
+    Balls.clean_all()
+    print('done.')
+    gc.collect()
     return rr, xi, nn, monopolesData
 
 def load_kappa(path, field=0):

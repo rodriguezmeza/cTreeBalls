@@ -107,6 +107,10 @@ def wtheta_cballs(tmin_deg, tmax_deg, nbins, nthreads=16, outdir=None, fits=None
     rr = Balls.getrBins()
     xi = Balls.getHistXi2pcf()
     th = np.degrees(rr)  # rr en rad → deg
+    print('cleaning all...')
+    Balls.clean_all()
+    print('done.')
+    gc.collect()
 
     return th, xi, dt
 # ------------------------
