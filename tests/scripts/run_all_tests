@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
+# set SMOOTHPIVOTON = 0 in addons/Makefile_addons_settings and then make "make clean; make all"
+
 # Set cBalls exe PATH
-CBALLS=cballs
-#CBALLS=../cballs
+CBALLS=../cballs
 PYTHON='python'
 InDir='./In'
 scriptsDir='./scripts'
@@ -23,7 +24,6 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $CBALLS $InDir/parameters_to-test_nside256_octree-sincos-omp || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_octree-sincos-omp.py || exit
-#mv ./Output ./Output_nside256_octree-sincos-omp
 
 # Test 02 :: (CPU real 0m1.246s)
 echo ""
@@ -33,7 +33,6 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $CBALLS $InDir/parameters_to-test_nside256_octree-sincos-omp_no-one-ball || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_octree-sincos-omp_no-one-ball.py || exit
-#mv ./Output ./Output_nside256_octree-sincos-omp_no-one-ball
 
 # Test 03 :: (CPU real 0m3.401s)
 echo ""
@@ -43,7 +42,6 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $CBALLS $InDir/parameters_to-test_nside256_kdtree-omp || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_kdtree-omp.py || exit
-#mv ./Output ./Output_nside256_kdtree-omp
 
 # Test 04 :: (CPU real 0m1.749s)
 echo ""
@@ -53,7 +51,6 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $CBALLS $InDir/parameters_to-test_nside256_octree-ggg-omp || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_octree-ggg-omp.py || exit
-#mv ./Output ./Output_nside256_octree-ggg-omp
 
 # Test 05 :: (CPU real 0m1.829s.611s)
 echo ""
@@ -63,7 +60,6 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $PYTHON $InDir/test_cython_octree-ggg-omp.py || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_cython_test.py || exit
-#mv ./Output ./Output_nside256_cython_octree-sincos-omp
 
 # Test 06 :: (CPU real 0m1.701s)
 # First check fits file header info:
@@ -75,6 +71,5 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $CBALLS $InDir/parameters_to-test_nside256_fits_octree-ggg-omp || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_fits_octree-ggg-omp.py || exit
-#mv ./Output ./Output_nside256_fits_octree-sincos-omp
 
 
