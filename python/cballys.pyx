@@ -189,8 +189,8 @@ cdef class cballs:
 #B        if "MainLoop" in self.ncp:
 #B this memory freeing may cause segmentation fault (core dumped) in linux
 #   when using cballys in a python loop. Must be analysed and corrected
-#        if self.gd.tree_allocated:
-#            EndRun_FreeMemory_tree(&(self.cmd), &(self.gd))
+        if self.gd.tree_allocated:
+            EndRun_FreeMemory_tree(&(self.cmd), &(self.gd))
 #E
         if self.gd.gd_allocated_2:
             EndRun_FreeMemory_gd_2(&(self.cmd), &(self.gd))

@@ -528,6 +528,9 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
     int ifile;
     INTEGER cellcounter=0;
 
+//    verb_print_debug(1, "%s: allocated cells: %ld\n",
+//                    routineName, gd->ncellTable[ifile] );
+
     if (scanopt(cmd->options, "read-mask")) {
         ifile=0;
         freecell = NULL;
@@ -569,12 +572,17 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
             p = freecell;
             while (p != NULL) {
                 if (Type(p) == CELL) {
-//                    if (cellcounter+1>=gd->ncellTable[ifile])
-//                    verb_print_debug(1, "CELL node:: %ld: %ld, %ld, %d, %d\n",
+//                    if (cellcounter<gd->ncellTable[ifile]-2) {
+                    if (cellcounter<387601-2) {
+//                        verb_print_debug(1, "CELL node:: %ld: %ld, %ld, %d, %d\n",
 //                        cellcounter+1,Id(p), Id(Next(p)), Type(p), Type(Next(p)));
-                    free(p);
-                    ++cellcounter;
-                    p = Next(p);
+                        free(p);
+                        ++cellcounter;
+                        p = Next(p);
+                    } else {
+                        ++cellcounter;
+                        break;
+                    }
                 } else {
 //                    verb_print_debug(1, "BODY node: %ld, %ld, %d, %d\n",
 //                                     Id(p), Id(Next(p)), Type(p), Type(Next(p)));
@@ -584,6 +592,8 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: allocated cells vs freed cells: %ld %ld\n",
                                    routineName, gd->ncellTable[ifile], cellcounter);
+//            verb_print_debug(1, "%s: allocated cells vs freed cells: %ld %ld\n",
+//                            routineName, gd->ncellTable[ifile], cellcounter);
         }
     }
 
