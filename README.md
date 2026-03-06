@@ -3,7 +3,7 @@
 Author: Mario A. Rodriguez-Meza
 
 Major contributors:
-- Alejandro Aviles
+- [Alejandro Aviles](https://github.com/alejandroaviles)
 - Eladio Moreno
 - Gustavo Niz
 - Axel Romero Tisnado
