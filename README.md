@@ -2,6 +2,12 @@
 
 Author: Mario A. Rodriguez-Meza
 
+Major contributors:
+- Alejandro Aviles
+- Eladio Moreno
+- Gustavo Niz
+- Axel Romero Tisnado
+
 ## Table of Contents
 
 -   [Introduction](#introduction)
