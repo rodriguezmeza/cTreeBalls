@@ -4,8 +4,8 @@ Author: Mario A. Rodriguez-Meza
 
 Major contributors:
 - [Alejandro Aviles](https://github.com/alejandroaviles)
-- Eladio Moreno
-- Gustavo Niz
+- [Eladio Moreno](https://github.com/Eladio-Moreno)
+- [Gustavo Niz](https://github.com/gnizq64)
 - Axel Romero Tisnado
 
 ## Table of Contents
