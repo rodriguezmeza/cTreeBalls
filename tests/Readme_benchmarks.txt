@@ -30,6 +30,4 @@ and in tests folder:
 $ time python3 python/benchmark_kappa_corr.py --kappa catalogs/Takahashi/allskymap_nres12r081_zs9_mag.fits --nsides "128,256,512,1024,2048" --threads 16 --nbins 20 --repeats 5 --outdir cputime_3pcf
 
 
-Note: comparisons against other correlation codes can be found in tests/comparisons.
-
 
