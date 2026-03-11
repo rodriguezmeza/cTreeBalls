@@ -18,6 +18,8 @@
 
 #include "globaldefs.h"
 
+local int treeInfo(struct  cmdline_data* cmd, struct  global_data* gd,
+                   int, INTEGER);
 local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int);
 local cellptr makecell(struct  cmdline_data* cmd, struct  global_data* gd, int);
 local int loadbody(struct  cmdline_data*, struct  global_data*, bodyptr, int);
@@ -27,7 +29,7 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
 local int setradius(struct  cmdline_data* cmd, struct  global_data* gd,
                     cellptr, vector, real, int);
 local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, 
-                      nodeptr, nodeptr);
+                      nodeptr, nodeptr, int);
 
 #define MAXLEVEL  32
 
@@ -70,6 +72,12 @@ local INTEGER inodelevB4;
 local INTEGER ibodyleftoutB4;
 #endif
 
+#ifndef MACONLY
+//B celltable
+local INTEGER ncell;
+//E
+#endif
+
 #ifdef PRUNING
 local void pruningCells(struct  cmdline_data* cmd,
                         struct  global_data* gd,
@@ -88,7 +96,7 @@ local INTEGER isel, inosel;
 /*
  MakeTree routine to create octtree structure:
 
- To be called using: search=tree-omp-sincos
+ To be called using: search=octree-omp-sincos
 
  Arguments:
     * `cmd`: Input: structure cmdline_data pointer
@@ -148,6 +156,9 @@ global int MakeTree(struct  cmdline_data* cmd,
                     routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
 
     cpustartMiddle = CPUTIME;
+
+    treeInfo(cmd, gd, ifile, nbody);
+
     debug_tracking("002");
     DO_BODY(p, btab, btab+nbody) {
 #ifdef BODY3ON
@@ -208,7 +219,17 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     cpustartMiddle = CPUTIME;
     debug_tracking("004");
-    threadtree(cmd, gd, (nodeptr) roottable[ifile], NULL);
+    
+#ifndef MACONLY
+    //B celltable
+    ncell=0;
+//    gd->ncellt[ifile]=0;
+    celltable[ifile] =
+        (cellptr *) allocate(gd->ncellTable[ifile] * sizeof(cellptr));
+    //E
+#endif
+
+    threadtree(cmd, gd, (nodeptr) roottable[ifile], NULL, ifile);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: threadtree CPU time: %lf %s\n",
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
@@ -238,7 +259,7 @@ global int MakeTree(struct  cmdline_data* cmd,
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\nSelected vs NotSelected and total: %ld %ld %ld\n\n",
                 isel, inosel, isel + inosel);
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "tdepth = %d\n\n",gd->tdepthTable[ifile]);
 
     cpustartMiddle = CPUTIME;
@@ -511,6 +532,30 @@ global int centerBodies(bodyptr btab, int nbody, int ifile, cellptr root)
     return SUCCESS;
 }
 
+#define invlog102 3.321928094887362
+local int treeInfo(struct  cmdline_data* cmd, struct  global_data* gd,
+                   int ifile, INTEGER nbody)
+{
+    string routineName = "treeInfo";
+    real averageLength;
+    real tmp;
+    real tdepthN;
+
+    averageLength = rsqrt(4.0*PI/(real)nbody);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "%s: average length, root size: %g %g\n",
+                           routineName, averageLength, gd->rSizeTable[ifile]);
+    tmp = rsqrt((double) nbody)*gd->rSizeTable[ifile]
+            / (2.0*SQRTPI);
+    tdepthN = invlog102*rlog10(tmp);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "%s: tdepthN: %g\n",
+                           routineName, tdepthN);
+
+    return SUCCESS;
+}
+#undef invlog102
+
 local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int ifile)
 {
     roottable[ifile] = NULL;
@@ -526,15 +571,27 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
     nodeptr p;
     nodeptr freecell = NULL;
     int ifile;
-    INTEGER cellcounter=0;
+    long int cellcounter=0;
 
-//    verb_print_debug(1, "%s: allocated cells: %ld\n",
-//                    routineName, gd->ncellTable[ifile] );
+    debug_tracking_s("001", routineName);
+
+//    verb_print_debug(1, "%s: allocated cells: %ld %ld %ld\n",
+//                    routineName, gd->ncellTable[ifile], gd->ncellt[ifile], ncell);
+    verb_print_debug(1, "%s: allocated cells: %ld %ld\n",
+                    routineName, gd->ncellTable[ifile], ncell);
 
     if (scanopt(cmd->options, "read-mask")) {
         ifile=0;
-        freecell = NULL;
         cellcounter=0;
+#ifndef MACONLY
+        //B celltable
+        for (INTEGER i=gd->ncellTable[ifile]-1; i>=0; i--) {
+            free(celltable[ifile][i]);
+                ++cellcounter;
+        }
+        //E
+#else
+        freecell = NULL;
         p = (nodeptr) roottable[ifile];
         while (p != NULL)
             if (Type(p) == CELL) {
@@ -556,10 +613,23 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "%s: allocated cells vs freed cells: %ld %ld\n",
                                routineName, gd->ncellTable[ifile], cellcounter);
+#endif // ! MACONLY
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
-            freecell = NULL;
             cellcounter=0;
+#ifndef MACONLY
+            debug_tracking_s("002", "MACONLY");
+            //B celltable
+            for (INTEGER i=gd->ncellTable[ifile]-1; i>=0; i--) {
+//                debug_tracking_i("002", i);
+                free(celltable[ifile][i]);
+                ++cellcounter;
+            }
+            //E
+            debug_tracking_s("003", "MACONLY");
+#else
+            debug_tracking_s("002", "NO-MACONLY");
+            freecell = NULL;
             p = (nodeptr) roottable[ifile];
             while (p != NULL)
                 if (Type(p) == CELL) {
@@ -568,14 +638,13 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
                     p = More(p);
                 } else                              // p can be BODY type
                     p = Next(p);
-            
+
             p = freecell;
             while (p != NULL) {
+//                for (INTEGER i=0; i<gd->ncellTable[ifile]; i++) {
                 if (Type(p) == CELL) {
-//                    if (cellcounter<gd->ncellTable[ifile]-2) {
-                    if (cellcounter<387601-2) {
-//                        verb_print_debug(1, "CELL node:: %ld: %ld, %ld, %d, %d\n",
-//                        cellcounter+1,Id(p), Id(Next(p)), Type(p), Type(Next(p)));
+                    if (cellcounter<gd->ncellTable[ifile]-1) {
+//                    if (cellcounter<387601-2) {
                         free(p);
                         ++cellcounter;
                         p = Next(p);
@@ -584,16 +653,17 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
                         break;
                     }
                 } else {
-//                    verb_print_debug(1, "BODY node: %ld, %ld, %d, %d\n",
-//                                     Id(p), Id(Next(p)), Type(p), Type(Next(p)));
                     p = Next(p);
                 }
+//            }
             }
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: allocated cells vs freed cells: %ld %ld\n",
                                    routineName, gd->ncellTable[ifile], cellcounter);
 //            verb_print_debug(1, "%s: allocated cells vs freed cells: %ld %ld\n",
 //                            routineName, gd->ncellTable[ifile], cellcounter);
+            debug_tracking_s("003", "NO-MACONLY");
+#endif // ! MACONLY
         }
     }
 
@@ -601,6 +671,10 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
         roottable[ifile] = NULL;
         gd->ncellTable[ifile] = 0;
     }
+
+    // also free celltable[ifile] arrays
+
+    debug_tracking_s("004... final", routineName);
 
     return SUCCESS;
 }
@@ -628,6 +702,7 @@ global int expandbox(struct  cmdline_data* cmd,
                     struct  global_data* gd,
                     bodyptr btab, int nbody, int ifile, cellptr root)
 {
+    string routineName = "expandbox (treeload)";
     real dmax, d;
     bodyptr p;
     int k;
@@ -642,9 +717,12 @@ global int expandbox(struct  cmdline_data* cmd,
     while (gd->rSizeTable[ifile] < 2 * dmax)
         gd->rSizeTable[ifile] = 2 * gd->rSizeTable[ifile];
 
-    if (cmd->verbose>=VERBOSENORMALINFO)
-        verb_print(cmd->verbose, "treeload expandbox: rSize = %lf\n",
-                   gd->rSizeTable[ifile]);
+//    if (cmd->verbose>=VERBOSENORMALINFO)
+//        verb_print(cmd->verbose, "treeload expandbox: rSize = %lf\n",
+//                   gd->rSizeTable[ifile]);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                          "%s: rSize = %lf\n",
+                           routineName, gd->rSizeTable[ifile]);
 
     return SUCCESS;
 }
@@ -874,7 +952,7 @@ local int setradius(struct  cmdline_data* cmd, struct  global_data* gd,
 }
 
 local void threadtree(struct  cmdline_data* cmd,
-                      struct  global_data* gd, nodeptr p, nodeptr n)
+                      struct  global_data* gd, nodeptr p, nodeptr n, int ifile)
 {
     int ndesc, i;
     nodeptr desc[NSUB+1];
@@ -883,6 +961,16 @@ local void threadtree(struct  cmdline_data* cmd,
 
     Next(p) = n;
     if (Type(p) == CELL) {
+//        verb_print_debug(1, "threadtree: %ld %ld %ld\n",
+//                        gd->ncellTable[ifile], gd->ncellt[ifile], ncell);
+#ifndef MACONLY
+        //B celltable
+        celltable[ifile][ncell] = (cellptr)p;
+        ncell++;
+//        celltable[ifile][gd->ncellt[ifile]] = (cellptr)p;
+//        gd->ncellt[ifile] = gd->ncellt[ifile]+1;
+        //E
+#endif
         if (Nb(p)<NbMax)
             cellhistNb[Nb(p)]++;
         ndesc = 0;
@@ -892,7 +980,7 @@ local void threadtree(struct  cmdline_data* cmd,
         More(p) = desc[0];
         desc[ndesc] = n;
         for (i = 0; i < ndesc; i++)
-            threadtree(cmd, gd, desc[i], desc[i+1]);
+            threadtree(cmd, gd, desc[i], desc[i+1], ifile);
     } // ! p = CELL
 }
 

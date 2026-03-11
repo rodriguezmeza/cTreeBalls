@@ -680,6 +680,31 @@ cdef class cballs:
                 matrix[i, j] = self.gd.matPXD[i][j]
 
         return matrix
+
+    def getHistZetaM_EE(self, int m):
+        cdef int sizeHistN
+        cdef int index_r
+        cdef int sizesqr
+        cdef ErrorMsg errmsg
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        
+        sizesqr = sizeHistN*sizeHistN
+
+        rows = sizeHistN
+        cols = sizeHistN
+        cdef np.ndarray[np.float64_t, ndim=2] matrix = np.zeros((rows, cols), dtype=np.float64)
+        
+        if get_HistZetaM_EE(&self.cmd, &self.gd, m, errmsg)==FAILURE:
+            raise cBallsSevereError(errmsg)
+
+        # You can then populate the matrix
+        for i in range(1,rows):
+            for j in range(1,cols):
+                matrix[i, j] = self.gd.matPXD[i][j]
+
+        return matrix
 #
 #E histograms
 

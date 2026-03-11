@@ -77,8 +77,10 @@ local long saveidum;
 int StartRun(struct  cmdline_data* cmd, struct  global_data* gd, 
              string head0, string head1, string head2, string head3)
 {
-    string routineName = "StartRun";
+    string routineName = "StartRun (no CLASSLIB)";
     double cpustart = CPUTIME;
+
+    debug_tracking_s("001", routineName);
 
     gd->headline0 = head0; gd->headline1 = head1;
     gd->headline2 = head2; gd->headline3 = head3;
@@ -96,6 +98,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->sameposcount = 0;
     //E
 
+    debug_tracking("002");
+
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
     if (*(cmd->paramfile)=='-')
@@ -107,6 +111,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 #else
     startrun_parameterfile(cmd, gd);
 #endif
+
+    debug_tracking("003");
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
@@ -124,6 +130,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
                         "\n%s CPU time: %g %s\n",
                         routineName, CPUTIME - cpustart, PRNUNITOFTIMEUSED);
 
+    debug_tracking_s("004... final", routineName);
+
     return SUCCESS;
 }
 
@@ -134,11 +142,13 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
              string head0, string head1, string head2, string head3)
 {
-    string routineName = "StartRun";
+    string routineName = "StartRun (CLASSLIB)";
     struct file_content fc;
 
     double cpustart = CPUTIME;
-    
+
+    debug_tracking_s("001", routineName);
+
     gd->headline0 = head0; gd->headline1 = head1;
     gd->headline2 = head2; gd->headline3 = head3;
     printf("\n%s\n%s: %s\n\t %s\n",
@@ -153,6 +163,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->bytes_tot = 0;
     gd->sameposcount = 0;
     //E
+
+    debug_tracking("002");
 
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
@@ -195,6 +207,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
                "\n%s: Total allocated %g MByte storage so far.\n",
                routineName, gd->bytes_tot*INMB);
 
+    debug_tracking("003");
+
 #ifdef OPENMPCODE
     class_call_cballs(SetNumberThreads(cmd), errmsg, errmsg);
 #endif
@@ -202,6 +216,8 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->cputotalinout += CPUTIME - cpustart;
     verb_print(cmd->verbose, "\n%s CPU time: %g %s\n",
                routineName, CPUTIME - cpustart, PRNUNITOFTIMEUSED);
+
+    debug_tracking_s("004... final", routineName);
 
     return SUCCESS;
 }
@@ -1463,8 +1479,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
         bytes_tot_local += 2*(cmd->mChebyshev+1)*cmd->sizeHistN*sizeof(real);
         gd->histZetaM = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,
                                   1,cmd->sizeHistN);
-        bytes_tot_local += 
-                (cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+        gd->histZetaM_EE = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,
+                                  1,cmd->sizeHistN);
+        bytes_tot_local +=
+            2.0*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
         gd->histZetaMcos =
                 dmatrix3D(1,cmd->mChebyshev+1,1,

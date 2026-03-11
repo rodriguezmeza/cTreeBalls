@@ -46,6 +46,7 @@ cdef extern from "cballs.h":
         double *histNNPXD
         double *histZetaMFlatten
         double ***histZetaMcos
+        double ***histZetaM_EE
 #E
         double Rcut
         double* histN
@@ -122,6 +123,7 @@ cdef extern from "cballs.h":
     int get_HistCF(void*, void*)
     int get_HistXi2pcf(void*, void*)
     int get_HistZetaMsincos(void*, void*, int, int, char*)
+    int get_HistZetaM_EE(void*, void*, int, char*)
 #E histograms
 
 

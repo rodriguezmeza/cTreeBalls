@@ -272,6 +272,25 @@ int get_HistZetaMsincos(struct  cmdline_data* cmd,
 #undef _SIN_
 #undef _SINCOS_
 #undef _COSSIN_
+
+int get_HistZetaM_EE(struct  cmdline_data* cmd,
+                     struct  global_data* gd,
+                     int m, ErrorMsg errmsg)
+{
+    int n1, n2;
+
+    class_test((m <= 0 || m > cmd->mChebyshev + 1),
+        errmsg,"\nget_HistZetaM_EE: not allowed value of m = %d\n",m);
+
+    for (n1=1; n1<=cmd->sizeHistN; n1++) {
+        for (n2=1; n2<=cmd->sizeHistN; n2++) {
+            gd->matPXD[n1][n2] = gd->histZetaM_EE[m][n1][n2];
+        }
+    }
+
+    return SUCCESS;
+}
+
 //E histograms section
 
 //E PXD functions

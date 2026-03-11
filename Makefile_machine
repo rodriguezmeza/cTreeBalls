@@ -47,6 +47,8 @@ OPT2LIB =
 # cballys module is working with python 3.13 and gcc-15
 #   check with: 'python -c "import cballys"'
 CC       = gcc
+# tested in MacBook Pro chip: Apple M3 Max
+#CC       = gcc-12
 #CC       = gcc-15
 # With icc (Intel):
 #CC       = icc
@@ -68,6 +70,8 @@ CC       = gcc
 # "PYTHON=python3 make all" (THanks to Marius Millea for pyhton3
 # compatibility)
 PYTHON ?= python
+# tested in MacBook Pro chip: Apple M3 Max
+#PYTHON = python3.12
 
 # your optimization flag
 # clang-12: warning: -O4 is equivalent to -O3 [-Wdeprecated]
@@ -170,6 +174,12 @@ endif
 #OPT2 += -DPTOPIVOTROTATION
 #endif
 #
+
+# Flags only for Mac...
+MACONLYON = 0
+ifeq ($(MACONLYON),1)
+OPT2 += -DMACONLY
+endif
 
 #B ADDONS
 #

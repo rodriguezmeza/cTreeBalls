@@ -39,6 +39,10 @@ int get_HistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd);
 int get_HistZetaMsincos(struct  cmdline_data* cmd,
                          struct  global_data* gd,
                          int m, int type, ErrorMsg errmsg);
+// (EE) edge_effects
+int get_HistZetaM_EE(struct  cmdline_data* cmd,
+                         struct  global_data* gd,
+                         int m, ErrorMsg errmsg);
 //E histograms section
 
 //E PXD functions

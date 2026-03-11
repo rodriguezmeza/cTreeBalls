@@ -34,9 +34,10 @@
 #define VERBOSENORMALINFO       2
 #define VERBOSEDEBUGINFO        3
 
+
 //B Debug tracking
 #define TRACKONLYSEARCH
-//#undef TRACKONLYSEARCH
+#undef TRACKONLYSEARCH
 
 #ifdef DEBUGTRACKING
 
@@ -91,6 +92,7 @@
 
 #endif // ! DEBUGTRACKING
 //E
+
 
 #endif // ! _common_defs_h
 

@@ -241,6 +241,8 @@ typedef struct {
     real ***histXi3pcf;
     //E
     real ***histZetaM;
+    // (EE) edge_effects
+    real ***histZetaM_EE;
 #endif
 
 #ifdef THREEPCFSHEAR
@@ -348,6 +350,8 @@ typedef struct {
      real ***histXi3pcf;
      //E
      real ***histZetaM;
+    // (EE) edge_effects
+    real ***histZetaM_EE;
  #endif
 
  #ifdef THREEPCFSHEAR
@@ -1755,6 +1759,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                 gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
                 gd->histZetaMsincos[m][n1][n2] = gdl.histZetaMsincos[m][n1][n2];
                 gd->histZetaMcossin[m][n1][n2] = gdl.histZetaMcossin[m][n1][n2];
+                // (EE) edge_effects
+                if (scanopt(cmd->options, "no-normalize-HistZeta"))
+                    if (scanopt(cmd->options, "edge-corrections"))
+                gd->histZetaM_EE[m][n1][n2] = gdl.histZetaM_EE[m][n1][n2];
             }
         }
     }
@@ -3058,8 +3066,11 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     gdl->histZetaM =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    // (EE) edge_effects
+    gdl->histZetaM_EE =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
-            5*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+            6*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
     gdl->histZetaGmRe =
                 dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3104,6 +3115,8 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
 //#ifdef PIVOTLOOP
         CLRM_ext(gdl->histZetaM[m], cmd->sizeHistN);
 //#endif
+        // (EE) edge_effects
+        CLRM_ext(gdl->histZetaM_EE[m], cmd->sizeHistN);
     }
 #endif
 
@@ -3124,6 +3137,9 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     free_dmatrix3D(gdl->histZetaGmRe,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
+    // (EE) edge_effects
+    free_dmatrix3D(gdl->histZetaM_EE,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaM,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
@@ -3401,8 +3417,11 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     gdl->histZetaM =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    // (EE) edge_effects
+    gdl->histZetaM_EE =
+            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
-            5*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+            6*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
     gdl->histZetaGmRe =
                 dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3447,6 +3466,8 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 //#ifdef PIVOTLOOP
         CLRM_ext(gdl->histZetaM[m], cmd->sizeHistN);
 //#endif
+        // (EE) edge_effects
+        CLRM_ext(gdl->histZetaM_EE[m], cmd->sizeHistN);
     }
 #endif
 
@@ -3467,6 +3488,9 @@ local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     free_dmatrix3D(gdl->histZetaGmRe,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
+    // (EE) edge_effects
+    free_dmatrix3D(gdl->histZetaM_EE,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaM,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
@@ -5181,6 +5205,8 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 fprintf(outstr,"%16.8e ",mat5[m][n1][n2]);
+                // (EE) edge_effects
+                gdl->histZetaM_EE[m][n1][n2] = mat5[m][n1][n2];
             }
             fprintf(outstr,"\n");
         }

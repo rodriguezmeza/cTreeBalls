@@ -29,6 +29,8 @@ struct global_data{
     real *vecPXD;
     real **matPXD;
     real *histZetaMFlatten;
+//    real *histZetaM;
+    real ***histZetaM_EE;
     //E PXD functions
 
     real cpuinit;
@@ -59,7 +61,11 @@ struct global_data{
     real rSize;                                     // Maximum r of the box,needed?
 
     real rSizeTable[MAXITEMS];                      // Maximum r of the box
-    INTEGER ncellTable[MAXITEMS];
+//    INTEGER ncellTable[MAXITEMS];
+    long int ncellTable[MAXITEMS];
+    //B celltable
+    long int ncellt[MAXITEMS];
+    //E
     INTEGER nbodyTable[MAXITEMS];
     int tdepthTable[MAXITEMS];
     INTEGER nnodescanlevTable[MAXITEMS];

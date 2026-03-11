@@ -2035,7 +2035,10 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
  */
 int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "EndRun";
     stream outstr;
+
+    debug_tracking_s("001", routineName);
 
     if (cmd->verbose_log>0)
         fclose(gd->outlog);
@@ -2077,7 +2080,11 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
         printf(" %s\n\n", PRNUNITOFTIMEUSED);       // Only work this way
     }
 
+    debug_tracking("002");
+
     EndRun_FreeMemory(cmd, gd);
+
+    debug_tracking_s("003... final", routineName);
 
     return SUCCESS;
 }
@@ -2088,6 +2095,8 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 global int EndRun_FreeMemory(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
+    string routineName = "EndRun_FreeMemory";
+
 //    printf("\n Flags: %d, %d, %d, %d, %d, %d\n", gd->tree_allocated,
 //           gd->gd_allocated_2,
 //           gd->bodytable_allocated,
@@ -2095,15 +2104,19 @@ global int EndRun_FreeMemory(struct cmdline_data* cmd,
 //           gd->gd_allocated,
 //           gd->cmd_allocated);
     
+    debug_tracking_s("001", routineName);
+
     if (gd->tree_allocated == TRUE)
         EndRun_FreeMemory_tree(cmd, gd);
 
+    debug_tracking("002");
     if (gd->gd_allocated_2 == TRUE)
         EndRun_FreeMemory_gd_2(cmd, gd);
 
     if (gd->bodytable_allocated == TRUE)
         EndRun_FreeMemory_bodytable(cmd, gd);
 
+    debug_tracking("002");
     if (gd->histograms_allocated == TRUE)
         EndRun_FreeMemory_histograms(cmd, gd);
 
@@ -2111,6 +2124,8 @@ global int EndRun_FreeMemory(struct cmdline_data* cmd,
         EndRun_FreeMemory_gd(cmd, gd);
     if (gd->cmd_allocated == TRUE)
         EndRun_FreeMemory_cmd(cmd, gd);
+
+    debug_tracking_s("003... final", routineName);
 
     return SUCCESS;
 }
@@ -2195,6 +2210,10 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
                        cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaMcos,
+                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
+                       cmd->sizeHistN);
+        // (EE) edge_effects
+        free_dmatrix3D(gd->histZetaM_EE,
                        1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
                        cmd->sizeHistN);
         free_dmatrix3D(gd->histZetaM,
