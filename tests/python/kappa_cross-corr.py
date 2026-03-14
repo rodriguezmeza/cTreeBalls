@@ -84,7 +84,7 @@ def cballs_corr(tmin_deg, tmax_deg, nbins, nthreads=16, outdir='Output',
     Balls.clean_all()
     gc.collect()
 
-    return rr, xi12, x13, nn, monopolesData
+    return rr, xi12, xi13, nn, monopolesData
 
 def load_kappa(path, field=0):
     k = hp.read_map(path, field=0, dtype=np.float64, verbose=False)
@@ -212,7 +212,8 @@ def main():
             fitsfile1=k2save1, fitsfile2=k2save2, fitsfile3=k2save3,
             mask=args.mask, fileformat=args.file_format, type=args.type)
     print('rr:',rr)
-    print('xi:',xi)
+    print('xi12:',xi12)
+    print('xi13:',xi13)
     print('nn',nn)
     print()
     print()
