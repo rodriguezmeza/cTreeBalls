@@ -12,7 +12,7 @@ import sys
 #   these two lines won´t be necessary if cballys is in searching path
 #target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
 # Append the directory to sys.path
-sys.path.append(target_directory)
+#sys.path.append(target_directory)
 from cballys import cballs
 #E
 
