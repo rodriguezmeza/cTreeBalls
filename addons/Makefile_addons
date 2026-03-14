@@ -27,6 +27,13 @@ include $(MACHINES_DIR)/addons/octree_ggg_omp/Makefile_octree_ggg_omp
 endif
 #
 
+# OCTREEG1G2G3OMP
+# For computing cross-3pcf using octree-g1g2g3-omp
+ifeq ($(OCTREEG1G2G3OMPON),1)
+include $(MACHINES_DIR)/addons/octree_g1g2g3_omp/Makefile_octree_g1g2g3_omp
+endif
+#
+
 # KDTREEBOXOMP
 # For computing 2pcf using kdtree_box_omp methods
 ifeq ($(KDTREEBOXOMPON),1)

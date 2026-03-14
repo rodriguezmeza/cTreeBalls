@@ -36,6 +36,10 @@ int get_rBins(struct  cmdline_data* cmd,
 int get_HistNN(struct  cmdline_data* cmd, struct  global_data* gd);
 int get_HistCF(struct  cmdline_data* cmd, struct  global_data* gd);
 int get_HistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd);
+//B cross
+int get_HistXi2pcf12(struct  cmdline_data* cmd, struct  global_data* gd);
+int get_HistXi2pcf13(struct  cmdline_data* cmd, struct  global_data* gd);
+//E
 int get_HistZetaMsincos(struct  cmdline_data* cmd,
                          struct  global_data* gd,
                          int m, int type, ErrorMsg errmsg);

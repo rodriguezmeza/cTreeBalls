@@ -656,6 +656,43 @@ cdef class cballs:
 
         return out_hist
 
+#B cross
+    def getHistXi2pcf12(self):
+        cdef int sizeHistN
+        cdef int index_r
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        cdef np.ndarray[DTYPE_t, ndim=1] out_hist = np.zeros(sizeHistN,'float64')
+
+        if get_HistXi2pcf12(&self.cmd, &self.gd)==FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        for index_r in range(sizeHistN):
+            out_hist[index_r] = self.gd.vecPXD[index_r+1]
+
+        return out_hist
+
+    def getHistXi2pcf13(self):
+        cdef int sizeHistN
+        cdef int index_r
+
+        if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        cdef np.ndarray[DTYPE_t, ndim=1] out_hist = np.zeros(sizeHistN,'float64')
+
+        if get_HistXi2pcf13(&self.cmd, &self.gd)==FAILURE:
+            raise cBallsSevereErrorDummy()
+
+        for index_r in range(sizeHistN):
+            out_hist[index_r] = self.gd.vecPXD[index_r+1]
+
+        return out_hist
+#E
+
+
     def getHistZetaMsincos(self, int m, int type):
         cdef int sizeHistN
         cdef int index_r

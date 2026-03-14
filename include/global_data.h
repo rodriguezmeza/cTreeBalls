@@ -31,6 +31,10 @@ struct global_data{
     real *histZetaMFlatten;
 //    real *histZetaM;
     real ***histZetaM_EE;
+    //B cross
+    real ***histZetaM_EE2;
+    real ***histZetaM_EE3;
+    //E
     //E PXD functions
 
     real cpuinit;
@@ -58,6 +62,12 @@ struct global_data{
 //
     INTEGER nbccalc;
     INTEGER nbbcalc;
+    //B cross
+    INTEGER nbccalc2;
+    INTEGER nbbcalc2;
+    INTEGER nbccalc3;
+    INTEGER nbbcalc3;
+    //E
     real rSize;                                     // Maximum r of the box,needed?
 
     real rSizeTable[MAXITEMS];                      // Maximum r of the box
@@ -105,18 +115,44 @@ struct global_data{
     realptr histNN;
     realptr histCF;
     realptr histNNSub;
+    //B cross
+    realptr histNN2;
+    realptr histCF2;
+//    realptr histNNSub2;
+    realptr histNN3;
+    realptr histCF3;
+//    realptr histNNSub3;
+    //E
 // 2pcf
     realptr histNNSubXi2pcf;
 #ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcftotal;
 #endif
     real *histXi2pcf;
+    //B cross
+//    real *histXi2pcf2;
+//    real *histXi2pcf3;
+    real *histXi2pcf12;
+    real *histXi2pcf13;
+    //E
 //B TPCF
     real ***histZetaMcos;
     real ***histZetaMsin;
     real ***histZetaMsincos;
 // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     real ***histZetaMcossin;
+    //B cross
+    real ***histZetaMcos2;
+    real ***histZetaMsin2;
+    real ***histZetaMsincos2;
+// Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    real ***histZetaMcossin2;
+    real ***histZetaMcos3;
+    real ***histZetaMsin3;
+    real ***histZetaMsincos3;
+// Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+    real ***histZetaMcossin3;
+    //E
 //E
     real ***histZetaM;
 //

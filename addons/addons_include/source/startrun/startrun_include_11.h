@@ -43,6 +43,10 @@
 #include "startrun_octree_ggg_omp_11.h"         // 66
 #endif
 
+#ifdef OCTREEG1G2G3OMP
+#include "startrun_octree_g1g2g3_omp_11.h"      // 74
+#endif
+
 /*
  Add your addon item here
  */

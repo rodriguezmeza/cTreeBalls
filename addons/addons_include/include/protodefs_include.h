@@ -13,6 +13,10 @@
 #include "protodefs_octree_ggg_omp.h"
 #endif
 
+#ifdef OCTREEG1G2G3OMP
+#include "protodefs_octree_g1g2g3_omp.h"
+#endif
+
 #ifdef KDTREEOMP
 #include "protodefs_kdtree_omp.h"
 #endif

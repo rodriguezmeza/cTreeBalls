@@ -33,6 +33,10 @@
 #include "cballs_octree_ggg_omp.h"
 #endif
 
+#ifdef OCTREEG1G2G3OMP
+#include "cballs_octree_g1g2g3_omp.h"
+#endif
+
 
 /*
  Add your addon item here

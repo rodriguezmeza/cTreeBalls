@@ -122,6 +122,10 @@ cdef extern from "cballs.h":
     int get_HistNN(void*, void*)
     int get_HistCF(void*, void*)
     int get_HistXi2pcf(void*, void*)
+#B cross
+    int get_HistXi2pcf12(void*, void*)
+    int get_HistXi2pcf13(void*, void*)
+#E
     int get_HistZetaMsincos(void*, void*, int, int, char*)
     int get_HistZetaM_EE(void*, void*, int, char*)
 #E histograms

@@ -1,0 +1,32 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# OCTREEG1G2G3OMP
+# For computing 3pcf using octree-ggg-omp
+#
+# These lines is added to ../Makefile_addons_settings
+#ifeq ($(USEGSL),1)
+#OCTREEG1G2G3OMPON = 1
+#else
+#ifeq ($(COMPLEXLIBON),1)
+#OCTREEG1G2G3OMPON = 1
+#else
+#$(info To compile with OCTREEG1G2G3OMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+#OCTREEG1G2G3OMPON = 0
+#endif
+#endif
+#
+ifeq ($(OCTREEG1G2G3OMP),1)
+include $(MACHINES_DIR)/addons/octree_g1g2g3_omp/Makefile_octree_g1g2g3_omp
+endif
+#
+
+

@@ -8,6 +8,10 @@
 #include "cballs_octree_ggg_omp_01.h"
 #endif
 
+#ifdef OCTREEG1G2G3OMP
+#include "cballs_octree_g1g2g3_omp_01.h"
+#endif
+
 #ifdef OCTREESMOOTHING
 #include "cballs_octree_smoothing_01.h"
 #endif

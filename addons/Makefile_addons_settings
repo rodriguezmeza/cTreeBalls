@@ -27,6 +27,23 @@ OCTREEGGGOMPON = 1
 endif
 endif
 
+# OCTREEG1G2G3OMP
+# For computing cross-3pcf using octree-g1g2g3-omp
+#   still in development phase.
+ifeq ($(USEGSL),1)
+OCTREEG1G2G3OMPON = 1
+else
+ifeq ($(COMPLEXLIBON),1)
+OCTREEG1G2G3OMPON = 1
+else
+$(info To compile with OCTREEG1G2G3OMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+# Note:
+#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
+#OCTREEG1G2G3OMPON = 0
+OCTREEG1G2G3OMPON = 1
+endif
+endif
+
 # KDTREEOMP
 # For computing 3pcf using kdtree-omp method
 KDTREEOMPON = 1

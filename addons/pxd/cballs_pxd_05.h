@@ -206,6 +206,29 @@ int get_HistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
     return SUCCESS;
 }
 
+//B cross
+int get_HistXi2pcf12(struct  cmdline_data* cmd, struct  global_data* gd)
+{
+    int n;
+
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        gd->vecPXD[n] = gd->histXi2pcf12[n];
+    }
+
+    return SUCCESS;
+}
+
+int get_HistXi2pcf13(struct  cmdline_data* cmd, struct  global_data* gd)
+{
+    int n;
+
+    for (n=1; n<=cmd->sizeHistN; n++) {
+        gd->vecPXD[n] = gd->histXi2pcf13[n];
+    }
+
+    return SUCCESS;
+}
+//E
 
 // get matrix ZetaM for each m multipole
 #define _COS_         1

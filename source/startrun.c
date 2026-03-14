@@ -1469,6 +1469,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     //
     gd->histNNN = dvector(1,cmd->sizeHistN);
     gd->histXi2pcf = dvector(1,cmd->sizeHistN);
+    //B cross
+    gd->histXi2pcf12 = dvector(1,cmd->sizeHistN);
+    gd->histXi2pcf13 = dvector(1,cmd->sizeHistN);
+    //E
 
     bytes_tot_local += 8*cmd->sizeHistN*sizeof(real);
     bytes_tot_local += cmd->sizeHistN*cmd->sizeHistN*sizeof(real);

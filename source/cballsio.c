@@ -2223,6 +2223,10 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
         free_dmatrix(gd->histXicos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
 #endif
 
+    //B cross
+    free_dvector(gd->histXi2pcf13,1,cmd->sizeHistN);
+    free_dvector(gd->histXi2pcf12,1,cmd->sizeHistN);
+    //E
     free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
      
     free_dvector(gd->histNNN,1,cmd->sizeHistN);
