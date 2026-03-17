@@ -9,7 +9,7 @@
 #define _cballs_octree_g1g2g3_omp_01_h
 
 #ifdef BALLS4SCANLEV
-    int k;
+    int kk;
     gd->flagBalls4Scanlevel = FALSE;
 
 #ifdef BALLS4SCANLEV2NDROUND
@@ -62,8 +62,8 @@
     for (INTEGER i=0; i< gd->nnodescanlevTableB4[ifile]; i++) {
         q = (bodyptr)nodetablescanlevB4[ifile][i];
         p = bodytable[ifile] + i;
-        DO_COORD(k)
-            Pos(p)[k] = Pos(q)[k];
+        DO_COORD(kk)
+            Pos(p)[kk] = Pos(q)[kk];
         Kappa(p) = Kappa(q);
         Mass(p) = Mass(q);
         Weight(p) = Weight(q);

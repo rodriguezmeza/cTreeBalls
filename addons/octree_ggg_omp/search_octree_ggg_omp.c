@@ -15,10 +15,6 @@
 
 #include "globaldefs.h"
 
-// edge-corrections in the pivot loop
-#define PIVOTLOOP
-#undef PIVOTLOOP
-
 #ifdef THREEPCFSHEAR
 #define mpOffSet        3
 int local mCheb;                                    // mCheb =
@@ -240,7 +236,7 @@ typedef struct {
     real ***histZetaGmIm;
     real ***histXi3pcf;
     //E
-    real ***histZetaM;
+//    real ***histZetaM;
     // (EE) edge_effects
     real ***histZetaM_EE;
 #endif
@@ -254,7 +250,7 @@ typedef struct {
 #ifdef TWOPCF
     realptr histNthread;            // used
     realptr histWthread;            // used
-    realptr histWWthread;            // used
+    realptr histWWthread;           // used
     realptr histNNSubXi2pcfthread;  // used
 #ifdef SMOOTHPIVOT
     realptr histNNSubXi2pcfthreadp; // used
@@ -274,17 +270,10 @@ typedef struct {
     real **xiOUTVPsin;
     real **xiOUTVPsincos;
     real **xiOUTVPcossin;
-#ifdef PIVOTLOOP
-    real ***histZetaMtmpcos;
-    real ***histZetaMtmpsin;
-    real ***histZetaMtmpsincos;
-    real ***histZetaMtmpcossin;
-#else
     real **histZetaMtmpcos;
     real **histZetaMtmpsin;
     real **histZetaMtmpsincos;
     real **histZetaMtmpcossin;
-#endif
     real ***histZetaMthreadcos;
     real ***histZetaMthreadsin;
     real ***histZetaMthreadsincos;
@@ -292,9 +281,6 @@ typedef struct {
 
     real **histXithreadcos;
     real **histXithreadsin;
-#ifdef PIVOTLOOP
-    real ***histZetaMtmp;
-#endif
 #endif
 
 #ifdef THREEPCFSHEAR
@@ -325,14 +311,14 @@ typedef struct {
 //  check the memory allocation and freeing is updated...
 typedef struct {
  #ifdef TWOPCF
-     real *histNN;                   // used
-    real *histWW;                   // used
-     real *histCF;                   // used
-     real *histNNSubXi2pcf;          // used
+     real *histNN;                      // used
+    real *histWW;                       // used
+     real *histCF;                      // used
+     real *histNNSubXi2pcf;             // used
 #ifdef SMOOTHPIVOT
-     realptr histNNSubXi2pcftotal;   // used
+     realptr histNNSubXi2pcftotal;      // used
 #endif
-     real *histXi2pcf;               // used
+     real *histXi2pcf;                  // used
  #endif
 
      realptr histNNSub;
@@ -349,7 +335,7 @@ typedef struct {
      real ***histZetaGmIm;
      real ***histXi3pcf;
      //E
-     real ***histZetaM;
+//     real ***histZetaM;
     // (EE) edge_effects
     real ***histZetaM_EE;
  #endif
@@ -382,17 +368,10 @@ typedef struct {
     real **xiOUTVPsin;
     real **xiOUTVPsincos;
     real **xiOUTVPcossin;
-#ifdef PIVOTLOOP
-    real ***histZetaMtmpcos;
-    real ***histZetaMtmpsin;
-    real ***histZetaMtmpsincos;
-    real ***histZetaMtmpcossin;
-#else
     real **histZetaMtmpcos;
     real **histZetaMtmpsin;
     real **histZetaMtmpsincos;
     real **histZetaMtmpcossin;
-#endif
     real ***histZetaMthreadcos;
     real ***histZetaMthreadsin;
     real ***histZetaMthreadsincos;
@@ -400,9 +379,6 @@ typedef struct {
 
     real **histXithreadcos;
     real **histXithreadsin;
-#ifdef PIVOTLOOP
-    real ***histZetaMtmp;
-#endif
 #endif
 
 #ifdef THREEPCFSHEAR
@@ -433,18 +409,17 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                   bodyptr *btable, int cat2,
                                   bodyptr, nodeptr, real,
-                                  gdhistptr_sincos_omp_ggg, int *, int *);
+                                  gdhistptr_sincos_omp_ggg);
 local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd,
                           bodyptr *btable, int cat2,
                           bodyptr, cellptr, cellptr,
-                          gdhistptr_sincos_omp_ggg, int *, int *);
+                          gdhistptr_sincos_omp_ggg);
 local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                struct  global_data* gd,
                                bodyptr *btable, int cat2,
                                bodyptr p, cellptr start, cellptr finish,
-                               gdhistptr_sincos_omp_ggg hist,
-                               int *nbList, int *intList);
+                               gdhistptr_sincos_omp_ggg hist);
 
 local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
                                         struct  global_data* gd,
@@ -487,20 +462,19 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     bodyptr *btable, int cat2,
                                     bodyptr, nodeptr, real,
                                     gdhistptr_sincos_omp_ggg,
-                                    gdhistptr_sincos_omp_ggg_N,  int *, int *);
+                                    gdhistptr_sincos_omp_ggg_N);
 local void sumnode_sincos_N(struct  cmdline_data* cmd,
                             struct  global_data* gd,
                             bodyptr *btable, int cat2,
                             bodyptr, cellptr, cellptr,
                             gdhistptr_sincos_omp_ggg,
-                            gdhistptr_sincos_omp_ggg_N, int *, int *);
+                            gdhistptr_sincos_omp_ggg_N);
 local void sumnode_sincos_cell_N(struct  cmdline_data*,
                                  struct  global_data*,
                                  bodyptr *btable, int cat2,
                                  bodyptr, cellptr, cellptr,
                                  gdhistptr_sincos_omp_ggg,
-                                 gdhistptr_sincos_omp_ggg_N,
-                                 int *nbList, int *intList);
+                                 gdhistptr_sincos_omp_ggg_N);
 local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                           struct  global_data* gd,
                                           gdlptr_sincos_omp_ggg_N);
@@ -708,12 +682,6 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
                                             gdlptr_sincos_omp_ggg,
                                             gdlptr_sincos_omp_ggg_N);
 //B edge effects:
-#ifdef PIVOTLOOP
-local int HistZetaM_sincos_edge_effects(struct  cmdline_data*,
-                                        struct  global_data*,
-                                        gdhistptr_sincos_omp_ggg,
-                                        gdhistptr_sincos_omp_ggg_N);
-#endif
 local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
                                              struct  global_data*,
                                              gdlptr_sincos_omp_ggg,
@@ -727,25 +695,6 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
 #ifdef DEBUG
 local char pivotsfilePath[MAXLENGTHOFFILES];
 local FILE *outpivots;
-#endif
-
-#ifdef ADDPIVOTNEIGHBOURS
-#define FACTIVENB  10
-#define FACTIVEINT  10
- 
-local int actlenNb;
-local int *activeNb;
-
-local int actlenInt;
-local int *activeInt;
-
-local void sumnode_nblist_omp(struct cmdline_data* cmd,
-                              struct  global_data* gd,
-                              bodyptr *btable,
-                              INTEGER ipmin, INTEGER *ipmax,
-                              int cat1, int cat2,
-                              bodyptr p,
-                              gdhistptr_sincos_omp_ggg hist, int);
 #endif
 #endif
 
@@ -841,28 +790,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     icountNbRmin=0;
     INTEGER icountNbRminOverlap;
     icountNbRminOverlap=0;
-#ifdef ADDPIVOTNEIGHBOURS
-        //B Alloc memory for neighbour lists
-        int Nrsmooth;
-        Nrsmooth = 0.25*nbody[cat2]*rsqr(gd->rsmooth[0]);
-        actlenNb = FACTIVENB * Nrsmooth;
-        verb_print(cmd->verbose, "\n- Nrsmooth and actlenNb: %d %d\n",
-                   Nrsmooth, actlenNb);
-        verb_log_print(cmd->verbose,gd->outlog,
-                       "%s: actlenNb = %ld\n", routineName, actlenNb);
-        activeNb = (int *) allocate(actlenNb * sizeof(int));
-        //E
-        //B Alloc memory for interaction lists
-        int NrangeN;
-        NrangeN = 0.25*nbody[cat2]*rsqr(cmd->rangeN);
-        actlenInt = FACTIVEINT * NrangeN;
-        verb_print(cmd->verbose, "- NrangeN and actlenInt: %d %d\n",
-                   NrangeN, actlenInt);
-        verb_log_print(cmd->verbose,gd->outlog,
-                       "%s: actlenInt = %ld\n", routineName, actlenInt);
-        activeInt = (int *) allocate(actlenInt * sizeof(int));
-        //E
-#endif
 #endif
 
     debug_tracking("004");
@@ -905,126 +832,63 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifndef SMOOTHPIVOT
     error("%s: DEBUG can not be used with SMOOTHPIVOT turned OFF.");
 #else
-#ifdef ADDPIVOTNEIGHBOURS
-#pragma omp parallel default(none)                                          \
-    shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
-           actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
-#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
-#endif // ! ADDPIVOTNEIGHBOURS
 #endif // ! SMOOTHPIVOT
 #else // ! DEBUG
-
-//#ifdef ADDPIVOTNEIGHBOURS
-//#pragma omp parallel default(none)                                          \
-//    shared(cmd,gd,btable,nbody,roottable,                                   \
-//           actlenNb,activeNb,actlenInt,activeInt,                           \
-//           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-//           icountNbRmin,icountNbRminOverlap, gdl)
-//#else // ! ADDPIVOTNEIGHBOURS
-
 #ifdef NMultipoles
-
 #ifndef BALLS4SCANLEV
-
 #ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-#pragma omp parallel default(none)                                          \
-    shared(cmd,gd,btable,nbody,roottable,                                   \
-           actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
-#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap,                                \
            gdl, gdlN, main_thread_id)
-#endif // ! ADDPIVOTNEIGHBOURS
 #else // ! SMOOTHPIVOT
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipmask,                            \
            gdl, gdlN, main_thread_id)
 #endif // ! SMOOTHPIVOT
-
 #else // ! BALLS4SCANLEV
-
 #ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-#pragma omp parallel default(none)                                          \
-    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
-           actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
-#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
-#endif // ! ADDPIVOTNEIGHBOURS
 #else // ! SMOOTHPIVOT
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipmask, gdl, gdlN, main_thread_id)
 #endif // ! SMOOTHPIVOT
-
 #endif // ! BALLS4SCANLEV
-
 #else // ! NMultipoles
-
 #ifndef BALLS4SCANLEV
-
 #ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-#pragma omp parallel default(none)                                          \
-    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
-           actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
-#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
-#endif // ! ADDPIVOTNEIGHBOURS
 #else // ! SMOOTHPIVOT
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id)
 #endif // ! SMOOTHPIVOT
-
 #else // ! BALLS4SCANLEV
-
 #ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-#pragma omp parallel default(none)                                          \
-    shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
-           actlenNb,activeNb,actlenInt,activeInt,                           \
-           ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
-#else // ! ADDPIVOTNEIGHBOURS
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
-#endif // ! ADDPIVOTNEIGHBOURS
 #else // ! SMOOTHPIVOT
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id)
 #endif // ! SMOOTHPIVOT
-
 #endif // ! BALLS4SCANLEV
-
 #endif // ! NMultipoles
-
-//#endif // ! ADDPIVOTNEIGHBOURS
 #endif // ! DEBUG
   {
       pthread_t current_thread_id = pthread_self();
@@ -1067,10 +931,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     icountNbRminOverlapthread=0;
 
 #endif
-//#ifdef ADDPIVOTNEIGHBOURS
-    int nbList;
-    int intList;
-//#endif
 
       if (main_thread_id == current_thread_id)
           debug_tracking_search("007");
@@ -1086,14 +946,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           NbRmin(p) = 1;
           NbRminOverlap(p) = 0;
           KappaRmin(p) = Kappa(p);
-//#ifdef ADDPIVOTNEIGHBOURS
-          nbList=0;
-          intList=0;
-//#endif
-              if (Update(p) == FALSE) {
-                  ipfalsethreads++;
-                  continue;
-              }
+          if (Update(p) == FALSE) {
+              ipfalsethreads++;
+              continue;
+          }
 #endif
 
           if (scanopt(cmd->options, "read-mask")) {
@@ -1178,8 +1034,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifndef BALLS4SCANLEV
           normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                    p, ((nodeptr) roottable[cat2]),
-                                   gd->rSizeTable[cat2], &hist, &histN,
-                                   &nbList, &intList);
+                                   gd->rSizeTable[cat2], &hist, &histN);
 
 #ifdef TWOPCF
           //B kappa Avg Rmin
@@ -1211,8 +1066,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #else // ! BALLS4SCANLEV
           normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                    (bodyptr)p, ((nodeptr) roottable[cat2]),
-                                   gd->rSizeTable[cat2], &hist, &histN,
-                                   &nbList, &intList);
+                                   gd->rSizeTable[cat2], &hist, &histN);
 
 #ifdef TWOPCF
 #ifdef SMOOTHPIVOT
@@ -1241,68 +1095,11 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
                                              gd->nnodescanlevTableB4[cat1], &histN);
 #endif // ! BALLS4SCANLEV
-
-#ifdef PIVOTLOOP
-#if defined(NMultipoles) && defined(NONORMHIST)
-    //  make this two questions more precise...
-        if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-            if (scanopt(cmd->options, "edge-corrections")) {
-                HistZetaM_sincos_edge_effects(cmd, gd, &hist, &histN);
-            }
-        }
-#endif
-#endif
-
-//#ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-              if (cmd->verbose_log>=3)
-                  verb_log_print(cmd->verbose_log, gd->outlog,
-                                 " - Summing nbList: %ld\n", nbList);
-              for (i = 0; i < nbList; i++) {        // loop over neighbours
-                  if (cmd->verbose_log>=3)
-                      verb_log_print(cmd->verbose_log, gd->outlog,
-                                     " - Summing intList: %ld\n", intList);
-                  q = btable[cat1] + activeNb[i];
-                  //B Set histograms to zero for the pivot
-                  for (n = 1; n <= cmd->sizeHistN; n++)
-                      hist.histNNSubthread[n] = 0.0;
-                  CLRM_ext_ext(hist.histXithreadcos,
-                               cmd->mChebyshev+1, cmd->sizeHistN);
-                  CLRM_ext_ext(hist.histXithreadsin,
-                               cmd->mChebyshev+1, cmd->sizeHistN);
-
-                  for (n = 1; n <= cmd->sizeHistN; n++)
-                      histN.histNNSubthread[n] = 0.0;
-                  CLRM_ext_ext(histN.histXithreadcos,
-                               cmd->mChebyshev+1, cmd->sizeHistN);
-                  CLRM_ext_ext(histN.histXithreadsin,
-                               cmd->mChebyshev+1, cmd->sizeHistN);
-                  //E
-//B Set reference axis...
-                  //E 3pcf convergence & shear
-#ifndef BALLS4SCANLEV
-          polarix_init(cmd, gd, p, &hist);
-#else
-          polarix_init(cmd, gd, (bodyptr)p, &hist);
-                  //E 3pcf convergence & shear
-#endif
-//E
-                  sumnode_nblist_omp(cmd, gd, btable, ipmin, ipmax, cat1, cat2,
-                                     q, &hist, intList);
-                  computeBodyProperties_sincos_ggg(cmd, gd, q,
-                                                   ipmax[cat1]-ipmin+1, &hist);
-                  computeBodyProperties_sincos_ggg_N(cmd, gd, q,
-                                                     ipmax[cat1]-ipmin+1, &histN);
-              } // ! end i loop
-#endif // ! ADDPIVOTNEIGHBOURS
-//#endif // ! SMOOTHPIVOT
-
 #else // ! NMultipoles
 #ifndef BALLS4SCANLEV
           normal_walktree_sincos(cmd, gd, btable, cat2,
                                  p, ((nodeptr) roottable[cat2]),
-                                 gd->rSizeTable[cat2], &hist, &nbList, &intList);
-
+                                 gd->rSizeTable[cat2], &hist);
 #ifdef TWOPCF
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
@@ -1329,8 +1126,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #else // ! BALLS4SCANLEV
           normal_walktree_sincos(cmd, gd, btable, cat2,
                                  (bodyptr)p, ((nodeptr) roottable[cat2]),
-                                 gd->rSizeTable[cat2], &hist, &nbList, &intList);
-
+                                 gd->rSizeTable[cat2], &hist);
 #ifdef TWOPCF
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
@@ -1355,42 +1151,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
                                            gd->nnodescanlevTableB4[cat1], &hist);
 #endif // ! BALLS4SCANLEV
-
-//#ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-              if (cmd->verbose_log>=3)
-                  verb_log_print(cmd->verbose_log, gd->outlog,
-                                 " - Summing nbList: %ld\n", nbList);
-              for (i = 0; i < nbList; i++) {        // loop over neighbours
-                  if (cmd->verbose_log>=3)
-                      verb_log_print(cmd->verbose_log, gd->outlog,
-                                     " - Summing intList: %ld\n", intList);
-                  q = btable[cat1] + activeNb[i];
-                  //B Set histograms to zero for the pivot
-                  for (n = 1; n <= cmd->sizeHistN; n++)
-                      hist.histNNSubthread[n] = 0.0;
-                  CLRM_ext_ext(hist.histXithreadcos,
-                               cmd->mChebyshev+1, cmd->sizeHistN);
-                  CLRM_ext_ext(hist.histXithreadsin,
-                               cmd->mChebyshev+1, cmd->sizeHistN);
-                  //E
-//B Set reference axis...
-                  //E 3pcf convergence & shear
-#ifndef BALLS4SCANLEV
-          polarix_init(cmd, gd, p, &hist);
-#else
-          polarix_init(cmd, gd, (bodyptr)p, &hist);
-                  //E 3pcf convergence & shear
-#endif
-//E
-                  sumnode_nblist_omp(cmd, gd, btable, ipmin, ipmax, cat1, cat2,
-                                     q, &hist, intList);
-                  computeBodyProperties_sincos_ggg(cmd, gd, q,
-                                                   ipmax[cat1]-ipmin+1, &hist);
-              } // ! end i loop
-#endif // ! ADDPIVOTNEIGHBOURS
-//#endif // ! SMOOTHPIVOT
-
+          
 #endif // ! NMultipoles
 
 #ifndef BALLS4SCANLEV
@@ -1402,15 +1163,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           icountNbRminthread += NbRmin(p);
           icountNbRminOverlapthread += NbRminOverlap(p);
 #ifdef DEBUG
-#ifdef ADDPIVOTNEIGHBOURS
-          fprintf(outpivots,"%ld \t%ld \t%ld \t%ld \t\t%g\n",
-                  ip, NbRmin(p), NbRminOverlap(p), intList,
-                  KappaRmin(p)/NbRmin(p));
-#else
           fprintf(outpivots,"%ld \t%ld \t%ld \t\t%g\n",
                   ip, NbRmin(p), NbRminOverlap(p),
                   KappaRmin(p)/NbRmin(p));
-#endif
 #endif
 #endif
           if (ip%gd->stepState == 0)
@@ -1459,10 +1214,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                      hist.histZetaMthreadsincos[m],cmd->sizeHistN);
             ADDM_ext(gdl.histZetaMcossin[m],gdl.histZetaMcossin[m],
                      hist.histZetaMthreadcossin[m],cmd->sizeHistN);
-#ifdef PIVOTLOOP
-            ADDM_ext(gdl.histZetaM[m],gdl.histZetaM[m],
-                     hist.histZetaMtmp[m],cmd->sizeHistN);
-#endif
         }
 #endif
 
@@ -1523,11 +1274,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifdef NONORMHIST
         xi = 1.0;
 #else
-#ifdef ADDPIVOTNEIGHBOURS
-        xi = 1.0;
-#else
         xi = num/den;
-#endif
 #endif // ! NONORMHIST
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: p falses found = %ld and %e %e %e\n",
@@ -1786,7 +1533,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         "\nGoing out: CPU time = %lf %s\n",
                         CPUTIME-cpustart, PRNUNITOFTIMEUSED);
 
-//      debug_tracking("013");
       debug_tracking_s("013 ...final", routineName);
 
     return SUCCESS;
@@ -1796,8 +1542,7 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                   bodyptr *btable, int cat2,
                                   bodyptr p, nodeptr q, real qsize,
-                                  gdhistptr_sincos_omp_ggg hist,
-                                  int *nbList, int *intList)
+                                  gdhistptr_sincos_omp_ggg hist)
 {
     nodeptr l;
 #ifdef SINGLEP
@@ -1819,116 +1564,40 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
 //B useLogHist section
                     if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
                         sumnode_sincos_cell(cmd, gd, btable, cat2, p,
-                                            ((cellptr) q), ((cellptr) q+1), hist,
-                                            nbList, intList);
+                                            ((cellptr) q), ((cellptr) q+1), hist);
                     else
                         for (l = More(q); l != Next(q); l = Next(l))
                             normal_walktree_sincos(cmd, gd, btable, cat2,
-                                                   p,l,qsize/2, hist,
-                                                   nbList, intList);
+                                                   p,l,qsize/2, hist);
 //E useLogHist section
 #else // ! NORMALHISTSCALE
                     if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
                         sumnode_sincos_cell(cmd, gd, btable, cat2, p,
-                                            ((cellptr) q), ((cellptr) q+1), hist,
-                                            nbList, intList);
+                                            ((cellptr) q), ((cellptr) q+1), hist);
                     else
                         for (l = More(q); l != Next(q); l = Next(l))
                             normal_walktree_sincos(cmd, gd, btable, cat2,
-                                                   p,l,qsize/2, hist,
-                                                   nbList, intList);
+                                                   p,l,qsize/2, hist);
 #endif // ! NORMALHISTSCALE
 
                 } else { // ! no-one-ball
                     for (l = More(q); l != Next(q); l = Next(l))
                         normal_walktree_sincos(cmd, gd, btable, cat2,
-                                               p,l,qsize/2, hist,
-                                               nbList, intList);
+                                               p,l,qsize/2, hist);
                 } // ! no-one-ball
             } // ! !reject_cell
         } else { // ! Type(q) == CELL
             sumnode_sincos(cmd, gd, btable, cat2,
-                           p, ((cellptr)q), ((cellptr)q+1), hist,
-                           nbList, intList);
+                           p, ((cellptr)q), ((cellptr)q+1), hist);
         } // ! Type(q) == CELL
     } // ! p != q
 }
-
-//#ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-local void sumnode_nblist_omp(struct cmdline_data* cmd,
-                              struct  global_data* gd,
-                              bodyptr *btable,
-                              INTEGER ipmin, INTEGER *ipmax,
-                              int cat1, int cat2,
-                              bodyptr p,
-                              gdhistptr_sincos_omp_ggg hist, int intList)
-{
-    bodyptr q;
-    real dr1;
-    vector dr;
-    int i;
-    int n;
-    real xi;
-    REAL cosphi,sinphi;
-
-    REAL s, sy;
-    vector pr0;
-
-    for (i = 0; i < intList; i++) {
-        q = btable[cat2] + activeInt[i];
-        accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
-        if(dr1>cmd->rminHist) {
-            if (cmd->rminHist==0)
-                n = (int)(cmd->logHistBinsPD*(rlog10(dr1) - rlog10(cmd->rangeN))
-                                  + cmd->sizeHistN) + 1;
-            else
-                n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
-            if (n<=cmd->sizeHistN && n>=1) {
-                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
-                xi = Kappa(q);
-
-#ifdef THREEPCFSHEAR
-#endif
-#ifdef TWOPCF
-#endif
-                //B check NDIM and periodic...
-                DOTVP(s, dr, hist->dr0);
-                cosphi = s/(dr1*hist->drpq);
-                CROSSVP(pr0,hist->dr0,Pos(p));
-                DOTVP(sy, dr, pr0);
-                sinphi = rsqrt(1.0 - rsqr(cosphi));
-                if (sy < 0) sinphi *= -1.0;
-                if (rabs(cosphi)>1.0)
-                    verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                        cosphi);
-                //E
-                if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPSINCOSANY
-                } else {
-                    CHEBYSHEVTUOMP;
-                }
-
-#ifdef THREEPCFSHEAR
-#endif
-#ifdef TWOPCF
-#endif
-
-                hist->nbccalcthread += 1;
-            } // ! 1 < n < sizeHistN
-        } // ! dr1 > rminHist
-    } // ! end loop i
-}
-#endif
-//#endif
 
 local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd,
                           bodyptr *btable, int cat2,
                           bodyptr p, cellptr start, cellptr finish,
-                          gdhistptr_sincos_omp_ggg hist,
-                          int *nbList, int *intList)
+                          gdhistptr_sincos_omp_ggg hist)
 {
     cellptr q;
 #ifdef SINGLEP
@@ -1954,14 +1623,6 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #ifdef SMOOTHPIVOT
             if (dr1<=gd->rsmooth[0]) {
                 if (Update(q)==TRUE) {
-#ifdef ADDPIVOTNEIGHBOURS
-                    iq = (bodyptr)q-btable[cat2];
-                    activeNb[*nbList]=iq;
-                    *nbList +=1;
-                    if (*nbList > actlenNb)
-                        error("nbList: too many neighbors, %d %d\n",
-                              *nbList, actlenNb);
-#endif
                     Update(q) = FALSE;
                     NbRmin(p) += 1;
                     KappaRmin(p) += Weight(q)*Kappa(q);
@@ -1974,15 +1635,6 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
-#ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-                iq = (bodyptr)q-btable[cat2];
-                activeInt[*intList]=iq;
-                *intList +=1;
-                if (*intList > actlenInt)
-                    error("intList: too many neighbors\n");
-#endif
-#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
                     - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
@@ -2034,15 +1686,6 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #else // ! NORMALHISTSCALE
 
         if(dr1>cmd->rminHist) {
-#ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-                iq = (bodyptr)q-btable[cat2];
-                activeInt[*intList]=iq;
-                *intList +=1;
-                if (*intList > actlenInt)
-                    error("intList: too many neighbors\n");
-#endif
-#endif
             n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
 
@@ -2096,8 +1739,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                struct  global_data* gd,
                                bodyptr *btable, int cat2,
                                bodyptr p, cellptr start, cellptr finish,
-                               gdhistptr_sincos_omp_ggg hist,
-                               int *nbList, int *intList)
+                               gdhistptr_sincos_omp_ggg hist)
 {
     cellptr q;
 //B implement these memory optimization and check its results
@@ -2127,14 +1769,6 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
-#ifdef ADDPIVOTNEIGHBOURS
-            INTEGER iq;
-            iq = (bodyptr)q-btable[cat2];
-            activeInt[*intList]=iq;
-            *intList +=1;
-            if (*intList > actlenInt)
-                error("intList: too many neighbors\n");
-#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
                     - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
@@ -2208,14 +1842,6 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #else // ! NORMALHISTSCALE
 
         if(dr1>cmd->rminHist) {
-#ifdef ADDPIVOTNEIGHBOURS
-            INTEGER iq;
-            iq = (bodyptr)q-btable[cat2];
-            activeInt[*intList]=iq;
-            *intList +=1;
-            if (*intList > actlenInt)
-                error("intList: too many neighbors\n");
-#endif
             n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
 
@@ -2333,12 +1959,6 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #else // ! NONORMHIST
 
-#ifdef ADDPIVOTNEIGHBOURS
-    //B not finished yet
-    xi = Weight(p)*Kappa(p)/nbody;
-    //E
-#else
-
 #ifdef BALLS4SCANLEV
 //    xi = Weight(p)*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
     xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
@@ -2372,8 +1992,6 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #endif
 #endif
 
-#endif // ! ADDPIVOTNEIGHBOURS
-
 #endif // ! NONORMHIST
 
 
@@ -2398,26 +2016,6 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
             hist->histXithreadsin[m], hist->histXithreadcos[m],cmd->sizeHistN);
         OUTVP_ext(hist->xiOUTVPcossin,
             hist->histXithreadcos[m], hist->histXithreadsin[m],cmd->sizeHistN);
-#ifdef PIVOTLOOP
-        CLRM_ext(hist->histZetaMtmpcos[m], cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsin[m], cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsincos[m], cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpcossin[m], cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcos[m],hist->xiOUTVPcos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsin[m],hist->xiOUTVPsin,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsincos[m],hist->xiOUTVPsincos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcossin[m],hist->xiOUTVPcossin,xi,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcos[m],
-            hist->histZetaMthreadcos[m],hist->histZetaMtmpcos[m],cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsin[m],
-            hist->histZetaMthreadsin[m],hist->histZetaMtmpsin[m],cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsincos[m],
-            hist->histZetaMthreadsincos[m],
-            hist->histZetaMtmpsincos[m],cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcossin[m],
-            hist->histZetaMthreadcossin[m],
-            hist->histZetaMtmpcossin[m],cmd->sizeHistN);
-#else
         CLRM_ext(hist->histZetaMtmpcos,cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsin,cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsincos,cmd->sizeHistN);
@@ -2436,7 +2034,6 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
         ADDM_ext(hist->histZetaMthreadcossin[m],
             hist->histZetaMthreadcossin[m],
             hist->histZetaMtmpcossin,cmd->sizeHistN);
-#endif
     }
 #endif
 
@@ -2476,8 +2073,7 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     bodyptr *btable, int cat2,
                                     bodyptr p, nodeptr q, real qsize,
                                     gdhistptr_sincos_omp_ggg hist,
-                                    gdhistptr_sincos_omp_ggg_N histN,
-                                    int *nbList, int *intList)
+                                    gdhistptr_sincos_omp_ggg_N histN)
 {
     nodeptr l;
 #ifdef SINGLEP
@@ -2500,41 +2096,37 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                     if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
                         sumnode_sincos_cell_N(cmd, gd, btable, cat2,
                                               p, ((cellptr) q),
-                                              ((cellptr) q+1), hist, histN,
-                                              nbList, intList);
+                                              ((cellptr) q+1), hist, histN);
                     else
                         for (l = More(q); l != Next(q); l = Next(l))
                             normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                                      p,l,qsize/2,
-                                                     hist, histN,
-                                                     nbList, intList);
+                                                     hist, histN);
 //E useLogHist section
 #else // ! NORMALHISTSCALE
                     if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
                         sumnode_sincos_cell_N(cmd, gd, btable, cat2,
                                               p, ((cellptr) q),
-                                              ((cellptr) q+1), hist, histN,
-                                              nbList, intList);
+                                              ((cellptr) q+1), hist, histN);
                     else
                         for (l = More(q); l != Next(q); l = Next(l))
                             normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                                      p,l,qsize/2,
-                                                     hist, histN,
-                                                     nbList, intList);
+                                                     hist, histN);
 #endif // ! NORMALHISTSCALE
 
                 } else { // ! no-one-ball
                     for (l = More(q); l != Next(q); l = Next(l))
                         normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                                  p,l,qsize/2,
-                                                 hist, histN,
-                                                 nbList, intList);
+                                                 hist, histN);
                 } // ! no-one-ball
             }
         } else { // ! Type(q) == CELL
             sumnode_sincos_N(cmd, gd, btable, cat2,
                              p, ((cellptr)q), ((cellptr)q+1),
-                             hist, histN, nbList, intList);
+                             hist, histN);
+            //nbList, intList);
         } // ! Type(q) == CELL
     } // ! p != q
 }
@@ -2544,8 +2136,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                             bodyptr *btable, int cat2,
                             bodyptr p, cellptr start, cellptr finish,
                             gdhistptr_sincos_omp_ggg hist,
-                            gdhistptr_sincos_omp_ggg_N histN,
-                            int *nbList, int *intList)
+                            gdhistptr_sincos_omp_ggg_N histN)
 {
     cellptr q;
 #ifdef SINGLEP
@@ -2572,14 +2163,6 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 #ifdef SMOOTHPIVOT
             if (dr1<=gd->rsmooth[0]) {
                 if (Update(q)==TRUE) {
-#ifdef ADDPIVOTNEIGHBOURS
-                    iq = (bodyptr)q-btable[cat2];
-                    activeNb[*nbList]=iq;
-                    *nbList +=1;
-                    if (*nbList > actlenNb)
-                        error("nbList: too many neighbors, %d %d\n",
-                              *nbList, actlenNb);
-#endif
                     Update(q) = FALSE;
                     NbRmin(p) += 1;
                     KappaRmin(p) += Kappa(q);
@@ -2592,13 +2175,6 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
-#ifdef ADDPIVOTNEIGHBOURS
-            iq = (bodyptr)q-btable[cat2];
-            activeInt[*intList]=iq;
-            *intList +=1;
-            if (*intList > actlenInt)
-                error("intList: too many neighbors\n");
-#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
                     - rlog10(cmd->rangeN))
@@ -2656,13 +2232,6 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 #else // ! NORMALHISTSCALE
 
         if(dr1>cmd->rminHist) {
-#ifdef ADDPIVOTNEIGHBOURS
-            iq = (bodyptr)q-btable[cat2];
-            activeInt[*intList]=iq;
-            *intList +=1;
-            if (*intList > actlenInt)
-                error("intList: too many neighbors\n");
-#endif
             n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
 
@@ -2721,8 +2290,7 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                                  bodyptr *btable, int cat2,
                                  bodyptr p, cellptr start, cellptr finish,
                                  gdhistptr_sincos_omp_ggg hist,
-                                 gdhistptr_sincos_omp_ggg_N histN,
-                                 int *nbList, int *intList)
+                                 gdhistptr_sincos_omp_ggg_N histN)
 {
     cellptr q;
 #ifdef SINGLEP
@@ -2749,14 +2317,6 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
-#ifdef ADDPIVOTNEIGHBOURS
-            INTEGER iq;
-            iq = (bodyptr)q-btable[cat2];
-            activeInt[*intList]=iq;
-            *intList +=1;
-            if (*intList > actlenInt)
-                error("intList: too many neighbors\n");
-#endif
             if (cmd->rminHist==0)
                 n = (int)(cmd->logHistBinsPD*(rlog10(dr1) - rlog10(cmd->rangeN))
                                   + cmd->sizeHistN) + 1;
@@ -2847,14 +2407,6 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 #else // ! NORMALHISTSCALE
 
         if(dr1>cmd->rminHist) {
-#ifdef ADDPIVOTNEIGHBOURS
-            INTEGER iq;
-            iq = (bodyptr)q-btable[cat2];
-            activeInt[*intList]=iq;
-            *intList +=1;
-            if (*intList > actlenInt)
-                error("intList: too many neighbors\n");
-#endif
             n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
             if (n<=cmd->sizeHistN && n>=1) {
 
@@ -2979,28 +2531,6 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
             hist->histXithreadsin[m], hist->histXithreadcos[m],cmd->sizeHistN);
         OUTVP_ext(hist->xiOUTVPcossin,
             hist->histXithreadcos[m], hist->histXithreadsin[m],cmd->sizeHistN);
-#ifdef PIVOTLOOP
-        CLRM_ext(hist->histZetaMtmpcos[m], cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsin[m], cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsincos[m], cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpcossin[m], cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcos[m],hist->xiOUTVPcos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsin[m],hist->xiOUTVPsin,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsincos[m],
-                  hist->xiOUTVPsincos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcossin[m],
-                  hist->xiOUTVPcossin,xi,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcos[m],
-            hist->histZetaMthreadcos[m],hist->histZetaMtmpcos[m],cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsin[m],
-            hist->histZetaMthreadsin[m],hist->histZetaMtmpsin[m],cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsincos[m],
-            hist->histZetaMthreadsincos[m],
-            hist->histZetaMtmpsincos[m],cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcossin[m],
-            hist->histZetaMthreadcossin[m],
-            hist->histZetaMtmpcossin[m],cmd->sizeHistN);
-#else
         CLRM_ext(hist->histZetaMtmpcos, cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsin, cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsincos, cmd->sizeHistN);
@@ -3019,7 +2549,6 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
         ADDM_ext(hist->histZetaMthreadcossin[m],
             hist->histZetaMthreadcossin[m],
             hist->histZetaMtmpcossin,cmd->sizeHistN);
-#endif
     }
 #endif
 
@@ -3064,8 +2593,8 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     gdl->histZetaMcossin =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gdl->histZetaM =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    gdl->histZetaM =
+//            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // (EE) edge_effects
     gdl->histZetaM_EE =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3112,9 +2641,6 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
         CLRM_ext(gdl->histZetaMsin[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMsincos[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMcossin[m], cmd->sizeHistN);
-//#ifdef PIVOTLOOP
-        CLRM_ext(gdl->histZetaM[m], cmd->sizeHistN);
-//#endif
         // (EE) edge_effects
         CLRM_ext(gdl->histZetaM_EE[m], cmd->sizeHistN);
     }
@@ -3140,8 +2666,8 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     // (EE) edge_effects
     free_dmatrix3D(gdl->histZetaM_EE,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(gdl->histZetaM,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    free_dmatrix3D(gdl->histZetaM,
+//                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     free_dmatrix3D(gdl->histZetaMcossin,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3221,26 +2747,11 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
     hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->xiOUTVPcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local += 4.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-#ifdef PIVOTLOOP
-    hist->histZetaMtmpcos = dmatrix3D(1,cmd->mChebyshev+1,
-                                      1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsin = dmatrix3D(1,cmd->mChebyshev+1,
-                                      1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsincos = dmatrix3D(1,cmd->mChebyshev+1,
-                                         1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpcossin = dmatrix3D(1,cmd->mChebyshev+1,
-                                         1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmp = dmatrix3D(1,cmd->mChebyshev+1,
-                                      1,cmd->sizeHistN,1,cmd->sizeHistN);
-    bytes_tot_local +=
-            5.0*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-#else
     hist->histZetaMtmpcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local += 4.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-#endif
 #endif
 
 #ifdef THREEPCFSHEAR
@@ -3280,9 +2791,6 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
         CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsincos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
-#ifdef PIVOTLOOP
-        CLRM_ext(hist->histZetaMtmp[m], cmd->sizeHistN);
-#endif
     }
 #endif
 
@@ -3325,21 +2833,10 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
 #endif
 
 #ifdef THREEPCFCONVERGENCE
-#ifdef PIVOTLOOP
-    free_dmatrix3D(hist->histZetaMtmpcossin,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(hist->histZetaMtmpsincos,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(hist->histZetaMtmpsin,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(hist->histZetaMtmpcos,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-#else
     free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-#endif
     free_dmatrix(hist->xiOUTVPcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->xiOUTVPsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->xiOUTVPsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3415,8 +2912,8 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     gdl->histZetaMcossin =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gdl->histZetaM =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    gdl->histZetaM =
+//            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // (EE) edge_effects
     gdl->histZetaM_EE =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3463,9 +2960,6 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
         CLRM_ext(gdl->histZetaMsin[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMsincos[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMcossin[m], cmd->sizeHistN);
-//#ifdef PIVOTLOOP
-        CLRM_ext(gdl->histZetaM[m], cmd->sizeHistN);
-//#endif
         // (EE) edge_effects
         CLRM_ext(gdl->histZetaM_EE[m], cmd->sizeHistN);
     }
@@ -3491,8 +2985,8 @@ local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     // (EE) edge_effects
     free_dmatrix3D(gdl->histZetaM_EE,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(gdl->histZetaM,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    free_dmatrix3D(gdl->histZetaM,
+//                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     free_dmatrix3D(gdl->histZetaMcossin,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3566,23 +3060,10 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     hist->xiOUTVPsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->xiOUTVPcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-#ifdef PIVOTLOOP
-    hist->histZetaMtmpcos = dmatrix3D(1,cmd->mChebyshev+1,
-                                      1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsin = dmatrix3D(1,cmd->mChebyshev+1,
-                                      1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsincos = dmatrix3D(1,cmd->mChebyshev+1,
-                                         1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpcossin = dmatrix3D(1,cmd->mChebyshev+1,
-                                         1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmp = dmatrix3D(1,cmd->mChebyshev+1,
-                                      1,cmd->sizeHistN,1,cmd->sizeHistN);
-#else
     hist->histZetaMtmpcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-#endif
 #endif
 
 #ifdef THREEPCFSHEAR
@@ -3620,9 +3101,6 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
         CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsincos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
-#ifdef PIVOTLOOP
-        CLRM_ext(hist->histZetaMtmp[m], cmd->sizeHistN);
-#endif
     }
 #endif
 
@@ -3663,21 +3141,10 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 #endif
 
 #ifdef THREEPCFCONVERGENCE
-#ifdef PIVOTLOOP
-    free_dmatrix3D(hist->histZetaMtmpcossin,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(hist->histZetaMtmpsincos,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(hist->histZetaMtmpsin,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(hist->histZetaMtmpcos,1,cmd->mChebyshev+1,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-#else
     free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-#endif
     free_dmatrix(hist->xiOUTVPcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->xiOUTVPsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->xiOUTVPsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3943,12 +3410,6 @@ local int print_info(struct cmdline_data* cmd,
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with POLARAXIS... \n");
 #endif
-#ifdef SMOOTHPIVOT
-#ifdef ADDPIVOTNEIGHBOURS
-        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "with ADDPIVOTNEIGHBOURS... \n");
-#endif
-#endif
     if (scanopt(cmd->options, "no-one-ball"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option no-one-ball... \n");
@@ -3963,12 +3424,6 @@ local int print_info(struct cmdline_data* cmd,
     if (scanopt(cmd->options, "fix-rsmooth"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option fix-rsmooth... \n");
-
-#ifdef PIVOTLOOP
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "with PIVOTLOOP... \n");
-#endif
-
 #ifdef BALLS4SCANLEV
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with BALLS4SCANLEV... \n");
@@ -3997,13 +3452,6 @@ local int print_info(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
-
-
-#ifdef ADDPIVOTNEIGHBOURS
-#undef FACTIVENB
-#undef FACTIVEINT
-#endif
-
 
 //B Saving histograms section: case KKKCORRELATION:
 
@@ -5081,69 +4529,6 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-#ifdef PIVOTLOOP
-// Edge-correct each matrix ZetaM for each m multipole
-local int HistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
-                                        struct  global_data* gd,
-                                        gdhistptr_sincos_omp_ggg hist,
-                                        gdhistptr_sincos_omp_ggg_N histN)
-{
-    int n1, n2, m;
-    stream outstr;
-    char namebuf[256];
-    real rBin, rbinlog;
-
-    real ***mat3;
-    real ***mat4;
-    real ***mat5;
-    mat3 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    mat4 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    mat5 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        CLRM_ext(mat3[m], cmd->sizeHistN);
-        CLRM_ext(mat4[m], cmd->sizeHistN);
-        CLRM_ext(mat5[m], cmd->sizeHistN);
-    }
-
-    for (n1=1; n1<=cmd->sizeHistN; n1++) {
-        for (n2=1; n2<=cmd->sizeHistN; n2++) {
-            for (m=1; m<=cmd->mChebyshev+1; m++) {
-                mat3[m][n1][n2] = hist->histZetaMtmpcos[m][n1][n2]
-                                    + hist->histZetaMtmpsin[m][n1][n2];
-                mat4[m][n1][n2] = histN->histZetaMtmpcos[m][n1][n2]
-                                    + histN->histZetaMtmpsin[m][n1][n2];
-            }
-        }
-    }
-
-    for (n1=1; n1<=cmd->sizeHistN; n1++) {
-        for (n2=1; n2<=cmd->sizeHistN; n2++) {
-            matrixClm(cmd, gd, mat3, mat4, n1, n2, mat5);
-            for (m=1; m<=cmd->mChebyshev+1; m++) {
-                if (cmd->verbose_log==4)  {
-                    verb_log_print(cmd->verbose_log, gd->outlog,
-                                    "\n\nhistZetaM elements again (%d, %d):\n\n",
-                                    n1, n2);
-                    verb_log_print(cmd->verbose_log, gd->outlog,
-                                    "%g\n",
-                                    mat5[m][n1][n2]);
-                }
-                hist->histZetaMtmp[m][n1][n2] += mat5[m][n1][n2];
-            }
-        }
-    }
-
-    free_dmatrix3D(mat5,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(mat4,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(mat3,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-
-    return SUCCESS;
-}
-#endif // ! PIVOTLOOP
-
 // Saves matrix ZetaM for each m multipole
 local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
                                               struct  global_data* gd,
@@ -5155,7 +4540,6 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
     char namebuf[256];
     real rBin, rbinlog;
 
-#ifndef PIVOTLOOP
     real ***mat3;
     real ***mat4;
     real ***mat5;
@@ -5261,68 +4645,6 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(mat3,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-#else
-
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_EE", m, EXTFILES);
-        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
-            for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",
-                        mat5[m][n1][n2]
-                        );
-            }
-            fprintf(outstr,"\n");
-        }
-        fclose(outstr);
-    }
-
-    //B  and saves matrix ZetaM for each m multipole at a set of theta2 angles
-    if (scanopt(cmd->options, "out-m-HistZeta")) {
-        real Zeta;
-        real Zeta2;
-        real Zeta3;
-        real Zeta4;
-        real Zeta5;
-        int Nbins;
-        
-        Nbins = cmd->sizeHistN;
-        for (m = 1; m <= cmd->mChebyshev+1; m++) {
-            sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                    "_EE", m, EXTFILES);
-            verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",
-                         namebuf);
-            outstr = stropen(namebuf, "w!");
-            fprintf(outstr,MHISTZETAHEADER);
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                if (cmd->useLogHist) {
-                    if (cmd->rminHist==0) {
-                        rbinlog = ((real)(n1-cmd->sizeHistN))/cmd->logHistBinsPD
-                        + rlog10(cmd->rangeN);
-                    } else {
-                        rbinlog = rlog10(cmd->rminHist)
-                                    + ((real)(n1)-0.5)*gd->deltaR;
-                    }
-                    rBin=rpow(10.0,rbinlog);
-                } else {
-                    rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
-                }
-
-                Zeta = mat5[m][n1][n1];
-                Zeta2 = mat5[m][n1][(int)(Nbins/4.0)];
-                Zeta3 = mat5[m][n1][(int)(2.0*Nbins/4.0)];
-                Zeta4 = mat5[m][n1][(int)(3.0*Nbins/4.0)];
-                Zeta5 = mat5[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
-            }
-            fclose(outstr);
-        }
-    }
-    //E
-
-#endif
 
     return SUCCESS;
 }

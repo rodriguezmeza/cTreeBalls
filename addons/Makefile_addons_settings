@@ -150,7 +150,7 @@ SMOOTHPIVOTON = 1
 ifeq ($(SMOOTHPIVOTON),1)
 OPT2 += -DSMOOTHPIVOT
 # Compute and add pivot neighbours. Only active if SMOOTHPIVOT is ON
-ADDPIVOTNEIGHBOURSON = 0
+#ADDPIVOTNEIGHBOURSON = 0
 endif
 #
 
