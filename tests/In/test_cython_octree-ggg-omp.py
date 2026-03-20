@@ -9,12 +9,12 @@
 # python test_cython_octree-ggg-omp.py
 #
 import os, sys
-# Determine the absolute path of the target (cballys) directory
+# Determine the absolute path of the target (cyballs) directory
 #   these two lines won´t be necessary if cballys is in searching path
-target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
+#target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
 # Append the directory to sys.path
-sys.path.append(target_directory)
-from cballys import cballs
+#sys.path.append(target_directory)
+from cyballs import cballs
 #from cballys import *
 Balls = cballs()
 Balls.set({'searchMethod':'octree-ggg-omp'})

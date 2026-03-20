@@ -58,7 +58,7 @@ gsl_folder = os.path.join(root_folder, "gsl")
 class_lib_folder = os.path.join(os.path.join(root_folder, "addons"),"class_lib")
 octree_ggg_omp_folder = os.path.join(os.path.join(root_folder, "addons"),"octree_ggg_omp")
 pxd_folder = os.path.join(os.path.join(root_folder, "addons"),"pxd")
-cballys_folder = os.path.join(root_folder, "python")
+cyballs_folder = os.path.join(root_folder, "python")
 
 # Recover the cBalls version
 with open(os.path.join(class_lib_folder, 'common.h'), 'r') as v_file:
@@ -72,7 +72,7 @@ with open(os.path.join(class_lib_folder, 'common.h'), 'r') as v_file:
 #   looking for cfitsio libs are OFF by default...
 #   find its path in your system, edit line below and uncomment it
 # Define cython extension and fix Python version
-cballys_ext = Extension("cballys", [os.path.join(cballys_folder, "cballys.pyx")],
+cyballs_ext = Extension("cyballs", [os.path.join(cyballs_folder, "cyballs.pyx")],
                            include_dirs=[nm.get_include(), include_folder, class_lib_folder,
                            general_libs_folder, getparam_folder, pxd_folder,
                            source_folder,
@@ -97,13 +97,13 @@ cballys_ext = Extension("cballys", [os.path.join(cballys_folder, "cballys.pyx")]
 #E
                        )
 import sys
-cballys_ext.cython_directives = {'language_level': "3" if sys.version_info.major>=3 else "2"}
+cyballs_ext.cython_directives = {'language_level': "3" if sys.version_info.major>=3 else "2"}
 
 setup(
-    name='cballys',
+    name='cyballs',
     version=VERSION,
     description='Python interface to the nPCF code cballs',
     url='http://github.com/rodriguezmeza/cTreeBalls.git',
     cmdclass={'build_ext': build_ext},
-    ext_modules=[cballys_ext],
+    ext_modules=[cyballs_ext],
 )

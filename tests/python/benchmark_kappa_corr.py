@@ -24,12 +24,12 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
 #B settings for cBalls
 import sys
-# if cballys not in path
+# if cyballs not in path
 #   Determine the absolute path to its target directory
 #target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
 # Append the directory to sys.path
 #sys.path.append(target_directory)
-from cballys import cballs
+from cyballs import cballs
 #E
 
 # ---------- estilo ----------

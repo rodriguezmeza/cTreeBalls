@@ -84,6 +84,11 @@ local void pruningCells(struct  cmdline_data* cmd,
                         int ifile, cellptr p, int lev);
 #endif
 
+#ifdef SMOOTHPIVOT
+local int scanSmoothPivot(struct  cmdline_data* cmd,
+                          struct  global_data* gd, int ifile);
+#endif
+
 local INTEGER isel, inosel;
 
 //B socket:
@@ -336,6 +341,19 @@ global int MakeTree(struct  cmdline_data* cmd,
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: pruningCells CPU time: %lf %s\n",
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
+#endif
+
+#ifdef SMOOTHPIVOT
+    cpustartMiddle = CPUTIME;
+    if (ifile==0) {
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%s: start scanSmoothPivot... \n",
+                               routineName);
+ //       scanSmoothPivot(cmd, gd, ifile);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "%s: scanSmoothPivot CPU time: %lf %s\n",
+                               routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
+    }
 #endif
 
 #ifdef DEBUGTREE
@@ -1225,3 +1243,126 @@ local void walkTree_printInfo(struct  cmdline_data* cmd, struct  global_data* gd
 }
 #endif
 
+#ifdef SMOOTHPIVOT
+local void walktree_scan_smooth_pivot(struct  cmdline_data* cmd,
+                                        struct  global_data* gd,
+                                        nodeptr q, real qsize,  bodyptr p)
+{
+    nodeptr l;
+#ifdef SINGLEP
+    float dr1;
+    float dr[NDIM];
+#else
+    real dr1;
+    vector dr;
+#endif
+
+    if (Type(q) == CELL) {                          // is a cell, zoom in
+        if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize))
+        for (l = More(q); l != Next(q); l = Next(l))
+            walktree_scan_smooth_pivot(cmd, gd, l, qsize/2, p);
+    } else {                                        // found body, process it
+        if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
+            if (dr1<=gd->rsmooth[0]) {
+                if (Update(q)==TRUE) {
+                    Update(q) = FALSE;
+                    NbRmin(p) += 1;
+                    KappaRmin(p) += Kappa(q);
+                } else {
+                    NbRminOverlap(p) += 1;
+                }
+            }
+        }
+    }
+}
+
+local int scanSmoothPivot(struct  cmdline_data* cmd,
+                      struct  global_data* gd, int ifile)
+{
+    string routineName = "scanSmoothPivot";
+    bodyptr p;
+
+    INTEGER ipfalse;
+    ipfalse=0;
+    INTEGER icountNbRmin;
+    icountNbRmin=0;
+    INTEGER icountNbRminOverlap;
+    icountNbRminOverlap=0;
+
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\nScan running...\n - Completed pivot node:\n");
+
+#pragma omp parallel default(none)                                          \
+    shared(cmd,gd,ifile, bodytable,roottable,                       \
+           ipfalse, icountNbRmin, icountNbRminOverlap)
+{
+    nodeptr q;
+    real qsize;
+    INTEGER ip;
+        //B scan tree to find pivot's neighbors
+        q = (nodeptr) roottable[ifile];
+        qsize = gd->rSizeTable[ifile];
+#pragma omp for nowait schedule(dynamic)
+        DO_BODY(p, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
+            NbRmin(p) = 1;
+            NbRminOverlap(p) = 0;
+            KappaRmin(p) = Kappa(p);
+            if (Update(p) == FALSE) {
+                ipfalse++;
+                continue;
+            }
+            walktree_scan_smooth_pivot(cmd, gd, q, qsize, p);
+            icountNbRmin += NbRmin(p);
+            icountNbRminOverlap += NbRminOverlap(p);
+            //#ifdef DEBUG
+//            fprintf(0,"%ld \t%ld \t%ld \t\t%g\n",
+//                    Id(p), NbRmin(p), NbRminOverlap(p),
+//                    KappaRmin(p)/NbRmin(p));
+            //#endif
+            ip = p - bodytable[ifile] + 1;
+            if (ip%gd->stepState == 0)
+            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, ".");
+            if (ip%cmd->stepState == 0)
+            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                "%d ", ip);
+        } // end do body p
+verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\n", ip);
+        //E
+}
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: p falses found = %ld\n",
+                           routineName, ipfalse);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: count NbRmin found = %ld\n",
+                           routineName, icountNbRmin);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: count overlap found = %ld\n",
+                           routineName, icountNbRminOverlap);
+    //B final statistics
+    bodyptr pp;
+    INTEGER ifalsecount;
+    ifalsecount = 0;
+    INTEGER itruecount;
+    itruecount = 0;
+    DO_BODY(pp, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
+        if (Update(pp) == FALSE) {
+            ifalsecount++;
+        } else {
+            itruecount++;
+        }
+    }
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: p falses found = %ld\n",
+                           routineName, ifalsecount);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: p true found = %ld\n",
+                           routineName, itruecount);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: total = %ld\n",
+                           routineName, itruecount+ifalsecount);
+    //E
+
+    return SUCCESS;
+}
+#endif // ! SMOOTHPIVOT

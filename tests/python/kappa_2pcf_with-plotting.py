@@ -13,12 +13,12 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
 #B for cBalls
 import sys
-# Determine the absolute path of the target (cballys) directory
+# Determine the absolute path of the target (cyballs) directory
 #   these two lines won´t be necessary if cballys is in searching path
 #target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
 # Append the directory to sys.path
 #sys.path.append(target_directory)
-from cballys import cballs
+from cyballs import cballs
 #E
 
 def set_fonts():
