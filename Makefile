@@ -37,7 +37,7 @@ OBJS = main.o cballsio.o cballs.o startrun.o testdata.o treeload.o \
 
 PYTHON_FILES = python/cyballs.pyx python/setup.py python/ccyballs.pxd
 
-all: $(EXEC) lib$(EXEC).a cballys
+all: $(EXEC) lib$(EXEC).a cyballs
 
 lib$(EXEC).a: $(OBJS) $(EXTERNAL)
 	$(AR)  $@ $(addprefix build/, $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
