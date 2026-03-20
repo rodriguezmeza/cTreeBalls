@@ -144,7 +144,7 @@ mainly from scanning the three and updating the histograms by summing up the nei
 For each multipole component, we need to compute its corresponding Chebyshev polynomials
 which translate toa naïve $O(mmaxN log N )$ scaling, where mmax is the maximal multipole
 number. In summary, we found ([@Arvizu:2025]), for a set of `HEALPix` Nsides parameters
-256, 512, 1024, 2048 and 4096, that the power scaling law goes as N 1.1. The scaling with
+256, 512, 1024, 2048 and 4096, that the power scaling law goes as $N^{1.1}$. The scaling with
 maximum number of multipoles shows a linear scaling $t(m) = 1.85m + 63.7$ seconds for Nside
 $= 1024$. We notice that the slope of $t(m)$ is close to 2, which is the number of operations
 needed in the recursive relations of the Chebyshev polynomials. However, the dependence on
