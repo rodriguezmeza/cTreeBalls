@@ -35,7 +35,7 @@ MAIN = main.o
 OBJS = main.o cballsio.o cballs.o startrun.o testdata.o treeload.o \
 	cballsutils.o search.o
 
-PYTHON_FILES = python/cballys.pyx python/setup.py python/ccballys.pxd
+PYTHON_FILES = python/cyballs.pyx python/setup.py python/ccyballs.pxd
 
 all: $(EXEC) lib$(EXEC).a cballys
 
@@ -46,13 +46,13 @@ $(EXEC): $(OBJS) $(EXTERNAL) $(MAIN)
 	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) -o $(EXEC) $(addprefix build/,$(notdir $^)) $(MLIBS) $(FITSIOLIBS)
 
 
-cballys: libcballs.a python/cballys.pyx python/ccballys.pxd
+cyballs: libcballs.a python/cyballs.pyx python/ccyballs.pxd
 	export CC=$(CC); output=$$($(PYTHON) -m pip install . 2>&1); \
     echo "$$output"; \
     if echo "$$output" | grep -q "ERROR: Cannot uninstall"; then \
         site_packages=$$($(PYTHON) -c "import distutils.sysconfig; print(distutils.sysconfig.get_python_lib())" || $(PYTHON) -c "import site; print(site.getsitepackages()[0])") && \
         echo "Cleaning up previous installation in: $$site_packages" && \
-        rm -rf $$site_packages/cballys* && \
+        rm -rf $$site_packages/cyballs* && \
         $(PYTHON) -m pip install .; \
     fi
 
@@ -61,6 +61,6 @@ clean: .base
 	rm -rf $(WRKDIR);
 	rm -f $(EXEC)
 	rm -f lib$(EXEC).a
-	rm -f $(MDIR)/python/cballys.c
+	rm -f $(MDIR)/python/cyballs.c
 	rm -rf $(MDIR)/python/build
 
