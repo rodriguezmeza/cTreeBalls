@@ -7,8 +7,10 @@
 #define _cballsio_cfitsio_08_h
 
 if (strcmp(infmt_str,"fits") == 0)     *infmt_int = INCFITSIO;
-if (strcmp(infmt_str,"fits-radec-tc") == 0)
-    *infmt_int = INFITSRADECTC;
+if (strcmp(infmt_str,"fits-radec-field") == 0)
+    *infmt_int = INFITSRADECFIELD;
+if (strcmp(infmt_str,"fits-radecr-field") == 0)
+    *infmt_int = INFITSRADECRFIELD;
 if (strcmp(infmt_str,"fits-healpix") == 0)
     *infmt_int = INFITSHEALPIX;
 if (strcmp(infmt_str,"numpy-healpix") == 0)

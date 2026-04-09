@@ -1044,8 +1044,9 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
 //B kappa Avg Rmin
 #ifdef SMOOTHPIVOT
+// in common_defs.h
 // 180*60/Pi
-#define RADTOARCMIN   3437.74677
+//#define RADTOARCMIN   3437.74677
     //B cell size threshold computed for gd->iCatalogs[0] only...
     real rSizeTmp;
     int i, idepth=64;
@@ -1069,7 +1070,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         }
     }
     //E
-#undef RADTOARCMIN
+//#undef RADTOARCMIN
 #endif
 //E
 
@@ -1934,8 +1935,8 @@ local int print_make_info(struct cmdline_data* cmd,
                         "with 3pcf shear computation... \n");
 #endif
 
-#ifdef KappaAvgON
-    verb_print(cmd->verbose, "KappaAvgON\n");
+#ifdef WKAvg
+    verb_print(cmd->verbose, "WKAvg\n");
 #endif
 
 #ifdef LONGINT

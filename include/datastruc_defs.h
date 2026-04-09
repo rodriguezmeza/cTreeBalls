@@ -95,10 +95,6 @@ typedef struct _node {
 #endif
 //E
 
-#ifdef KappaAvgON
-    REAL kappaavg;
-#endif
-
 //B socket:
 #ifdef ADDONS
 #include "datastruc_defs_include_00.h"
@@ -130,9 +126,6 @@ typedef struct _node {
 
 #define Weight(x)   (((nodeptr) (x))->weight)
 
-#ifdef KappaAvgON
-#define KappaAvg(x)    (((nodeptr) (x))->kappaavg)
-#endif
 
 #define Pos(x)    (((nodeptr) (x))->pos)
 #define Next(x)   (((nodeptr) (x))->next)

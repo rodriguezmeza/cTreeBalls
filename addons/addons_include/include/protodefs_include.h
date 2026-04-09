@@ -13,8 +13,8 @@
 #include "protodefs_octree_ggg_omp.h"
 #endif
 
-#ifdef OCTREEG1G2G3OMP
-#include "protodefs_octree_g1g2g3_omp.h"
+#ifdef OCTREEGGGCROSSOMP
+#include "protodefs_octree_ggg_cross_omp.h"
 #endif
 
 #ifdef KDTREEOMP
@@ -31,6 +31,10 @@
 
 #ifdef KDTREECUTEBOX
 #include "protodefs_kdtree_cute_box.h"
+#endif
+
+#ifdef COSMOLIB
+#include "protodefs_cosmolib.h"
 #endif
 
 #ifdef PXD
@@ -55,6 +59,10 @@
  # Normally they will be switched OFF
  ############################
  */
+
+#ifdef OCTREEGGG
+#include "protodefs_octree_ggg.h"
+#endif
 
 #ifdef DIRECTMETHOD
 #include "protodefs_direct_method.h"

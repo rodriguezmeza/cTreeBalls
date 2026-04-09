@@ -33,8 +33,8 @@
 #include "cballs_octree_ggg_omp.h"
 #endif
 
-#ifdef OCTREEG1G2G3OMP
-#include "cballs_octree_g1g2g3_omp.h"
+#ifdef OCTREEGGGCROSSOMP
+#include "cballs_octree_ggg_cross_omp.h"
 #endif
 
 
@@ -55,6 +55,10 @@
 
 #ifdef DIRECTMETHOD
 #include "cballs_direct_method.h"
+#endif
+
+#ifdef OCTREEGGG
+#include "cballs_octree_ggg.h"
 #endif
 
 #ifdef DIRECTMETHODSIMPLE

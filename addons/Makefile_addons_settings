@@ -22,25 +22,7 @@ else
 $(info To compile with OCTREEGGGOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
 # Note:
 #                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
-#OCTREEGGGOMPON = 0
 OCTREEGGGOMPON = 1
-endif
-endif
-
-# OCTREEG1G2G3OMP
-# For computing cross-3pcf using octree-g1g2g3-omp
-#   still in development phase.
-ifeq ($(USEGSL),1)
-OCTREEG1G2G3OMPON = 1
-else
-ifeq ($(COMPLEXLIBON),1)
-OCTREEG1G2G3OMPON = 1
-else
-$(info To compile with OCTREEG1G2G3OMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
-# Note:
-#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
-#OCTREEG1G2G3OMPON = 0
-OCTREEG1G2G3OMPON = 1
 endif
 endif
 
@@ -157,6 +139,10 @@ endif
 ############################
 # Nothing to do below, unless it is explicitly asked for
 ############################
+
+# WKAvg switch...
+# Default is 0. If set to 0 will give tests OK (./run_tests_all; ./run_all_tests_public)
+NOWKAvgON = 0
 
 # NMultipoles switch (multipoles for counting).
 # Default is 1
@@ -292,9 +278,54 @@ endif
 # For computing 3pcf using balls method
 BALLSON = 0
 
+# OCTREEKKKBALLS4OMP
+# For computing 3pcf using octree-kkk-balls4-omp
+#   is in development phase. Not included. Do not use.
+# Needs BALLSON = 1 above
+ifeq ($(OCTREESMOOTHINGON),1)
+OCTREEKKKBALLS4OMPON = 0
+else
+$(info To compile with OCTREEKKKBALLS4OMP needs BALLSON = 1, deactivating...)
+OCTREEKKKBALLS4OMPON = 0
+endif
+
+# OCTREEGGGCROSSOMP
+# For computing cross-3pcf using octree-ggg_cross-omp
+#   still in development phase.
+ifeq ($(USEGSL),1)
+OCTREEGGGCROSSOMPON = 0
+else
+ifeq ($(COMPLEXLIBON),1)
+OCTREEGGGCROSSOMPON = 0
+else
+$(info To compile with OCTREEGGGCROSSOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+# Note:
+#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
+#OCTREEGGGCROSSOMPON = 0
+OCTREEGGGCROSSOMPON = 0
+endif
+endif
+
 # DIRECTMETHOD
 # For computing 3pcf using direct method
 DIRECTMETHODON = 0
+
+# OCTREEGGG
+# For computing 3pcf using octree-ggg
+#   still is in development phase.
+ifeq ($(USEGSL),1)
+OCTREEGGGON = 0
+else
+ifeq ($(COMPLEXLIBON),1)
+OCTREEGGGON = 1
+else
+$(info To compile with OCTREEGGG needs USEGSL/COMPLEXLIBON = 1, deactivating...)
+# Note:
+#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
+#OCTREEGGGON = 0
+OCTREEGGGON = 1
+endif
+endif
 
 # DIRECTMETHODSIMPLE
 # For computing 3pcf using direct method simple
@@ -331,17 +362,6 @@ OCTREEBOXOMPON = 0
 # For computing 2pcf using cute-box methods
 KDTREECUTEBOXON = 0
 
-# OCTREEKKKBALLS4OMP
-# For computing 3pcf using octree-kkk-balls4-omp
-#   is in development phase. Not included. Do not use.
-# Needs BALLSON = 1 above
-ifeq ($(BALLSON),1)
-OCTREEKKKBALLS4OMPON = 0
-else
-$(info To compile with OCTREEKKKBALLS4OMP needs BALLSON = 1, deactivating...)
-OCTREEKKKBALLS4OMPON = 0
-endif
-
 # OCTREEKKKBALLS4OMPTRIANGLES
 # For computing 3pcf using octree-kkk-balls4-omp-triangles
 #   is in development phase. Not included. Do not use.
@@ -352,6 +372,10 @@ else
 $(info To compile with OCTREEKKKBALLS4OMPTRIANGLES needs BALLSON = 1, deactivating...)
 OCTREEKKKBALLS4OMPTRIANGLESON = 0
 endif
+
+# COSMOLIB
+# For computing several cosmology functions
+COSMOLIBON = 0
 
 # SAVERESTORE
 # For save/restore options

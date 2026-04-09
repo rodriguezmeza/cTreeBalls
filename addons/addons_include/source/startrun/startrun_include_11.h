@@ -43,8 +43,8 @@
 #include "startrun_octree_ggg_omp_11.h"         // 66
 #endif
 
-#ifdef OCTREEG1G2G3OMP
-#include "startrun_octree_g1g2g3_omp_11.h"      // 74
+#ifdef OCTREEGGGCROSSOMP
+#include "startrun_octree_ggg_cross_omp_11.h"   // 74
 #endif
 
 /*
@@ -100,6 +100,10 @@
 
 #ifdef NEIGHBORBOXESOMP
 #include "startrun_neighbor_boxes_omp_11.h"     // 73
+#endif
+
+#ifdef OCTREEGGG
+#include "startrun_octree_ggg_11.h"         // 75
 #endif
 
 

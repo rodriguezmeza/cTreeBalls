@@ -149,15 +149,6 @@ OPT2 += $(SINGLEP)
 endif
 #
 
-#
-KAPPAAVGON = 0
-#
-ifeq ($(KAPPAAVGON),1)
-KappaAvgON = -DKappaAvgON
-OPT2 += $(KappaAvgON)
-endif
-#
-
 # To activate long integers set to 1. Else 0
 LONGINTON = 1
 #
