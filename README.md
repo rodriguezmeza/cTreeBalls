@@ -1,5 +1,5 @@
-<p align="center">
-    <img src="https://github.com/rodriguezmeza/cTreeBalls/blob/main/addons/cBalls_04.png" width="400" height="400">
+<p align="left">
+    <img src="https://github.com/rodriguezmeza/cTreeBalls/blob/main/addons/cBalls_04.png" width="300" height="300">
 </p>
 
 # cTreeBalls: Correlation functions computation with Tree/Balls methods
