@@ -27,7 +27,7 @@ affiliations:
     index: 2
   - name: Instituto de Ciencias Físicas, Universidad Nacional Autónoma de México, 62210, Cuernavaca, Morelos, México
     index: 3
-date: 8 April 2026
+date: 9 April 2026
 bibliography: paper.bib
 ---
 
