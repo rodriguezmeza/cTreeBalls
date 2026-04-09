@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="https://github.com/rodriguezmeza/cTreeBalls/blob/main/addons/cBalls_04.png" width="700" height="200">
+</p>
+
 # cTreeBalls: Correlation functions computation with Tree/Balls methods
 
 Author: Mario A. Rodriguez-Meza
