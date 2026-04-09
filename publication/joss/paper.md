@@ -10,7 +10,7 @@ authors:
   - name: Mario A. Rodriguez-Meza
     orcid: 0000-0003-1160-1488
     affiliation: 1       # (add quotes to multiple affiliations)
-    corresponding: true
+    corresponding: false
   - name: Eladio A. Moreno-Alcala
     orcid: 0000-0002-5400-2584
     affiliation: 2       # (add quotes to multiple affiliations)
@@ -18,11 +18,11 @@ authors:
   - name: Alejandro Aviles
     orcid: 0000-0001-5998-3986
     affiliation: 3       # (add quotes to multiple affiliations)
-    corresponding: true
+    corresponding: false
   - name: Gustavo Niz
     orcid: 0000-0002-1544-8946
     affiliation: 2       # (add quotes to multiple affiliations)
-    corresponding: true
+    corresponding: false
 affiliations:
   - name: Departamento de Física, Instituto Nacional de Investigaciones Nucleares,
           Apartado Postal 18-1027,
