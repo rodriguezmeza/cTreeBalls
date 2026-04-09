@@ -44,8 +44,10 @@ options                            = compute-HistN,and-CF,out-m-HistZeta
 # 
 # Give the name of the point catalog to analyze and its format.
 infile                             = ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
-infileformat                       = binary	# can be columns-ascii (default value), binary or takahasi
-iCatalogs                          = 1		# this is the tag associated to catalog giving in above
+infileformat                       = binary
+# can be columns-ascii (default value), binary or takahasi
+iCatalogs                          = 1
+# this is the tag associated to catalog giving in above
 								# several files can be given, the 'iCatalog' tag them
 								# this is useful to do cross-correlations
 #
@@ -58,7 +60,7 @@ sizeHistN                          = 20
 #
 # Give the number of Chebyshev multipoles to compute. Is active when cBalls has been given computeTPCF = true
 mChebyshev                         = 7		# mChebyshev + 1 must be a power of 2
-stepState                          = 1000		# gives the frequency to save the the number of pivot computed. Useful to see the state of the run
+stepState                          = 10000		# gives the frequency to save the the number of pivot computed. Useful to see the state of the run
 #
 verbose                            = 2
 verbose_log                        = 2
@@ -72,7 +74,8 @@ numberThreads                      = 16
 # -------------------------
 #
 # You may save the input catalog in a different format:
-outfile                            = 			# if it empty no file is save
+outfile                            =
+# if it empty no file is save
 									# if it is not empty file is saved
 									#	but use in combination with
 									#	'options = stop' because normally
@@ -84,7 +87,7 @@ outfile                            = 			# if it empty no file is save
 outfileformat                      = columns-ascii
 #
 # To compute 3pcf in harmonic base set to true. Else false
-computeTPCF                         = true
+#computeTPCF                         = true
 # For histograms in logscale version set to true. Else false
 useLogHist                          = true
 # And set the number of bins per decade:
@@ -101,16 +104,17 @@ phiL                               = 1.28011
 phiR                               = 1.86187
 #
 # Set of parameters to define names of the histograms output files
-histNFileName                      = histNN
+histNNFileName                      = histNN
 histXi2pcfFileName                 = histXi2pcf
-histZetaMFileName                  = histZetaM
-mhistZetaFileName                  = mhistZeta
-suffixOutFiles                     
+histZetaFileName                  = histZetaM
+#mhistZetaFileName                  = mhistZeta
+suffixOutFiles
 #
 # Python/shell/C script to use as a pre/post processing
 #	in options above add 'pre-processing' and/or 'post-processing'
 preScript                             = ""
-posScript                             = ""		# you can set, i.e., "python scripts/plot2pcf.py"
+posScript                             = ""
+# you can set, i.e., "python scripts/plot2pcf.py"
 									#	in order to plot the 2pcf
 									#	at the end of the computation
 									#	if use with 'options = post-processing'

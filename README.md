@@ -22,9 +22,7 @@ Major contributors:
 
 ## Introduction
 
-**c**orrelations function computation with **T**ree/**B**alls methods (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
-
-There is a html version of the man manual version. Look for it (`docs/man/cballs.html`) an open it with a web explorer.
+**TreeBalls** (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
 
 ## Compiling and getting started
 
@@ -32,7 +30,7 @@ Download the code by cloning it from https://github.com/rodriguezmeza/cTreeBalls
 
 Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Sources are included. Therefore no need to make any changes. In case of problems go to web page https://www.gnu.org/software/gsl/ for details or ask to your system administrator. Make necessary changes in `Makefile_machine` file and look up for `GSL`. But in case you have problems installing GSL just set it off (switched off: USEGSL = 0) in `Makefile_settings`, the basic distribution will run okey. I/O cfitsio library is set it ON. Can be set it OFF in `addons/Makefile_settings`.
 
-Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make`). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: `-O4 -ffast-math`) and of the OpenMP flag (default: `-fopenmp`; this flag is facultative, you are free to compile without OpenMP if you don't want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with `-fopenmp`). The code has been tested with gcc version 10 and 12 and would be working with version 11, and 13. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
+Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make all`). If compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: `-O4 -ffast-math`) and of the OpenMP flag (default: `-fopenmp`; this flag is facultative, you are free to compile without OpenMP if you don't want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with `-fopenmp`). The code has been tested with gcc version 10 and 12 and would be working with version 11, and 13. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
 
 To check that the code runs, if you are in `cTreeBalls` directory, type:
 
@@ -44,7 +42,7 @@ It will run using all default values and a directory named `Output` will be crea
 
 If you execute:
 
-    $ ../cballs options=post-processing script="python scripts/plot2pcf.py"
+    $ ../cballs options=post-processing posScript="python scripts/plot2pcf.py"
 
 will do the same but now will plot the 2pcf and save it as a pdf file. Now, let us use a parameter file, execute:
 
@@ -77,6 +75,7 @@ You may also consult the code´s man page for more detailed information on how t
 
     $ man ../docs/man/cballs.m
 
+There is a html version of this manual version. Look for it (`docs/man/cballs.html`) an open it with a web explorer.
 
 ## Configuration
 
@@ -93,7 +92,7 @@ cBalls can be configured by switching on/off several options. Configuration file
 | `ADDONSON`  | `= 1` for adding more funcionality to the code, like other searching methods, other catalog formats                                                                                                |
 
 **Note**:
-After changing `Makefile_settings` in order to have the new settings active in **cBalls** you have to re-compile the code: `make clean; make`. 
+After changing `Makefile_settings` in order to have the new settings active in **cBalls** you have to re-compile the code: `make clean; make all`. 
 
 ## Parameters
 
@@ -109,13 +108,13 @@ you will receive in response how **cBalls** should be executed using command lin
 
 ## Python
 
-To install cBalls python module (cballys) just execute (you already do it...):
+To install cBalls python module (cyballs) just execute (you already do it...):
 
     $ make clean; make all
 
 To test it go to directory `tests` and run:
 
-    $ python ./In/test_cython_balls.py
+    $ python ./In/test_cython_octree-ggg-omp.py
 
 Note: this interface in Cython was tested in a python environment with `python3.12`.
 
@@ -125,7 +124,7 @@ Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are avai
 
 https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks
 
-Other python scripts are in directory `tests/scripts`.
+Other python scripts are in directory `tests/python`. Look for Readme files in `tests` and in `tests/python`.
 
 
 ## License

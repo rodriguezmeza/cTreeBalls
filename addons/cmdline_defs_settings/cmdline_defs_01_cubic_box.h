@@ -49,7 +49,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
-    "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
+    "searchMethod=octree-sincos-omp",     ";Searching method to use", ":search",
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
     "nsmooth=8",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",

@@ -168,6 +168,36 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 //B socket:
 #ifdef ADDONS
 #include "cballs_include_02.h"
+
+        case SEARCHNULL:
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "\n\t%s: null search method... using default...\n",
+                                   routineName);
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\n\t\twith normal tree method (sincos-omp)\n\n");
+            for (ifile=0; ifile<gd->ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
+                Update(p) = TRUE;
+                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
+                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+        default:
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                   "\n\t%s: unknown (%s) method... using dafault search method.\n",
+                                   routineName, cmd->searchMethod);
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "\n\twith normal tree method (sincos-omp)\n\n");
+            for (ifile=0; ifile<gd->ninfiles; ifile++) {
+                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
+                Update(p) = TRUE;
+                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+            }
+            searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
+                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            break;
+
 #else
         case SEARCHNULL:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
