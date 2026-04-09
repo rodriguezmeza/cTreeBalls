@@ -8,8 +8,8 @@
 #include "cballs_octree_ggg_omp_01.h"
 #endif
 
-#ifdef OCTREEG1G2G3OMP
-#include "cballs_octree_g1g2g3_omp_01.h"
+#ifdef OCTREEGGGCROSSOMP
+#include "cballs_octree_ggg_cross_omp_01.h"
 #endif
 
 #ifdef OCTREESMOOTHING
@@ -19,5 +19,10 @@
 /*
  Add your addon item here
  */
+
+#ifdef OCTREEGGG
+#include "cballs_octree_ggg_01.h"
+#endif
+
 
 #endif	// ! _cballs_include_01_h

@@ -27,10 +27,10 @@ include $(MACHINES_DIR)/addons/octree_ggg_omp/Makefile_octree_ggg_omp
 endif
 #
 
-# OCTREEG1G2G3OMP
-# For computing cross-3pcf using octree-g1g2g3-omp
-ifeq ($(OCTREEG1G2G3OMPON),1)
-include $(MACHINES_DIR)/addons/octree_g1g2g3_omp/Makefile_octree_g1g2g3_omp
+# OCTREEGGGCROSSOMP
+# For computing cross-3pcf using octree-ggg-cross-omp
+ifeq ($(OCTREEGGGCROSSOMPON),1)
+include $(MACHINES_DIR)/addons/octree_ggg_cross_omp/Makefile_octree_ggg_cross_omp
 endif
 #
 
@@ -45,6 +45,13 @@ endif
 # For computing 2pcf using neighbor-boxes-omp method
 ifeq ($(NEIGHBORBOXESOMPON),1)
 include $(MACHINES_DIR)/addons/neighbor_boxes_omp/Makefile_neighbor_boxes_omp
+endif
+#
+
+# COSMOLIB
+# For computing several cosmology functions
+ifeq ($(COSMOLIBON),1)
+include $(MACHINES_DIR)/addons/cosmolib/Makefile_cosmolib
 endif
 #
 
@@ -144,6 +151,12 @@ ifeq ($(NOLIMBERON),1)
 OPT2 += -DNOLIMBER
 endif
 
+# WKAvg switch...
+ifeq ($(WKAvgON),1)
+OPT2 += -DWKAvg
+endif
+#
+
 # NMultipoles switch (multipoles for counting)
 ifeq ($(NMultipolesON),1)
 OPT2 += -DNMultipoles
@@ -206,6 +219,13 @@ endif
 # For computing 3pcf using direct method
 ifeq ($(DIRECTMETHODON),1)
 include $(MACHINES_DIR)/addons/direct_method/Makefile_direct_method
+endif
+#
+
+# OCTREEGGG
+# For computing 3pcf using octree-ggg
+ifeq ($(OCTREEGGGON),1)
+include $(MACHINES_DIR)/addons/octree_ggg/Makefile_octree_ggg
 endif
 #
 

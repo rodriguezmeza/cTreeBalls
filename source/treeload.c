@@ -173,9 +173,6 @@ global int MakeTree(struct  cmdline_data* cmd,
         loadbody(cmd, gd, p, ifile);                // Set body in a cell
         Nb(p) = 1;
         Radius(p) = 0.0;
-#ifdef KappaAvgON
-        KappaAvg(p) = Kappa(p);
-#endif
     }
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\n%s: loadbody CPU time: %lf %s\n",
@@ -847,9 +844,6 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
     Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
-#ifdef KappaAvgON
-    KappaAvg(p) = 0.0;
-#endif
     CLRV(cmpos);
 
     for (i = 0; i < NSUB; i++) {
@@ -865,24 +859,21 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
 
             Mass(p) += Mass(q);
             Weight(p) += Weight(q);                 // sum of all weight of q
+#ifndef NOWKAvg
+            // ... this definition will give tests OK
+            Kappa(p) += Weight(q)*Kappa(q);     // Kappa(q) average at cell q
+#else
+            Kappa(p) += Kappa(q);     // Kappa(q) average at cell q
+#endif
             if ( Type(q) == CELL) {
                 if (scanopt(cmd->options, "read-mask"))
                     Mask(p) |= Mask(q);
                 Nb(p) += Nb(q);
-                Kappa(p) += Weight(q)*Kappa(q);     // Kappa(q) average at cell q
-#ifdef KappaAvgON
-                KappaAvg(p) += KappaAvg(q);         // sum of all kappa at cell q
-#endif
             } else {
                 if (Type(q) == BODY) {
                     Nb(p) += 1;
-                    Kappa(p) += Weight(q)*Kappa(q);
-#ifdef KappaAvgON
-                    KappaAvg(p) += Kappa(q);
-#endif
                 } else if (Type(q) == BODY3) {      // To set smoothing body
                     Nb(p) += 1;
-                    Kappa(p) += Weight(q)*Kappa(q);
                 }
             }
             MULVS(tmpv, Pos(q), Mass(q));
@@ -926,6 +917,12 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
     SETV(Pos(p), cmpos);
     if (Nb(p)>0) {
         Kappa(p) /= Nb(p);
+#ifdef NOWKAvg
+        Weight(p) /= Nb(p);                         // Weight: added
+//#else
+        // ... this definition will give tests OK
+#endif
+        //E
     } else {
 #if defined(DEBUGTREE)
         error("%s: Nb = 0: %ld\n", routineName, Nb(p));
@@ -1184,9 +1181,6 @@ local void pruningCells(struct  cmdline_data* cmd,
 // correct to consider these properties be computed...
         Mass(p) = 0.0;
         Weight(p) = 0.0;
-    #ifdef KappaAvgON
-        KappaAvg(p) = 0.0;
-    #endif
         CLRV(cmpos);
 */
 

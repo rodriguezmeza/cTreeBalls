@@ -228,7 +228,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
             icountNbRmin += icountNbRminthread;
             icountNbRminOverlap += icountNbRminOverlapthread;
 #endif
-        }
+        } // ! critical
         search_free_sincos_omp(cmd, gd, &hist);
     } // end pragma omp parallel
 
@@ -590,12 +590,8 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] + 1.0;
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
-                        
-#ifdef KappaAvgON
-                        xi = KappaAvg(q)/Nb(q);
-#else
+
                         xi = Kappa(q);
-#endif
 
 #ifdef TPCF
                         REAL cosphi,sinphi;

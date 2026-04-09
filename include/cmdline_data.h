@@ -67,7 +67,7 @@ struct cmdline_data{
     string histNNFileName;
     string histXi2pcfFileName;
     string histZetaFileName;
-    string suffixOutFiles;                  // deprecate... in favor o no .txt
+    string suffixOutFiles;                  // deprecated... in favor or no .txt
     //E
 
     //B Set of parameters needed to construct a test model

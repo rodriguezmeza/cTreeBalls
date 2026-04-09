@@ -19,6 +19,9 @@
 #define MAXLENGTHOFSTRSCMD     1024
 #define EXTFILES            ".txt"
 #define INMB                9.536743116E-7          // 1/(1024*1024)
+#define SMALLESTDOUBLE 1.0E-300
+// 180*60/Pi
+#define RADTOARCMIN   3437.74677
 //E
 
 #define MAXITEMS                100

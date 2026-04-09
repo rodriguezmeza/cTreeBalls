@@ -5,8 +5,8 @@ Modules developed so far are:
 
 Searching methods:
 
-1. search=balls-omp, with several options.
-2. search=direct-simple-sincos.
+1. search=octree-ggg-omp, with several options
+2. search=kdtree-omp
 
 Utilities libs:
 

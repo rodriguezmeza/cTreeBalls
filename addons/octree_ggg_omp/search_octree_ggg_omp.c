@@ -212,14 +212,14 @@ int local mCheb;                                    // mCheb =
 //B Define structures:
 typedef struct {
 #ifdef TWOPCF
-    real *histNN;                   // used
-    real *histWW;                   // used
-    real *histCF;                   // used
-    real *histNNSubXi2pcf;          // used
+    real *histNN;                                   // used
+    real *histWW;                                   // used
+    real *histCF;                                   // used
+    real *histNNSubXi2pcf;                          // used
 #ifdef SMOOTHPIVOT
-    realptr histNNSubXi2pcftotal;   // used
+    realptr histNNSubXi2pcftotal;                   // used
 #endif
-    real *histXi2pcf;               // used
+    real *histXi2pcf;                               // used
 #endif
 
     realptr histNNSub;
@@ -236,7 +236,6 @@ typedef struct {
     real ***histZetaGmIm;
     real ***histXi3pcf;
     //E
-//    real ***histZetaM;
     // (EE) edge_effects
     real ***histZetaM_EE;
 #endif
@@ -248,16 +247,16 @@ typedef struct {
 
 typedef struct {
 #ifdef TWOPCF
-    realptr histNthread;            // used
-    realptr histWthread;            // used
-    realptr histWWthread;           // used
-    realptr histNNSubXi2pcfthread;  // used
+    realptr histNthread;                            // used
+    realptr histWthread;                            // used
+    realptr histWWthread;                           // used
+    realptr histNNSubXi2pcfthread;                  // used
 #ifdef SMOOTHPIVOT
-    realptr histNNSubXi2pcfthreadp; // used
-    realptr histNNSubXi2pcfthreadtotal; // used
+    realptr histNNSubXi2pcfthreadp;                 // used
+    realptr histNNSubXi2pcfthreadtotal;             // used
 #endif
-    real *histXi2pcfthread;         // used
-    real *histXi2pcfthreadsub;      // used
+    real *histXi2pcfthread;                         // used
+    real *histXi2pcfthreadsub;                      // used
 #endif
 
     real *ChebsT;
@@ -311,14 +310,14 @@ typedef struct {
 //  check the memory allocation and freeing is updated...
 typedef struct {
  #ifdef TWOPCF
-     real *histNN;                      // used
-    real *histWW;                       // used
-     real *histCF;                      // used
-     real *histNNSubXi2pcf;             // used
+     real *histNN;                                  // used
+    real *histWW;                                   // used
+     real *histCF;                                  // used
+     real *histNNSubXi2pcf;                         // used
 #ifdef SMOOTHPIVOT
-     realptr histNNSubXi2pcftotal;      // used
+     realptr histNNSubXi2pcftotal;                  // used
 #endif
-     real *histXi2pcf;                  // used
+     real *histXi2pcf;                              // used
  #endif
 
      realptr histNNSub;
@@ -335,7 +334,6 @@ typedef struct {
      real ***histZetaGmIm;
      real ***histXi3pcf;
      //E
-//     real ***histZetaM;
     // (EE) edge_effects
     real ***histZetaM_EE;
  #endif
@@ -346,16 +344,16 @@ typedef struct {
 
 typedef struct {
 #ifdef TWOPCF
-    realptr histNthread;            // used
-    realptr histWthread;            // used
-    realptr histWWthread;            // used
-    realptr histNNSubXi2pcfthread;  // used
+    realptr histNthread;                            // used
+    realptr histWthread;                            // used
+    realptr histWWthread;                           // used
+    realptr histNNSubXi2pcfthread;                  // used
 #ifdef SMOOTHPIVOT
-    realptr histNNSubXi2pcfthreadp; // used
-    realptr histNNSubXi2pcfthreadtotal; // used
+    realptr histNNSubXi2pcfthreadp;                 // used
+    realptr histNNSubXi2pcfthreadtotal;             // used
 #endif
-    real *histXi2pcfthread;         // used
-    real *histXi2pcfthreadsub;      // used
+    real *histXi2pcfthread;                         // used
+    real *histXi2pcfthreadsub;                      // used
 #endif
 
     real *ChebsT;
@@ -849,7 +847,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #else // ! SMOOTHPIVOT
 #pragma omp parallel default(none)                                          \
     shared(cmd,gd,btable,nbody,roottable,                                   \
-           ipmin,ipmax,cat1,cat2,ipmask,                            \
+           ipmin,ipmax,cat1,cat2,ipmask,                                    \
            gdl, gdlN, main_thread_id)
 #endif // ! SMOOTHPIVOT
 #else // ! BALLS4SCANLEV
@@ -946,6 +944,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           NbRmin(p) = 1;
           NbRminOverlap(p) = 0;
           KappaRmin(p) = Kappa(p);
+          WeightRmin(p) = Weight(p);
           if (Update(p) == FALSE) {
               ipfalsethreads++;
               continue;
@@ -997,8 +996,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
           //B 3pcf convergence & shear counting
-//          for (n = 1; n <= cmd->sizeHistN; n++)
-//              histN.histNNSubthread[n] = 0.0;
           CLRM_ext_ext(histN.histXithreadcos,
                        cmd->mChebyshev+1, cmd->sizeHistN);
           CLRM_ext_ext(histN.histXithreadsin,
@@ -1030,7 +1027,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif
 //E segment to be included below...
 
+//================
 #ifdef NMultipoles
+//================
+
 #ifndef BALLS4SCANLEV
           normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                    p, ((nodeptr) roottable[cat2]),
@@ -1044,7 +1044,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
-// Check if these lines are needed!!!
+// Check if these lines are needed!!! they are in not a BALLS4SCANLEV domain
 //                  hist.histNNSubthread[n] =
 //                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
@@ -1075,7 +1075,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
-// Check if these lines are needed!!!
+// Check if these lines are needed!!! they are in a BALLS4SCANLEV domain
 //                  hist.histNNSubthread[n] =
 //                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
@@ -1085,7 +1085,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++)
-              // Check if these lines are needed!!!
+        // Check if these lines are needed!!! they are in a BALLS4SCANLEV domain
                 hist.histNNSubthread[n] =
                                 ((real)NbRmin(p))*hist.histNNSubthread[n];
 #endif
@@ -1095,7 +1095,11 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
                                              gd->nnodescanlevTableB4[cat1], &histN);
 #endif // ! BALLS4SCANLEV
+
+//================
 #else // ! NMultipoles
+//================
+
 #ifndef BALLS4SCANLEV
           normal_walktree_sincos(cmd, gd, btable, cat2,
                                  p, ((nodeptr) roottable[cat2]),
@@ -1107,7 +1111,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
-// Check if these lines are needed!!!
+// Check if these lines are needed!!! they are in not a BALLS4SCANLEV domain
 //                  hist.histNNSubthread[n] =
 //                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
@@ -1134,7 +1138,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
-// Check if these lines are needed!!!
+// Check if these lines are needed!!! they are in a BALLS4SCANLEV domain
 //                  hist.histNNSubthread[n] =
 //                                    ((real)NbRmin(p))*hist.histNNSubthread[n];
           }
@@ -1152,7 +1156,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                            gd->nnodescanlevTableB4[cat1], &hist);
 #endif // ! BALLS4SCANLEV
           
+//================
 #endif // ! NMultipoles
+//================
 
 #ifndef BALLS4SCANLEV
           ip = p - btable[cat1] + 1;
@@ -1163,9 +1169,9 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           icountNbRminthread += NbRmin(p);
           icountNbRminOverlapthread += NbRminOverlap(p);
 #ifdef DEBUG
-          fprintf(outpivots,"%ld \t%ld \t%ld \t\t%g\n",
+          fprintf(outpivots,"%ld \t%ld \t%ld \t\t%g \t\t%g\n",
                   ip, NbRmin(p), NbRminOverlap(p),
-                  KappaRmin(p)/NbRmin(p));
+                  KappaRmin(p)/NbRmin(p), WeightRmin(p)/NbRmin(p));
 #endif
 #endif
           if (ip%gd->stepState == 0)
@@ -1188,7 +1194,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         for (n = 1; n <= cmd->sizeHistN; n++) {
             gdl.histNN[n] += hist.histNthread[n];
             gdl.histWW[n] += hist.histWWthread[n];
-//            gdl.histNNSub[n] += hist.histNNSubthread[n];
             gdl.histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
 #ifdef SMOOTHPIVOT
             gdl.histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
@@ -1350,19 +1355,19 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif
 
 #ifdef TWOPCF
+    //B asymmetric,weights-norm options give same results without them...
     int nn;
     if (!scanopt(cmd->options, "asymmetric")) {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
 #ifdef SMOOTHPIVOT
             if (cmd->verbose>3)
-                printf("%d %e %e %e\n", nn,
-                   gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn],
-                       gdl.histNN[nn]);
+                printf("%d %e %e %e\n",
+                       nn, gdl.histNNSubXi2pcf[nn],
+                       gdl.histNNSubXi2pcftotal[nn], gdl.histNN[nn]);
 #else
             if (cmd->verbose>3)
-                printf("%d %e %e\n", nn,
-                   gdl.histNNSubXi2pcf[nn],
-                       gdl.histNN[nn]);
+                printf("%d %e %e\n",
+                       nn, gdl.histNNSubXi2pcf[nn], gdl.histNN[nn]);
 #endif
             if (scanopt(cmd->options, "weights-norm")) {
 //           gdl.histXi2pcf[nn] /= MAX(gdl.histNN[nn],1.0);// gives same as below
@@ -1375,7 +1380,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                 gdl.histNNSubXi2pcftotal[nn] /= 2.0;
                     gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
 #else
-                    gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
+                gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
 #endif
             }
         }
@@ -1385,15 +1390,18 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
             if (cmd->verbose>3)
             printf(0,"%d %e %e\n", nn,
                    gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn]);
-                gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
+            gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
 #else
             if (cmd->verbose>3)
-            printf(0,"%d %e\n", nn,
-                   gdl.histNNSubXi2pcf[nn]);
+                printf(0,"%d %e\n", nn, gdl.histNNSubXi2pcf[nn]);
+            if (scanopt(cmd->options, "weights-norm"))
+                gdl.histXi2pcf[nn] /= gdl.histWW[nn];
+            else
                 gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
 #endif
         }
     }
+    //E
 
     if (scanopt(cmd->options, "compute-HistN")) {
 #ifdef SMOOTHPIVOT
@@ -1569,7 +1577,7 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                         for (l = More(q); l != Next(q); l = Next(l))
                             normal_walktree_sincos(cmd, gd, btable, cat2,
                                                    p,l,qsize/2, hist);
-//E useLogHist section
+//E
 #else // ! NORMALHISTSCALE
                     if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
                         sumnode_sincos_cell(cmd, gd, btable, cat2, p,
@@ -1625,7 +1633,18 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 if (Update(q)==TRUE) {
                     Update(q) = FALSE;
                     NbRmin(p) += 1;
+#ifndef NOWKAvg
+                    // ... this definition will give tests OK
                     KappaRmin(p) += Weight(q)*Kappa(q);
+                    //B Added this line and SMOOTHPIVOT works for
+                    //      NMultipoles=0 and NONORMHIST=0
+                    WeightRmin(p) += Weight(q);
+                    //E
+#else
+                    KappaRmin(p) += Kappa(q);       // when use it in
+                    WeightRmin(p) += Weight(q);     //  computeProperties
+                                                    //  multiply by Weight
+#endif
                 } else {
                     NbRminOverlap(p) += 1;
                 }
@@ -1655,7 +1674,6 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
 
-                // needs to multiply xi by Weight(p)
                 xi = Weight(q)*Kappa(q);
 
 #ifdef THREEPCFSHEAR
@@ -1702,7 +1720,6 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
 
-                // needs to multiply xi by Weight(p)
                 xi = Weight(q)*Kappa(q);
 
 #ifdef THREEPCFSHEAR
@@ -1789,28 +1806,11 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
 
-//B needs to multiply xi by Weight(p) of the cell q
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    xi = Nb(q)*Kappa(q);
-                } else {
-#ifdef KappaAvgON
-                    xi = KappaAvg(q)/Nb(q);
-#else
-#ifdef NMultipole
-                    xi = Kappa(q);
-#else
-                    xi = Nb(q)*Kappa(q);
-#endif
-#endif
-                }
-#else // ! NONORMHIST
-#ifdef KappaAvgON
-                xi = KappaAvg(q)/Nb(q);
-#else
+#ifndef NOWKAvg
                 xi = Kappa(q);
+#else
+                xi = Weight(q)*Kappa(q);
 #endif
-#endif // ! NONORMHIST
 //E
 
 #ifdef THREEPCFSHEAR
@@ -1834,7 +1834,6 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
-
                 hist->nbccalcthread += 1;
             } // ! 1 < n < sizeHistN
         } // ! dr1 > rminHist
@@ -1858,29 +1857,13 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
 
-//B needs to multiply xi by Weight(p) of the cell q
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    xi = Nb(q)*Kappa(q);
-                } else {
-#ifdef KappaAvgON
-                    xi = KappaAvg(q)/Nb(q);
-#else
-#ifdef NMultipole
-                    xi = Kappa(q);
-#else
-                    xi = Nb(q)*Kappa(q);
-#endif
-#endif
-                }
-#else // ! NONORMHIST
-#ifdef KappaAvgON
-                xi = KappaAvg(q)/Nb(q);
-#else
+#ifndef NOWKAvg
+                //B ... this definition will give tests OK
                 xi = Kappa(q);
+                //E
+#else
+                xi = Weight(q)*Kappa(q);
 #endif
-#endif // ! NONORMHIST
-//E
 
 #ifdef THREEPCFSHEAR
                 gamma1 = Gamma1(q);
@@ -1926,7 +1909,11 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     real wi;
 #endif
 
-// check Weight factor... must be an average of Weights
+//B Weight: check Weight factor... must be an average of Weights
+//==============
+#ifndef NOWKAvg     // this definition will give tests OK
+//==============
+
 #ifdef NONORMHIST
 
 #ifdef BALLS4SCANLEV
@@ -1960,27 +1947,26 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #else // ! NONORMHIST
 
 #ifdef BALLS4SCANLEV
-//    xi = Weight(p)*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
-    xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;               // equiv to Nb*(Weight/Nb)*Kappa
-#ifdef SMOOTHPIVOT
-//        xi = Nb(p)*KappaRmin(p)/NbRmin(p)/nbody;
-//        xi = Nb(p)*KappaRmin(p)/nbody;
-        xi = KappaRmin(p)/NbRmin(p)/nbody;
+    xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;    // equiv to Nb*(Weight/Nb)*Kappa
+#ifdef SMOOTHPIVOT                            // not working inside BALLS4SCANLEV
+    xi = KappaRmin(p)/nbody;
 #endif
-#else
-    //B Not working yet
+#else // ! BALLS4SCANLEV
     xi = Weight(p)*Kappa(p)/nbody;
 #ifdef SMOOTHPIVOT
-        xi = (KappaRmin(p)/NbRmin(p))/nbody;
-#endif
+    //B works if added a line for WeightRmin at the begining of
+    //      sumnode_sincos above (first SMOOTHPIVOT segment)
+    xi = WeightRmin(p)*KappaRmin(p)/nbody;
     //E
 #endif
+    //E
+#endif // ! BALLS4SCANLEV
 
 #ifdef TWOPCF
 #ifdef BALLS4SCANLEV
     wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
-#ifdef SMOOTHPIVOT
+#ifdef SMOOTHPIVOT                            // not working inside BALLS4SCANLEV
         xi_2p = KappaRmin(p);
 #endif
 #else
@@ -1994,6 +1980,76 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #endif // ! NONORMHIST
 
+//==============
+#else // ! NOWKAvg
+//==============
+
+//B Weight:: not corrected yet this segment... use Weight(p) or not...
+#ifdef NONORMHIST
+
+    xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
+#ifdef BALLS4SCANLEV
+#ifdef SMOOTHPIVOT
+        xi = Nb(p)*Weight(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+#endif
+#else // ! BALLS4SCANLEV
+#ifdef SMOOTHPIVOT
+    // check this line thoroughly... Weight must be smoothed also...
+    xi = (WeightRmin(p)/NbRmin(p))*KappaRmin(p)/NbRmin(p);
+#endif
+#endif // ! BALLS4SCANLEV
+
+#ifdef TWOPCF
+    wi = Weight(p);
+#ifdef BALLS4SCANLEV
+    // check this line thoroughly against treeload.c
+    xi_2p = (Weight(p)/Nb(p))*(Kappa(p)/Nb(p));
+#ifdef SMOOTHPIVOT
+        xi_2p = Nb(p)*Weight(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+#endif
+#else // ! BALLS4SCANLEV
+    xi_2p = Weight(p)*Kappa(p);
+#ifdef SMOOTHPIVOT
+        xi_2p = (WeightRmin(p)/NbRmin(p))*KappaRmin(p)/NbRmin(p);
+#endif
+#endif // ! BALLS4SCANLEV
+#endif // ! TWOPCF
+
+#else // ! NONORMHIST
+
+#ifdef BALLS4SCANLEV
+    xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;      // equiv to Nb*(Weight/Nb)*Kappa
+#ifdef SMOOTHPIVOT
+        xi = KappaRmin(p)/NbRmin(p)/nbody;
+#endif
+#else // ! BALLS4SCANLEV
+    xi = Weight(p)*Kappa(p)/nbody;
+#ifdef SMOOTHPIVOT
+        xi = (WeightRmin(p)/NbRmin(p))*(KappaRmin(p)/NbRmin(p))/nbody;
+#endif
+#endif // ! BALLS4SCANLEV
+
+#ifdef TWOPCF
+    wi = Weight(p);
+#ifdef BALLS4SCANLEV
+    //B check if Weight and Kappa are averaged or not in treeload.c
+    xi_2p = (Weight(p)/Nb(p))*Kappa(p)/Nb(p);
+#ifdef SMOOTHPIVOT
+        xi_2p = WeightRmin(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+#endif
+#else // ! BALLS4SCANLEV
+    xi_2p = Weight(p)*Kappa(p);
+#ifdef SMOOTHPIVOT
+    //B divide by Nb(p)
+        xi_2p = WeightRmin(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+#endif
+#endif // ! BALLS4SCANLEV
+#endif // ! TWOPCF
+
+#endif // ! NONORMHIST
+//E Weight:: not corrected yet this segment... use Weight(p) or not...
+#endif // ! NOWKAvg
+//E
 
 #ifndef NONORMHIST
 #ifdef THREEPCFCONVERGENCE
@@ -2102,7 +2158,7 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                             normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                                      p,l,qsize/2,
                                                      hist, histN);
-//E useLogHist section
+//E
 #else // ! NORMALHISTSCALE
                     if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
                         sumnode_sincos_cell_N(cmd, gd, btable, cat2,
@@ -2166,6 +2222,7 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                     Update(q) = FALSE;
                     NbRmin(p) += 1;
                     KappaRmin(p) += Kappa(q);
+                    WeightRmin(p) += Weight(q);
                 } else {
                     NbRminOverlap(p) += 1;
                 }
@@ -2223,7 +2280,6 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
-
                 hist->nbbcalcthread += 1;
             } // ! n <= sizeHistN && n >= 1
         } // ! dr1 > rminHist
@@ -2340,32 +2396,46 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.0;
                 //E
 
+#ifndef NOWKAvg
+//B ... this definition will give tests OK
 #ifdef NONORMHIST
                 if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-//B begin corrections
                     xi = Nb(q)*Kappa(q);            // Kappa is cell average
                     xiN = Weight(q);                // Weight sum in cell
                 } else {
-#ifdef KappaAvgON
-                    xi = KappaAvg(q)/Nb(q);         // Weight(q)?
-#else
 //                    xi = Weight(q)*Kappa(q);
                     xi = Kappa(q);                  // original line
-#endif
                     xiN = 1.0;                      // original line
 //                    xiN = Weight(q);              // average of weights
                 }
 #else // ! NONORMHIST
-#ifdef KappaAvgON
-                xi = KappaAvg(q)/Nb(q);             // Weight(q)
-#else
                 xi = Kappa(q);                      // original line
 //                xi = Weight(q)*Kappa(q);
-#endif
                 xiN = 1.0;                          // original line
 //                xiN = Weight(q);                  // average of weights
 #endif // ! NONORMHIST
 //E
+#else // ! NOWKAvg
+//B Weight:: this segment not corrected yet... use Weight(q) below?
+#ifdef NONORMHIST
+                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+                    // check this line... must be Nb(q)^2? should be Nb(q)
+                    xi = Nb(q)*Weight(q)*Kappa(q);  // Kappa is cell average
+                    xiN = Nb(q)*Weight(q);          // Weight sum in cell
+                } else {
+                    xi = Weight(q)*Kappa(q);
+//                    xi = Kappa(q);                  // original line
+//                    xiN = 1.0;                      // original line
+                    xiN = Weight(q);                // average of weights
+                }
+#else // ! NONORMHIST
+//                xi = Kappa(q);                      // original line
+                xi = Weight(q)*Kappa(q);
+//                xiN = 1.0;                          // original line
+                xiN = Weight(q);                    // average of weights
+#endif // ! NONORMHIST
+//E Weight:: this segment not corrected yet... use Weight(q) above?
+#endif // ! NOWKAvg
 
 #ifdef THREEPCFSHEAR
                 gamma1 = Gamma1(q);
@@ -2426,32 +2496,45 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.0;
                 //E
 
+#ifndef NOWKAvg
+//B ... this definition will give tests OK
 #ifdef NONORMHIST
                 if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-//B begin corrections
                     xi = Nb(q)*Kappa(q);            // Kappa is cell average
                     xiN = Weight(q);                // Weight sum in cell
                 } else {
-#ifdef KappaAvgON
-                    xi = KappaAvg(q)/Nb(q);         // Weight(q)?
-#else
 //                    xi = Weight(q)*Kappa(q);
                     xi = Kappa(q);                  // original line
-#endif
-                    xiN = 1.0;                      // original line
-//                    xiN = Weight(q);              // average of weights
+//                    xiN = 1.0;                      // original line
+                    xiN = Weight(q);              // average of weights
                 }
 #else // ! NONORMHIST
-#ifdef KappaAvgON
-                xi = KappaAvg(q)/Nb(q);             // Weight(q)
-#else
                 xi = Kappa(q);                      // original line
 //                xi = Weight(q)*Kappa(q);
-#endif
                 xiN = 1.0;                          // original line
 //                xiN = Weight(q);                  // average of weights
 #endif // ! NONORMHIST
 //E
+#else // ! NOWKAvg
+//B Weight:: this segment not corrected yet... use Weight(q) below?
+#ifdef NONORMHIST
+                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+                    xi = Nb(q)*Weight(q)*Kappa(q);  // Kappa is cell average
+                    xiN = Nb(q)*Weight(q);                // Weight sum in cell
+                } else {
+                    xi = Weight(q)*Kappa(q);
+//                    xi = Kappa(q);                  // original line
+//                    xiN = 1.0;                      // original line
+                    xiN = Weight(q);              // average of weights
+                }
+#else // ! NONORMHIST
+//                xi = Kappa(q);                      // original line
+                xi = Weight(q)*Kappa(q);
+//                xiN = 1.0;                          // original line
+                xiN = Weight(q);                  // average of weights
+#endif // ! NONORMHIST
+//E Weight:: this segment not corrected yet... use Weight(q) above?
+#endif // ! NOWKAvg
 
 #ifdef THREEPCFSHEAR
                 gamma1 = Gamma1(q);
@@ -2537,8 +2620,10 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
         CLRM_ext(hist->histZetaMtmpcossin, cmd->sizeHistN);
         MULMS_ext(hist->histZetaMtmpcos,hist->xiOUTVPcos,xi,cmd->sizeHistN);
         MULMS_ext(hist->histZetaMtmpsin,hist->xiOUTVPsin,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsincos,hist->xiOUTVPsincos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcossin,hist->xiOUTVPcossin,xi,cmd->sizeHistN);
+        MULMS_ext(hist->histZetaMtmpsincos,
+                  hist->xiOUTVPsincos,xi,cmd->sizeHistN);
+        MULMS_ext(hist->histZetaMtmpcossin,
+                  hist->xiOUTVPcossin,xi,cmd->sizeHistN);
         ADDM_ext(hist->histZetaMthreadcos[m],
             hist->histZetaMthreadcos[m],hist->histZetaMtmpcos,cmd->sizeHistN);
         ADDM_ext(hist->histZetaMthreadsin[m],
@@ -2593,8 +2678,6 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     gdl->histZetaMcossin =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-//    gdl->histZetaM =
-//            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // (EE) edge_effects
     gdl->histZetaM_EE =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -2666,8 +2749,6 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     // (EE) edge_effects
     free_dmatrix3D(gdl->histZetaM_EE,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-//    free_dmatrix3D(gdl->histZetaM,
-//                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     free_dmatrix3D(gdl->histZetaMcossin,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -2912,8 +2993,6 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     gdl->histZetaMcossin =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-//    gdl->histZetaM =
-//            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // (EE) edge_effects
     gdl->histZetaM_EE =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -2985,8 +3064,6 @@ local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     // (EE) edge_effects
     free_dmatrix3D(gdl->histZetaM_EE,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-//    free_dmatrix3D(gdl->histZetaM,
-//                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     free_dmatrix3D(gdl->histZetaMcossin,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3383,7 +3460,7 @@ local int print_info(struct cmdline_data* cmd,
     } else {
         if (scanopt(cmd->options, "edge-corrections")) {
             verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                "option edge-corrections only works with %s... \n",
+                            "option edge-corrections only works with %s... \n",
                                 "no-normalize-HistZeta option added");
             // Check freeing allocated memory...
             error("going out...\n");
@@ -3434,6 +3511,11 @@ local int print_info(struct cmdline_data* cmd,
                         "with NORMALHISTSCALE... \n");
 #endif
 
+#ifdef NOWKAvg
+    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                        "with NOWKAvg to correct WK product... \n");
+#endif
+
     if (scanopt(cmd->options, "read-mask"))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option read-mask... \n");
@@ -3469,7 +3551,9 @@ local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
             if (cmd->rminHist==0) {
-                rbinlog = ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD + rlog10(cmd->rangeN);
+                rbinlog =
+                    ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD
+                    + rlog10(cmd->rangeN);
             } else {
                 rbinlog = rlog10(cmd->rminHist) + ((real)(n)-0.5)*gd->deltaR;
             }
@@ -4722,8 +4806,9 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd,
     return SUCCESS;
 }
 
+// in common_defs.h
 // 180*60/Pi
-#define RADTOARCMIN   3437.74677
+//#define RADTOARCMIN   3437.74677
 local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd,
                           gdlptr_sincos_omp_ggg gdl)
 {
@@ -4761,14 +4846,10 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd,
 
     return SUCCESS;
 }
-#undef RADTOARCMIN
+//#undef RADTOARCMIN
 
 #endif // ! TWOPCF
 
 
 //E Saving histograms section: case GGGCORRELATION:
-
-
-
-
 
