@@ -32,7 +32,7 @@ int get_rootDir(struct  cmdline_data* cmd, char *value);
 
 //B global parameter section
 int get_nbody(struct  cmdline_data* cmd, struct  global_data* gd, int *value);
-int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, bool *value);
+int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, short *value);
 //E global parameter section
 
 //B histograms section
