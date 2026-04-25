@@ -18,33 +18,32 @@
                                                 //  and used below
 #endif
 
-#ifdef OCTREESINCOSOMP
-#include "startrun_octree_sincos_omp_11.h"      // 74
-#endif
-
-#ifdef TREEOMPSINCOS
-#include "startrun_tree_omp_sincos_11.h"        // 75
-#endif
-
-
 #ifdef BALLS
-#include "startrun_balls_omp_06.h"              // 46
+#include "startrun_balls_omp_06.h"                          // 46
 #endif
 
 #ifdef KDTREEOMP
-#include "startrun_kdtree_omp_11.h"             // 59
+#include "startrun_kdtree_omp_11.h"                         // 59
 #endif
 
 #ifdef OCTREEKKKOMP
-#include "startrun_octree_kkk_omp_11.h"         // 61
+#include "startrun_octree_kkk_omp_11.h"                     // 61
 #endif
 
 #ifdef OCTREEGGGOMP
-#include "startrun_octree_ggg_omp_11.h"         // 66
+#include "startrun_octree_ggg_omp_11.h"                     // 66
+#endif
+
+#ifdef OCTREESINCOSOMP
+#include "startrun_octree_sincos_omp_11.h"                  // 74
+#endif
+
+#ifdef TREEOMPSINCOS
+#include "startrun_tree_omp_sincos_11.h"                    // 75
 #endif
 
 #ifdef OCTREEGGGCROSSOMP
-#include "startrun_octree_ggg_cross_omp_11.h"   // 74
+#include "startrun_octree_ggg_cross_omp_11.h"               // 76
 #endif
 
 /*
@@ -66,44 +65,47 @@
 
 
 #ifdef DIRECTMETHOD
-#include "startrun_direct_method.h"             // 19
+#include "startrun_direct_method.h"                         // 19
+#endif
+
+#ifdef KDTREECUTEBOX
+#include "startrun_kdtree_cute_box.h"                       // 48
 #endif
 
 #ifdef DIRECTMETHODSIMPLE
-#include "startrun_direct_method_simple.h"      // 67
-#endif
-
-
-#ifdef KDTREECUTEBOX
-#include "startrun_kdtree_cute_box.h"           // 48
+#include "startrun_direct_method_simple.h"                  // 67
 #endif
 
 #ifdef OCTREEGGGOMPTRIANGLES
-#include "startrun_octree_ggg_omp_triangles_11.h" // 68
+#include "startrun_octree_ggg_omp_triangles_11.h"           // 68
 #endif
 
 #ifdef OCTREEKKKBALLS4OMP
-#include "startrun_octree_kkk_balls4_omp_11.h"  // 69
+#include "startrun_octree_kkk_balls4_omp_11.h"              // 69
 #endif
 
 #ifdef OCTREEKKKBALLS4OMPTRIANGLES
-#include "startrun_octree_kkk_balls4_omp_triangles_11.h" // 70
+#include "startrun_octree_kkk_balls4_omp_triangles_11.h"    // 70
 #endif
 
 #ifdef KDTREEBOXOMP
-#include "startrun_kdtree_box_omp_11.h"         // 71
+#include "startrun_kdtree_box_omp_11.h"                     // 71
 #endif
 
 #ifdef OCTREEBOXOMP
-#include "startrun_octree_box_omp_11.h"         // 72
+#include "startrun_octree_box_omp_11.h"                     // 72
 #endif
 
 #ifdef NEIGHBORBOXESOMP
-#include "startrun_neighbor_boxes_omp_11.h"     // 73
+#include "startrun_neighbor_boxes_omp_11.h"                 // 73
 #endif
 
 #ifdef OCTREEGGG
-#include "startrun_octree_ggg_11.h"         // 75
+#include "startrun_octree_ggg_11.h"                         // 77
+#endif
+
+#ifdef DIRECTMETHODSIMPLELOOPID
+#include "startrun_direct_method_simple_loopId.h"           // 78
 #endif
 
 

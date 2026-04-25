@@ -20,8 +20,22 @@
 #define EXTFILES            ".txt"
 #define INMB                9.536743116E-7          // 1/(1024*1024)
 #define SMALLESTDOUBLE 1.0E-300
+#define SMALLESTRMPC 1.0E-00
+#define BIGGESTDOUBLE 1.0E+300
 // 180*60/Pi
 #define RADTOARCMIN   3437.74677
+//E
+//B octree treeload definitions
+//      choose well...
+//      If not tdepth and number of cells will grow badly
+#define EPSILONLOADBODY 1.0E-4
+#define EPSILONFLOATLOADBODY 1.0E-5
+//B this is the one working
+#define EPSILONHACKCELL 1.0E-16
+//E
+//B testing this one...
+//#define EPSILONHACKCELL 1.0E-12
+//E
 //E
 
 #define MAXITEMS                100
@@ -45,13 +59,13 @@
 #ifdef DEBUGTRACKING
 
 #ifdef TRACKONLYSEARCH
-#define debug_tracking_search(track_step)                              \
+#define debug_tracking_search(track_step)                               \
   verb_print_debug(1, "Track step (%s)\n", track_step);
-#define debug_tracking_s_search(track_step, extra)                              \
+#define debug_tracking_s_search(track_step, extra)                      \
   verb_print_debug(1, "Track step (%s): %s\n", track_step, extra);
-#define debug_tracking_r_search(track_step, extra)                              \
+#define debug_tracking_r_search(track_step, extra)                      \
   verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
-#define debug_tracking_i_search(track_step, extra)                              \
+#define debug_tracking_i_search(track_step, extra)                      \
   verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
 
 #define debug_tracking
@@ -61,22 +75,22 @@
 
 #else // ! TRACKONLYSEARCH
 
-#define debug_tracking(track_step)                              \
+#define debug_tracking(track_step)                                      \
   verb_print_debug(1, "Track step (%s)\n", track_step);
-#define debug_tracking_s(track_step, extra)                              \
+#define debug_tracking_s(track_step, extra)                             \
   verb_print_debug(1, "Track step (%s): %s\n", track_step, extra);
-#define debug_tracking_r(track_step, extra)                              \
+#define debug_tracking_r(track_step, extra)                             \
   verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
-#define debug_tracking_i(track_step, extra)                              \
+#define debug_tracking_i(track_step, extra)                             \
   verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
 
-#define debug_tracking_search(track_step)                              \
+#define debug_tracking_search(track_step)                               \
   verb_print_debug(1, "Track step (%s)\n", track_step);
-#define debug_tracking_s_search(track_step, extra)                              \
+#define debug_tracking_s_search(track_step, extra)                      \
   verb_print_debug(1, "Track step (%s): %s\n", track_step, extra);
-#define debug_tracking_r_search(track_step, extra)                              \
+#define debug_tracking_r_search(track_step, extra)                      \
   verb_print_debug(1, "Track step (%s): %g\n", track_step, extra);
-#define debug_tracking_i_search(track_step, extra)                              \
+#define debug_tracking_i_search(track_step, extra)                      \
   verb_print_debug(1, "Track step (%s): %d\n", track_step, extra);
 
 #endif // ! TRACKONLYSEARCH

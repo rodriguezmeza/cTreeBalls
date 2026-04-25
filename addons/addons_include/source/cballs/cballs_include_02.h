@@ -65,6 +65,10 @@
 #include "cballs_direct_method_simple.h"
 #endif
 
+#ifdef DIRECTMETHODSIMPLELOOPID
+#include "cballs_direct_method_simple_loopId.h"
+#endif
+
 #ifdef KDTREECUTEBOX
 #include "cballs_kdtree_cute_box.h"
 #endif

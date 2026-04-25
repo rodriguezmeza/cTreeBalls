@@ -68,7 +68,6 @@ int main(int argc, string argv[])
                                                     //  read data points to analyze
 	MainLoop(&cmd, &gd);                            // make tree and search data
 	EndRun(&cmd, &gd);                              // close streams and free mem
-
     return SUCCESS;
 }
 

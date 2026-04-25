@@ -45,6 +45,15 @@ if (nitems==4) {
     gd->columns[6] = 7;
 }
 
+if (nitems==5) {
+    gd->columns[5] = 6;
+    gd->columns[6] = 7;
+}
+
+if (nitems==6) {
+    gd->columns[6] = 7;
+}
+
 int ii;
 if (cmd->verbose_log>=2)
     for (ii=0; ii<nitems; ii++)

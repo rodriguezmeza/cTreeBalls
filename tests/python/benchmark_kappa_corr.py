@@ -25,7 +25,8 @@ from matplotlib import font_manager as fm
 #B settings for cBalls
 import sys
 # if cyballs not in path
-#   Determine the absolute path to its target directory
+#   Determine the absolute path to its target directory and edit line below properly
+#       and uncomment the line with "sys.path.append" command below.
 #target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
 # Append the directory to sys.path
 #sys.path.append(target_directory)

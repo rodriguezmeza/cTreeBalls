@@ -709,6 +709,12 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     double cpustart;
     double cpustartMiddle;
 
+#ifdef THREEPCFCONVERGENCE
+    gd->computeTPCF = TRUE;
+#else
+    gd->computeTPCF = FALSE;
+#endif
+    gd->inputHeaderFlag = FALSE;
     gd->cmd_allocated = TRUE;
     gd->histograms_allocated = FALSE;
     gd->random_allocated = FALSE;
@@ -861,6 +867,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         }
     }
     debug_tracking("013");
+
+    if (gd->inputHeaderFlag==TRUE) return SUCCESS;
 
     //B consider moving below after computing rsize
     if (scanopt(cmd->options, "all-in-one")) {
@@ -1390,7 +1398,8 @@ int PrintParameterFile(struct  cmdline_data *cmd,
         
     } // ! gd->flagPrint==TRUE && gd->rootDirFlag==TRUE
 
-    debug_tracking("002... final");
+//    debug_tracking("002... final");
+    debug_tracking_s("002... final", routineName);
 
 
     return SUCCESS;
@@ -1452,7 +1461,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     //B PXD functions
 #ifdef PXD
     gd->vecPXD = dvector(1,cmd->sizeHistN);
-    gd->matPXD = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+//    gd->matPXD = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+    //B offset at 0 in order to work with Cython
+    gd->matPXD = dmatrix(0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
+    //E
     bytes_tot_local += cmd->sizeHistN*sizeof(real);
     bytes_tot_local += cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
     gd->rBins = dvector(1,cmd->sizeHistN);
@@ -1462,6 +1474,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     gd->histNN = dvector(1,cmd->sizeHistN);
     gd->histCF = dvector(1,cmd->sizeHistN);
     gd->histNNSub = dvector(1,cmd->sizeHistN);
+    //B only in search_direct_method_simple
+//    gd->histW = dvector(1,cmd->sizeHistN);
+//    gd->histWW = dvector(1,cmd->sizeHistN);
+    //E
     // 2pcf
     gd->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
 #ifdef SMOOTHPIVOT
@@ -1702,7 +1718,8 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
 #include "startrun_include_12.h"
 #endif
 //E
-    debug_tracking("010... final");
+//    debug_tracking("010... final");
+    debug_tracking_s("010... final", routineName);
 
     return SUCCESS;
 }

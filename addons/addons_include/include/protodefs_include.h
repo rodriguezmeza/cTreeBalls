@@ -41,10 +41,6 @@
 #include "protodefs_pxd.h"
 #endif
 
-#ifdef DIRECTMETHODSIMPLE
-#include "protodefs_direct_method_simple.h"
-#endif
-
 
 /*
  Add your addon item here
@@ -59,6 +55,15 @@
  # Normally they will be switched OFF
  ############################
  */
+
+#ifdef DIRECTMETHODSIMPLE
+#include "protodefs_direct_method_simple.h"
+#endif
+
+#ifdef DIRECTMETHODSIMPLELOOPID
+#include "protodefs_direct_method_simple_loopId.h"
+#endif
+
 
 #ifdef OCTREEGGG
 #include "protodefs_octree_ggg.h"

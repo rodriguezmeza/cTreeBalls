@@ -22,8 +22,7 @@ Run
 
 $ ../cballs
 
-A distribution of uniformly points in the unit sphere is generated with a gaussian values of convergence field. The (2,3)-point correlation functions are computed and saved as histograms in a folder name Output just created by cBalls. Also you will find a 
-file named "parameters_null-cballs-usedvalues". Do
+A distribution of uniformly points in the unit sphere is generated with a gaussian values of convergence field. The (2,3)-point correlation functions are computed and saved as histograms in a folder name Output just created by cBalls. Also you will find a file named "parameters_null-cballs-usedvalues". Do
 
 $ more Output/parameters_null-cballs-usedvalues
 
@@ -35,9 +34,9 @@ If above is not enough do
 
 $ more ../tests/In/parameters_explained
 
-But if not... and an extended description is gotten by
+But if not... an extended description is gotten by
 
-$ man ../doc/man/cballs.1
+$ man ../docs/man/cballs.1
 
 Read as thoroughly as needed in particular follow the examples at the end for reading files.
 

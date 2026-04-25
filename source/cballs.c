@@ -88,6 +88,13 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
         MakeTree(cmd, gd, bodytable[ifile], cmd->nbody, 0);
     }
 
+    if (gd->inputHeaderFlag==TRUE) {
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\n\t%s: stopping...\n\n", routineName);
+        return FAILURE;                             // check if it is FAILURE...
+                                                    //  could be SUCCESS indeed
+    }
+
     if (scanopt(cmd->options, "stop")) {
         if (!strnull(cmd->outfile)&&!scanopt(cmd->options, "save-ra-dec"))
             OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
@@ -126,6 +133,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
                             CPUTIME - cpustart);
     }
 //E
+
     debug_tracking_s("002... final", routineName);
 
     return SUCCESS;

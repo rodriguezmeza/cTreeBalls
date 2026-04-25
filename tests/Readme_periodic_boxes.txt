@@ -1,16 +1,16 @@
 
-cBalls has two searching tool to compute correlations for periodic box catalogs:
+cBalls has two searching engines to compute correlations for periodic box catalogs:
 
 1. neighbor-boxes-omp
 2. kdtree-box-omp
 
 Fastest one is the first and is called using "searchMethod=neighbor-boxes-omp" option. Look for it in the python scripts or in parameter files below.
 
-Computing correlations of N-body simulations like L-picola and halos catalog given by ROCKSTAR
+Computing correlations of N-body simulations like L-picola and halo catalogs given by ROCKSTAR
 
 Let us assume we have a halo catalog (extracted with ROCKSTAR from an N-body simulation):
 
-$ time python python/bao_from_halos.py --in catalogs_working/l-picola/r000/rockstar_galaxies/z0p500/halos_0.0.ascii --tag "z0p5" --box 1024 --threads 16 --rmin 0.1 --rmax 150 --nbins 40 --x-col 9 --y-col 10 --z-col 11 --masamin 11 --masamax 13 --out ./Output
+$ time python python/bao_from_halos.py --in catalogs/l-picola/r000/rockstar_galaxies/z0p500/halos_0.0.ascii --tag "z0p5" --box 1024 --threads 16 --rmin 0.1 --rmax 150 --nbins 40 --x-col 9 --y-col 10 --z-col 11 --masamin 11 --masamax 13 --out ./Output
 
 At the end you may delete Output/xyz_z0p5.txt which contains all selected halo positions.
 

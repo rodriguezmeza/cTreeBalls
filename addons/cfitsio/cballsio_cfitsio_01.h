@@ -3,7 +3,6 @@
 
 #ifndef _cballsio_cfitsio_01_h
 #define _cballsio_cfitsio_01_h
-
 case INCFITSIO:
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                           "\n\tInput in fits format...\n");

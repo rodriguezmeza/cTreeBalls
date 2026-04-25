@@ -32,14 +32,15 @@ $ python python/compare_xi3pcf_flatten_curves.py --file-a Output/ --file-b Outpu
 
 2. To test vs cute_box:
 
-$ cd test_cute_box
+$ more test_cute_box/Readme.txt
 
-Read the readme files.
+to read the readme files in there.
 
-
-
-Note: in some machines "make all" does not install cballys. Try:
+Note: in some machines "make all" does not install cyballs. Try:
 
 $ python3.xx setup.py build_ext --inplace
 $ python3.xx -c "from _cballys import cballys"
 
+Also, remember to set SMOOTHPIVOT variable back to its original value in addons/Makefile_addons_settings:
+
+SMOOTHPIVOTON = 1

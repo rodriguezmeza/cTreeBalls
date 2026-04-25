@@ -530,7 +530,7 @@ local int polarix_init(struct  cmdline_data* cmd,
     real b = 2.0*rasin(hist->drpq/2.0);
     hist->cosb = rcos(b);
     hist->sinb = rsin(b);
-    if (hist.drpq2==0) continue;
+    if (hist->drpq2==0) continue;
     //E
 #else // ! POLARAXIS
     //B check NDIM and periodic...
@@ -1181,12 +1181,11 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                               "%d ", ip);
       } // end do body p
 
-          if (main_thread_id == current_thread_id)
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                              "\n", ip);
+      if (main_thread_id == current_thread_id)
+          verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
 
-          if (main_thread_id == current_thread_id)
-              debug_tracking_search("008");
+      if (main_thread_id == current_thread_id)
+          debug_tracking_search("008");
 
 #pragma omp critical
     {
@@ -1506,14 +1505,35 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     }
 #endif
 
+//  gdl->histZetaMcos[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+
 #ifdef THREEPCFCONVERGENCE
     for (m=1; m<=cmd->mChebyshev+1; m++) {
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                gd->histZetaMcos[m][n1][n2] = gdl.histZetaMcos[m][n1][n2];
-                gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
-                gd->histZetaMsincos[m][n1][n2] = gdl.histZetaMsincos[m][n1][n2];
-                gd->histZetaMcossin[m][n1][n2] = gdl.histZetaMcossin[m][n1][n2];
+                //B Working OK in cyballs
+                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+                    gd->histZetaMcos[m][n1][n2] = gdl.histZetaMcos[m][n1][n2];
+                    gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
+                    gd->histZetaMsincos[m][n1][n2] = gdl.histZetaMsincos[m][n1][n2];
+                    gd->histZetaMcossin[m][n1][n2] = gdl.histZetaMcossin[m][n1][n2];
+                } else {
+#if defined(NMultipoles) && defined(NONORMHIST)
+                    gd->histZetaMcos[m][n1][n2] =
+                    gdl.histZetaMcos[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    gd->histZetaMsin[m][n1][n2] =
+                    gdl.histZetaMsin[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    gd->histZetaMsincos[m][n1][n2] =
+                    gdl.histZetaMsincos[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    gd->histZetaMcossin[m][n1][n2] =
+                    gdl.histZetaMcossin[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+#else
+                    gd->histZetaMcos[m][n1][n2] = gdl.histZetaMcos[m][n1][n2];
+                    gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
+                    gd->histZetaMsincos[m][n1][n2] = gdl.histZetaMsincos[m][n1][n2];
+                    gd->histZetaMcossin[m][n1][n2] = gdl.histZetaMcossin[m][n1][n2];
+#endif
+                }
                 // (EE) edge_effects
                 if (scanopt(cmd->options, "no-normalize-HistZeta"))
                     if (scanopt(cmd->options, "edge-corrections"))

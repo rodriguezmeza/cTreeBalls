@@ -63,7 +63,7 @@ def residual_percent(y, yref, eps=1e-30):
 def main():
     ap = argparse.ArgumentParser(description="Compare 2 curves (convergence Xi2pcf) with residuals and metrics.")
     ap.add_argument("--file-a", required=True, help="TXT A (p.ej. DES TreeCorr)")
-    ap.add_argument("--file-b", required=True, help="TXT B (p.ej. DES Corrfunc)")
+    ap.add_argument("--file-b", default=None, help="TXT B (p.ej. DES Corrfunc)")
     ap.add_argument("--label-a", default="cBalls_a")
     ap.add_argument("--label-b", default="cBalls_b")
     ap.add_argument("--ref", choices=["a","b"], default="a",
@@ -85,9 +85,14 @@ def main():
                     help="x units: arcmin (default), radian or degree.")
     args = ap.parse_args()
 
+    if args.file_b == None:
+        file_b = args.file-a if False else args.file_a
+    else:
+        file_b = args.file_b
+
     #B Load:
     thA, yA = load_xy(args.file-a if False else args.file_a)
-    thB, yB = load_xy(args.file_b)
+    thB, yB = load_xy(file_b)
     #E
 
     #B Cut in θ:

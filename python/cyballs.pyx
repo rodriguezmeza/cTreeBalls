@@ -308,7 +308,7 @@ cdef class cballs:
 
 #
 # tracking...
-#        print('INIT: computed, allocated: ', self.computed, self.allocated)
+#        print('Track step (PYX): 000: BEGIN: computed, allocated: ', self.computed, self.allocated)
 #
         level = self._check_task_dependency(level)
 
@@ -337,7 +337,7 @@ cdef class cballs:
         if "input" in level:
 #
 # tracking...
-#            print('Track step: input... (0000)')
+#            print('Track step (PYX): (001): input...')
 #
             if input_read_from_file(&self.cmd, &self.gd, &self.fc, errmsg) == FAILURE:
                 raise cBallsSevereError(errmsg)
@@ -356,21 +356,21 @@ cdef class cballs:
         if "StartRun_Common" in level:
 #
 # tracking...
-#            print('Track step: StartRun_Common... (000)')
+#            print('Track step (PYX): (002): StartRun_Common...')
 #
             if StartRun_Common(&(self.cmd), &(self.gd)) == FAILURE:
                 self.struct_cleanup()
                 raise cBallsComputationError(self.op.error_message)
 #
 # tracking...
-#            print('Track step: StartRun_Common... (018)')
+#            print('Track step (PYX): (003): StartRun_Common...')
 #
             self.ncp.add("StartRun_Common")
 
         if "PrintParameterFile" in level:
 #
 # tracking...
-#            print('Track step: PrintParameterFile...')
+#            print('Track step (PYX): (004): PrintParameterFile...')
 #
             if PrintParameterFile(&(self.cmd), &(self.gd), "cyballs_param.txt") == FAILURE:
                 self.struct_cleanup()
@@ -383,10 +383,11 @@ cdef class cballs:
                 raise cBallsComputationError(self.op.error_message)
             self.ncp.add("SetNumberThreads")
             self.nthreads=self.getNThreads()
+#            print('Track step: Set number of threads...')
 
 # Consider process_time() as another good option...
         if "MainLoop" in level:
-#            print('rootDir: ',self.getRootDir())
+#            print('rootDir: ',self.getRootDir(), self.getNBody())
 
 #            print('Flags (cleanpup): ',self.gd.tree_allocated,self.gd.gd_allocated_2,
 #                        self.gd.bodytable_allocated,self.gd.histograms_allocated,
@@ -394,7 +395,9 @@ cdef class cballs:
             start_wall_time_p = time.process_time()
             if MainLoop(&(self.cmd), &(self.gd)) == FAILURE:
                 self.struct_cleanup()
-                raise cBallsComputationError(self.op.error_message)
+#                raise cBallsComputationError(self.op.error_message)
+                return self.cputime
+#                , self.getNBody()
             self.ncp.add("MainLoop")
             end_wall_time_p = time.process_time()
 #            end_wall_time = time.perf_counter()
@@ -417,7 +420,7 @@ cdef class cballs:
             self.cputime = (end_wall_time_p - start_wall_time_p)/self.nthreads
 #
 # tracking...
-#        print('Track step: After MainLoop... (022a)')
+#        print('Track step (PYX): (005): After MainLoop...')
 #
 
 #        if "EndRun_FreeMemory" in level:
@@ -438,9 +441,10 @@ cdef class cballs:
 
 #
 # tracking...
-#        print('END: computed, allocated: ', self.computed, self.allocated)
+#        print('Track step (PYX): (006): END: computed, allocated: ', self.computed, self.allocated)
 #
         return self.cputime
+ #       , self.getNBody()
 ################# End Run ####################
 
 #
@@ -508,9 +512,9 @@ cdef class cballs:
         out_value = value
         return out_value
 
-    def getnMonopoles(self):
+    def getnMultipoles(self):
         cdef int value
-        if get_nmonopoles(&self.cmd,&value)== FAILURE:
+        if get_nmultipoles(&self.cmd,&value)== FAILURE:
             raise cBallsSevereErrorDummy()
         return value
 
@@ -568,23 +572,24 @@ cdef class cballs:
 #
     def getRootDir(self):
         cdef char *value
-#        cdef char *out_value
         cdef int buffer_size = 1024 # Allocate enough space
         # Allocate memory for the destination string
         value = <char*> malloc(buffer_size * sizeof(char))
-#        out_value = <char*> malloc(buffer_size * sizeof(char))
-#        if out_value is NULL:
-#            raise MemoryError("Failed to allocate memory")
 
         if get_rootDir(&self.cmd,value)== FAILURE:
             raise cBallsSevereErrorDummy()
 
-#        print(f"param: {<bytes>param}.decode('utf-8')")
-
         # Copy the string using strcpy (be careful with buffer overflows)
-#        strcpy(out_value, value)
         return value
 
+#E parameters
+
+#B parameters
+    def getNBody(self):
+        cdef int value
+        if get_nbody(&self.cmd, &self.gd, &value)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        return value
 #E parameters
 
 #B histograms
@@ -697,6 +702,7 @@ cdef class cballs:
         cdef int sizeHistN
         cdef int index_r
         cdef int sizesqr
+        cdef short computeTPCF
         cdef ErrorMsg errmsg
 
         if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
@@ -707,13 +713,18 @@ cdef class cballs:
         rows = sizeHistN
         cols = sizeHistN
         cdef np.ndarray[np.float64_t, ndim=2] matrix = np.zeros((rows, cols), dtype=np.float64)
-        
+
+        if get_computeTPCF(&self.cmd, &self.gd, &computeTPCF)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        if computeTPCF==0:
+            return matrix
+
         if get_HistZetaMsincos(&self.cmd, &self.gd, m, type, errmsg)==FAILURE:
             raise cBallsSevereError(errmsg)
 
         # You can then populate the matrix
-        for i in range(1,rows):
-            for j in range(1,cols):
+        for i in range(0,rows):
+            for j in range(0,cols):
                 matrix[i, j] = self.gd.matPXD[i][j]
 
         return matrix
@@ -722,6 +733,7 @@ cdef class cballs:
         cdef int sizeHistN
         cdef int index_r
         cdef int sizesqr
+        cdef short computeTPCF
         cdef ErrorMsg errmsg
 
         if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
@@ -732,7 +744,12 @@ cdef class cballs:
         rows = sizeHistN
         cols = sizeHistN
         cdef np.ndarray[np.float64_t, ndim=2] matrix = np.zeros((rows, cols), dtype=np.float64)
-        
+
+        if get_computeTPCF(&self.cmd, &self.gd, &computeTPCF)== FAILURE:
+            raise cBallsSevereErrorDummy()
+        if computeTPCF==0:
+            return matrix
+
         if get_HistZetaM_EE(&self.cmd, &self.gd, m, errmsg)==FAILURE:
             raise cBallsSevereError(errmsg)
 

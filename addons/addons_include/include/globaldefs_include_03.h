@@ -20,4 +20,39 @@
  Add your addon item here
  */
 
+/*
+ ############################
+ #B Addendum of some not important
+ #   modules or that are in
+ #   development phase
+ # Normally they will be switched OFF
+ ############################
+ */
+
+#ifdef DIRECTMETHODSIMPLELOOPID
+#include "global_data_direct_method_simple_loopId.h"
+#endif
+
+/*
+ #E Addendum of some not important
+ ############################
+*/
+
+/*
+ ############################
+ #B Addendum of some important
+ #   modules that will not be part
+ #       any longer of the public version
+ # Normally they will be switched OFF
+ ############################
+ */
+
+/*
+ #E Addendum of some not important
+ #  no longer part of the public version
+ ############################
+*/
+
+
+
 #endif	// ! _globaldefs_include_03_h

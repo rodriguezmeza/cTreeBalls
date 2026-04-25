@@ -29,7 +29,6 @@ struct global_data{
     real *vecPXD;
     real **matPXD;
     real *histZetaMFlatten;
-//    real *histZetaM;
     real ***histZetaM_EE;
     //B cross
     real ***histZetaM_EE2;
@@ -71,7 +70,6 @@ struct global_data{
     real rSize;                                     // Maximum r of the box,needed?
 
     real rSizeTable[MAXITEMS];                      // Maximum r of the box
-//    INTEGER ncellTable[MAXITEMS];
     long int ncellTable[MAXITEMS];
     //B celltable
     long int ncellt[MAXITEMS];
@@ -97,7 +95,8 @@ struct global_data{
     int infilefmt_int;
 
 #ifdef USEGSL
-    gsl_rng * r;            // It is used r_gsl in globaldefs.h. Check!!!
+    gsl_rng * r;                                    // It is used r_gsl in
+                                                    //  globaldefs.h. Check!!!
 #endif
 
 #ifdef SINGLEP
@@ -118,10 +117,8 @@ struct global_data{
     //B cross
     realptr histNN2;
     realptr histCF2;
-//    realptr histNNSub2;
     realptr histNN3;
     realptr histCF3;
-//    realptr histNNSub3;
     //E
 // 2pcf
     realptr histNNSubXi2pcf;
@@ -130,8 +127,6 @@ struct global_data{
 #endif
     real *histXi2pcf;
     //B cross
-//    real *histXi2pcf2;
-//    real *histXi2pcf3;
     real *histXi2pcf12;
     real *histXi2pcf13;
     //E
@@ -254,7 +249,7 @@ struct global_data{
     char infilefmtname[MAXITEMS][MAXLENGTHOFFMTFILES];
     int iCatalogs[MAXITEMS];
 
-    int nsmooth[MAXITEMS];          // deprecated, will be deleted
+    int nsmooth[MAXITEMS];                          // deprecated, will be deleted
 
     //B to control memory allocation/deallocation
     bool cmd_allocated;
@@ -270,7 +265,8 @@ struct global_data{
     INTEGER rnnode;
 
 #define MAXLEVEL  32
-    real Rcell[MAXLEVEL];           // used only in treeload's scanLevel routine
+    real Rcell[MAXLEVEL];                           // used only in treeload's
+                                                    //  scanLevel routine
 #undef MAXLEVEL
 
 #ifdef BALLS4SCANLEV
@@ -282,6 +278,9 @@ struct global_data{
 
     int irsmooth;
 
+    bool inputHeaderFlag;                           // control reading header-info
+
+    bool computeTPCF;                               // switch ON/OFF I/O for TPCF
     //B to control memory allocation/deallocation
     bool flagPrint;
     bool rootDirFlag;

@@ -461,6 +461,7 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
                                          struct  global_data* gd,
                                          string filename, int ifile)
 {
+    string routineName = "inputdata_cfitsio_radecr_field";
     fitsfile *fptr;
     char card[FLEN_CARD];
     int status = 0, nkeys, ii;                      // MUST init status
@@ -469,13 +470,13 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
 
     //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                          "\tinputdata_cfitsio: -D_REENTRANT flag: %d...\n",
-                          fits_is_reentrant());
+                          "\t%s: -D_REENTRANT flag: %d...\n",
+                          routineName, fits_is_reentrant());
     //E
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\tinputdata_cfitsio: opening fits file: %s...\n",
-                        filename);
+                        "\t%s: opening fits file: %s...\n",
+                        routineName, filename);
 
     if (scanopt(cmd->options, "fits-type-file"))
         fits_open_file(&fptr, filename, READONLY, &status);
@@ -572,7 +573,9 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
                            status);
                 fits_report_error(stderr, status);
             }
-            exit(1);
+            gd->inputHeaderFlag=TRUE;
+            return FAILURE;                         // it is not FAILURE indeed
+                                                    //  change to SUCCESS
         }
     }
 
@@ -594,6 +597,7 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
     return SUCCESS;
 }
 
+
 // Routine to read ra-dec-r-field fits files
 //  columns order is ra,dec,r,field,weight
 //  Check header with:
@@ -601,7 +605,8 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
 //  and if needed add to options 'with-weight'
 local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
                                      struct  global_data* gd,
-                                     string filename, int ifile, fitsfile *fptr)
+                                     string filename, int ifile,
+                                     fitsfile *fptr)
 {
     string routineName = "inputdata_cfitsio_ra_dec_r";
     bodyptr p;
@@ -614,26 +619,26 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     LONGLONG firstelem;
     LONGLONG nelements;
     double nulval;
-    double *arrayKappa;
     int anynul;
     int status = 0;
     INTEGER nrows;
 
-    verb_print_debug(1, "\n%s: columns (ra-dec-r-field-weight): %d %d %d %d %d\n",
+    int typecode;
+    long repeat;
+    long width;
+
+    verb_print_debug(1,
+                     "\n%s: columns (ra-dec-r-field-weight): %d %d %d %d %d\n",
                      routineName,
                      gd->columns[0], gd->columns[1],
                      gd->columns[2], gd->columns[3], gd->columns[4]);
 
-    //B reading field
+    //B arrayKappa
+    double *arrayKappa;
     datatype = 82;                                  // TDOUBLE
     colnum = gd->columns[3];
-    int typecode;
-    long repeat;
-    long width;
-    verb_print(cmd->verbose,
-               "Column info details:\n");
-    fits_get_coltype(fptr, colnum, &typecode,
-                     &repeat, &width, &status);
+    verb_print(cmd->verbose, "Column info details (Kappa):\n");
+    fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     switch(typecode) {
         case TLONG:
             verb_print(cmd->verbose,
@@ -654,33 +659,31 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     firstrow = 1;
     firstelem = 1;
     nelements = cmd->nbody*repeat;
+    INTEGER nelementsKappa = nelements;
 
     verb_print_debug(1, "\n%s: rows, nelements: %ld %ld\n",
                      routineName, cmd->nbody, nelements);
     cmd->nbody = nelements;
-//    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
     bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
     arrayKappa = (double*) allocate(nelements * sizeof(double));
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
+
     INTEGER nonvalid=0;
     INTEGER valid=0;
     INTEGER ij=1;
     INTEGER ip=1;                                   // to track row
-//    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
     DO_BODY(p, bodytabtmp, bodytabtmp+cmd->nbody) {
         Update(p) = FALSE;
         Mask(p) = TRUE;                             // initialize body's Mask
-//        if (arrayKappa[p-bodytable[ifile]] < SMALLESTDOUBLE)
         if (arrayKappa[p-bodytabtmp] < SMALLESTDOUBLE) {
             nonvalid++;
         } else {
             valid++;
             Update(p) = TRUE;
         }
-//        Kappa(p) = arrayKappa[p-bodytable[ifile]];
         Kappa(p) = arrayKappa[p-bodytabtmp];
         if (scanopt(cmd->options, "kappa-constant")) {
             if (scanopt(cmd->options, "kappa-constant-one"))
@@ -690,39 +693,30 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         }
         if (ij%repeat == 0) {
             Id(p) = ip++;
-//            verb_print_debug(1, "\n%s: ij, Id, Kappa(p): %ld %ld %g",
-//                             routineName, ij, Id(p), Kappa(p));
         }
         ij++;
-//        verb_print_debug(1, "\n%s: p, kappa: %ld %g\n",
-//                        routineName, p-bodytable[ifile]+1, Kappa(p));
     }
-//    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-//                              "\n");
     nrows = ip-1;
-    verb_print_debug(1, "\n%s: valid, nonvalid, nelements, nrows: %ld %ld %ld %ld\n",
-                     routineName, valid, nonvalid, nelements, nrows);
-
-//    free(arrayKappa);
-    //E
-
+    verb_print_debug(1,
+                "\n%s: valid, nonvalid, nelements, nrows: %ld %ld %ld %ld\n",
+                routineName, valid, nonvalid, nelements, nrows);
+    //B not needed this line... check
     nelements = cmd->nbody;
+    //E
     int repeatKappa = repeat;
-//    error("\nexiting... %d",firstelem);
+#ifdef DIRECTMETHODSIMPLELOOPID
+#include "iolib_direct_method_simple_loopId.h"
+#endif
+    //E arrayKappa
 
 #if NDIM == 3
     real ra, dec;
-    double *arrayRA;
-    double *arrayDEC;
-    double *arrayR;
-    double *arrayWEIGHT;
 
     //B arrayRA
+    double *arrayRA;
     colnum = gd->columns[0];
-    verb_print(cmd->verbose,
-               "Column info details (RA):\n");
-    fits_get_coltype(fptr, colnum, &typecode,
-                     &repeat, &width, &status);
+    verb_print(cmd->verbose, "Column info details (RA):\n");
+    fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     nelements = nrows*repeat;
     arrayRA = (double*) allocate(nelements * sizeof(double));
     switch(typecode) {
@@ -752,11 +746,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     //E
 
     //B arrayDEC
+    double *arrayDEC;
     colnum = gd->columns[1];
-    verb_print(cmd->verbose,
-               "Column info details (DEC):\n");
-    fits_get_coltype(fptr, colnum, &typecode,
-                     &repeat, &width, &status);
+    verb_print(cmd->verbose, "Column info details (DEC):\n");
+    fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     nelements = nrows*repeat;
     arrayDEC = (double*) allocate(nelements * sizeof(double));
     switch(typecode) {
@@ -786,11 +779,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     //E
 
     //B arrayR
+    double *arrayR;
     colnum = gd->columns[2];
-    verb_print(cmd->verbose,
-               "Column info details (R):\n");
-    fits_get_coltype(fptr, colnum, &typecode,
-                     &repeat, &width, &status);
+    verb_print(cmd->verbose, "Column info details (R):\n");
+    fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     nelements = nrows*repeat;
     arrayR = (double*) allocate(nelements * sizeof(double));
     switch(typecode) {
@@ -817,15 +809,39 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
                    "\tinputdata_cfitsio: status: %d...\n\n", status);
         fits_report_error(stderr, status);
     }
-    //E
+
+    INTEGER nonvalidR=0;
+    INTEGER validR=0;
+    ij=1;
+    real r;
+    real rmin=BIGGESTDOUBLE, rmax=0.;
+    DO_BODY(p, bodytabtmp, bodytabtmp+cmd->nbody) {
+        r = arrayR[p-bodytabtmp];
+        if (Update(p)==TRUE && r < SMALLESTRMPC) {
+            nonvalidR++;
+        } else {
+            validR++;
+        }
+        if (Update(p)) {
+            rmax = MAX(rmax,r);
+            rmin = MIN(rmin,r);
+        }
+        ij++;
+    }
+    verb_print_debug(1,
+                "\n%s: validR, nonvalidR, nelements, nrows: %ld %ld %ld %ld\n",
+                routineName, validR, nonvalidR, nelements, nrows);
+    verb_print(cmd->verbose, "\t%s: min and max of r = %g %g\n",
+               routineName, rmin, rmax);
+
+    //E arrayR
 
     //B arrayWEIGHT
+    double *arrayWEIGHT;
     if (scanopt(cmd->options, "with-weight")) {
         colnum = gd->columns[4];
-        verb_print(cmd->verbose,
-                   "Column info details (weight):\n");
-        fits_get_coltype(fptr, colnum, &typecode,
-                         &repeat, &width, &status);
+        verb_print(cmd->verbose, "Column info details (weight):\n");
+        fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
         nelements = nrows*repeat;
         arrayWEIGHT = (double*) allocate(nelements * sizeof(double));
         switch(typecode) {
@@ -858,12 +874,11 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         error("\nSize of Kappa array must be equal to Weight's one.");
     //E
 
-//    nonvalid=0;
-//    valid=0;
     ij=1;
-    ip=1;                                   // to track row
+    ip=1;                                           // to track row
     real ramin=0., ramax=0.;
     real decmin=0., decmax=0.;
+    rmin=BIGGESTDOUBLE, rmax=0.;
     if (scanopt(cmd->options, "no-arfken")) {
         DO_BODY(p, bodytabtmp, bodytabtmp+cmd->nbody) {
             if (ij%repeatKappa == 0) {
@@ -875,9 +890,14 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
                 decmax = MAX(decmax,dec);
                 ip++;
             }
-            Pos(p)[0] = rcos(dec)*rcos(ra);
-            Pos(p)[1] = rcos(dec)*rsin(ra);
-            Pos(p)[2] = rsin(dec);
+            r = arrayR[p-bodytabtmp];
+            if(Update(p)) {
+                rmax = MAX(rmax,r);
+                rmin = MIN(rmin,r);
+            }
+            Pos(p)[0] = r*rcos(dec)*rcos(ra);
+            Pos(p)[1] = r*rcos(dec)*rsin(ra);
+            Pos(p)[2] = r*rsin(dec);
             if (scanopt(cmd->options, "with-weight")) {
                 Weight(p) = arrayWEIGHT[p-bodytabtmp];
             } else {
@@ -890,17 +910,26 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
             if (ij%repeatKappa == 0) {
                 ra = arrayRA[ip-1] * 60.0/RADTOARCMIN;
                 dec = arrayDEC[ip-1] * 60.0/RADTOARCMIN;
-//                verb_print_debug(1, "\n%s: ij, Id, ra, dec: %ld %ld %g %g",
-//                                 routineName, ij, ip, ra, dec);
                 ramin = MIN(ramin,ra);
                 decmin = MIN(decmin,dec);
                 ramax = MAX(ramax,ra);
                 decmax = MAX(decmax,dec);
                 ip++;
             }
-            Pos(p)[0] = rsin(dec)*rcos(ra);
-            Pos(p)[1] = rsin(dec)*rsin(ra);
-            Pos(p)[2] = rcos(dec);
+            Id(p) = ip-1;
+            r = arrayR[p-bodytabtmp];
+            //B this segment will give too much bodies with equal positions...
+            //      randomize positions a little bit here instead in treeload
+            if (scanopt(cmd->options, "ra-dec-only"))
+                r = 1.0;
+            //E
+            if(Update(p)) {
+                rmax = MAX(rmax,r);
+                rmin = MIN(rmin,r);
+            }
+            Pos(p)[0] = r*rsin(dec)*rcos(ra);
+            Pos(p)[1] = r*rsin(dec)*rsin(ra);
+            Pos(p)[2] = r*rcos(dec);
             if (scanopt(cmd->options, "with-weight")) {
                 Weight(p) = arrayWEIGHT[p-bodytabtmp];
             } else {
@@ -914,6 +943,8 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
                routineName, ramin, ramax);
     verb_print(cmd->verbose, "\t%s: min and max of dec = %f %f\n",
                routineName, decmin, decmax);
+    verb_print(cmd->verbose, "\t%s: min and max of r = %f %f\n",
+               routineName, rmin, rmax);
 
     if (scanopt(cmd->options, "with-weight"))
         free(arrayWEIGHT);
@@ -926,16 +957,21 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     gd->nbodyTable[ifile] = cmd->nbody;
     bodyptr q;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    verb_print(cmd->verbose_log, "\n%s: Created bodies = %ld",
+               routineName, cmd->nbody);
 
     real kavg=0.0;
     ij = 0;
+    ip=1;                                   // to track row
     real xmin, xmax;
     real ymin, ymax;
     real zmin, zmax;
-    xmin=0., ymin=0., zmin=0.;
+    xmin=0., ymin=0.0, zmin=0.;
     xmax=0., ymax=0., zmax=0.;
-//    DO_BODY(p, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
-    DO_BODY(q, bodytabtmp, bodytabtmp+cmd->nbody) {
+    verb_print(cmd->verbose,
+               "\t%s: columns 5 : %d\n",
+               routineName, gd->columns[5]);
+    DO_BODY(q, bodytabtmp, bodytabtmp+nelementsKappa) {
         if(Update(q)) {
             p = bodytable[ifile]+ij;
             Pos(p)[0] = Pos(q)[0];
@@ -956,13 +992,13 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
             zmax = MAX(zmax,Pos(p)[2]);
             ij++;
             kavg += Kappa(p);
-
-//            Type(p) = BODY;
-//            Mass(p) = mass;
-//            Id(p) = p-bodytable[ifile]+1;
-//            kavg += Kappa(p);
+            Update(p) = Update(q);
+            ip++;
         }
     }
+    verb_print(cmd->verbose,
+               "\t%s: selected kappas = %ld\n",
+               routineName, ij);
     verb_print(cmd->verbose,
                "\t%s: average of kappa (%ld particles) = %le\n",
                routineName, cmd->nbody, kavg/((real)gd->nbodyTable[ifile]) );
@@ -1009,10 +1045,6 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     verb_print(cmd->verbose,
                "\n\t%s: selected read points (out of nbody=%ld) = %ld\n",
                routineName, cmd->nbody, valid);
-
-//    verb_print(cmd->verbose,
-//               "%s: average of kappa (%ld particles) = %le\n",
-//               routineName, cmd->nbody, kavg/((real)cmd->nbody) );
 
     free(bodytabtmp);
 

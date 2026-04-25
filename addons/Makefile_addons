@@ -236,6 +236,13 @@ include $(MACHINES_DIR)/addons/direct_method_simple/Makefile_direct_method_simpl
 endif
 #
 
+# DIRECTMETHODSIMPLELOOPID
+# For computing 3pcf using direct method simple loopId
+ifeq ($(DIRECTMETHODSIMPLELOOPIDON),1)
+include $(MACHINES_DIR)/addons/direct_method_simple_loopId/Makefile_direct_method_simple_loopId
+endif
+#
+
 # OCTREEGGGOMPTRIANGLES
 # For computing 3pcf using octree-ggg-omp-triangles
 ifeq ($(OCTREEGGGOMPTRIANGLESON),1)

@@ -19,7 +19,7 @@ int get_cmd_allocated(struct global_data* gd, short *value);
 int get_nthreads(struct  cmdline_data* cmd,
               int *value);
 //B version 1.0.1
-int get_nmonopoles(struct  cmdline_data* cmd,
+int get_nmultipoles(struct  cmdline_data* cmd,
               int *value);
 int get_theta(struct  cmdline_data* cmd,
               real *theta);
@@ -29,6 +29,11 @@ int get_sizeHistN(struct  cmdline_data* cmd, int *sizeHistN);
 int get_version(struct  cmdline_data* cmd, char *param);
 int get_rootDir(struct  cmdline_data* cmd, char *value);
 //E parameters section
+
+//B global parameter section
+int get_nbody(struct  cmdline_data* cmd, struct  global_data* gd, int *value);
+int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, bool *value);
+//E global parameter section
 
 //B histograms section
 int get_rBins(struct  cmdline_data* cmd,

@@ -778,16 +778,17 @@ startagain:
                                Pos(p)[k],Pos(Subp(q)[qind])[k]);
                 if (scanopt(cmd->options, "no-check-two-bodies-eq-pos")) {
                     DO_COORD(k) {
-//                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
-                        Pos(p)[k] += EPSILON*grandom(0.0, 1.0);
-                        DO_COORD(k) {
-                            verb_log_print(cmd->verbose_log,gd->outlog,
-                            "CorrectedPos[k]: %g %g and correction: %le\n",
-                            Pos(p)[k],Pos(Subp(q)[qind])[k],
-                            EPSILON*grandom(0.0, 1.0));
-//                            EPSILON*grandom(0.0, 0.01*qsize));
-                        }
+        //                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
+                        Pos(p)[k] += EPSILONLOADBODY*grandom(0.0, 1.0);
                     }
+                    DO_COORD(k) {
+                        verb_log_print(cmd->verbose_log,gd->outlog,
+                        "CorrectedPos[k]: %g %g and correction: %le\n",
+                        Pos(p)[k],Pos(Subp(q)[qind])[k],
+                        EPSILONLOADBODY*grandom(0.0, 1.0));
+//                           EPSILON*grandom(0.0, 0.01*qsize));
+                    }
+//                    }
                     Update(p) = FALSE;
                     gd->sameposcount++;
                     sameposcount++;
@@ -894,12 +895,17 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
     } else
         SETV(cmpos, Pos(p));
 
-#define EPSILON 1.0E-16
+//B this is the one working
+//#define EPSILON 1.0E-16
+//E
+//B testing this one...
+#define EPSILON 1.0E-12
+//E
 // Here there appears an error for big numbers of points such 201 millions...
 // See line above and uncomment DIVVS(cmpos, cmpos, Mass(p)); line (not working!)
 	DO_COORD(k)
         if (cmpos[k] < Pos(p)[k] - psize/2 || Pos(p)[k] + psize/2 <= cmpos[k]) {
-            if (psize/2 > 2.710505e-20 + EPSILON)
+            if (psize/2 > 2.710505e-20 + EPSILONHACKCELL)
             error("%s: tree structure error: %d %le %le %le %le\n",
                   routineName, k, cmpos[k],
                   Pos(p)[k] - psize/2, Pos(p)[k] + psize/2, psize/2);

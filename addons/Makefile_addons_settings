@@ -177,7 +177,10 @@ CMDLINE_DEFS_UNITSPHERE_ON = 1
 #B for some addons will be useful this switches
 DEFINEFLAGS =
 #
+TWOPCFON = 1
+ifeq ($(TWOPCFON),1)
 OPT2 += -DTWOPCF
+endif
 TPCFON = 1
 ifeq ($(TPCFON),1)
 OPT2 += -DTHREEPCFCONVERGENCE
@@ -330,6 +333,10 @@ endif
 # DIRECTMETHODSIMPLE
 # For computing 3pcf using direct method simple
 DIRECTMETHODSIMPLEON = 0
+
+# DIRECTMETHODSIMPLE
+# For computing 3pcf using direct method simple loopId
+DIRECTMETHODSIMPLELOOPIDON = 0
 
 # For complex math use only one: USEGSL or COMPLEXLIB
 #   COMPLEXLIB is in development phase.

@@ -103,7 +103,7 @@ int get_nthreads(struct  cmdline_data* cmd, int *value)
 }
 
 //B version 1.0.1
-int get_nmonopoles(struct  cmdline_data* cmd, int *value)
+int get_nmultipoles(struct  cmdline_data* cmd, int *value)
 {
     *value = cmd->mChebyshev;
     return SUCCESS;
@@ -149,6 +149,24 @@ int get_rootDir(struct  cmdline_data* cmd, char *value)
 }
 //E parameters section
 
+//B global parameter section
+int get_nbody(struct  cmdline_data* cmd, struct  global_data* gd, int *value)
+{
+// update to get nbobdy as an array...
+    for (int ifile=0; ifile<gd->ninfiles; ifile++)
+        *value = gd->nbodyTable[ifile];
+    *value = cmd->nbody;
+
+    return SUCCESS;
+}
+
+int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, bool *value)
+{
+    *value = gd->computeTPCF;
+
+    return SUCCESS;
+}
+//E global parameter section
 
 //B histograms section
 int get_rBins(struct  cmdline_data* cmd, struct  global_data* gd)
@@ -240,52 +258,52 @@ int get_HistZetaMsincos(struct  cmdline_data* cmd,
                      struct  global_data* gd,
                      int m, int type, ErrorMsg errmsg)
 {
+    string routineName = "get_HistZetaMsincos";
     int n1, n2;
+    
+    if (gd->computeTPCF==TRUE) {
+        class_test((m <= 0 || m > cmd->mChebyshev + 1),
+                   errmsg,"\nget_HistZetaM_sincos: not allowed value of m = %d\n",m);
 
-    class_test((m <= 0 || m > cmd->mChebyshev + 1),
-        errmsg,"\nget_HistZetaM_sincos: not allowed value of m = %d\n",m);
-    for (n1=1; n1<=cmd->sizeHistN; n1++) {
-        for (n2=1; n2<=cmd->sizeHistN; n2++) {
-            gd->matPXD[n1][n2] = gd->histZetaMcos[m][n1][n2];
+        //B matPXD array begins at 0 offset. Working OK in cyballs
+        switch(type) {
+            case _COS_:
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        gd->matPXD[n1-1][n2-1] = gd->histZetaMcos[m][n1][n2];
+                    }
+                }
+                break;
+            case _SIN_:
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        gd->matPXD[n1-1][n2-1] = gd->histZetaMsin[m][n1][n2];
+                    }
+                }
+                break;
+            case _SINCOS_:
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        gd->matPXD[n1-1][n2-1] = gd->histZetaMsincos[m][n1][n2];
+                    }
+                }
+                break;
+            case _COSSIN_:
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        gd->matPXD[n1-1][n2-1] = gd->histZetaMcossin[m][n1][n2];
+                    }
+                }
+                break;
+            default:
+                for (n1=1; n1<=cmd->sizeHistN; n1++) {
+                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                        gd->matPXD[n1-1][n2-1] = gd->histZetaMcos[m][n1][n2];
+                    }
+                }
+                break;
         }
-    }
-
-    switch(type) {
-        case _COS_:
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->matPXD[n1][n2] = gd->histZetaMcos[m][n1][n2];
-                }
-            }
-            break;
-        case _SIN_:
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->matPXD[n1][n2] = gd->histZetaMsin[m][n1][n2];
-                }
-            }
-            break;
-        case _SINCOS_:
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->matPXD[n1][n2] = gd->histZetaMsincos[m][n1][n2];
-                }
-            }
-            break;
-        case _COSSIN_:
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->matPXD[n1][n2] = gd->histZetaMcossin[m][n1][n2];
-                }
-            }
-            break;
-        default:
-            for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                    gd->matPXD[n1][n2] = gd->histZetaMcos[m][n1][n2];
-                }
-            }
-            break;
+        //E
     }
 
     return SUCCESS;
@@ -302,13 +320,17 @@ int get_HistZetaM_EE(struct  cmdline_data* cmd,
 {
     int n1, n2;
 
-    class_test((m <= 0 || m > cmd->mChebyshev + 1),
-        errmsg,"\nget_HistZetaM_EE: not allowed value of m = %d\n",m);
-
-    for (n1=1; n1<=cmd->sizeHistN; n1++) {
-        for (n2=1; n2<=cmd->sizeHistN; n2++) {
-            gd->matPXD[n1][n2] = gd->histZetaM_EE[m][n1][n2];
+    if (gd->computeTPCF==TRUE) {
+        class_test((m <= 0 || m > cmd->mChebyshev + 1),
+                   errmsg,"\nget_HistZetaM_EE: not allowed value of m = %d\n",m);
+        
+        //B matPXD array begins at 0 offset. Working OK in cyballs
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                gd->matPXD[n1-1][n2-1] = gd->histZetaM_EE[m][n1][n2];
+            }
         }
+        //E
     }
 
     return SUCCESS;

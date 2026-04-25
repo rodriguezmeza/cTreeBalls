@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # Acknowledgements: Axel Romero Tisnado
@@ -12,7 +12,7 @@ import healpy as hp
 #B for cBalls
 import sys
 # Determine the absolute path of the target (cyballs) directory
-#   these two lines won´t be necessary if cballys is in searching path
+#   these two lines won´t be necessary if cyballs is in searching path
 #target_directory = os.path.abspath('/opt/homebrew/anaconda3/lib/python3.13/site-packages/')
 # Append the directory to sys.path
 #sys.path.append(target_directory)
@@ -57,23 +57,23 @@ def cballs_corr(tmin_deg, tmax_deg, nbins, nthreads=16, outdir='Output',
     print('Running...')
     cputime=Balls.Run()
 
-    nmonopoles = Balls.getnMonopoles()
-    
+    nmultipoles = Balls.getnMultipoles()
+
     # getHistZetaM_sincos(m, type): m multipole,
     #   type: 1 - cos; 2 - sin; 3 - sincos; 4 - cossin
     # edge_effects not programmed yet
-    monopolesData = []
+    multipolesData = []
     if type=="sincos":
-        for j in range(1,nmonopoles+1):
+        for j in range(1,nmultipoles+2):
             zcos = Balls.getHistZetaMsincos(j, 1)
             zsin = Balls.getHistZetaMsincos(j, 2)
-            monopolesData.append(zcos+zsin)
+            multipolesData.append(zcos+zsin)
     else:
         if type=="edge_effects":
-            for j in range(1,nmonopoles+1):
-                zcos = Balls.getHistZetaMsincos(j, 1)
-                zsin = Balls.getHistZetaMsincos(j, 2)
-                monopolesData.append(zcos+zsin)
+            for j in range(1,nmultipoles+2):
+                zM = Balls.getHistZetaM_EE(j)
+                multipolesData.append(zM)
+
     rr = Balls.getrBins()
     xi = Balls.getHistXi2pcf()
     nn = Balls.getHistNN()
@@ -82,7 +82,7 @@ def cballs_corr(tmin_deg, tmax_deg, nbins, nthreads=16, outdir='Output',
     Balls.clean_all()
     print('done.')
     gc.collect()
-    return rr, xi, nn, monopolesData
+    return rr, xi, nn, multipolesData
 
 def load_kappa(path, field=0):
     k = hp.read_map(path, field=0, dtype=np.float64, verbose=False)
@@ -164,10 +164,10 @@ def main():
             args.nbins, nthreads=args.threads, outdir=args.outdir,
             fitsfile=k2save, mask=args.mask,
             fileformat=args.file_format, type=args.type)
+    print()
     print('rr:',rr)
     print('xi:',xi)
     print('nn',nn)
-    print()
     print()
     print('zeta monopole:')
     print(zeta[0])

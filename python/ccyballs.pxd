@@ -62,6 +62,8 @@ cdef extern from "cballs.h":
         int columns[100]
         double rsmooth[100]
         short rsmoothFlag;
+        
+        short computeTPCF
 
     cdef struct file_content:
         char * filename
@@ -98,7 +100,7 @@ cdef extern from "cballs.h":
 #B parameters
     int get_cmdline(void*, void*)
     int get_nthreads(void*, int*)
-    int get_nmonopoles(void*, int*)
+    int get_nmultipoles(void*, int*)
     int get_theta(void*, double*)
     int get_rsmooth(void*, double*)
     int get_cputime(void*, double*)
@@ -106,7 +108,12 @@ cdef extern from "cballs.h":
     int get_sizeHistN(void*, int*)
     int get_version(void*, char*)
     int get_rootDir(void*, char*)
-#B parameters
+#E parameters
+
+#B global parameters
+    int get_nbody(void*, void*, int*)
+    int get_computeTPCF(void*, void*, short*)
+#E global parameters
 
 #B free memory
     void EndRun_FreeMemory_cmd(void*, void*)

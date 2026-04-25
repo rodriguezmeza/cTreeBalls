@@ -1905,6 +1905,7 @@ global void setFilesDirs_log(struct cmdline_data* cmd,
     char buf[BUFFERSIZE];
 
     debug_tracking_s("001", routineName);
+
     if (cmd->verbose_log>0) {           // gd->logfilePath is defined
         debug_tracking_s("002", cmd->rootDir);
         sprintf(gd->tmpDir,"%s/%s",cmd->rootDir,"tmp");
@@ -1918,7 +1919,8 @@ global void setFilesDirs_log(struct cmdline_data* cmd,
         sprintf(gd->logfilePath,"%s/cballs%s.log",
                 gd->tmpDir,cmd->suffixOutFiles);
     }
-    debug_tracking("005... final");
+//    debug_tracking("005... final");
+    debug_tracking_s("005... final", routineName);
 }
 
 global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
@@ -2236,6 +2238,10 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
 #endif
     free_dvector(gd->histNNSubXi2pcf,1,cmd->sizeHistN);
     //
+    //B only in search_direct_method_simple
+//    free_dvector(gd->histWW,1,cmd->sizeHistN);
+//    free_dvector(gd->histW,1,cmd->sizeHistN);
+    //E
     free_dvector(gd->histNNSub,1,cmd->sizeHistN);
     free_dvector(gd->histCF,1,cmd->sizeHistN);
     free_dvector(gd->histNN,1,cmd->sizeHistN);
@@ -2244,7 +2250,10 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
 #ifdef PXD
     free_dvector(gd->histZetaMFlatten,1,cmd->sizeHistN*cmd->sizeHistN);
     free_dvector(gd->rBins,1,cmd->sizeHistN);
-    free_dmatrix(gd->matPXD,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    //B offset at 0 in order to work with Cython
+    free_dmatrix(gd->matPXD,0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
+    //E
+//    free_dmatrix(gd->matPXD,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dvector(gd->vecPXD,1,cmd->sizeHistN);
 #endif
     //E Histogram arrays PXD versions
