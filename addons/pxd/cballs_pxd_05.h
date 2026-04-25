@@ -160,7 +160,7 @@ int get_nbody(struct  cmdline_data* cmd, struct  global_data* gd, int *value)
     return SUCCESS;
 }
 
-int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, bool *value)
+int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, short *value)
 {
     *value = gd->computeTPCF;
 
