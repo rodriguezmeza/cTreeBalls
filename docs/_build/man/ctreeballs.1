@@ -1,0 +1,979 @@
+'\" t
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "CTREEBALLS" "1" "May 19, 2026" "" "cTreeBalls"
+.SH NAME
+ctreeballs \- cTreeBalls 1.0.0
+.SH OVERVIEW
+.sp
+cTreeBalls: Correlation functions computation with Tree/Balls methods
+.sp
+Author: Mario A. Rodriguez\-Meza
+.sp
+For download and information, see \X'tty: link https://github.com/rodriguezmeza/cTreeBalls'\fI\%https://github.com/rodriguezmeza/cTreeBalls\fP\X'tty: link'
+.SS Introduction
+.sp
+Correlation function computation with Tree/Balls methods (short\-name cBalls) is a C code for computing correlation functions using tree and balls methods. So far can compute 2 points correlation function (2pcf) and 3 points correlation function for scalar fields like weak lensing convergence.
+.SS Compiling and getting started
+.sp
+Download the code by cloning it from \X'tty: link https://github.com/rodriguezmeza/cTreeBalls'\fI\%https://github.com/rodriguezmeza/cTreeBalls\fP\X'tty: link'
+.sp
+Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Go to its web page \X'tty: link https://www.gnu.org/software/gsl/'\fI\%GSL\fP\X'tty: link' for details or ask to your system administrator. Make necessary changes in \fBMakefile_machine\fP file and look up for \fBGSL\fP\&. Can be switched off: USEGSL = 0 in \fBMakefile_settings\fP\&. I/O cfitsio library is set it OFF. Can be set it ON in \fBaddons/Makefile_settings\fP\&.
+.sp
+Go to the \fBcTreeBalls\fP directory (\fBcd cTreeBalls\fP) and compile (\fBmake clean; make\fP). If the first compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: \fB\-O4 \-ffast\-math\fP) and of the OpenMP flag (default: \-fopenmp; this flag is facultative, you are free to compile without OpenMP if you don\(aqt want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with \fB\-fopenmp\fP). The code has been tested with gcc version 10 and would be working with version 11, 12. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
+.sp
+To check that the code runs, type:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+cd tests
+\&../cballs parameters_explained
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+The parameters_explained file is a reference input file, containing and explaining the use of all possible input parameters.
+.sp
+By default \fBcBalls\fP reads/writes catalog of points to analyzed files in 4\-column format with x, y, z columns first and then value of the convergence field. It has a two line header:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+# nbody NDIM Lx Ly Lz
+# nbody\-value NDIM\-value Lx Ly Lz \- values
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Try running:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&../cballs nbody=6480 o=points_on_sphere testmodel=unit\-sphere\-random options=stop
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+In the \fBOutput\fP directory you will have a file: \fBpoints_on_sphere.txt\fP\&. View its contents to see the two lines header and the 4 columns structure of data.
+.sp
+Note: in the above example \fBpoints_on_sphere\fP was not given an extension. By default cBalls gives to the output files the extension \fB\&.txt\fP\&.
+.sp
+On top of that, if you wish to modify the code, you will find comments directly in the files in the folder \fBaddons\fP, and the modules you may add must go in this folder. See one of the most simple in \fBaddons/direct_method\fP\&.
+.sp
+For the moment you may consult man page:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+man ../docs/cballs.m
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+or open with a browser the html file: docs/man/cballs.html
+.sp
+See more details about parameters needed by cBalls below (\fI\%Parameters\fP).
+.SS Configuration
+.sp
+cBalls can be configured by switching on/off several options. Configuration file is \fBMakefile_setting\fP\&. Search method \fBballs\-omp\fP in folder addons/balls_omp: \fBMakefile_settings_balls_omp\fP has other options that can be switched on/off.
+.SS Parameters
+.sp
+The list of available command line parameters can be consulted using the \fB\-\-help\fP flag:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&../cballs \-\-help
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+or its short version:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+\&../cballs \-h
+.EE
+.UNINDENT
+.UNINDENT
+.SS Python
+.sp
+cBalls python module (cballys) will be installed if you use:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+make clean; make all
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Note: if problems, you can go to python directory and execute:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+python setup.py build
+python setup.py install \-\-user
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+To test it go to directory tests and \(aqrun\(aq:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+python test_cython_balls.py
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Note: this interface in Cython was tested in a python environment with \fBpython3.7\fP\&.
+.SS Plotting utilities
+.sp
+Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are available to process cBalls results. They are in the github repository:
+.sp
+\X'tty: link https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks'\fI\%https://github.com/joar\-cafe/CBalls_plots/tree/main/benchmarks\fP\X'tty: link'
+.sp
+or you can find more scripts in \fBtests\fP folder.
+.SS License
+.sp
+cBalls is written by Mario A. Rodriguez\-Meza, and is distributed under the \X'tty: link https://github.com/rodriguezmeza/cTreeBalls/blob/main/LICENSE'\fI\%MIT license\fP\X'tty: link'\&. If you use this program in research work that results in publications, please cite the following paper:
+.sp
+\X'tty: link https://arxiv.org/abs/2408.16847'\fI\%Abraham Arvizu et al., arXiv:2048.16847\fP\X'tty: link'
+.SS Acknowledgements
+.sp
+cBalls use/is based on the following codes or projects:
+.INDENT 0.0
+.IP \(bu 2
+\X'tty: link https://home.ifa.hawaii.edu/users/barnes/zeno/index.html'\fI\%Zeno\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://wwwmpa.mpa-garching.mpg.de/gadget/'\fI\%Gadget\-2\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://github.com/damonge/CUTE'\fI\%CUTE\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://numerical.recipes/'\fI\%Numerical recipies\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://www.gnu.org/software/gsl/'\fI\%GSL\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://github.com/lesgourg/class_public'\fI\%CLASS\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html'\fI\%CFITSIO\fP\X'tty: link'
+.IP \(bu 2
+\X'tty: link https://healpix.sourceforge.io'\fI\%HEALPix\fP\X'tty: link'
+.UNINDENT
+.sp
+Also author acknowledges for helpful discussion and testing to the following people:
+.INDENT 0.0
+.IP \(bu 2
+Abraham Arvizu
+.IP \(bu 2
+Alejandro Aviles
+.IP \(bu 2
+Juan Carlos Hidalgo
+.IP \(bu 2
+Eladio Moreno
+.IP \(bu 2
+Gustavo Niz
+.IP \(bu 2
+Axel Romero Tisnado
+.IP \(bu 2
+Sofia Samario
+.UNINDENT
+.SH INSTALLATION
+.sp
+This section describes the installation settings of cBalls:
+.SS Makefile
+.SS Makefile settings
+.SS Makefile plataform machine
+.SH PARAMETERS
+.sp
+This section describes the various parameters cBalls needs for controlling
+what the searching process do:
+.SS Parameters related to the searching method
+.INDENT 0.0
+.TP
+.B searchMethod
+(str or list) [alias: search]
+The searching method to use. Default is \fBtree\-omp\-sincos\fP\&. Fastest method so far is \fBoctree\-ggg\-omp\fP\&.
+.sp
+Use it as:
+.INDENT 7.0
+.INDENT 3.5
+.sp
+.EX
+searchMethod = octree\-ggg\-omp
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+In command line version do not use spaces before and after \fB=\fP or it won\(aqt be parsed correctly. In a parameter file you have more liberty.
+.TP
+.B mChebyshev
+(positive int) [alias: mcheb]
+The number of multipoles to compute for a 3pcf computation. Number of them are: \fBmChebyshev + 1\fP, because it includes the monopole.
+.sp
+Use it as:
+.INDENT 7.0
+.INDENT 3.5
+.sp
+.EX
+mChebyshev = 7
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Default value is \fB7\fP\&. As multipoles comes from a harmonic expansion, we may be interested in computing the whole 3pcf. This process involves a FFT, therefore give \fBmChebyshev + 1\fP as a power of 2.
+.UNINDENT
+.SS Parameters to control the I/O file(s)
+.INDENT 0.0
+.TP
+.B infile
+(str, default=\(dq\(dq) [alias: in] File names with points to analyse.
+.TP
+.B infileformat
+(str, default=columns\-ascii) [alias: infmt] Data input files format (columns\-ascii, binary or takahasi)
+.sp
+The input columns for \fBcolumns\-ascii\fP format:
+.INDENT 7.0
+.IP \(bu 2
+\fBx\fP = x position of a point in the catalog.
+.IP \(bu 2
+\fBy\fP = y position of a point in the catalog.
+.IP \(bu 2
+\fBz\fP = z position of a point in the catalog.
+.IP \(bu 2
+\fBkappa\fP = The kappa value of the point.
+.UNINDENT
+.UNINDENT
+.SS Parameters to control histograms and their output files
+.INDENT 0.0
+.TP
+.B useLogHist
+(bool, default=true) Which type of binning should be used.
+.TP
+.B logHistBinsPD
+(float) The minimum separation to include in the histograms.
+.TP
+.B rangeN
+(float) The maximum separation to include in the histograms.
+.TP
+.B rminHist
+(float) The minimum separation to include in the histograms.
+.TP
+.B sizeHistN
+(int) The number of output bins to use.
+.UNINDENT
+.SS Set of parameters needed to construct a test model
+.INDENT 0.0
+.TP
+.B seed
+(int, default=123) Random number seed to test run or useful to change a random region in Takahasi simulations.
+.TP
+.B testmodel
+(str, default=simple\-cubic\-random) [alias: tstmodel] Test model name to analyse.
+.TP
+.B nbody
+(int, default=16348) Number of points to test.
+.TP
+.B lengthBox
+(float, default=10000) [alias: lbox] Length of the box to test.
+.UNINDENT
+.SS Miscellaneous parameters
+.INDENT 0.0
+.TP
+.B script
+(str, default=\(dq\(dq) Scripts in shell or python that can be run in pre\-processing or post\-processing.
+.TP
+.B stepState
+(int, default=10000) number of steps to save a state\-run info (pivot number completed in the log file).
+.TP
+.B verbose
+(int, default=1) [alias: verb] How verbose the code should be during processing.
+.INDENT 7.0
+.IP \(bu 2
+0 = no output unless there is an error
+.IP \(bu 2
+1 = output warnings
+.IP \(bu 2
+2 = output progress information
+.IP \(bu 2
+3 = output extra debugging lines
+.UNINDENT
+.TP
+.B verbose_log
+(int, default=1) [alias: verblog] To print messages to a log file \fBcballs.log\fP in directory \fBtmp\fP under output directory given by the parameter: 
+.nf
+\(ga\(ga
+.fi
+rootDir\(ga.
+.sp
+Amount of message information is controlled by the int given.
+.TP
+.B numberThreads
+(int, default=4) [alias: nthreads] How many OpenMP threads should be used.
+.sp
+It is needed to switch on OpenMP: \fBOPENMPMACHINE = 1\fP in \fBMakefile_settings\fP and recompile cBalls again.
+.TP
+.B options
+(str, default=\(dq\(dq) [alias: opt] You may give here various code behavior options.
+.sp
+Use it as:
+.INDENT 7.0
+.INDENT 3.5
+.sp
+.EX
+options = str1,str2,str3,...
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+where str# is one of the:
+.INDENT 7.0
+.IP \(bu 2
+stop = stop execution before searching process
+.IP \(bu 2
+compute\-HistN = compute NN encounters and save histogram in a file
+.IP \(bu 2
+and\-CF = if you use \fBcompute\-HistN\fP then you may compute and save the correlation funcion of NN encounters (the equivalent to the radial distribution function in liquids).
+.IP \(bu 2
+no\-one\-ball = during the searching process does not use balls criterion to speed up the code
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+.IP \(bu 2
+It is not necessary to specify all the parameters. You need to give only the ones apropriate to the run. The rest of parameters will use their default values if they are OK with you.
+.IP \(bu 2
+When you specify the root output directory using: \fBrootDir\fP, and this is a single directory that will be located in the pwd dir, then do not use \fB\&./\fP at the begining of the name or \fB/\fP at its end.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SH CATALOG FILES
+.sp
+This section describes the various formats of catalog points you need to compute correlation functions on them.
+.sp
+They are given with the option: \fBinfileformat\fP\&.
+.SS Standard formats
+.INDENT 0.0
+.TP
+.B columns\-ascii
+The file(s) with the data to be correlated.
+.TP
+.B binary
+The file with data to be correlated in binary format.
+.TP
+.B takahashi
+The file with data to be correlated using Takahashi etal simulations format (can be transformed to Healpix format).
+.UNINDENT
+.SS Miscellaneous formats
+.INDENT 0.0
+.TP
+.B gadget
+Gadget files can be read using this format. Catalog can be only one file or composed of several files.
+.TP
+.B multi\-columns\-ascii
+This format is to be able to read any ascci file with values arrage in columns. Positions can be in any order and with/without header. For example, files with halo catalogs from Rockstar can be read.
+.TP
+.B fits\-healpix
+to read maps in Healpix format using cfitsio library. This format permits to apply a mask in the same format.
+.UNINDENT
+.SH PRE/POST PROCESSING
+.sp
+This section describes the various pre/pos processing for controlling
+what the \fIcballs\fP before/after main processing:
+.SS Pre\-processing
+.SS Post\-processing
+.SH CODE STRUCTURE
+.sp
+This page is a developer\-oriented map of the cTreeBalls source tree. It is
+intended to answer two questions before editing the code: where does a run move
+through the program, and which files own each piece of state.
+.SS Runtime flow
+.sp
+The command\-line executable follows this high\-level sequence:
+.INDENT 0.0
+.IP 1. 3
+\fBmain/main.c\fP creates the run state objects and calls \fBStartRun\fP\&.
+.IP 2. 3
+\fBsource/startrun.c\fP reads parameters, checks them, initializes random
+generators, prepares output paths, and allocates the run\-owned arrays.
+.IP 3. 3
+\fBsource/cballs.c\fP enters \fBMainLoop\fP and dispatches to \fBEvalHist\fP\&.
+.IP 4. 3
+\fBsource/treeload.c\fP builds one tree per selected input catalog with
+\fBMakeTree\fP\&.
+.IP 5. 3
+\fBsource/search.c\fP walks the tree, accepts or rejects node pairs, and
+accumulates thread\-local histogram contributions.
+.IP 6. 3
+\fBsource/cballsutils.c\fP supplies shared search utilities, histogram
+allocation and normalization helpers, geometry transforms, and acceptance
+predicates.
+.IP 7. 3
+\fBsource/cballs.c\fP writes evaluated histograms through its \fBPrintHist*\fP
+helpers.
+.IP 8. 3
+\fBsource/cballsio.c\fP closes files and releases memory in \fBEndRun\fP\&.
+.UNINDENT
+.sp
+The Cython wrapper in \fBpython/cballys.pyx\fP calls the same C stages, but it
+splits them into a dependency\-checked \fBRun(level=[...])\fP workflow so Python
+callers can compute and then read arrays back without going through the command
+line.
+.SS Module map
+.TS
+box center;
+l|l.
+T{
+Path
+T}	T{
+Responsibility
+T}
+_
+T{
+\fBmain/main.c\fP
+T}	T{
+CLI entry point. Creates \fBstruct cmdline_data\fP and
+\fBstruct global_data\fP, records start times, reads the parameter file
+argument when \fBGETPARAM\fP is disabled, and runs \fBStartRun\fP,
+\fBMainLoop\fP, then \fBEndRun\fP\&.
+T}
+_
+T{
+\fBinclude/globaldefs.h\fP
+T}	T{
+Central include file. Pulls in common libraries, declares global tables
+such as \fBbodytable\fP, \fBroottable\fP, and \fBnodetablescanlev\fP, selects
+GSL or Numerical Recipes support, and exposes project\-wide error and
+debug macros.
+T}
+_
+T{
+\fBinclude/cmdline_defs.h\fP
+T}	T{
+Parameter registry used by the \fBgetparam\fP interface. Add command\-line
+parameters here first, then wire them through \fBstartrun.c\fP\&.
+T}
+_
+T{
+\fBinclude/cmdline_data.h\fP
+T}	T{
+Parsed user options and derived command state. This is the user\-facing
+configuration object passed through almost every major routine.
+T}
+_
+T{
+\fBinclude/global_data.h\fP
+T}	T{
+Run state that is derived, allocated, or accumulated during execution:
+file paths, histogram arrays, tree statistics, timing counters, input
+catalog metadata, and memory ownership flags.
+T}
+_
+T{
+\fBinclude/datastruc_defs.h\fP
+T}	T{
+Body, cell, and node layout. \fBbody\fP and \fBcell\fP both embed a common
+\fBnode\fP header so tree traversal can work on \fBnodeptr\fP values.
+T}
+_
+T{
+\fBinclude/datastruc_hist.h\fP
+T}	T{
+Per\-thread and global histogram workspaces used by the search code.
+T}
+_
+T{
+\fBinclude/protodefs.h\fP
+T}	T{
+Shared function prototypes and add\-on include hook for APIs that need to
+be visible across C modules.
+T}
+_
+T{
+\fBsource/startrun.c\fP
+T}	T{
+Startup lifecycle: command\-line and parameter\-file parsing,
+\fBStartRun_Common\fP, validation, data loading or test\-data generation,
+output setup, and memory allocation.
+T}
+_
+T{
+\fBsource/cballsio.c\fP
+T}	T{
+Input/output formats, output directory and filename setup, writing
+catalogs, and all teardown routines called from C and Cython.
+T}
+_
+T{
+\fBsource/testdata.c\fP
+T}	T{
+Synthetic catalog generation for simple cubic and unit\-sphere runs.
+T}
+_
+T{
+\fBsource/treeload.c\fP
+T}	T{
+Octree construction, root\-cell setup, body insertion, cell properties,
+tree threading, scan\-level tables, and tree cleanup.
+T}
+_
+T{
+\fBsource/search.c\fP
+T}	T{
+The default \fBoctree\-sincos\-omp\fP search. Owns the OpenMP pivot loop,
+tree walk, node summation, and merging of thread\-local histograms.
+T}
+_
+T{
+\fBsource/cballsutils.c\fP
+T}	T{
+Shared search utilities: histogram initialization, body property
+reduction, acceptance/rejection checks, periodic wrapping, coordinate
+conversion, and histogram diagnostics.
+T}
+_
+T{
+\fBsource/cballsutils_with\-RADECPOS.c\fP
+T}	T{
+RA/DEC\-position variant of \fBcballsutils.c\fP\&. Keep it in sync with
+\fBcballsutils.c\fP when enabling or maintaining that build path.
+T}
+_
+T{
+\fBsource/cballs.c\fP
+T}	T{
+Main computation driver and histogram output dispatch. This is where
+search\-method selection reaches the concrete search implementation.
+T}
+_
+T{
+\fBpython/cballys.pyx\fP
+T}	T{
+Python class wrapper around the C lifecycle. Converts a Python parameter
+dictionary into CLASS\-style \fBfile_content\fP, calls C modules, exposes
+histogram getters, and releases C allocations.
+T}
+_
+T{
+\fBpython/ccballys.pxd\fP
+T}	T{
+Cython declarations for the C structs and functions that Python needs.
+Only expose fields here when the wrapper really consumes them.
+T}
+_
+T{
+\fBaddons/\fP
+T}	T{
+Optional search methods, input formats, and bundled libraries. Add\-ons
+connect through the \fB//B socket:\fP include points in core files.
+T}
+.TE
+.SS Core state model
+.sp
+Most C routines receive two pointers:
+.INDENT 0.0
+.TP
+.B \fBstruct cmdline_data *cmd\fP
+Values requested by the user or read from a parameter file. Treat this as
+configuration. It contains items such as \fBsearchMethod\fP, histogram sizes,
+input/output names, verbosity, and option strings.
+.TP
+.B \fBstruct global_data *gd\fP
+Values computed during the run. Treat this as mutable execution state. It
+owns histogram buffers, input catalog metadata, output paths, timing
+counters, tree statistics, and allocation flags used during cleanup.
+.UNINDENT
+.sp
+The large catalog and tree tables are declared as project globals in
+\fBinclude/globaldefs.h\fP:
+.INDENT 0.0
+.TP
+.B \fBbodytable[MAXITEMS]\fP
+Per\-catalog body arrays.
+.TP
+.B \fBroottable[MAXITEMS]\fP
+One tree root per loaded catalog.
+.TP
+.B \fBnodetablescanlev[MAXITEMS]\fP and \fBnodetablescanlev_root[MAXITEMS]\fP
+Flattened node tables used by scan\-level traversal and diagnostics.
+.UNINDENT
+.sp
+The body/cell hierarchy is defined in \fBinclude/datastruc_defs.h\fP\&. A \fBbody\fP
+contains a \fBnode\fP named \fBbodynode\fP and a body id. A \fBcell\fP contains a
+\fBnode\fP named \fBcellnode\fP, a size, a linked \fBmore\fP pointer, and \fBNSUB\fP
+subcells. The macros in that header, for example \fBPos(x)\fP, \fBMass(x)\fP,
+\fBRadius(x)\fP, and \fBSubp(x)\fP, are the intended field access style throughout
+the C code.
+.SS Tree and search lifecycle
+.sp
+\fBMakeTree\fP in \fBsource/treeload.c\fP starts with \fBnewtree\fP and a root cell,
+then loads bodies into subcells using \fBloadbody\fP and \fBsubindex\fP\&. After
+insertion, \fBhackcellprop\fP computes cell\-level properties used by the search,
+\fBthreadtree\fP links traversal order, and \fBscanLevel\fP prepares node tables
+for level\-based operations.
+.sp
+\fBsearchcalc_normal_sincos\fP in \fBsource/search.c\fP is the default search path
+for \fBsearchMethod=tree\-omp\-sincos\fP/\fBoctree\-sincos\-omp\fP style runs. It:
+.INDENT 0.0
+.IP 1. 3
+Initializes global and per\-thread histogram workspaces.
+.IP 2. 3
+Runs an OpenMP loop over pivot bodies from the selected pivot catalog.
+.IP 3. 3
+Walks the scanning catalog tree with \fBnormal_walktree_sincos\fP\&.
+.IP 4. 3
+Uses acceptance/rejection helpers from \fBsource/cballsutils.c\fP to decide
+whether a body/cell or cell/cell pair contributes.
+.IP 5. 3
+Accumulates 2PCF and, when enabled at compile time, 3PCF Chebyshev/sine/cosine
+components.
+.IP 6. 3
+Merges thread\-local histograms back into \fBgd\fP\&.
+.UNINDENT
+.SS Histogram ownership
+.sp
+Histogram buffers are allocated during startup and search initialization, then
+freed through the \fBEndRun_FreeMemory_*\fP routines in \fBsource/cballsio.c\fP\&.
+The important ownership rule is: if a new allocation is attached to \fBcmd\fP or
+\fBgd\fP, it needs a matching allocation flag or an existing cleanup stage that
+cannot miss it. This is especially important for the Python wrapper, because
+\fBcballs.struct_cleanup\fP calls the granular C cleanup routines instead of only
+exiting the process.
+.sp
+Common histogram outputs include:
+.INDENT 0.0
+.TP
+.B \fBhistNN\fP
+Neighbor count histogram.
+.TP
+.B \fBhistCF\fP
+Correlation\-function style output derived from counts.
+.TP
+.B \fBhistXi2pcf\fP
+Two\-point correlation function output.
+.TP
+.B \fBhistZetaM*\fP and \fBmhistZetaM*\fP
+Three\-point/Chebyshev multipole outputs, split by sine/cosine component and
+multipole index when the corresponding compile\-time options are enabled.
+.UNINDENT
+.SS Adding or changing parameters
+.sp
+To add a user\-visible parameter:
+.INDENT 0.0
+.IP 1. 3
+Add the default, description, and optional short name in
+\fBinclude/cmdline_defs.h\fP\&.
+.IP 2. 3
+Add fields to \fBstruct cmdline_data\fP in \fBinclude/cmdline_data.h\fP if the
+value needs to persist.
+.IP 3. 3
+Read the parameter in \fBReadParametersCmdline\fP and \fBReadParameterFile\fP in
+\fBsource/startrun.c\fP\&.
+.IP 4. 3
+Print it from \fBPrintParameterFile\fP so generated parameter snapshots remain
+reproducible.
+.IP 5. 3
+Validate derived constraints in \fBCheckParameters\fP when invalid
+combinations would otherwise fail later.
+.IP 6. 3
+If the parameter is exposed to Python, mirror it in \fBpython/ccballys.pxd\fP
+and set or document it in \fBpython/cballys.pyx\fP\&.
+.UNINDENT
+.SS Adding input/output formats
+.sp
+Input format names are converted to integer tags by
+\fBinfilefmt_string_to_int\fP in \fBsource/cballsio.c\fP\&. Add a new tag in the same
+style as the existing formats, implement the parser near the other
+\fBinputdata_*\fP functions, and add the switch case in \fBInputData\fP or
+\fBInputData_all_in_one\fP\&.
+.sp
+Output formats follow the matching pattern through
+\fBoutfilefmt_string_to_int\fP, \fBoutputdata\fP, and the \fBoutputdata_*\fP helpers.
+Keep filename construction in \fBsetFilesDirs\fP/\fBsetFilesDirs_log\fP so command
+line, tests, and Python runs all agree on output paths.
+.SS Adding search methods
+.sp
+Search\-method selection happens in two places:
+.INDENT 0.0
+.IP 1. 3
+\fBsearch_method_string_to_int\fP in \fBsource/startrun.c\fP maps user strings
+to integer constants.
+.IP 2. 3
+\fBEvalHist\fP in \fBsource/cballs.c\fP switches on \fBgd\->searchMethod_int\fP and
+calls the concrete implementation.
+.UNINDENT
+.sp
+New search methods usually need prototypes in \fBinclude/protodefs.h\fP, compile
+settings in the Makefiles or add\-on make fragments, and output handling in
+\fBsource/cballs.c\fP only if they produce different histogram families.
+.SS Add\-on sockets
+.sp
+Core files contain \fB//B socket:\fP blocks guarded by \fB#ifdef ADDONS\fP\&. These
+blocks include generated or configured files such as \fB*_include.h\fP so optional
+modules can add fields, prototypes, switch cases, and setup logic without
+editing every core file manually. When adding an add\-on, keep its ownership
+localized under \fBaddons/<name>/\fP and document which socket files it expects to
+be copied or generated.
+.SS Python wrapper notes
+.sp
+The wrapper class \fBcballs\fP in \fBpython/cballys.pyx\fP keeps a Python parameter
+dictionary in \fBself._pars\fP\&. \fBRun\fP converts that dictionary into
+\fBfile_content\fP, calls \fBinput_read_from_file\fP, then advances through
+\fBStartRun_Common\fP, \fBPrintParameterFile\fP, \fBSetNumberThreads\fP, and
+\fBMainLoop\fP according to the requested dependency level.
+.sp
+Getter methods such as \fBgetrBins\fP, \fBgetHistNN\fP, \fBgetHistXi2pcf\fP, and
+\fBgetHistZetaMsincos\fP copy C arrays into NumPy arrays. They assume the relevant
+run stage has already completed and that \fBsizeHistN\fP still matches the
+allocated histogram dimensions.
+.sp
+When changing C struct fields consumed by Python, update both
+\fBpython/ccballys.pxd\fP and the getter or setup code in \fBpython/cballys.pyx\fP\&.
+The wrapper intentionally exposes only a subset of the C structs; avoid adding
+fields to the \fB\&.pxd\fP unless Python needs direct access.
+.SS Generated and vendored code
+.sp
+The repository includes generated Sphinx output under \fBdocs/_build\fP and large
+vendored libraries under \fBaddons/\fP\&. Prefer editing the source \fB\&.rst\fP files,
+core \fBsource/\fP and \fBinclude/\fP code, or add\-on source fragments rather than
+generated HTML/LaTeX or third\-party library internals.
+.SH ADDON'S
+.sp
+Add\-ons extend cBalls with optional search methods, catalog formats, and
+supporting libraries without making every core file permanently depend on those
+features. They are enabled at compile time through \fBMakefile_settings\fP and the
+add\-on make fragments under \fBaddons/\fP\&.
+.SS Include files
+.sp
+Core headers and modules contain guarded \fB//B socket:\fP blocks such as:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+#ifdef ADDONS
+#include \(dqprotodefs_include.h\(dq
+#endif
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+An add\-on uses these include sockets to add prototypes, struct fields,
+parameter definitions, switch cases, and implementation hooks. Keep add\-on
+specific declarations in the add\-on include files rather than editing unrelated
+core code.
+.sp
+Common socket targets include:
+.INDENT 0.0
+.TP
+.B \fBcmdline_defs_include.h\fP
+Adds new command\-line parameters.
+.TP
+.B \fBprotodefs_include.h\fP
+Adds prototypes that must be visible across C modules.
+.TP
+.B \fBglobaldefs_include_*.h\fP and \fBglobal_data_include_*.h\fP
+Adds globals or run\-state fields required by the add\-on.
+.TP
+.B \fBcballs_include_*.h\fP, \fBstartrun_include_*.h\fP, \fBcballsio_include_*.h\fP
+Adds search\-method dispatch, startup, and I/O cases.
+.UNINDENT
+.SS Source files
+.sp
+Each add\-on should keep its implementation and build fragment in its own
+subdirectory, for example \fBaddons/cfitsio\fP, \fBaddons/gadget_io\fP,
+\fBaddons/kdtree_box_omp\fP, or \fBaddons/octree_box_omp\fP\&. The add\-on
+\fBReadme.txt\fP and \fBTo_add_in_Makefile_addons\fP files explain which fragments
+must be included in the top\-level add\-on build.
+.sp
+When adding a new search add\-on, wire it through the same conceptual path as a
+core search method:
+.INDENT 0.0
+.IP 1. 3
+Define the command\-line search string and integer method tag.
+.IP 2. 3
+Add parameter parsing or validation hooks if the method needs extra options.
+.IP 3. 3
+Add the method\(aqs prototype through the prototype socket.
+.IP 4. 3
+Add the \fBEvalHist\fP switch case through the \fBcballs\fP socket.
+.IP 5. 3
+Make sure any method\-specific allocations are released by an existing or new
+cleanup hook.
+.UNINDENT
+.sp
+When adding a new I/O add\-on, add the format string conversion, the parser or
+writer implementation, and the \fBInputData\fP/\fBOutputData\fP switch case through
+the I/O sockets.
+.SH PYTHON INTERFACE
+.sp
+The Python extension is implemented by \fBpython/cballys.pyx\fP and declared to
+Cython through \fBpython/ccballys.pxd\fP\&. It wraps the same C lifecycle used by the
+\fBcballs\fP executable, but exposes it as a Python class named \fBcballs\fP\&.
+.SS Basic lifecycle
+.sp
+Typical Python use follows this pattern:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+from cballys import cballs
+
+cb = cballs()
+cb.set(
+    infile=\(dqcatalog.txt\(dq,
+    infileformat=\(dqcolumns\-ascii\(dq,
+    rootDir=\(dqOutput\(dq,
+    options=\(dqcompute\-HistN\(dq,
+)
+cb.Run()
+rbins = cb.getrBins()
+xi2 = cb.getHistXi2pcf()
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fBset\fP updates the internal parameter dictionary. \fBRun\fP converts that
+dictionary into the C \fBfile_content\fP representation, calls the startup
+routines, executes the main search, and leaves C\-owned histograms available for
+getter methods. \fBclean_all\fP releases C allocations and clears the Python
+parameter dictionary.
+.SS Run levels
+.sp
+\fBRun(level=[...])\fP accepts the name of the last C stage the caller needs. The
+wrapper expands dependencies automatically. The default level is
+\fB[\(dqMainLoop\(dq]\fP, which performs a full calculation. Internally the common stage
+order is:
+.INDENT 0.0
+.IP 1. 3
+\fBinput\fP reads Python parameters into C structures.
+.IP 2. 3
+\fBStartRun_Common\fP validates parameters, initializes state, loads input
+catalogs or test data, and allocates memory.
+.IP 3. 3
+\fBPrintParameterFile\fP writes a reproducible parameter snapshot.
+.IP 4. 3
+\fBSetNumberThreads\fP applies the OpenMP thread count.
+.IP 5. 3
+\fBMainLoop\fP builds trees, runs the selected search, and evaluates
+histograms.
+.UNINDENT
+.SS Available getters
+.sp
+The wrapper exposes small, NumPy\-oriented getters for the C arrays used most
+often from notebooks and scripts:
+.INDENT 0.0
+.TP
+.B \fBgetrBins\fP
+Radial bin centers or edges as prepared by the C run.
+.TP
+.B \fBgetHistNN\fP and \fBgetHistCF\fP
+Neighbor counts and correlation\-function outputs.
+.TP
+.B \fBgetHistXi2pcf\fP
+Two\-point correlation function array.
+.TP
+.B \fBgetHistZetaMsincos(m, type)\fP and \fBgetHistZetaM_EE(m)\fP
+Two\-dimensional 3PCF/multipole matrices for the requested multipole index.
+.UNINDENT
+.sp
+\fBgetNThreads\fP, \fBgetTheta\fP, \fBgetrsmooth\fP, \fBgetCPUTime\fP, \fBgetVersion\fP,
+\fBgetRootDir\fP, and allocation\-flag getters expose selected scalar state from
+the underlying C structs.
+.SS Cython interface
+.sp
+\fBpython/ccballys.pxd\fP intentionally declares only the fields and C functions
+needed by the wrapper. When a C field is renamed, moved, or newly needed by
+Python, update the \fB\&.pxd\fP declaration and the matching logic in
+\fBpython/cballys.pyx\fP together.
+.sp
+Memory is owned by the C code after \fBStartRun_Common\fP\&. The wrapper tracks C
+allocation flags and calls the granular \fBEndRun_FreeMemory_*\fP routines from
+\fBstruct_cleanup\fP\&. New C allocations that should survive long enough for
+Python getters must also be reachable by the cleanup path.
+.SS See also
+.sp
+For a broader map of the C modules and Python wrapper, see
+\fI\%Code structure\fP\&.
+.SH HANDS ON
+.sp
+This section describes a practical guide to use \fBcBalls\fP:
+.sp
+Let us test one of the \X'tty: link https://arxiv.org/pdf/1706.01472'\fI\%Takahashi\fP\X'tty: link' realizations. We download the realization using unix \fBwget\fP command in the terminal:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+wget http://cosmo.phys.hirosaki\-u.ac.jp/takahasi/allsky_raytracing/sub1/nres12/allskymap_nres12r000.zs9.mag.dat
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Then we will have in our working directory the file \fBallskymap_nres12r000.zs9.mag.dat\fP, 3 Gb in size with ~200 million points distributed on the surface of a unit sphere.
+.SH 2-POINT CORRELATION FUNCTIONS
+.sp
+\fBcBalls\fP can compute 2\-point correlations (2pcf) when counts (N) or a scalar field are involved (like convergence K):
+.INDENT 0.0
+.TP
+.B NN
+It is the normal 2\-point correlation function of number counts (typically
+galaxy counts).
+.TP
+.B KK
+So far we have consider that the scalar field is the convergence in weak lensing \ekappa\&. Then this gives the 2\-point kappa\-kappa correlation function.
+.UNINDENT
+.sp
+N represent simple counting and K represent a real scalar field, like convergence in weak lensing.
+.SH 3-POINT CORRELATION FUNCTIONS
+.sp
+\fBcBalls\fP can also compute 3\-point correlations (3pcf) when counts (N) or a scalar field are involved (like convergence \ekappa). In particular to compute the correlation KKK the numerical code use the harmonic base.
+.SS Harmonic base
+.INDENT 0.0
+.IP \(bu 2
+\fI\%Index\fP
+.IP \(bu 2
+\fI\%Module Index\fP
+.IP \(bu 2
+\fI\%Search Page\fP
+.UNINDENT
+.SH AUTHOR
+Mario A. Rodriguez-Meza
+.SH COPYRIGHT
+2024, Mario A. Rodriguez-Meza
+.\" Generated by docutils manpage writer.
+.

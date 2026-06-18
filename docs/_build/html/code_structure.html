@@ -1,0 +1,404 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code structure &mdash; cTreeBalls 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
+      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="AddOn&#39;s" href="addons.html" />
+    <link rel="prev" title="Pre/Post processing" href="pre_post_process.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cTreeBalls
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="params.html">Parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="catalog_files.html">Catalog files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pre_post_process.html">Pre/Post processing</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Code structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#runtime-flow">Runtime flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-map">Module map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core-state-model">Core state model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tree-and-search-lifecycle">Tree and search lifecycle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#histogram-ownership">Histogram ownership</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-or-changing-parameters">Adding or changing parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-input-output-formats">Adding input/output formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-search-methods">Adding search methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#add-on-sockets">Add-on sockets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#python-wrapper-notes">Python wrapper notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generated-and-vendored-code">Generated and vendored code</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="addons.html">AddOn's</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python.html">Python interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="handson.html">Hands on</a></li>
+<li class="toctree-l1"><a class="reference internal" href="2pcf.html">2-point correlation functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3pcf.html">3-point correlation functions</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cTreeBalls</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Code structure</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/code_structure.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="code-structure">
+<h1>Code structure<a class="headerlink" href="#code-structure" title="Link to this heading"></a></h1>
+<p>This page is a developer-oriented map of the cTreeBalls source tree. It is
+intended to answer two questions before editing the code: where does a run move
+through the program, and which files own each piece of state.</p>
+<section id="runtime-flow">
+<h2>Runtime flow<a class="headerlink" href="#runtime-flow" title="Link to this heading"></a></h2>
+<p>The command-line executable follows this high-level sequence:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">main/main.c</span></code> creates the run state objects and calls <code class="docutils literal notranslate"><span class="pre">StartRun</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/startrun.c</span></code> reads parameters, checks them, initializes random
+generators, prepares output paths, and allocates the run-owned arrays.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/cballs.c</span></code> enters <code class="docutils literal notranslate"><span class="pre">MainLoop</span></code> and dispatches to <code class="docutils literal notranslate"><span class="pre">EvalHist</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/treeload.c</span></code> builds one tree per selected input catalog with
+<code class="docutils literal notranslate"><span class="pre">MakeTree</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/search.c</span></code> walks the tree, accepts or rejects node pairs, and
+accumulates thread-local histogram contributions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/cballsutils.c</span></code> supplies shared search utilities, histogram
+allocation and normalization helpers, geometry transforms, and acceptance
+predicates.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/cballs.c</span></code> writes evaluated histograms through its <code class="docutils literal notranslate"><span class="pre">PrintHist*</span></code>
+helpers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source/cballsio.c</span></code> closes files and releases memory in <code class="docutils literal notranslate"><span class="pre">EndRun</span></code>.</p></li>
+</ol>
+<p>The Cython wrapper in <code class="docutils literal notranslate"><span class="pre">python/cballys.pyx</span></code> calls the same C stages, but it
+splits them into a dependency-checked <code class="docutils literal notranslate"><span class="pre">Run(level=[...])</span></code> workflow so Python
+callers can compute and then read arrays back without going through the command
+line.</p>
+</section>
+<section id="module-map">
+<h2>Module map<a class="headerlink" href="#module-map" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 28.0%" />
+<col style="width: 72.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Responsibility</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">main/main.c</span></code></p></td>
+<td><p>CLI entry point. Creates <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">cmdline_data</span></code> and
+<code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">global_data</span></code>, records start times, reads the parameter file
+argument when <code class="docutils literal notranslate"><span class="pre">GETPARAM</span></code> is disabled, and runs <code class="docutils literal notranslate"><span class="pre">StartRun</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MainLoop</span></code>, then <code class="docutils literal notranslate"><span class="pre">EndRun</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">include/globaldefs.h</span></code></p></td>
+<td><p>Central include file. Pulls in common libraries, declares global tables
+such as <code class="docutils literal notranslate"><span class="pre">bodytable</span></code>, <code class="docutils literal notranslate"><span class="pre">roottable</span></code>, and <code class="docutils literal notranslate"><span class="pre">nodetablescanlev</span></code>, selects
+GSL or Numerical Recipes support, and exposes project-wide error and
+debug macros.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">include/cmdline_defs.h</span></code></p></td>
+<td><p>Parameter registry used by the <code class="docutils literal notranslate"><span class="pre">getparam</span></code> interface. Add command-line
+parameters here first, then wire them through <code class="docutils literal notranslate"><span class="pre">startrun.c</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">include/cmdline_data.h</span></code></p></td>
+<td><p>Parsed user options and derived command state. This is the user-facing
+configuration object passed through almost every major routine.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">include/global_data.h</span></code></p></td>
+<td><p>Run state that is derived, allocated, or accumulated during execution:
+file paths, histogram arrays, tree statistics, timing counters, input
+catalog metadata, and memory ownership flags.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">include/datastruc_defs.h</span></code></p></td>
+<td><p>Body, cell, and node layout. <code class="docutils literal notranslate"><span class="pre">body</span></code> and <code class="docutils literal notranslate"><span class="pre">cell</span></code> both embed a common
+<code class="docutils literal notranslate"><span class="pre">node</span></code> header so tree traversal can work on <code class="docutils literal notranslate"><span class="pre">nodeptr</span></code> values.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">include/datastruc_hist.h</span></code></p></td>
+<td><p>Per-thread and global histogram workspaces used by the search code.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">include/protodefs.h</span></code></p></td>
+<td><p>Shared function prototypes and add-on include hook for APIs that need to
+be visible across C modules.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">source/startrun.c</span></code></p></td>
+<td><p>Startup lifecycle: command-line and parameter-file parsing,
+<code class="docutils literal notranslate"><span class="pre">StartRun_Common</span></code>, validation, data loading or test-data generation,
+output setup, and memory allocation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">source/cballsio.c</span></code></p></td>
+<td><p>Input/output formats, output directory and filename setup, writing
+catalogs, and all teardown routines called from C and Cython.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">source/testdata.c</span></code></p></td>
+<td><p>Synthetic catalog generation for simple cubic and unit-sphere runs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">source/treeload.c</span></code></p></td>
+<td><p>Octree construction, root-cell setup, body insertion, cell properties,
+tree threading, scan-level tables, and tree cleanup.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">source/search.c</span></code></p></td>
+<td><p>The default <code class="docutils literal notranslate"><span class="pre">octree-sincos-omp</span></code> search. Owns the OpenMP pivot loop,
+tree walk, node summation, and merging of thread-local histograms.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">source/cballsutils.c</span></code></p></td>
+<td><p>Shared search utilities: histogram initialization, body property
+reduction, acceptance/rejection checks, periodic wrapping, coordinate
+conversion, and histogram diagnostics.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">source/cballsutils_with-RADECPOS.c</span></code></p></td>
+<td><p>RA/DEC-position variant of <code class="docutils literal notranslate"><span class="pre">cballsutils.c</span></code>. Keep it in sync with
+<code class="docutils literal notranslate"><span class="pre">cballsutils.c</span></code> when enabling or maintaining that build path.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">source/cballs.c</span></code></p></td>
+<td><p>Main computation driver and histogram output dispatch. This is where
+search-method selection reaches the concrete search implementation.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">python/cballys.pyx</span></code></p></td>
+<td><p>Python class wrapper around the C lifecycle. Converts a Python parameter
+dictionary into CLASS-style <code class="docutils literal notranslate"><span class="pre">file_content</span></code>, calls C modules, exposes
+histogram getters, and releases C allocations.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">python/ccballys.pxd</span></code></p></td>
+<td><p>Cython declarations for the C structs and functions that Python needs.
+Only expose fields here when the wrapper really consumes them.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">addons/</span></code></p></td>
+<td><p>Optional search methods, input formats, and bundled libraries. Add-ons
+connect through the <code class="docutils literal notranslate"><span class="pre">//B</span> <span class="pre">socket:</span></code> include points in core files.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="core-state-model">
+<h2>Core state model<a class="headerlink" href="#core-state-model" title="Link to this heading"></a></h2>
+<p>Most C routines receive two pointers:</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">cmdline_data</span> <span class="pre">*cmd</span></code></dt><dd><p>Values requested by the user or read from a parameter file. Treat this as
+configuration. It contains items such as <code class="docutils literal notranslate"><span class="pre">searchMethod</span></code>, histogram sizes,
+input/output names, verbosity, and option strings.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">global_data</span> <span class="pre">*gd</span></code></dt><dd><p>Values computed during the run. Treat this as mutable execution state. It
+owns histogram buffers, input catalog metadata, output paths, timing
+counters, tree statistics, and allocation flags used during cleanup.</p>
+</dd>
+</dl>
+<p>The large catalog and tree tables are declared as project globals in
+<code class="docutils literal notranslate"><span class="pre">include/globaldefs.h</span></code>:</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">bodytable[MAXITEMS]</span></code></dt><dd><p>Per-catalog body arrays.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">roottable[MAXITEMS]</span></code></dt><dd><p>One tree root per loaded catalog.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">nodetablescanlev[MAXITEMS]</span></code> and <code class="docutils literal notranslate"><span class="pre">nodetablescanlev_root[MAXITEMS]</span></code></dt><dd><p>Flattened node tables used by scan-level traversal and diagnostics.</p>
+</dd>
+</dl>
+<p>The body/cell hierarchy is defined in <code class="docutils literal notranslate"><span class="pre">include/datastruc_defs.h</span></code>. A <code class="docutils literal notranslate"><span class="pre">body</span></code>
+contains a <code class="docutils literal notranslate"><span class="pre">node</span></code> named <code class="docutils literal notranslate"><span class="pre">bodynode</span></code> and a body id. A <code class="docutils literal notranslate"><span class="pre">cell</span></code> contains a
+<code class="docutils literal notranslate"><span class="pre">node</span></code> named <code class="docutils literal notranslate"><span class="pre">cellnode</span></code>, a size, a linked <code class="docutils literal notranslate"><span class="pre">more</span></code> pointer, and <code class="docutils literal notranslate"><span class="pre">NSUB</span></code>
+subcells. The macros in that header, for example <code class="docutils literal notranslate"><span class="pre">Pos(x)</span></code>, <code class="docutils literal notranslate"><span class="pre">Mass(x)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Radius(x)</span></code>, and <code class="docutils literal notranslate"><span class="pre">Subp(x)</span></code>, are the intended field access style throughout
+the C code.</p>
+</section>
+<section id="tree-and-search-lifecycle">
+<h2>Tree and search lifecycle<a class="headerlink" href="#tree-and-search-lifecycle" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">MakeTree</span></code> in <code class="docutils literal notranslate"><span class="pre">source/treeload.c</span></code> starts with <code class="docutils literal notranslate"><span class="pre">newtree</span></code> and a root cell,
+then loads bodies into subcells using <code class="docutils literal notranslate"><span class="pre">loadbody</span></code> and <code class="docutils literal notranslate"><span class="pre">subindex</span></code>. After
+insertion, <code class="docutils literal notranslate"><span class="pre">hackcellprop</span></code> computes cell-level properties used by the search,
+<code class="docutils literal notranslate"><span class="pre">threadtree</span></code> links traversal order, and <code class="docutils literal notranslate"><span class="pre">scanLevel</span></code> prepares node tables
+for level-based operations.</p>
+<p><code class="docutils literal notranslate"><span class="pre">searchcalc_normal_sincos</span></code> in <code class="docutils literal notranslate"><span class="pre">source/search.c</span></code> is the default search path
+for <code class="docutils literal notranslate"><span class="pre">searchMethod=tree-omp-sincos</span></code>/<code class="docutils literal notranslate"><span class="pre">octree-sincos-omp</span></code> style runs. It:</p>
+<ol class="arabic simple">
+<li><p>Initializes global and per-thread histogram workspaces.</p></li>
+<li><p>Runs an OpenMP loop over pivot bodies from the selected pivot catalog.</p></li>
+<li><p>Walks the scanning catalog tree with <code class="docutils literal notranslate"><span class="pre">normal_walktree_sincos</span></code>.</p></li>
+<li><p>Uses acceptance/rejection helpers from <code class="docutils literal notranslate"><span class="pre">source/cballsutils.c</span></code> to decide
+whether a body/cell or cell/cell pair contributes.</p></li>
+<li><p>Accumulates 2PCF and, when enabled at compile time, 3PCF Chebyshev/sine/cosine
+components.</p></li>
+<li><p>Merges thread-local histograms back into <code class="docutils literal notranslate"><span class="pre">gd</span></code>.</p></li>
+</ol>
+</section>
+<section id="histogram-ownership">
+<h2>Histogram ownership<a class="headerlink" href="#histogram-ownership" title="Link to this heading"></a></h2>
+<p>Histogram buffers are allocated during startup and search initialization, then
+freed through the <code class="docutils literal notranslate"><span class="pre">EndRun_FreeMemory_*</span></code> routines in <code class="docutils literal notranslate"><span class="pre">source/cballsio.c</span></code>.
+The important ownership rule is: if a new allocation is attached to <code class="docutils literal notranslate"><span class="pre">cmd</span></code> or
+<code class="docutils literal notranslate"><span class="pre">gd</span></code>, it needs a matching allocation flag or an existing cleanup stage that
+cannot miss it. This is especially important for the Python wrapper, because
+<code class="docutils literal notranslate"><span class="pre">cballs.struct_cleanup</span></code> calls the granular C cleanup routines instead of only
+exiting the process.</p>
+<p>Common histogram outputs include:</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">histNN</span></code></dt><dd><p>Neighbor count histogram.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">histCF</span></code></dt><dd><p>Correlation-function style output derived from counts.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">histXi2pcf</span></code></dt><dd><p>Two-point correlation function output.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">histZetaM*</span></code> and <code class="docutils literal notranslate"><span class="pre">mhistZetaM*</span></code></dt><dd><p>Three-point/Chebyshev multipole outputs, split by sine/cosine component and
+multipole index when the corresponding compile-time options are enabled.</p>
+</dd>
+</dl>
+</section>
+<section id="adding-or-changing-parameters">
+<h2>Adding or changing parameters<a class="headerlink" href="#adding-or-changing-parameters" title="Link to this heading"></a></h2>
+<p>To add a user-visible parameter:</p>
+<ol class="arabic simple">
+<li><p>Add the default, description, and optional short name in
+<code class="docutils literal notranslate"><span class="pre">include/cmdline_defs.h</span></code>.</p></li>
+<li><p>Add fields to <code class="docutils literal notranslate"><span class="pre">struct</span> <span class="pre">cmdline_data</span></code> in <code class="docutils literal notranslate"><span class="pre">include/cmdline_data.h</span></code> if the
+value needs to persist.</p></li>
+<li><p>Read the parameter in <code class="docutils literal notranslate"><span class="pre">ReadParametersCmdline</span></code> and <code class="docutils literal notranslate"><span class="pre">ReadParameterFile</span></code> in
+<code class="docutils literal notranslate"><span class="pre">source/startrun.c</span></code>.</p></li>
+<li><p>Print it from <code class="docutils literal notranslate"><span class="pre">PrintParameterFile</span></code> so generated parameter snapshots remain
+reproducible.</p></li>
+<li><p>Validate derived constraints in <code class="docutils literal notranslate"><span class="pre">CheckParameters</span></code> when invalid
+combinations would otherwise fail later.</p></li>
+<li><p>If the parameter is exposed to Python, mirror it in <code class="docutils literal notranslate"><span class="pre">python/ccballys.pxd</span></code>
+and set or document it in <code class="docutils literal notranslate"><span class="pre">python/cballys.pyx</span></code>.</p></li>
+</ol>
+</section>
+<section id="adding-input-output-formats">
+<h2>Adding input/output formats<a class="headerlink" href="#adding-input-output-formats" title="Link to this heading"></a></h2>
+<p>Input format names are converted to integer tags by
+<code class="docutils literal notranslate"><span class="pre">infilefmt_string_to_int</span></code> in <code class="docutils literal notranslate"><span class="pre">source/cballsio.c</span></code>. Add a new tag in the same
+style as the existing formats, implement the parser near the other
+<code class="docutils literal notranslate"><span class="pre">inputdata_*</span></code> functions, and add the switch case in <code class="docutils literal notranslate"><span class="pre">InputData</span></code> or
+<code class="docutils literal notranslate"><span class="pre">InputData_all_in_one</span></code>.</p>
+<p>Output formats follow the matching pattern through
+<code class="docutils literal notranslate"><span class="pre">outfilefmt_string_to_int</span></code>, <code class="docutils literal notranslate"><span class="pre">outputdata</span></code>, and the <code class="docutils literal notranslate"><span class="pre">outputdata_*</span></code> helpers.
+Keep filename construction in <code class="docutils literal notranslate"><span class="pre">setFilesDirs</span></code>/<code class="docutils literal notranslate"><span class="pre">setFilesDirs_log</span></code> so command
+line, tests, and Python runs all agree on output paths.</p>
+</section>
+<section id="adding-search-methods">
+<h2>Adding search methods<a class="headerlink" href="#adding-search-methods" title="Link to this heading"></a></h2>
+<p>Search-method selection happens in two places:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">search_method_string_to_int</span></code> in <code class="docutils literal notranslate"><span class="pre">source/startrun.c</span></code> maps user strings
+to integer constants.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EvalHist</span></code> in <code class="docutils literal notranslate"><span class="pre">source/cballs.c</span></code> switches on <code class="docutils literal notranslate"><span class="pre">gd-&gt;searchMethod_int</span></code> and
+calls the concrete implementation.</p></li>
+</ol>
+<p>New search methods usually need prototypes in <code class="docutils literal notranslate"><span class="pre">include/protodefs.h</span></code>, compile
+settings in the Makefiles or add-on make fragments, and output handling in
+<code class="docutils literal notranslate"><span class="pre">source/cballs.c</span></code> only if they produce different histogram families.</p>
+</section>
+<section id="add-on-sockets">
+<h2>Add-on sockets<a class="headerlink" href="#add-on-sockets" title="Link to this heading"></a></h2>
+<p>Core files contain <code class="docutils literal notranslate"><span class="pre">//B</span> <span class="pre">socket:</span></code> blocks guarded by <code class="docutils literal notranslate"><span class="pre">#ifdef</span> <span class="pre">ADDONS</span></code>. These
+blocks include generated or configured files such as <code class="docutils literal notranslate"><span class="pre">*_include.h</span></code> so optional
+modules can add fields, prototypes, switch cases, and setup logic without
+editing every core file manually. When adding an add-on, keep its ownership
+localized under <code class="docutils literal notranslate"><span class="pre">addons/&lt;name&gt;/</span></code> and document which socket files it expects to
+be copied or generated.</p>
+</section>
+<section id="python-wrapper-notes">
+<h2>Python wrapper notes<a class="headerlink" href="#python-wrapper-notes" title="Link to this heading"></a></h2>
+<p>The wrapper class <code class="docutils literal notranslate"><span class="pre">cballs</span></code> in <code class="docutils literal notranslate"><span class="pre">python/cballys.pyx</span></code> keeps a Python parameter
+dictionary in <code class="docutils literal notranslate"><span class="pre">self._pars</span></code>. <code class="docutils literal notranslate"><span class="pre">Run</span></code> converts that dictionary into
+<code class="docutils literal notranslate"><span class="pre">file_content</span></code>, calls <code class="docutils literal notranslate"><span class="pre">input_read_from_file</span></code>, then advances through
+<code class="docutils literal notranslate"><span class="pre">StartRun_Common</span></code>, <code class="docutils literal notranslate"><span class="pre">PrintParameterFile</span></code>, <code class="docutils literal notranslate"><span class="pre">SetNumberThreads</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">MainLoop</span></code> according to the requested dependency level.</p>
+<p>Getter methods such as <code class="docutils literal notranslate"><span class="pre">getrBins</span></code>, <code class="docutils literal notranslate"><span class="pre">getHistNN</span></code>, <code class="docutils literal notranslate"><span class="pre">getHistXi2pcf</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">getHistZetaMsincos</span></code> copy C arrays into NumPy arrays. They assume the relevant
+run stage has already completed and that <code class="docutils literal notranslate"><span class="pre">sizeHistN</span></code> still matches the
+allocated histogram dimensions.</p>
+<p>When changing C struct fields consumed by Python, update both
+<code class="docutils literal notranslate"><span class="pre">python/ccballys.pxd</span></code> and the getter or setup code in <code class="docutils literal notranslate"><span class="pre">python/cballys.pyx</span></code>.
+The wrapper intentionally exposes only a subset of the C structs; avoid adding
+fields to the <code class="docutils literal notranslate"><span class="pre">.pxd</span></code> unless Python needs direct access.</p>
+</section>
+<section id="generated-and-vendored-code">
+<h2>Generated and vendored code<a class="headerlink" href="#generated-and-vendored-code" title="Link to this heading"></a></h2>
+<p>The repository includes generated Sphinx output under <code class="docutils literal notranslate"><span class="pre">docs/_build</span></code> and large
+vendored libraries under <code class="docutils literal notranslate"><span class="pre">addons/</span></code>. Prefer editing the source <code class="docutils literal notranslate"><span class="pre">.rst</span></code> files,
+core <code class="docutils literal notranslate"><span class="pre">source/</span></code> and <code class="docutils literal notranslate"><span class="pre">include/</span></code> code, or add-on source fragments rather than
+generated HTML/LaTeX or third-party library internals.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pre_post_process.html" class="btn btn-neutral float-left" title="Pre/Post processing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="addons.html" class="btn btn-neutral float-right" title="AddOn&#39;s" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Mario A. Rodriguez-Meza.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
