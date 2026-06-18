@@ -77,7 +77,7 @@ Miscellaneous parameters
     - 2 = output progress information
     - 3 = output extra debugging lines
 
-:verbose_log: (int, default=1) [alias: verblog] To print messages to a log file ``cballs.log`` in directory ``tmp`` under output directory given by the parameter: ``rootDir`.
+:verbose_log: (int, default=1) [alias: verblog] To print messages to a log file ``cballs.log`` in directory ``tmp`` under output directory given by the parameter: ``rootDir``.
 
     Amount of message information is controlled by the int given.
 
@@ -104,5 +104,4 @@ Miscellaneous parameters
     - It is not necessary to specify all the parameters. You need to give only the ones apropriate to the run. The rest of parameters will use their default values if they are OK with you.
 
     - When you specify the root output directory using: ``rootDir``, and this is a single directory that will be located in the pwd dir, then do not use ``./`` at the begining of the name or ``/`` at its end.
-
 
