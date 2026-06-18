@@ -1,6 +1,6 @@
 
 Catalog files
-===========
+=============
 
 This section describes the various formats of catalog points you need to compute correlation functions on them.
 
@@ -27,4 +27,3 @@ Miscellaneous formats
 :multi-columns-ascii: This format is to be able to read any ascci file with values arrage in columns. Positions can be in any order and with/without header. For example, files with halo catalogs from Rockstar can be read.
 
 :fits-healpix: to read maps in Healpix format using cfitsio library. This format permits to apply a mask in the same format.
-

@@ -1,91 +1,84 @@
+Python Interface Reference
+==========================
 
-Python interface
-================
+The current extension module is ``cyballs`` and the wrapped class is
+``cballs``.  It calls the same C lifecycle as the command-line executable.
 
-The Python extension is implemented by ``python/cballys.pyx`` and declared to
-Cython through ``python/ccballys.pxd``. It wraps the same C lifecycle used by the
-``cballs`` executable, but exposes it as a Python class named ``cballs``.
-
-Basic lifecycle
+Basic Lifecycle
 ---------------
-
-Typical Python use follows this pattern:
 
 .. code-block:: python
 
-   from cballys import cballs
+   from cyballs import cballs
 
-   cb = cballs()
-   cb.set(
-       infile="catalog.txt",
-       infileformat="columns-ascii",
-       rootDir="Output",
-       options="compute-HistN",
+   model = cballs()
+   model.set(
+       nbody=4096,
+       sizeHistN=12,
+       mChebyshev=3,
+       rootDir="Output_python",
+       numberThreads=1,
+       verbose=0,
+       verbose_log=0,
    )
-   cb.Run()
-   rbins = cb.getrBins()
-   xi2 = cb.getHistXi2pcf()
+   cpu_time = model.Run()
+   radius = model.getrBins()
+   xi = model.getHistXi2pcf()
+   model.clean_all()
 
-``set`` updates the internal parameter dictionary. ``Run`` converts that
-dictionary into the C ``file_content`` representation, calls the startup
-routines, executes the main search, and leaves C-owned histograms available for
-getter methods. ``clean_all`` releases C allocations and clears the Python
-parameter dictionary.
+``set`` accepts either one mapping or keyword arguments.  ``Run`` expands the
+requested stage dependencies, converts the Python parameters into the C parser
+representation, initializes the search, and leaves result arrays available to
+the getters.  ``clean_all`` releases C allocations and clears the parameter
+dictionary.
 
-Run levels
+Run Levels
 ----------
 
-``Run(level=[...])`` accepts the name of the last C stage the caller needs. The
-wrapper expands dependencies automatically. The default level is
-``["MainLoop"]``, which performs a full calculation. Internally the common stage
-order is:
+``Run(level=[...])`` accepts the last C stage required by the caller.  Its
+default, ``["MainLoop"]``, executes the full calculation while keeping arrays
+available to Python.  The common order is:
 
-1. ``input`` reads Python parameters into C structures.
-2. ``StartRun_Common`` validates parameters, initializes state, loads input
-   catalogs or test data, and allocates memory.
-3. ``PrintParameterFile`` writes a reproducible parameter snapshot.
-4. ``SetNumberThreads`` applies the OpenMP thread count.
-5. ``MainLoop`` builds trees, runs the selected search, and evaluates
-   histograms.
+1. ``input`` parses the staged Python parameters.
+2. ``StartRun_Common`` validates settings and allocates run state.
+3. ``PrintParameterFile`` records the used values.
+4. ``SetNumberThreads`` applies OpenMP thread control.
+5. ``MainLoop`` builds trees, performs searches, and evaluates histograms.
 
-Available getters
+Available Getters
 -----------------
 
-The wrapper exposes small, NumPy-oriented getters for the C arrays used most
-often from notebooks and scripts:
-
 ``getrBins``
-    Radial bin centers or edges as prepared by the C run.
+    Radial-bin values.
 
 ``getHistNN`` and ``getHistCF``
-    Neighbor counts and correlation-function outputs.
+    Neighbor-count and count-derived correlation histograms.
 
 ``getHistXi2pcf``
-    Two-point correlation function array.
+    Two-point correlation function.
 
-``getHistZetaMsincos(m, type)`` and ``getHistZetaM_EE(m)``
-    Two-dimensional 3PCF/multipole matrices for the requested multipole index.
+``getHistZetaMsincos(m, type)``
+    3PCF multipole matrix.  ``type`` selects cosine, sine, sine-cosine, or
+    cosine-sine components.
 
-``getNThreads``, ``getTheta``, ``getrsmooth``, ``getCPUTime``, ``getVersion``,
-``getRootDir``, and allocation-flag getters expose selected scalar state from
-the underlying C structs.
+``getHistZetaM_EE(m)``
+    Edge-corrected 3PCF multipole matrix when that build path is enabled.
 
-Cython interface
+``getNThreads``, ``getnMultipoles``, ``getTheta``, ``getrsmooth``,
+``getCPUTime``, ``getVersion``, ``getRootDir``, and ``getNBody`` expose
+selected scalar state.
+
+Memory Ownership
 ----------------
 
-``python/ccballys.pxd`` intentionally declares only the fields and C functions
-needed by the wrapper. When a C field is renamed, moved, or newly needed by
-Python, update the ``.pxd`` declaration and the matching logic in
-``python/cballys.pyx`` together.
+The C core owns catalogs, trees, and histogram buffers after initialization.
+Call ``clean_all`` after copying required NumPy results.  For repeated runs in a
+long-lived process, do not retain references to arrays that depend on C memory
+after cleanup.
 
-Memory is owned by the C code after ``StartRun_Common``. The wrapper tracks C
-allocation flags and calls the granular ``EndRun_FreeMemory_*`` routines from
-``struct_cleanup``. New C allocations that should survive long enough for
-Python getters must also be reachable by the cleanup path.
-
-See also
+See Also
 --------
 
-For a broader map of the C modules and Python wrapper, see
-:doc:`code_structure`.
+See :doc:`user/python` for a task-oriented workflow and
+:doc:`code_structure` for Cython implementation details.
 
