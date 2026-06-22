@@ -8,10 +8,10 @@ $ python setup.py install --user
 You can check that these steps work by typing
 
 $ python
->>> from cballys import cballs
+>>> from cyballs import cballs
 
 If python does not complain, the cballs module has been correctly installed in your python distribution. You can now import it and use its functions from your python codes.  
 
 Notes:
 1. GSL is not working so far. Go Makefile_settings (USEGSL) and turn it off.
-2. Set NDIM (in ccballys.pxd) as pretend to use cBalls. Set it according to Makefile_settings.
+2. Set NDIM (in ccyballs.pxd) as pretend to use cBalls. Set it according to Makefile_settings.

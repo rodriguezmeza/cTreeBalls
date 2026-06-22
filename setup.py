@@ -1,29 +1,12 @@
-#
-# Test it with python 3.7
-#   there are some issues with python 3.9...
-#
-#https://blog.ganssle.io/articles/2021/10/setup-py-deprecated.html
-#https://build.pypa.io/en/stable/
-#
-# Should be installed with 'pip install .' ... check it!
-#
-# pip install setuptools --upgrade
-# pip install numpy --upgrade
-#
-# Could be useful to add
-# pipVersion = pkg_resources.require("pip")[0].version
-#setuptoolsVersion = pkg_resources.require("setuptools")[0].version
-#
-#print("\n PIP Version", pipVersion, "\n")
-#print("\n Setuptools Version", setuptoolsVersion, "\n")
-#
+# cTreeBalls Python extension build.
+# Invoke through pip; pyproject.toml provides the isolated build dependencies.
 
-from distutils.core import setup
-from distutils.extension import Extension
-from Cython.Distutils import build_ext
+from setuptools import setup, Extension
+from Cython.Distutils import build_ext as cython_build_ext
 
 import numpy as nm
 import os
+import subprocess
 import subprocess as sbp
 import os.path as osp
 
@@ -49,7 +32,7 @@ if b"mvec" not in MVEC_STRING:
     liblist += ["mvec","m"]
 
 # define absolute paths
-root_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".")
+root_folder = os.path.dirname(os.path.abspath(__file__))
 include_folder = os.path.join(root_folder, "include")
 general_libs_folder = os.path.join(root_folder, "general_libs")
 getparam_folder = os.path.join(root_folder, "getparam")
@@ -99,11 +82,45 @@ cyballs_ext = Extension("cyballs", [os.path.join(cyballs_folder, "cyballs.pyx")]
 import sys
 cyballs_ext.cython_directives = {'language_level': "3" if sys.version_info.major>=3 else "2"}
 
+
+class build_ext(cython_build_ext):
+    """Build the native cTreeBalls library before linking the extension."""
+
+    def run(self):
+        subprocess.check_call(["make", "clean"], cwd=root_folder)
+        subprocess.check_call(["make", "libcballs.a"], cwd=root_folder)
+        super().run()
+
 setup(
-    name='cyballs',
+    name='cTreeBalls',
     version=VERSION,
-    description='Python interface to the nPCF code cballs',
-    url='http://github.com/rodriguezmeza/cTreeBalls.git',
+    description='Tree/balls methods for two- and three-point correlation functions',
+    long_description=open(
+        os.path.join(root_folder, "README.md"), encoding="utf-8"
+    ).read(),
+    long_description_content_type='text/markdown',
+    url='https://github.com/rodriguezmeza/cTreeBalls',
+    project_urls={
+        'Documentation': 'https://ctreeballs.readthedocs.io/en/latest/',
+        'Source': 'https://github.com/rodriguezmeza/cTreeBalls',
+        'Issues': 'https://github.com/rodriguezmeza/cTreeBalls/issues',
+    },
+    author='Mario A. Rodriguez-Meza and cTreeBalls contributors',
+    license='MIT',
+    python_requires='>=3.8',
+    install_requires=['numpy>=1.22'],
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: MIT License',
+        'Operating System :: POSIX :: Linux',
+        'Programming Language :: C',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3 :: Only',
+        'Topic :: Scientific/Engineering :: Astronomy',
+        'Topic :: Scientific/Engineering :: Physics',
+    ],
     cmdclass={'build_ext': build_ext},
     ext_modules=[cyballs_ext],
+    zip_safe=False,
 )

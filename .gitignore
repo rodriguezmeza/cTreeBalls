@@ -1,0 +1,25 @@
+# Native and Python build products
+build/
+dist/
+*.o
+*.a
+*.so
+cballs
+*.egg-info/
+python/cballys.c
+python/build/
+
+# Documentation builds
+docs/_build/
+
+# Test outputs and caches
+tests/Output/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Platform metadata
+.DS_Store
+*Zone.Identifier
