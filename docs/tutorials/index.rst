@@ -10,6 +10,7 @@ external catalogs.
 
    minimal-cli
    python-wrapper
+   colab-python-wrapper
    catalog-workflow
    ../handson
    ../pre_post_process
