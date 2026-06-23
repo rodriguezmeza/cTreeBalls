@@ -34,6 +34,17 @@ The distribution name and import name intentionally differ: pip installs
 ``cyballs``.  The first installation can take several minutes because the
 bundled native libraries are compiled locally.
 
+Run in Google Colab
+-------------------
+
+For a browser-based smoke test with plots, use the standalone Colab notebook:
+
+`Open the cTreeBalls Colab notebook <https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb>`_
+
+The notebook installs ``cTreeBalls`` from PyPI, imports ``cyballs``, runs a
+compact synthetic-catalog calculation, and plots the returned arrays.  It does
+not require cloning the repository.
+
 Build All Interfaces from a Checkout
 ------------------------------------
 

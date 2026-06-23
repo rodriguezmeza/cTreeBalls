@@ -1,9 +1,10 @@
 Tutorials
 =========
 
-These tutorials progress from a small generated catalog to real map and Python
-workflows.  Start with the compact CLI example before downloading large
-external catalogs.
+These tutorials progress from small generated-catalog smoke tests to real map
+and Python workflows.  If you want a browser-only start, open the Colab
+notebook first.  If you need command-line outputs, start with the compact CLI
+example before downloading large external catalogs.
 
 .. toctree::
    :maxdepth: 1

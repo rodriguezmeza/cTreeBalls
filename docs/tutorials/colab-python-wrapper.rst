@@ -14,3 +14,18 @@ histogram counts.
 It is intended as a smoke test and starting point.  For production catalog
 workflows, move on to :doc:`catalog-workflow` after the Colab example runs
 successfully.
+
+Notebook Flow
+-------------
+
+The notebook follows this sequence:
+
+1. install native build tools and ``cTreeBalls==1.0.1`` from PyPI;
+2. import ``cyballs.cballs``;
+3. run a small generated-catalog calculation;
+4. copy ``rBins``, ``histXi2pcf``, and ``histNN`` into NumPy arrays;
+5. plot the 2PCF-style output and histogram counts;
+6. optionally download the generated output directory.
+
+This mirrors the :doc:`python-wrapper` tutorial but keeps everything inside the
+Colab runtime.

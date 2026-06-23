@@ -1,8 +1,56 @@
 Quickstart
 ==========
 
-This page validates a source build with a small synthetic catalog.  It avoids
-the large external Takahashi data files used by the full tutorial.
+This page validates cTreeBalls with a small synthetic catalog.  Start with the
+PyPI package when you only need the Python wrapper; build from a source checkout
+when you also need the command-line executable or development files.
+
+Install From PyPI
+-----------------
+
+.. code-block:: bash
+
+   python3 -m pip install cTreeBalls
+
+Verify the Python wrapper:
+
+.. code-block:: bash
+
+   python3 -c "from cyballs import cballs; print(cballs)"
+
+Run the minimal Python calculation:
+
+.. code-block:: python
+
+   import numpy as np
+   from cyballs import cballs
+
+   model = cballs()
+   model.set(
+       nbody=4096,
+       sizeHistN=12,
+       mChebyshev=3,
+       rootDir="Output_python_quick",
+       numberThreads=1,
+       verbose=0,
+       verbose_log=0,
+   )
+
+   cpu_time = model.Run()
+   radius = np.array(model.getrBins(), copy=True)
+   xi = np.array(model.getHistXi2pcf(), copy=True)
+   model.clean_all()
+
+   print(f"CPU time: {cpu_time:.3f} s")
+   print(np.column_stack([radius, xi]))
+
+Try the Same Workflow in Colab
+------------------------------
+
+The standalone notebook runs the same style of compact calculation in a fresh
+Google Colab runtime and plots the results:
+
+`Open the cTreeBalls Colab notebook <https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb>`_
 
 Build From a Source Checkout
 ----------------------------

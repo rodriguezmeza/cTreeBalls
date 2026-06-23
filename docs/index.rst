@@ -17,7 +17,23 @@ runs; then consult the tutorials and developer reference.
 Basic Usage
 -----------
 
-Build from a source checkout:
+Install the Python interface from PyPI:
+
+.. code-block:: bash
+
+   python3 -m pip install cTreeBalls
+
+Then import the compiled wrapper as ``cyballs``:
+
+.. code-block:: python
+
+   from cyballs import cballs
+
+For a no-checkout notebook workflow, open the standalone Colab example:
+`cTreeBalls minimal Colab notebook <https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb>`_.
+
+Build from a source checkout only when you also need the ``cballs`` command-line
+executable, the static library, test catalogs, or development files:
 
 .. code-block:: bash
 
@@ -33,7 +49,7 @@ Run a compact synthetic-catalog calculation:
    ./cballs nbody=4096 sizeHistN=12 mChebyshev=3 \
       rootDir=Output_quick numberThreads=1 verbose=0 verbose_log=0
 
-Or call the same C core through Python:
+Call the same C core through Python:
 
 .. code-block:: python
 
@@ -57,11 +73,12 @@ Or call the same C core through Python:
 How to Use This Guide
 ---------------------
 
-Read :doc:`installation` and :doc:`quickstart` first.  For production runs,
-consult :doc:`user/command-line`, :doc:`user/inputs`, :doc:`user/outputs`, and
-:doc:`performance`.  Existing detailed material on parameters, formats,
-pre/post-processing, 2PCF, 3PCF, and add-ons remains available under Tutorials
-and Reference.
+Read :doc:`installation` first for the PyPI and source-build paths.  Then use
+:doc:`quickstart` or the :doc:`tutorials/colab-python-wrapper` notebook for a
+small smoke test.  For production runs, consult :doc:`user/command-line`,
+:doc:`user/inputs`, :doc:`user/outputs`, and :doc:`performance`.  Existing
+detailed material on parameters, formats, pre/post-processing, 2PCF, 3PCF, and
+add-ons remains available under Tutorials and Reference.
 
 .. toctree::
    :maxdepth: 2
