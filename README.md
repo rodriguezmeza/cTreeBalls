@@ -11,6 +11,7 @@ Major contributors:
 - [Alejandro Aviles](https://github.com/alejandroaviles)
 - [Eladio Moreno](https://github.com/Eladio-Moreno)
 - [Gustavo Niz](https://github.com/gnizq64)
+- [Sadi Ramirez](https://github.com/sadirs)
 - Axel Romero Tisnado
 
 
