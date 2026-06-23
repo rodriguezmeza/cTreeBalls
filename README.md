@@ -30,6 +30,9 @@ Major contributors:
 
 Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/).
 
+Try the standalone Python-wrapper notebook in Google Colab:
+[Open cTreeBalls in Colab](https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb).
+
 ## Install the Python interface
 
 The PyPI distribution is named `cTreeBalls`; the Python extension is imported
