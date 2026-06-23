@@ -6,6 +6,7 @@ from Cython.Distutils import build_ext as cython_build_ext
 
 import numpy as nm
 import os
+import shutil
 import subprocess
 import subprocess as sbp
 import os.path as osp
@@ -83,10 +84,48 @@ import sys
 cyballs_ext.cython_directives = {'language_level': "3" if sys.version_info.major>=3 else "2"}
 
 
+def ensure_bundled_cfitsio_alias():
+    """Ensure Makefile paths can find the bundled CFITSIO headers.
+
+    Git preserves ``addons/cfitsiolib/cfitsio`` as a symlink, but source
+    distribution unpacking can materialize or omit that alias depending on the
+    build environment.  The Makefile expects the non-versioned path, so recreate
+    it from the bundled versioned CFITSIO sources before compiling.
+    """
+
+    cfitsiolib_folder = os.path.join(root_folder, "addons", "cfitsiolib")
+    alias_folder = os.path.join(cfitsiolib_folder, "cfitsio")
+    alias_header = os.path.join(alias_folder, "fitsio.h")
+    if os.path.exists(alias_header):
+        return
+
+    for versioned_name in ("cfitsio_ver_4.6.3", "cfitsio_ver_4.4.1"):
+        source_folder = os.path.join(cfitsiolib_folder, versioned_name)
+        if not os.path.exists(os.path.join(source_folder, "fitsio.h")):
+            continue
+
+        if os.path.lexists(alias_folder):
+            if os.path.islink(alias_folder) or os.path.isfile(alias_folder):
+                os.unlink(alias_folder)
+            else:
+                shutil.rmtree(alias_folder)
+
+        try:
+            os.symlink(versioned_name, alias_folder)
+        except (OSError, NotImplementedError):
+            shutil.copytree(source_folder, alias_folder)
+        return
+
+    raise RuntimeError(
+        "Could not find bundled CFITSIO headers under addons/cfitsiolib"
+    )
+
+
 class build_ext(cython_build_ext):
     """Build the native cTreeBalls library before linking the extension."""
 
     def run(self):
+        ensure_bundled_cfitsio_alias()
         subprocess.check_call(["make", "clean"], cwd=root_folder)
         subprocess.check_call(["make", "libcballs.a"], cwd=root_folder)
         super().run()
@@ -108,7 +147,7 @@ setup(
     author='Mario A. Rodriguez-Meza and cTreeBalls contributors',
     license='MIT',
     python_requires='>=3.8',
-    install_requires=['numpy>=1.22'],
+    install_requires=['numpy>=1.22,<2'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
