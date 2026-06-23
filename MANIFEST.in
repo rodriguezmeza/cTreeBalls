@@ -1,0 +1,15 @@
+include LICENSE
+include README.md
+include pyproject.toml
+include Makefile
+include Makefile_machine
+include Makefile_settings
+recursive-include source *.c
+recursive-include main *.c
+recursive-include include *.h
+recursive-include general_libs *.c *.h
+recursive-include getparam *.c *.h
+recursive-include python *.pyx *.pxd
+graft addons
+global-exclude .DS_Store
+global-exclude *.Po *.Plo

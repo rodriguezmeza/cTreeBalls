@@ -25,7 +25,7 @@ The command-line executable follows this high-level sequence:
    helpers.
 8. ``source/cballsio.c`` closes files and releases memory in ``EndRun``.
 
-The Cython wrapper in ``python/cballys.pyx`` calls the same C stages, but it
+The Cython wrapper in ``python/cyballs.pyx`` calls the same C stages, but it
 splits them into a dependency-checked ``Run(level=[...])`` workflow so Python
 callers can compute and then read arrays back without going through the command
 line.
@@ -92,11 +92,11 @@ Module map
    * - ``source/cballs.c``
      - Main computation driver and histogram output dispatch. This is where
        search-method selection reaches the concrete search implementation.
-   * - ``python/cballys.pyx``
+   * - ``python/cyballs.pyx``
      - Python class wrapper around the C lifecycle. Converts a Python parameter
        dictionary into CLASS-style ``file_content``, calls C modules, exposes
        histogram getters, and releases C allocations.
-   * - ``python/ccballys.pxd``
+   * - ``python/ccyballs.pxd``
      - Cython declarations for the C structs and functions that Python needs.
        Only expose fields here when the wrapper really consumes them.
    * - ``addons/``
@@ -199,8 +199,8 @@ To add a user-visible parameter:
    reproducible.
 5. Validate derived constraints in ``CheckParameters`` when invalid
    combinations would otherwise fail later.
-6. If the parameter is exposed to Python, mirror it in ``python/ccballys.pxd``
-   and set or document it in ``python/cballys.pyx``.
+6. If the parameter is exposed to Python, mirror it in ``python/ccyballs.pxd``
+   and set or document it in ``python/cyballs.pyx``.
 
 Adding input/output formats
 ---------------------------
@@ -243,7 +243,7 @@ be copied or generated.
 Python wrapper notes
 --------------------
 
-The wrapper class ``cballs`` in ``python/cballys.pyx`` keeps a Python parameter
+The wrapper class ``cballs`` in ``python/cyballs.pyx`` keeps a Python parameter
 dictionary in ``self._pars``. ``Run`` converts that dictionary into
 ``file_content``, calls ``input_read_from_file``, then advances through
 ``StartRun_Common``, ``PrintParameterFile``, ``SetNumberThreads``, and
@@ -255,7 +255,7 @@ run stage has already completed and that ``sizeHistN`` still matches the
 allocated histogram dimensions.
 
 When changing C struct fields consumed by Python, update both
-``python/ccballys.pxd`` and the getter or setup code in ``python/cballys.pyx``.
+``python/ccyballs.pxd`` and the getter or setup code in ``python/cyballs.pyx``.
 The wrapper intentionally exposes only a subset of the C structs; avoid adding
 fields to the ``.pxd`` unless Python needs direct access.
 

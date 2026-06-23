@@ -47,15 +47,13 @@ For the moment you may consult man page::
 
 or open with a browser the html file: docs/man/cballs.html
 
-See more details about parameters needed by cBalls below (:ref:`PARAMETERS`).
+See :doc:`params` for the complete parameter reference.
 
 Configuration
 -------------
 
 cBalls can be configured by switching on/off several options. Configuration file is ``Makefile_setting``. Search method ``balls-omp`` in folder addons/balls_omp: ``Makefile_settings_balls_omp`` has other options that can be switched on/off.
 
-
-.. _PARAMETERS:
 
 Parameters
 ----------
@@ -72,7 +70,7 @@ or its short version::
 Python
 ------
 
-cBalls python module (cballys) will be installed if you use::
+cBalls python module (cyballs) will be installed if you use::
 
     make clean; make all
 

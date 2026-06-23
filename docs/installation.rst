@@ -1,23 +1,44 @@
 Installation
 ============
 
+The Python interface is distributed on PyPI as ``cTreeBalls`` and imported as
+``cyballs``.  The installation builds a native extension from source using the
+repository's bundled GSL and CFITSIO code.
+
 Prerequisites
 -------------
 
-A source build requires a C compiler, ``make``, and Python development tools
-when the ``cyballs`` extension is needed.  The default configuration enables
-OpenMP, bundled GSL sources, the add-on system, and bundled CFITSIO support.
-
-On Debian or Ubuntu, a typical preparation is:
+The source build requires a C compiler, ``make``, ``ar``, and Python
+development headers.  On Debian or Ubuntu:
 
 .. code-block:: bash
 
    sudo apt-get update
-   sudo apt-get install build-essential python3-dev python3-pip
-   python3 -m pip install --user numpy Cython
+   sudo apt-get install build-essential python3-dev zlib1g-dev
 
-Clone and Build
----------------
+Install the Python Interface
+----------------------------
+
+.. code-block:: bash
+
+   python3 -m pip install cTreeBalls
+
+Verify the compiled extension:
+
+.. code-block:: bash
+
+   python3 -c "from cyballs import cballs; print(cballs)"
+
+The distribution name and import name intentionally differ: pip installs
+``cTreeBalls``, while Python programs import the compiled extension as
+``cyballs``.  The first installation can take several minutes because the
+bundled native libraries are compiled locally.
+
+Build All Interfaces from a Checkout
+------------------------------------
+
+Clone the repository when you also need the command-line executable, static
+library, test catalogs, or an editable development checkout:
 
 .. code-block:: bash
 
@@ -72,8 +93,8 @@ Changing a switch requires a clean rebuild:
    make clean
    make PYTHON=python3 all
 
-Verify the Installation
------------------------
+Verify the Checkout Build
+-------------------------
 
 From the repository root:
 
@@ -93,4 +114,3 @@ Build the Documentation
 
    python3 -m pip install -r docs/requirements.txt
    make -C docs html
-
