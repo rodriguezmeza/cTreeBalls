@@ -1,6 +1,6 @@
 #
 # -------------------------
-# To test balls-omp searching method
+# To test octree-ggg-omp searching method
 # -------------------------
 # In Makefile_settings set:
 #
