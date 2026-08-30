@@ -21,8 +21,40 @@
 #include "cballs_balls_omp.h"
 #endif
 
+#ifdef BALLS0357
+#include "cballs_balls_omp_0357.h"
+#endif
+
 #ifdef KDTREEOMP
 #include "cballs_kdtree_omp.h"
+#endif
+
+#if defined(BALLTREEOMP) || defined(BALLTREEMPI)
+#include "cballs_balltree_omp.h"
+#endif
+
+#ifdef BALLTREE2BALLSOMP
+#include "cballs_balltree_2balls_omp.h"
+#endif
+
+#ifdef BALLTREE2BALLSMPI
+#include "cballs_balltree_2balls_mpi.h"
+#endif
+
+#ifdef OCTREE2BALLSOMP
+#include "cballs_octree_2balls_omp.h"
+#endif
+
+#ifdef OCTREE2BALLSMPI
+#include "cballs_octree_2balls_mpi.h"
+#endif
+
+#ifdef BALLTREE2BALLSOMP3PCF
+#include "cballs_balltree_2balls_omp_3pcf.h"
+#endif
+
+#ifdef BALLTREE2BALLSMPI3PCF
+#include "cballs_balltree_2balls_mpi_3pcf.h"
 #endif
 
 #ifdef OCTREEKKKOMP
@@ -31,6 +63,14 @@
 
 #ifdef OCTREEGGGOMP
 #include "cballs_octree_ggg_omp.h"
+#endif
+
+#ifdef OCTREEGGGMPI
+#include "cballs_octree_ggg_mpi.h"
+#endif
+
+#ifdef OCTREESHEAROMP
+#include "cballs_octree_shear_omp.h"
 #endif
 
 #ifdef OCTREEGGGCROSSOMP
@@ -95,6 +135,14 @@
 
 #ifdef NEIGHBORBOXESOMP
 #include "cballs_neighbor_boxes_omp.h"
+#endif
+
+#ifdef OCTREE3PCF3DOMP
+#include "cballs_octree_3pcf_3d_omp.h"
+#endif
+
+#ifdef LYAFORESTOMP
+#include "cballs_lya_forest_omp.h"
 #endif
 
 

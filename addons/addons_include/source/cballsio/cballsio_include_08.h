@@ -16,6 +16,10 @@
 #include "cballsio_cfitsio_08.h"
 #endif
 
+#ifdef LYAFORESTOMP
+#include "cballsio_lya_forest_omp_08.h"
+#endif
+
 /*
  Add your addon item here
  */

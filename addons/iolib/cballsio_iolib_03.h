@@ -7,7 +7,8 @@
 case OUTCOLUMNSPOS:
     verb_print(cmd->verbose,
                "\n\tOutput in columns-ascii-pos format...\n");
-    outputdata_ascii_pos(cmd, gd, btable, nbody);
+    class_call_cballs(outputdata_ascii_pos(cmd, gd, btable, nbody),
+                      errmsg, errmsg);
     break;
 
 #endif	// ! _cballsio_iolib_03_h

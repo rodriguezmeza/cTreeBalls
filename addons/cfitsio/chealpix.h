@@ -153,6 +153,25 @@ void pix2vec_ring64(int64_t nside, int64_t ipix, double *vec);
 float *read_healpix_map (const char *infile, long *nside, char *coordsys,
   char *ordering);
 
+//B added by cBalls
+int read_healpix_map_status(const char *infile, long *nside,
+                            char *coordsys, char *ordering,
+                            float **map_out);
+
+int get_fits_size_status(const char *filename, long *nside,
+                         char *ordering, long *npix_out);
+
+/* Converts an in-memory HEALPix map to canonical RING order. For a NESTED
+   input, the original allocation is freed and *map_io is replaced. On
+   failure, ownership and the value of *map_io are unchanged. */
+int healpix_map_to_ring_status(float **map_io, long nside,
+                               const char *ordering);
+
+int write_healpix_map_status(const float *signal, long nside,
+                             const char *filename, char nest,
+                             const char *coordsys);
+//E
+
 void write_healpix_map (const float *signal, long nside, const char *filename,
   char nest, const char *coordsys);
 

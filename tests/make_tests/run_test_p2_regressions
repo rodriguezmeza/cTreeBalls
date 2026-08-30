@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-p2.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=$2
+
+    echo "ERROR: $message" >&2
+    if [ -f "$logfile" ]; then
+        cat "$logfile" >&2
+    fi
+    exit 1
+}
+
+expect_failure()
+{
+    local name=$1
+    local pattern=$2
+    shift 2
+
+    local output_dir="$TMP_ROOT/$name"
+    local logfile="$output_dir/run.log"
+    mkdir -p "$output_dir"
+
+    if "$CBALLS" \
+        search=octree-ggg-omp \
+        testmodel=simple-cubic \
+        nbody=8 \
+        rootDir="$output_dir" \
+        numberThreads=2 \
+        verbose=0 \
+        verbose_log=0 \
+        "$@" >"$logfile" 2>&1; then
+        fail_with_log "$name unexpectedly succeeded" "$logfile"
+    fi
+
+    grep -Eq "$pattern" "$logfile" \
+        || fail_with_log "$name did not report the expected diagnostic" "$logfile"
+}
+
+expect_failure equal-endpoints \
+    'rminHist must be finite and satisfy 0 <= rminHist < rangeN' \
+    useLogHist=false rangeN=0.1 rminHist=0.1
+
+expect_failure zero-log-minimum \
+    'logarithmic histograms require rminHist > 0' \
+    useLogHist=true rangeN=0.1 rminHist=0
+
+expect_failure zero-log-density \
+    'logarithmic histograms require logHistBinsPD > 0' \
+    useLogHist=true rangeN=0.1 rminHist=0.01 logHistBinsPD=0
+
+expect_failure sampled-histogram-too-small \
+    'out-m-HistZeta requires sizeHistN >= 4' \
+    options=out-m-HistZeta sizeHistN=3
+
+expect_failure negative-histogram-size \
+    'sizeHistN must be at least 2' \
+    sizeHistN=-1
+
+expect_failure trailing-integer-junk \
+    'invalid numeric value for sizeHistN.*trailing characters' \
+    sizeHistN=12junk
+
+expect_failure nonfinite-real \
+    'invalid numeric value for rangeN.*not finite' \
+    rangeN=nan
+
+expect_failure malformed-integer-list \
+    'invalid numeric value for iCatalogs.*trailing characters' \
+    iCatalogs=0:2junk
+
+cubic_dir="$TMP_ROOT/cubic-grid-too-small"
+cubic_log="$cubic_dir/run.log"
+mkdir -p "$cubic_dir"
+if "$CBALLS" \
+    search=octree-ggg-omp \
+    testmodel=simple-cubic \
+    nbody=3 \
+    rootDir="$cubic_dir" \
+    numberThreads=2 \
+    verbose=0 \
+    verbose_log=0 >"$cubic_log" 2>&1; then
+    fail_with_log "one-point cubic lattice unexpectedly succeeded" "$cubic_log"
+fi
+grep -q 'cubic test models require at least two lattice points per dimension' \
+    "$cubic_log" \
+    || fail_with_log "small cubic lattice reported the wrong diagnostic" \
+                     "$cubic_log"
+
+run_zero_divisor_regression()
+{
+    local method=$1
+    local output_dir="$TMP_ROOT/zero-divisor-$method"
+    local logfile="$output_dir/run.log"
+
+    mkdir -p "$output_dir"
+    "$CBALLS" \
+        search="$method" \
+        testmodel=simple-cubic \
+        nbody=8 \
+        rootDir="$output_dir" \
+        numberThreads=2 \
+        verbose=0 \
+        verbose_log=0 \
+        theta=0 \
+        stepState=1 \
+        options=no-out-Hist >"$logfile" 2>&1 \
+        || fail_with_log "$method rejected exact theta or a short progress interval" \
+                         "$logfile"
+}
+
+run_zero_divisor_regression octree-ggg-omp
+run_zero_divisor_regression kdtree-omp
+run_zero_divisor_regression kdtree-box-omp
+
+normalization_dir="$TMP_ROOT/zero-denominator"
+normalization_log="$normalization_dir/run.log"
+mkdir -p "$normalization_dir"
+
+"$CBALLS" \
+    search=octree-ggg-omp \
+    testmodel=simple-cubic \
+    nbody=8 \
+    rootDir="$normalization_dir" \
+    numberThreads=2 \
+    verbose=0 \
+    verbose_log=0 \
+    useLogHist=false \
+    rangeN=1.0e-6 \
+    rminHist=0 \
+    sizeHistN=8 \
+    mChebyshev=3 \
+    sizeHistPhi=16 \
+    options=compute-HistN >"$normalization_log" 2>&1 \
+    || fail_with_log "zero-denominator normalization run failed" "$normalization_log"
+
+normalized_files=$(find "$normalization_dir" -maxdepth 1 -type f \
+    \( -name 'histZetaM_cos_*.txt' -o -name 'histZetaM_sin_*.txt' \
+       -o -name 'histZetaM_sincos_*.txt' -o -name 'histZetaM_cossin_*.txt' \) \
+    -print)
+
+[ -n "$normalized_files" ] \
+    || fail_with_log "normalization run produced no Zeta histogram files" \
+                     "$normalization_log"
+
+if LC_ALL=C grep -Eiq '(^|[^[:alpha:]])[+-]?(nan|inf)([^[:alpha:]]|$)' \
+    $normalized_files; then
+    fail_with_log "zero-denominator normalization emitted NaN or infinity" \
+                  "$normalization_log"
+fi
+
+awk '
+    BEGIN { found_zero = 0 }
+    {
+        for (i = 1; i <= NF; i++) {
+            if (($i + 0.0) == 0.0) {
+                found_zero = 1
+            }
+        }
+    }
+    END { exit(found_zero ? 0 : 1) }
+' $normalized_files \
+    || fail_with_log "empty-support bins were not normalized to zero" \
+                     "$normalization_log"
+
+used_values="$normalization_dir/parameters_null-cballs-usedvalues"
+bad_parameter_file="$TMP_ROOT/invalid-parameter-file"
+parameter_log="$TMP_ROOT/invalid-parameter-file.log"
+[ -f "$used_values" ] \
+    || fail_with_log "normalization run did not produce a used-values file" \
+                     "$normalization_log"
+
+sed 's/^sizeHistN[[:space:]]*=.*/sizeHistN = 12junk/' \
+    "$used_values" >"$bad_parameter_file"
+
+if "$CBALLS" "$bad_parameter_file" >"$parameter_log" 2>&1; then
+    fail_with_log "parameter-file numeric junk unexpectedly succeeded" \
+                  "$parameter_log"
+fi
+
+echo "PASS: histogram domains, numeric parsing, zero-divisor guards, and zero normalization"

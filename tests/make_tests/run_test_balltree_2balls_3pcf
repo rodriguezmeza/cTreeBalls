@@ -1,0 +1,485 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MULTI_THREADS=${MULTI_THREADS:-4}
+ENGINE=${ENGINE:-balltree-2balls-omp_3pcf}
+ENGINE_MACRO=${ENGINE_MACRO:-BALLTREE2BALLSOMP3PCF}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-2balls-3pcf.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- "-D${ENGINE_MACRO}\\([[:space:]]\\|$\\)" <<<"$build_env" \
+    || fail_with_log "the active build does not enable $ENGINE_MACRO"
+if ! grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
+    echo "SKIP: $ENGINE 3PCF is disabled (TPCFON=0)"
+    exit 0
+fi
+
+"$PYTHON" - "$TMP_ROOT/auto.txt" "$TMP_ROOT/pivots.txt" \
+              "$TMP_ROOT/legs.txt" "$TMP_ROOT/aggregate.txt" <<'PY'
+import math
+import pathlib
+import sys
+
+auto_path, pivots_path, legs_path, aggregate_path = map(pathlib.Path, sys.argv[1:])
+
+auto = [
+    (0.11, 0.23, 0.37, 0.70),
+    (0.28, 0.16, 0.49, -0.35),
+    (0.44, 0.31, 0.19, 1.10),
+    (0.63, 0.12, 0.42, 0.25),
+    (0.77, 0.39, 0.28, -0.80),
+    (0.19, 0.58, 0.53, 0.55),
+    (0.36, 0.72, 0.14, 1.25),
+    (0.54, 0.64, 0.67, -0.45),
+    (0.82, 0.79, 0.46, 0.95),
+    (0.25, 0.87, 0.75, -0.20),
+    (0.69, 0.91, 0.82, 0.40),
+]
+pivots = auto[:5]
+legs = auto[4:]
+
+def write(path, rows):
+    path.write_text(
+        "".join(" ".join(f"{value:.17g}" for value in row) + "\n"
+                for row in rows),
+        encoding="ascii",
+    )
+
+write(auto_path, auto)
+write(pivots_path, pivots)
+write(legs_path, legs)
+
+aggregate = []
+for i in range(384):
+    angle = 0.173 * i
+    radius = 0.15 + 0.0015 * (i % 71)
+    x = 0.55 + radius * math.cos(angle) + 0.0007 * (i % 5)
+    y = 0.48 + radius * math.sin(angle) + 0.0009 * (i % 7)
+    z = 0.25 + 0.003 * (i % 83)
+    field = 0.4 + 0.02 * (i % 13)
+    aggregate.append((x, y, z, field))
+write(aggregate_path, aggregate)
+PY
+
+run_auto()
+{
+    local name=$1
+    local threads=$2
+    local options=$3
+    local catalog=${4:-$TMP_ROOT/auto.txt}
+    local nsmooth=${5:-2}
+    local theta=${6:-1}
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search="$ENGINE" \
+        in="$catalog" \
+        infmt=multi-columns-ascii \
+        columns=1,2,3,4 \
+        iCatalogs=1 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=1.4 \
+        rminHist=0.02 \
+        sizeHistN=5 \
+        mChebyshev=3 \
+        nsmooth="$nsmooth" \
+        theta="$theta" \
+        stepState=1000000 \
+        verbose=1 \
+        verbose_log=0 \
+        options="$options" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+exact_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,no-normalize-HistZeta,out-m-HistZeta
+normalized_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,out-m-HistZeta
+aggregate_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-normalize-HistZeta,out-m-HistZeta
+run_auto exact-one 1 "$exact_options"
+run_auto exact-many "$MULTI_THREADS" "$exact_options"
+run_auto exact-direct 1 "$exact_options,treecorr-direct-triples"
+run_auto exact-normalized 1 "$normalized_options"
+run_auto exact-normalized-direct 1 "$normalized_options,treecorr-direct-triples"
+run_auto theta-limit 1 "$aggregate_options" "$TMP_ROOT/auto.txt" 2 1e-12
+
+for component in cos sin sincos cossin; do
+    for order in 1 2 3 4; do
+        name="histZetaM_${component}_${order}.txt"
+        cmp -s "$TMP_ROOT/exact-one/$name" "$TMP_ROOT/exact-many/$name" \
+            || fail_with_log \
+                "exact 3PCF differs between thread counts: $name" \
+                "$TMP_ROOT/exact-many/run.log"
+    done
+done
+
+"$PYTHON" - "$TMP_ROOT/exact-one" \
+              "$TMP_ROOT/exact-direct" "$TMP_ROOT/theta-limit" <<'PY'
+import math
+import pathlib
+import sys
+
+factorized = pathlib.Path(sys.argv[1])
+candidates = (
+    (pathlib.Path(sys.argv[2]), "direct-triple exact mode"),
+    (pathlib.Path(sys.argv[3]), "theta-limit production mode"),
+)
+for candidate, label in candidates:
+    for component in ("cos", "sin", "sincos", "cossin"):
+        for order in range(1, 5):
+            name = f"histZetaM_{component}_{order}.txt"
+            left = [float(value)
+                    for line in (factorized / name).read_text().splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")
+                    for value in line.split()]
+            right = [float(value)
+                     for line in (candidate / name).read_text().splitlines()
+                     if line.strip() and not line.lstrip().startswith("#")
+                     for value in line.split()]
+            if len(left) != len(right) or any(
+                    not math.isclose(a, b, rel_tol=2.0e-12, abs_tol=2.0e-13)
+                    for a, b in zip(left, right)):
+                raise SystemExit(
+                    f"LogMultipole exact mode and {label} differ: {name}")
+PY
+
+"$PYTHON" - "$TMP_ROOT/exact-normalized" \
+              "$TMP_ROOT/exact-normalized-direct" <<'PY'
+import math
+import pathlib
+import sys
+
+factorized = pathlib.Path(sys.argv[1])
+direct = pathlib.Path(sys.argv[2])
+for component in ("cos", "sin", "sincos", "cossin"):
+    for order in range(1, 5):
+        name = f"histZetaM_{component}_{order}.txt"
+        left = [float(value)
+                for line in (factorized / name).read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+                for value in line.split()]
+        right = [float(value)
+                 for line in (direct / name).read_text().splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")
+                 for value in line.split()]
+        if len(left) != len(right) or any(
+                not math.isclose(a, b, rel_tol=2.0e-12, abs_tol=2.0e-13)
+                for a, b in zip(left, right)):
+            raise SystemExit(
+                f"normalized LogMultipole and direct mode differ: {name}")
+PY
+
+"$PYTHON" - "$TMP_ROOT/auto.txt" "$TMP_ROOT/exact-one" \
+              "$TMP_ROOT/exact-normalized" auto <<'PY'
+import itertools
+import math
+import pathlib
+import sys
+
+catalog_path = pathlib.Path(sys.argv[1])
+output_path = pathlib.Path(sys.argv[2])
+normalized_path = pathlib.Path(sys.argv[3])
+mode = sys.argv[4]
+rows = [tuple(map(float, line.split()))
+        for line in catalog_path.read_text(encoding="ascii").splitlines()
+        if line.strip()]
+# Standalone one-catalog startup centers every coordinate on the bounding-box
+# midpoint before tree construction. The reference must use that same frame
+# because the 3D angular basis is defined relative to the coordinate origin.
+center = tuple((min(row[axis] for row in rows)
+                + max(row[axis] for row in rows)) / 2.0
+               for axis in range(3))
+rows = [tuple(row[axis] - center[axis] for axis in range(3)) + (row[3],)
+        for row in rows]
+
+rmin = 0.02
+rmax = 1.4
+nbins = 5
+orders = 4
+width = (rmax - rmin) / nbins
+expected = {name: [[[0.0 for _ in range(nbins)] for _ in range(nbins)]
+                   for _ in range(orders)]
+            for name in ("cos", "sin", "sincos", "cossin")}
+denominator = [[0.0 for _ in range(nbins)] for _ in range(nbins)]
+
+def rotation(position):
+    x, y, z = position
+    alpha = beta = gamma = 0.01
+    a11 = 1.0 - gamma * alpha
+    a12 = alpha + gamma
+    return (
+        a11 * x + a12 * y - beta * z,
+        -a12 * x + a11 * y + gamma * beta * z,
+        beta * x + beta * alpha * y + z,
+    )
+
+def polar(pivot, neighbor):
+    dr = tuple(pivot[i] - neighbor[i] for i in range(3))
+    distance = math.sqrt(sum(value * value for value in dr))
+    q0 = rotation(pivot)
+    dr0 = tuple(pivot[i] - q0[i] for i in range(3))
+    reference = math.sqrt(sum(value * value for value in dr0))
+    if distance == 0.0 or reference == 0.0:
+        return None
+    cosine = sum(dr[i] * dr0[i] for i in range(3)) / (distance * reference)
+    cosine = min(1.0, max(-1.0, cosine))
+    sine = math.sqrt(max(0.0, 1.0 - cosine * cosine))
+    cross = (
+        dr0[1] * pivot[2] - dr0[2] * pivot[1],
+        dr0[2] * pivot[0] - dr0[0] * pivot[2],
+        dr0[0] * pivot[1] - dr0[1] * pivot[0],
+    )
+    if sum(dr[i] * cross[i] for i in range(3)) < 0.0:
+        sine = -sine
+    return distance, cosine, sine
+
+def radial_bin(distance):
+    if not rmin < distance < rmax:
+        return None
+    index = int((distance - rmin) / width)
+    return index if 0 <= index < nbins else None
+
+for ip, iq, ir in itertools.permutations(range(len(rows)), 3):
+    pivot = rows[ip]
+    q = rows[iq]
+    r = rows[ir]
+    dq, cosq1, sinq1 = polar(pivot[:3], q[:3])
+    dr, cosr1, sinr1 = polar(pivot[:3], r[:3])
+    nq = radial_bin(dq)
+    nr = radial_bin(dr)
+    if nq is None or nr is None:
+        continue
+    denominator[nq][nr] += 1.0
+    numerator = pivot[3] * q[3] * r[3]
+    cosq = cosr = 1.0
+    sinq = sinr = 0.0
+    for order in range(orders):
+        expected["cos"][order][nq][nr] += numerator * cosq * cosr
+        expected["sin"][order][nq][nr] += numerator * sinq * sinr
+        expected["sincos"][order][nq][nr] += numerator * sinq * cosr
+        expected["cossin"][order][nq][nr] += numerator * cosq * sinr
+        cosq, sinq = (cosq * cosq1 - sinq * sinq1,
+                      sinq * cosq1 + cosq * sinq1)
+        cosr, sinr = (cosr * cosr1 - sinr * sinr1,
+                      sinr * cosr1 + cosr * sinr1)
+
+for component, values in expected.items():
+    for order, matrix in enumerate(values, 1):
+        path = output_path / f"histZetaM_{component}_{order}.txt"
+        actual = [[float(value) for value in line.split()]
+                  for line in path.read_text(encoding="ascii").splitlines()
+                  if line.strip() and not line.lstrip().startswith("#")]
+        if len(actual) != nbins or any(len(row) != nbins for row in actual):
+            raise SystemExit(f"{path.name}: unexpected matrix dimensions")
+        for i in range(nbins):
+            for j in range(nbins):
+                got = actual[i][j]
+                want = matrix[i][j]
+                if not math.isclose(got, want, rel_tol=8.0e-8, abs_tol=8.0e-9):
+                    raise SystemExit(
+                        f"{path.name}[{i},{j}]: {got:.17g} != {want:.17g}")
+
+        normalized_file = normalized_path / path.name
+        normalized = [[float(value) for value in line.split()]
+                      for line in normalized_file.read_text(
+                          encoding="ascii").splitlines()
+                      if line.strip() and not line.lstrip().startswith("#")]
+        for i in range(nbins):
+            for j in range(nbins):
+                want = (matrix[i][j] / denominator[i][j]
+                        if denominator[i][j] != 0.0 else 0.0)
+                got = normalized[i][j]
+                if not math.isclose(got, want,
+                                    rel_tol=8.0e-8, abs_tol=8.0e-9):
+                    raise SystemExit(
+                        f"normalized {path.name}[{i},{j}]: "
+                        f"{got:.17g} != {want:.17g}")
+PY
+
+# Cross-catalog mode uses catalog 1 only as the pivot and unordered pairs from
+# catalog 2.  Exercise that distinct task decomposition independently.
+run_cross()
+{
+    local name=$1
+    local threads=$2
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search="$ENGINE" \
+        in="$TMP_ROOT/pivots.txt,$TMP_ROOT/legs.txt" \
+        infmt=multi-columns-ascii,multi-columns-ascii \
+        columns=1,2,3,4 \
+        iCatalogs=1,2 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=1.4 \
+        rminHist=0.02 \
+        sizeHistN=5 \
+        mChebyshev=3 \
+        nsmooth=2 \
+        theta=1 \
+        stepState=1000000 \
+        verbose=1 \
+        verbose_log=0 \
+        options="$exact_options" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+run_cross cross-one 1
+run_cross cross-many "$MULTI_THREADS"
+for component in cos sin sincos cossin; do
+    for order in 1 2 3 4; do
+        name="histZetaM_${component}_${order}.txt"
+        cmp -s "$TMP_ROOT/cross-one/$name" "$TMP_ROOT/cross-many/$name" \
+            || fail_with_log \
+                "cross 3PCF differs between thread counts: $name" \
+                "$TMP_ROOT/cross-many/run.log"
+    done
+done
+
+"$PYTHON" - "$TMP_ROOT/pivots.txt" "$TMP_ROOT/legs.txt" \
+              "$TMP_ROOT/cross-one" <<'PY'
+import itertools
+import math
+import pathlib
+import sys
+
+def catalog(path):
+    return [tuple(map(float, line.split()))
+            for line in pathlib.Path(path).read_text(encoding="ascii").splitlines()
+            if line.strip()]
+
+pivots = catalog(sys.argv[1])
+legs = catalog(sys.argv[2])
+output = pathlib.Path(sys.argv[3])
+rmin = 0.02
+rmax = 1.4
+nbins = 5
+orders = 4
+width = (rmax - rmin) / nbins
+expected = {name: [[[0.0 for _ in range(nbins)] for _ in range(nbins)]
+                   for _ in range(orders)]
+            for name in ("cos", "sin", "sincos", "cossin")}
+
+def rotation(position):
+    x, y, z = position
+    alpha = beta = gamma = 0.01
+    return (
+        (1.0 - gamma * alpha) * x + (alpha + gamma) * y - beta * z,
+        -(alpha + gamma) * x + (1.0 - gamma * alpha) * y
+        + gamma * beta * z,
+        beta * x + beta * alpha * y + z,
+    )
+
+def polar(pivot, neighbor):
+    dr = tuple(pivot[i] - neighbor[i] for i in range(3))
+    distance = math.sqrt(sum(value * value for value in dr))
+    q0 = rotation(pivot)
+    dr0 = tuple(pivot[i] - q0[i] for i in range(3))
+    reference = math.sqrt(sum(value * value for value in dr0))
+    if distance == 0.0 or reference == 0.0:
+        return None
+    cosine = sum(dr[i] * dr0[i] for i in range(3)) / (distance * reference)
+    cosine = min(1.0, max(-1.0, cosine))
+    sine = math.sqrt(max(0.0, 1.0 - cosine * cosine))
+    cross = (
+        dr0[1] * pivot[2] - dr0[2] * pivot[1],
+        dr0[2] * pivot[0] - dr0[0] * pivot[2],
+        dr0[0] * pivot[1] - dr0[1] * pivot[0],
+    )
+    if sum(dr[i] * cross[i] for i in range(3)) < 0.0:
+        sine = -sine
+    return distance, cosine, sine
+
+def radial_bin(distance):
+    if not rmin < distance < rmax:
+        return None
+    index = int((distance - rmin) / width)
+    return index if 0 <= index < nbins else None
+
+for pivot in pivots:
+    for j, k in itertools.combinations(range(len(legs)), 2):
+        for iq, ir in ((j, k), (k, j)):
+            q = legs[iq]
+            r = legs[ir]
+            polar_q = polar(pivot[:3], q[:3])
+            polar_r = polar(pivot[:3], r[:3])
+            if polar_q is None or polar_r is None:
+                continue
+            dq, cosq1, sinq1 = polar_q
+            dr, cosr1, sinr1 = polar_r
+            nq = radial_bin(dq)
+            nr = radial_bin(dr)
+            if nq is None or nr is None:
+                continue
+            numerator = pivot[3] * q[3] * r[3]
+            cosq = cosr = 1.0
+            sinq = sinr = 0.0
+            for order in range(orders):
+                expected["cos"][order][nq][nr] += numerator * cosq * cosr
+                expected["sin"][order][nq][nr] += numerator * sinq * sinr
+                expected["sincos"][order][nq][nr] += numerator * sinq * cosr
+                expected["cossin"][order][nq][nr] += numerator * cosq * sinr
+                cosq, sinq = (cosq * cosq1 - sinq * sinq1,
+                              sinq * cosq1 + cosq * sinq1)
+                cosr, sinr = (cosr * cosr1 - sinr * sinr1,
+                              sinr * cosr1 + cosr * sinr1)
+
+for component, values in expected.items():
+    for order, matrix in enumerate(values, 1):
+        path = output / f"histZetaM_{component}_{order}.txt"
+        actual = [[float(value) for value in line.split()]
+                  for line in path.read_text(encoding="ascii").splitlines()
+                  if line.strip() and not line.lstrip().startswith("#")]
+        for i in range(nbins):
+            for j in range(nbins):
+                if not math.isclose(actual[i][j], matrix[i][j],
+                                    rel_tol=8.0e-8, abs_tol=8.0e-9):
+                    raise SystemExit(
+                        f"{path.name}[{i},{j}]: "
+                        f"{actual[i][j]:.17g} != {matrix[i][j]:.17g}")
+PY
+
+# The aggregate run is intentionally larger. It verifies that cells are
+# actually accepted and that changing only the worker count is bit-repeatable.
+run_auto aggregate-one 1 "$aggregate_options" "$TMP_ROOT/aggregate.txt" 8 4
+run_auto aggregate-many "$MULTI_THREADS" "$aggregate_options" \
+         "$TMP_ROOT/aggregate.txt" 8 4
+for component in cos sin sincos cossin; do
+    for order in 1 2 3 4; do
+        name="histZetaM_${component}_${order}.txt"
+        cmp -s "$TMP_ROOT/aggregate-one/$name" "$TMP_ROOT/aggregate-many/$name" \
+            || fail_with_log \
+                "aggregate 3PCF differs between thread counts: $name" \
+                "$TMP_ROOT/aggregate-many/run.log"
+    done
+done
+
+cell_orientations=$(sed -n \
+    's/.*accepted cell orientations = \([0-9][0-9]*\).*/\1/p' \
+    "$TMP_ROOT/aggregate-many/run.log" | tail -1)
+[ "${cell_orientations:-0}" -gt 0 ] \
+    || fail_with_log "the triple-node traversal did not accept a cell orientation" \
+                     "$TMP_ROOT/aggregate-many/run.log"
+
+echo "PASS: $ENGINE auto/cross 3PCF oracle, aggregation, and determinism"

@@ -7,8 +7,10 @@
 #
 ifeq ($(KDTREEBOXOMPON),1)
 OPT2 += -DKDTREEBOXOMP
-KDTREEBOXOMP = ../addons/kdtree_box_omp/
-vpath %.c ./addons/kdtree_box_omp/
+#KDTREEBOXOMP = ../addons/kdtree_box_omp/
+KDTREEBOXOMP = $(MDIR)/addons/kdtree_box_omp/
+#vpath %.c ./addons/kdtree_box_omp/
+vpath %.c $(MDIR)/addons/kdtree_box_omp/
 INCLUDES += -I$(KDTREEBOXOMP)
 HEADERFILES = $(wildcard $(KDTREEBOXOMP)/*.h)
 EXTERNAL += kdtree_box.o search_kdtree_box_omp.o

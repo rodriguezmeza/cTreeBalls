@@ -9,7 +9,7 @@ int input_default_params(struct cmdline_data *cmd)
 // Every item in cmdline_defs.h must have an item here::
 
     //B Parameters related to the searching method
-    cmd->searchMethod = "tree-omp-sincos";
+    cmd->searchMethod = "octree-ggg-omp";
     cmd->mChebyshev = 7;
     cmd->nsmooth = 8;
     //E
@@ -68,6 +68,8 @@ int input_default_params(struct cmdline_data *cmd)
     cmd->numthreads = 16;
 #endif
     cmd->options = "\0";
+    cmd->options_cache_flags = 0;
+    cmd->options_cache_valid = FALSE;
     //E
 
 //B socket:

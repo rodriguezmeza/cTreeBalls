@@ -1,0 +1,10 @@
+# ----- TreeCorr-style dual-ball/triple-node OpenMP addon -----
+
+ifeq ($(BALLTREE2BALLSOMPON),1)
+OPT2 += -DBALLTREE2BALLSOMP
+BALLTREE2BALLSOMP = $(MDIR)/addons/balltree_2balls_omp/
+vpath %.c $(BALLTREE2BALLSOMP)
+INCLUDES += -I$(BALLTREE2BALLSOMP)
+HEADERFILES += $(wildcard $(BALLTREE2BALLSOMP)/*.h)
+EXTERNAL += search_balltree_2balls_omp.o
+endif

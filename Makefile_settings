@@ -15,9 +15,10 @@ DEFDIMENSION = 3
 USEGSL = 1
 # If you want the internal gsl version set it to 1, gsl sources files are included.
 GSLINTERNAL = 1
-# When USEGSL = 1 and GSLINTERNAL = 0 you must configure GSL directory in the system
-#   in order to be found. See Makefile_machine
-#   and set NAGBODYDIR to point to GSL directory in your machine.
+# When USEGSL = 1 and GSLINTERNAL = 0 you may need to configure GSL in the system
+#   in order to be found. Makefile and setup.py have been configured to find it
+#   automatically. In case of problems see Makefile_machine for details
+#   and set variables to point to GSL directory in your machine.
 #
 # For an OpenMP machine could be important to set (maximum number of threads to use):
 # export OMP_NUM_THREADS=8

@@ -14,8 +14,12 @@
 // Work to do in order to use with boxes not centered at (0,0,...)
 
 #include "globaldefs.h"
+#include <float.h>
+#ifdef OCTREEGGGMPI
+#include "fcfc_octree_ggg_mpi.h"
+#endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
 #define mpOffSet        3
 int local mCheb;                                    // mCheb =
                                                     // cmd->mChebyshev + mpOffSet
@@ -157,7 +161,7 @@ int local mCheb;                                    // mCheb =
 //E
 #endif // ! NMultipoles
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
 //B shear macro definition
 //B Macro for any posible value of mChebyshev
 //  for recursivity needs that at least 3 multipoles be evaluated
@@ -207,10 +211,11 @@ int local mCheb;                                    // mCheb =
     }}
 //E
 //E shear macro definition
-#endif // ! THREEPCFSHEAR
+#endif // ! TPCFSHEAR
 
 //B Define structures:
 typedef struct {
+    bool threepcf_enabled;
 #ifdef TWOPCF
     real *histNN;                                   // used
     real *histWW;                                   // used
@@ -238,14 +243,16 @@ typedef struct {
     //E
     // (EE) edge_effects
     real ***histZetaM_EE;
+    real ***histZetaM_EE_Im;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
 #endif
 
 } gdl_sincos_omp_ggg, *gdlptr_sincos_omp_ggg;
 
 typedef struct {
+    bool threepcf_enabled;
 #ifdef TWOPCF
     realptr histNthread;                            // used
     realptr histWthread;                            // used
@@ -280,9 +287,12 @@ typedef struct {
 
     real **histXithreadcos;
     real **histXithreadsin;
+    real **histXithreaddiagcos;
+    real **histXithreaddiagsin;
+    real **histXithreaddiagsincos;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     real **histg1threadcos;
     real **histg1threadsin;
     real **histg2threadcos;
@@ -298,9 +308,9 @@ typedef struct {
     INTEGER nbbcalcthread;
     INTEGER nbccalcthread;
 
-    vector q0;
+    compute_vector q0;
     real drpq2, drpq;
-    vector dr0;
+    compute_vector dr0;
     real cosb;
     real sinb;
 } gdhist_sincos_omp_ggg, *gdhistptr_sincos_omp_ggg;
@@ -329,16 +339,9 @@ typedef struct {
      // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
      real ***histZetaMcossin;
      //E
-     //B Used to compute ZetaG using FFT
-     real ***histZetaGmRe;
-     real ***histZetaGmIm;
-     real ***histXi3pcf;
-     //E
-    // (EE) edge_effects
-    real ***histZetaM_EE;
  #endif
 
- #ifdef THREEPCFSHEAR
+ #ifdef TPCFSHEAR
  #endif
 } gdl_sincos_omp_ggg_N, *gdlptr_sincos_omp_ggg_N;
 
@@ -377,9 +380,12 @@ typedef struct {
 
     real **histXithreadcos;
     real **histXithreadsin;
+    real **histXithreaddiagcos;
+    real **histXithreaddiagsin;
+    real **histXithreaddiagsincos;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     real **histg1threadcos;
     real **histg1threadsin;
     real **histg2threadcos;
@@ -393,9 +399,9 @@ typedef struct {
     INTEGER nbbcalcthread;
     INTEGER nbccalcthread;
 
-    vector q0;
+    compute_vector q0;
     real drpq2, drpq;
-    vector dr0;
+    compute_vector dr0;
     real cosb;
     real sinb;
 } gdhist_sincos_omp_ggg_N, *gdhistptr_sincos_omp_ggg_N;
@@ -422,12 +428,18 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
                                         struct  global_data* gd,
                                         gdlptr_sincos_omp_ggg);
+local int search_init_gd_sincos_omp_ggg_unguarded(struct cmdline_data *cmd,
+                                        struct global_data *gd,
+                                        gdlptr_sincos_omp_ggg);
 local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
                                          struct  global_data* gd,
                                         gdlptr_sincos_omp_ggg);
 local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                      gdhistptr_sincos_omp_ggg hist);
+local int search_init_sincos_omp_ggg_unguarded(struct cmdline_data *cmd,
+                                  struct global_data *gd,
+                                  gdhistptr_sincos_omp_ggg hist);
 local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
                                          struct  global_data* gd,
                                      gdhistptr_sincos_omp_ggg hist);
@@ -476,12 +488,18 @@ local void sumnode_sincos_cell_N(struct  cmdline_data*,
 local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                           struct  global_data* gd,
                                           gdlptr_sincos_omp_ggg_N);
+local int search_init_gd_sincos_omp_ggg_N_unguarded(struct cmdline_data *cmd,
+                                          struct global_data *gd,
+                                          gdlptr_sincos_omp_ggg_N);
 local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                          struct  global_data* gd,
                                           gdlptr_sincos_omp_ggg_N);
 local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                      gdhistptr_sincos_omp_ggg_N hist);
+local int search_init_sincos_omp_ggg_N_unguarded(struct cmdline_data *cmd,
+                                  struct global_data *gd,
+                                  gdhistptr_sincos_omp_ggg_N hist);
 local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                          struct  global_data* gd,
                                      gdhistptr_sincos_omp_ggg_N);
@@ -536,11 +554,7 @@ local int polarix_init(struct  cmdline_data* cmd,
     //B check NDIM and periodic...
     dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist->q0);
     DOTPSUBV(hist->drpq2, hist->dr0, Pos(p), hist->q0);
-#ifdef SINGLEP
-    hist->drpq = sqrt(hist->drpq2);
-#else
     hist->drpq = rsqrt(hist->drpq2);
-#endif
     //E
 #endif // ! POLARAXIS
     //E
@@ -554,7 +568,7 @@ local int polarix_init(struct  cmdline_data* cmd,
 #define POLARAXIS_MAIN                              \
 {                                                   \
     real a, c, c2;                                  \
-    vector vc;                                      \
+    compute_vector vc;                              \
     DOTPSUBV(c2, vc, Pos(q), hist->q0);             \
     a = 2.0*rasin(dr1/2.0);                         \
     real cosc;                                      \
@@ -572,7 +586,7 @@ local int polarix_init(struct  cmdline_data* cmd,
 #define POLARAXIS_MAIN                              \
 {                                                   \
     real a, c, c2;                                  \
-    vector vc;                                      \
+    compute_vector vc;                              \
     DOTPSUBV(c2, vc, Pos(q), hist->q0);             \
     a = dr1;                                        \
     real cosc;                                      \
@@ -597,7 +611,7 @@ local int polarix_init(struct  cmdline_data* cmd,
 #ifdef SINGLEP
 #define POLARAXIS_MAIN                              \
 {                                                   \
-    float s, sy; float pr0[NDIM];                   \
+    real s, sy; compute_vector pr0;                 \
     DOTVP(s, dr, hist->dr0);                        \
     cosphi = s/(dr1*hist->drpq);                    \
     CROSSVP(pr0,hist->dr0,Pos(p));                  \
@@ -605,7 +619,7 @@ local int polarix_init(struct  cmdline_data* cmd,
     if (rabs(cosphi)>1.0)                           \
         sinphi = 0.0;                               \
     else                                            \
-        sinphi = sqrt(1.0 - cosphi*cosphi);         \
+        sinphi = rsqrt(1.0 - rsqr(cosphi));         \
     if (sy < 0) sinphi *= -1.0;                     \
     if (cosphi>1.0) cosphi = 1.0;                   \
     if (cosphi<-1.0) cosphi = -1.0;                 \
@@ -687,7 +701,306 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
 
 #endif
 #endif // ! NMultipoles
+
+#ifdef NMultipoles
+#define GGG_WINDOW_ORDERS(cmd) (2*(cmd)->mChebyshev + 1)
+#endif
+
+#if defined(NMultipoles) && defined(THREEPCFCONVERGENCE)
+/* N_{ell-n} requires window modes through |ell-n| = 2*mChebyshev. */
+#define GGG_ACCUMULATE_WINDOW_MODES                                      \
+do {                                                                     \
+    int _ggg_index;                                                       \
+    int _ggg_orders = GGG_WINDOW_ORDERS(cmd);                            \
+    real _ggg_cos_mode;                                                   \
+    real _ggg_sin_mode;                                                   \
+    real _ggg_xi_cos;                                                     \
+    real _ggg_xi_sin;                                                     \
+    histN->ChebsT[1] = 1.0;                                              \
+    histN->ChebsU[1] = 0.0;                                              \
+    for (_ggg_index = 1; _ggg_index <= _ggg_orders; _ggg_index++) {     \
+        if (_ggg_index == 2) {                                           \
+            histN->ChebsT[2] = cosphi;                                   \
+            histN->ChebsU[2] = 1.0;                                      \
+        } else if (_ggg_index > 2) {                                     \
+            histN->ChebsT[_ggg_index] =                                  \
+                2.0*cosphi*histN->ChebsT[_ggg_index-1]                   \
+                - histN->ChebsT[_ggg_index-2];                           \
+            histN->ChebsU[_ggg_index] =                                  \
+                2.0*cosphi*histN->ChebsU[_ggg_index-1]                   \
+                - histN->ChebsU[_ggg_index-2];                           \
+        }                                                                \
+        _ggg_cos_mode = histN->ChebsT[_ggg_index];                       \
+        _ggg_sin_mode = histN->ChebsU[_ggg_index]*sinphi;                \
+        _ggg_xi_cos = xiN*_ggg_cos_mode;                                 \
+        _ggg_xi_sin = xiN*_ggg_sin_mode;                                 \
+        histN->histXithreadcos[_ggg_index][n] += _ggg_xi_cos;            \
+        histN->histXithreadsin[_ggg_index][n] += _ggg_xi_sin;            \
+        histN->histXithreaddiagcos[_ggg_index][n] +=                     \
+            _ggg_xi_cos*_ggg_xi_cos;                                     \
+        histN->histXithreaddiagsin[_ggg_index][n] +=                     \
+            _ggg_xi_sin*_ggg_xi_sin;                                     \
+        histN->histXithreaddiagsincos[_ggg_index][n] +=                  \
+            _ggg_xi_sin*_ggg_xi_cos;                                     \
+    }                                                                    \
+} while (0)
+
+#define GGG_ACCUMULATE_NUMERATOR_DIAGONAL                               \
+do {                                                                     \
+    int _ggg_index;                                                       \
+    for (_ggg_index = 1; _ggg_index <= cmd->mChebyshev + 1;            \
+         _ggg_index++) {                                                 \
+        real _ggg_xi_cos = xi*hist->ChebsT[_ggg_index];                 \
+        real _ggg_xi_sin =                                               \
+            xi*hist->ChebsU[_ggg_index]*sinphi;                          \
+        hist->histXithreaddiagcos[_ggg_index][n] +=                     \
+            _ggg_xi_cos*_ggg_xi_cos;                                     \
+        hist->histXithreaddiagsin[_ggg_index][n] +=                     \
+            _ggg_xi_sin*_ggg_xi_sin;                                     \
+        hist->histXithreaddiagsincos[_ggg_index][n] +=                  \
+            _ggg_xi_sin*_ggg_xi_cos;                                     \
+    }                                                                    \
+} while (0)
+
+#endif
+
+/* Radius(q) is an opening radius and is divided by theta in treeload.c.
+ * Cell rejection needs the undivided geometric bound or it can drop valid
+ * neighbors when theta > 1. */
+local bool reject_cell_ggg(struct cmdline_data *cmd,
+                           struct global_data *gd,
+                           nodeptr p, nodeptr q)
+{
+    real distance_squared;
+    real distance;
+    real bounding_radius = Radius(q);
+    compute_vector dr;
+
+    DOTPSUBV(distance_squared, dr, Pos(p), Pos(q));
+    if (cmd->usePeriodic) {
+        VWrapAll(dr);
+        DOTVP(distance_squared, dr, dr);
+    }
+    distance = rsqrt(distance_squared);
+    if (cmd->theta > 0.0)
+        bounding_radius *= cmd->theta;
+
+    return distance >= gd->Rcut + bounding_radius;
+}
 //E
+
+#if defined(NMultipoles) && defined(NONORMHIST)
+local real normalize_zeta_ggg(real numerator,
+                              gdlptr_sincos_omp_ggg_N gdlN,
+                              int n1, int n2)
+{
+    real denominator = gdlN->histZetaMcos[1][n1][n2]
+                     + gdlN->histZetaMsin[1][n1][n2];
+
+    return cballs_normalize_or_zero(numerator, denominator);
+}
+#endif
+
+#if defined(NMultipoles) && defined(NONORMHIST) \
+    && defined(THREEPCFCONVERGENCE)
+typedef struct {
+    real re;
+    real im;
+} ggg_complex;
+
+local ggg_complex ggg_complex_make(real re, real im)
+{
+    ggg_complex value = {re, im};
+    return value;
+}
+
+local ggg_complex ggg_complex_sub(ggg_complex a, ggg_complex b)
+{
+    return ggg_complex_make(a.re-b.re, a.im-b.im);
+}
+
+local ggg_complex ggg_complex_mul(ggg_complex a, ggg_complex b)
+{
+    return ggg_complex_make(a.re*b.re-a.im*b.im,
+                            a.re*b.im+a.im*b.re);
+}
+
+local real ggg_complex_abs2(ggg_complex value)
+{
+    return value.re*value.re + value.im*value.im;
+}
+
+local ggg_complex ggg_complex_div(ggg_complex numerator,
+                                  ggg_complex denominator)
+{
+    real norm = ggg_complex_abs2(denominator);
+    return ggg_complex_make(
+        (numerator.re*denominator.re + numerator.im*denominator.im)/norm,
+        (numerator.im*denominator.re - numerator.re*denominator.im)/norm);
+}
+
+local ggg_complex ggg_histogram_mode(real ***coscos, real ***sinsin,
+                                     real ***sincos, real ***cossin,
+                                     int order, int n1, int n2)
+{
+    int index = abs(order) + 1;
+    ggg_complex value = ggg_complex_make(
+        coscos[index][n1][n2] + sinsin[index][n1][n2],
+        sincos[index][n1][n2] - cossin[index][n1][n2]);
+    if (order < 0)
+        value.im = -value.im;
+    return value;
+}
+
+local int compute_edge_corrections_ggg(struct cmdline_data *cmd,
+                                       struct global_data *gd,
+                                       gdlptr_sincos_omp_ggg gdl,
+                                       gdlptr_sincos_omp_ggg_N gdlN)
+{
+    int nmax = cmd->mChebyshev;
+    int multipoles = 2*nmax + 1;
+    size_t matrix_count;
+    ggg_complex *matrix = NULL;
+    ggg_complex *rhs = NULL;
+    int n1, n2;
+    int singular_bins = 0;
+
+    if ((size_t)multipoles > SIZE_MAX/(size_t)multipoles) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-ggg-omp: edge-correction workspace overflow");
+        return FAILURE;
+    }
+    matrix_count = (size_t)multipoles*(size_t)multipoles;
+    matrix = calloc(matrix_count, sizeof(*matrix));
+    rhs = calloc((size_t)multipoles, sizeof(*rhs));
+    if (matrix == NULL || rhs == NULL) {
+        free(matrix);
+        free(rhs);
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-ggg-omp: cannot allocate edge-correction workspace");
+        return FAILURE;
+    }
+
+    for (n1=1; n1<=cmd->sizeHistN; n1++) {
+        for (n2=1; n2<=cmd->sizeHistN; n2++) {
+            ggg_complex nzero = ggg_histogram_mode(
+                gdlN->histZetaMcos, gdlN->histZetaMsin,
+                gdlN->histZetaMsincos, gdlN->histZetaMcossin,
+                0, n1, n2);
+            real tolerance;
+            real matrix_scale = 0.0;
+            bool singular = FALSE;
+            int row, column;
+
+            memset(matrix, 0, matrix_count*sizeof(*matrix));
+            memset(rhs, 0, (size_t)multipoles*sizeof(*rhs));
+            if (ggg_complex_abs2(nzero) <= DBL_MIN)
+                continue;
+
+            for (row=0; row<multipoles; row++) {
+                int ell = row-nmax;
+                for (column=0; column<multipoles; column++) {
+                    int order = ell-(column-nmax);
+                    ggg_complex value = ggg_histogram_mode(
+                        gdlN->histZetaMcos, gdlN->histZetaMsin,
+                        gdlN->histZetaMsincos, gdlN->histZetaMcossin,
+                        order, n1, n2);
+                    matrix[(size_t)row*multipoles+column] =
+                        ggg_complex_div(value, nzero);
+                    if (ggg_complex_abs2(
+                            matrix[(size_t)row*multipoles+column])
+                        > matrix_scale)
+                        matrix_scale = ggg_complex_abs2(
+                            matrix[(size_t)row*multipoles+column]);
+                }
+                rhs[row] = ggg_complex_div(ggg_histogram_mode(
+                    gdl->histZetaMcos, gdl->histZetaMsin,
+                    gdl->histZetaMsincos, gdl->histZetaMcossin,
+                    ell, n1, n2), nzero);
+            }
+            tolerance = 128.0*DBL_EPSILON*(1.0+sqrt(matrix_scale));
+
+            for (column=0; column<multipoles; column++) {
+                int pivot = column;
+                real pivot_norm = ggg_complex_abs2(
+                    matrix[(size_t)column*multipoles+column]);
+                int candidate;
+                for (candidate=column+1; candidate<multipoles; candidate++) {
+                    real candidate_norm = ggg_complex_abs2(
+                        matrix[(size_t)candidate*multipoles+column]);
+                    if (candidate_norm > pivot_norm) {
+                        pivot = candidate;
+                        pivot_norm = candidate_norm;
+                    }
+                }
+                if (pivot_norm <= tolerance*tolerance) {
+                    singular = TRUE;
+                    break;
+                }
+                if (pivot != column) {
+                    int k;
+                    for (k=0; k<multipoles; k++) {
+                        ggg_complex swap = matrix[
+                            (size_t)column*multipoles+k];
+                        matrix[(size_t)column*multipoles+k] = matrix[
+                            (size_t)pivot*multipoles+k];
+                        matrix[(size_t)pivot*multipoles+k] = swap;
+                    }
+                    {
+                        ggg_complex swap = rhs[column];
+                        rhs[column] = rhs[pivot];
+                        rhs[pivot] = swap;
+                    }
+                }
+                {
+                    ggg_complex divisor = matrix[
+                        (size_t)column*multipoles+column];
+                    int k;
+                    for (k=0; k<multipoles; k++)
+                        matrix[(size_t)column*multipoles+k] =
+                            ggg_complex_div(
+                                matrix[(size_t)column*multipoles+k], divisor);
+                    rhs[column] = ggg_complex_div(rhs[column], divisor);
+                }
+                for (row=0; row<multipoles; row++) {
+                    ggg_complex factor;
+                    int k;
+                    if (row == column)
+                        continue;
+                    factor = matrix[(size_t)row*multipoles+column];
+                    if (ggg_complex_abs2(factor) == 0.0)
+                        continue;
+                    for (k=0; k<multipoles; k++)
+                        matrix[(size_t)row*multipoles+k] = ggg_complex_sub(
+                            matrix[(size_t)row*multipoles+k],
+                            ggg_complex_mul(factor,
+                                matrix[(size_t)column*multipoles+k]));
+                    rhs[row] = ggg_complex_sub(
+                        rhs[row], ggg_complex_mul(factor, rhs[column]));
+                }
+            }
+            if (singular) {
+                singular_bins++;
+                continue;
+            }
+            for (row=nmax; row<multipoles; row++) {
+                int output_index = row-nmax+1;
+                gdl->histZetaM_EE[output_index][n1][n2] = rhs[row].re;
+                gdl->histZetaM_EE_Im[output_index][n1][n2] = rhs[row].im;
+            }
+        }
+    }
+
+    if (singular_bins > 0)
+        verb_print_normal_info(
+            cmd->verbose, cmd->verbose_log, gd->outlog,
+            "octree-ggg-omp: %d edge-correction radial-bin pairs "
+            "were singular and set to zero\n", singular_bins);
+    free(matrix);
+    free(rhs);
+    return SUCCESS;
+}
+#endif
 
 #ifdef SMOOTHPIVOT
 #ifdef DEBUG
@@ -697,6 +1010,212 @@ local FILE *outpivots;
 #endif
 
 #include <pthread.h>
+
+/* Keep floating-point reduction groups independent of the OpenMP team size.
+ * Tree walks within a chunk run sequentially on one worker, while different
+ * chunks run concurrently and are published in ascending pivot order.
+ *
+ * Both values can be overridden with CPPFLAGS for focused benchmarking.  The
+ * MPI claim is deliberately independent of the deterministic OpenMP chunk. */
+#ifndef GGG_OMP_PIVOT_CHUNK_SIZE
+#define GGG_OMP_PIVOT_CHUNK_SIZE 4096
+#endif
+#ifndef GGG_MPI_PIVOT_CLAIM_SIZE
+#define GGG_MPI_PIVOT_CLAIM_SIZE 65536
+#endif
+
+#if GGG_OMP_PIVOT_CHUNK_SIZE < 1
+#error GGG_OMP_PIVOT_CHUNK_SIZE must be positive
+#endif
+#if GGG_MPI_PIVOT_CLAIM_SIZE < 1
+#error GGG_MPI_PIVOT_CLAIM_SIZE must be positive
+#endif
+
+#ifdef OCTREEGGGMPI
+local int reduce_octree_ggg_histograms(
+    struct cmdline_data *cmd, struct global_data *gd,
+    gdlptr_sincos_omp_ggg gdl, bool run_threepcf,
+#ifdef NMultipoles
+    gdlptr_sincos_omp_ggg_N gdlN,
+#endif
+    INTEGER *ipmask,
+#ifdef SMOOTHPIVOT
+    INTEGER *ipfalse, INTEGER *count_rmin, INTEGER *count_overlap
+#else
+    INTEGER *unused1, INTEGER *unused2, INTEGER *unused3
+#endif
+    )
+{
+    const size_t bins = (size_t)cmd->sizeHistN;
+    size_t count = bins;
+    size_t cursor = 0;
+    real *packed;
+    INTEGER counters[7] = {gd->nbbcalc, gd->nbccalc, gd->ncccalc,
+                           0, 0, 0, 0};
+
+#ifdef TWOPCF
+    if (bins > (SIZE_MAX - count) / 4) goto overflow;
+    count += 4 * bins;
+#ifdef SMOOTHPIVOT
+    if (bins > SIZE_MAX - count) goto overflow;
+    count += bins;
+#endif
+#endif
+#ifdef THREEPCFCONVERGENCE
+    if (run_threepcf) {
+        const size_t numerator_orders = (size_t)cmd->mChebyshev + 1;
+        size_t plane;
+        size_t numerator_count;
+#ifdef NMultipoles
+        const size_t window_orders = (size_t)GGG_WINDOW_ORDERS(cmd);
+        size_t window_count;
+#endif
+        if ((bins != 0 && bins > SIZE_MAX / bins)
+            || (plane = bins * bins,
+                numerator_orders != 0 && plane > SIZE_MAX / numerator_orders)
+            || (numerator_count = numerator_orders * plane,
+                numerator_count > (SIZE_MAX - count) / 4))
+            goto overflow;
+        count += 4 * numerator_count;
+#ifdef NMultipoles
+        if ((window_orders != 0 && plane > SIZE_MAX / window_orders)
+            || (window_count = window_orders * plane,
+                window_count > (SIZE_MAX - count) / 4))
+            goto overflow;
+        count += 4 * window_count;
+#endif
+    }
+#endif
+    if (count > SIZE_MAX / sizeof(*packed)) goto overflow;
+
+    if (cballs_opt_read_mask(cmd)) counters[3] = *ipmask;
+#ifndef SMOOTHPIVOT
+    (void)unused1;
+    (void)unused2;
+    (void)unused3;
+#else
+    counters[4] = *ipfalse;
+    counters[5] = *count_rmin;
+    counters[6] = *count_overlap;
+#endif
+
+    packed = malloc(count * sizeof(*packed));
+    if (fcfc_octree_ggg_mpi_consensus(
+            cmd, packed == NULL ? FAILURE : SUCCESS,
+            "MPI octree-GGG histogram packing allocation") == FAILURE) {
+        free(packed);
+        return FAILURE;
+    }
+
+#define PACK_VECTOR(array)                                                 \
+    do {                                                                  \
+        for (int n = 1; n <= cmd->sizeHistN; n++)                        \
+            packed[cursor++] = (array)[n];                               \
+    } while (0)
+#define PACK_ZETA(array, orders)                                           \
+    do {                                                                  \
+        for (int m = 1; m <= (orders); m++)                              \
+            for (int n = 1; n <= cmd->sizeHistN; n++)                    \
+                for (int l = 1; l <= cmd->sizeHistN; l++)                \
+                    packed[cursor++] = (array)[m][n][l];                  \
+    } while (0)
+
+    PACK_VECTOR(gdl->histNNSub);
+#ifdef TWOPCF
+    PACK_VECTOR(gdl->histNN);
+    PACK_VECTOR(gdl->histWW);
+    PACK_VECTOR(gdl->histNNSubXi2pcf);
+    PACK_VECTOR(gdl->histXi2pcf);
+#ifdef SMOOTHPIVOT
+    PACK_VECTOR(gdl->histNNSubXi2pcftotal);
+#endif
+#endif
+#ifdef THREEPCFCONVERGENCE
+    if (run_threepcf) {
+    PACK_ZETA(gdl->histZetaMcos, cmd->mChebyshev + 1);
+    PACK_ZETA(gdl->histZetaMsin, cmd->mChebyshev + 1);
+    PACK_ZETA(gdl->histZetaMsincos, cmd->mChebyshev + 1);
+    PACK_ZETA(gdl->histZetaMcossin, cmd->mChebyshev + 1);
+#ifdef NMultipoles
+    PACK_ZETA(gdlN->histZetaMcos, GGG_WINDOW_ORDERS(cmd));
+    PACK_ZETA(gdlN->histZetaMsin, GGG_WINDOW_ORDERS(cmd));
+    PACK_ZETA(gdlN->histZetaMsincos, GGG_WINDOW_ORDERS(cmd));
+    PACK_ZETA(gdlN->histZetaMcossin, GGG_WINDOW_ORDERS(cmd));
+#endif
+    }
+#endif
+
+    if (cursor != count
+        || fcfc_octree_ggg_mpi_reduce_reals(cmd, packed, count) == FAILURE
+        || fcfc_octree_ggg_mpi_reduce_integers(cmd, counters, 7) == FAILURE) {
+        free(packed);
+        if (cursor != count)
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "octree-ggg-mpi internal histogram packing mismatch");
+        return FAILURE;
+    }
+
+    if (fcfc_octree_ggg_mpi_is_root()) {
+        cursor = 0;
+#define UNPACK_VECTOR(array)                                               \
+        do {                                                              \
+            for (int n = 1; n <= cmd->sizeHistN; n++)                    \
+                (array)[n] = packed[cursor++];                            \
+        } while (0)
+#define UNPACK_ZETA(array, orders)                                         \
+        do {                                                              \
+            for (int m = 1; m <= (orders); m++)                          \
+                for (int n = 1; n <= cmd->sizeHistN; n++)                \
+                    for (int l = 1; l <= cmd->sizeHistN; l++)            \
+                        (array)[m][n][l] = packed[cursor++];              \
+        } while (0)
+        UNPACK_VECTOR(gdl->histNNSub);
+#ifdef TWOPCF
+        UNPACK_VECTOR(gdl->histNN);
+        UNPACK_VECTOR(gdl->histWW);
+        UNPACK_VECTOR(gdl->histNNSubXi2pcf);
+        UNPACK_VECTOR(gdl->histXi2pcf);
+#ifdef SMOOTHPIVOT
+        UNPACK_VECTOR(gdl->histNNSubXi2pcftotal);
+#endif
+#endif
+#ifdef THREEPCFCONVERGENCE
+        if (run_threepcf) {
+        UNPACK_ZETA(gdl->histZetaMcos, cmd->mChebyshev + 1);
+        UNPACK_ZETA(gdl->histZetaMsin, cmd->mChebyshev + 1);
+        UNPACK_ZETA(gdl->histZetaMsincos, cmd->mChebyshev + 1);
+        UNPACK_ZETA(gdl->histZetaMcossin, cmd->mChebyshev + 1);
+#ifdef NMultipoles
+        UNPACK_ZETA(gdlN->histZetaMcos, GGG_WINDOW_ORDERS(cmd));
+        UNPACK_ZETA(gdlN->histZetaMsin, GGG_WINDOW_ORDERS(cmd));
+        UNPACK_ZETA(gdlN->histZetaMsincos, GGG_WINDOW_ORDERS(cmd));
+        UNPACK_ZETA(gdlN->histZetaMcossin, GGG_WINDOW_ORDERS(cmd));
+#endif
+        }
+#endif
+        gd->nbbcalc = counters[0];
+        gd->nbccalc = counters[1];
+        gd->ncccalc = counters[2];
+        if (cballs_opt_read_mask(cmd)) *ipmask = counters[3];
+#ifdef SMOOTHPIVOT
+        *ipfalse = counters[4];
+        *count_rmin = counters[5];
+        *count_overlap = counters[6];
+#endif
+#undef UNPACK_VECTOR
+#undef UNPACK_ZETA
+    }
+    free(packed);
+#undef PACK_VECTOR
+#undef PACK_ZETA
+    return SUCCESS;
+
+overflow:
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "octree-ggg-mpi histogram packing size overflow");
+    return FAILURE;
+}
+#endif
 
 /*
  Search routine using octree method:
@@ -721,45 +1240,75 @@ local FILE *outpivots;
  Return (the error status):
     int SUCCESS or FAILURE
  */
-global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
-                                     struct  global_data* gd,
-                                     bodyptr *btable, INTEGER *nbody,
-                                     INTEGER ipmin, INTEGER *ipmax,
-                                     int cat1, int cat2)
+local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
+                                       struct  global_data* gd,
+                                       bodyptr *btable, INTEGER *nbody,
+                                       INTEGER ipmin, INTEGER *ipmax,
+                                       int cat1, int cat2, bool distributed)
 {
-    string routineName = "searchcalc_octree_ggg_omp";
+    string routineName = distributed ? "searchcalc_octree_ggg_mpi"
+                                     : "searchcalc_octree_ggg_omp";
     double cpustart;
     gdl_sincos_omp_ggg gdl;
 #ifdef NMultipoles
     gdl_sincos_omp_ggg_N gdlN;
 #endif
+#ifndef OCTREEGGGMPI
+    (void)distributed;
+#endif
 
     cpustart = CPUTIME;
     gd->cpusearch = 0.0;
-    print_info(cmd, gd);
-    debug_tracking_s("001",routineName);
+    const bool run_threepcf = !cballs_opt_only_2pcf(cmd);
+#ifndef TWOPCF
+    if (!run_threepcf) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: only-2pcf requires TWOPCFON=1", routineName);
+        return FAILURE;
+    }
+#endif
+#ifdef OCTREEGGGMPI
+    if (distributed && !fcfc_octree_ggg_mpi_active()) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: MPI runtime is not initialized", routineName);
+        return FAILURE;
+    }
+#ifdef DEBUG
+    if (distributed) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: DEBUG pivot-file output is not MPI-safe", routineName);
+        return FAILURE;
+    }
+#endif
+#endif
+    if (print_info(cmd, gd) == FAILURE)
+        return FAILURE;
 
     if (cmd->useLogHist==FALSE &&
-        (strcmp(cmd->searchMethod,"octree-ggg-omp") == 0))
+        (strcmp(cmd->searchMethod,"octree-ggg-omp") == 0
+         || strcmp(cmd->searchMethod,"octree-ggg-mpi") == 0))
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "%s: can´t have loghist false and octree-ggg-omp (%d %s)\n",
             routineName, cmd->useLogHist, cmd->searchMethod);
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     mCheb =cmd->mChebyshev + mpOffSet;
 #endif
 
 #ifdef SMOOTHPIVOT
 #ifdef DEBUG
-    sprintf(pivotsfilePath,"%s/pivot_info%s.txt",
-            gd->tmpDir,cmd->suffixOutFiles);
-    if(!(outpivots=fopen(pivotsfilePath, "w")))
-        error("\n%s: error opening file '%s' \n",
-              routineName, pivotsfilePath);
+    if (format_checked(pivotsfilePath, sizeof(pivotsfilePath),
+        "pivotsfilePath", "%s/pivot_info%s.txt",
+                       gd->tmpDir,cmd->suffixOutFiles) != 0)
+        return FAILURE;
+    if(!(outpivots=fopen(pivotsfilePath, "w"))) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "\n%s: error opening file '%s' \n",
+                       routineName, pivotsfilePath);
+        return FAILURE;
+    }
 #endif
 #endif
-
-    debug_tracking("002");
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
@@ -768,17 +1317,64 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #error `OPENMPMACHINE` is not defined. Switch it on in Makefile_settings
 #endif
 
-    search_init_gd_sincos_omp_ggg(cmd, gd, &gdl);
-#ifdef NMultipoles
-    search_init_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+    if (cballs_opt_pivot_number(cmd)) {
+        ipmax[cat1] = gd->pivotNumber;
+        verb_print(cmd->verbose, "\n%s: pivot number: %ld\n",
+                   routineName, gd->pivotNumber);
+    }
+
+#ifdef SMOOTHPIVOT
+    int smooth_status = prepare_smooth_pivots(cmd, gd, btable, nbody,
+                                               ipmin, ipmax, cat1, cat2);
+#ifdef OCTREEGGGMPI
+    if (distributed)
+        smooth_status = fcfc_octree_ggg_mpi_consensus(
+            cmd, smooth_status, "MPI smooth-pivot preparation");
+#endif
+    if (smooth_status == FAILURE)
+        return FAILURE;
 #endif
 
-    debug_tracking("003");
+    int gdl_local_status = search_init_gd_sincos_omp_ggg(cmd, gd, &gdl);
+    int gdl_status = gdl_local_status;
+#ifdef OCTREEGGGMPI
+    if (distributed)
+        gdl_status = fcfc_octree_ggg_mpi_consensus(
+            cmd, gdl_status, "MPI octree-GGG histogram initialization");
+#endif
+    if (gdl_status == FAILURE) {
+        if (gdl_local_status == SUCCESS)
+            search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+#ifdef DEBUG
+        fclose(outpivots);
+#endif
+        return FAILURE;
+    }
+#ifdef NMultipoles
+    int gdln_local_status = SUCCESS;
+    if (run_threepcf)
+        gdln_local_status =
+            search_init_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+    int gdln_status = gdln_local_status;
+#ifdef OCTREEGGGMPI
+    if (distributed)
+        gdln_status = fcfc_octree_ggg_mpi_consensus(
+            cmd, gdln_status,
+            "MPI octree-GGG N-multipole histogram initialization");
+#endif
+    if (gdln_status == FAILURE) {
+        if (run_threepcf && gdln_local_status == SUCCESS)
+            search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+        search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+#ifdef DEBUG
+        fclose(outpivots);
+#endif
+        return FAILURE;
+    }
+#endif
 
     //B Mask correction
-    INTEGER ipmask;
-    if (scanopt(cmd->options, "read-mask"))
-        ipmask=0;
+    INTEGER ipmask = 0;
     //E
 
 #ifdef SMOOTHPIVOT
@@ -790,21 +1386,48 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     icountNbRminOverlap=0;
 #endif
 
-    debug_tracking("004");
+#ifndef BALLS4SCANLEV
+    INTEGER pivot_task_count = ipmax[cat1] - ipmin + 1;
+#else
+    INTEGER pivot_task_count = gd->nnodescanlevTableB4[cat1];
+#endif
+    INTEGER task_first = 0;
+    INTEGER task_last = pivot_task_count;
+    int scheduler_status = SUCCESS;
+    int work_done = FALSE;
+#ifdef OCTREEGGGMPI
+    fcfc_octree_ggg_mpi_scheduler scheduler;
+    memset(&scheduler, 0, sizeof(scheduler));
+    if (distributed) {
+        int thread_hint = omp_get_max_threads();
+        INTEGER step = (INTEGER)GGG_MPI_PIVOT_CLAIM_SIZE;
+        if (fcfc_octree_ggg_mpi_scheduler_init(
+                cmd, &scheduler, pivot_task_count, step) == FAILURE) {
+#ifdef NMultipoles
+            if (run_threepcf)
+                search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+            search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+#ifdef DEBUG
+            fclose(outpivots);
+#endif
+            return FAILURE;
+        }
+        verb_print(cmd->verbose,
+                   "octree-ggg-mpi: %d ranks, %d OpenMP threads, "
+                   "%" INTEGER_FMT " pivot tasks\n",
+                   fcfc_octree_ggg_mpi_size(), thread_hint,
+                   pivot_task_count);
+    }
+#endif
 
 #if defined(NMultipoles) && defined(NONORMHIST)
-    if (scanopt(cmd->options, "patch-with-all")) {
+    if (cballs_opt_patch_with_all(cmd)) {
         verb_print(cmd->verbose,
             "\n%s: total number of pixels to be pivots: %ld\n",
                    routineName, gd->pivotCount);
     }
 #endif
-
-    if (scanopt(cmd->options, "pivot-number")) {
-        ipmax[cat1] = gd->pivotNumber;
-        verb_print(cmd->verbose, "\n%s: pivot number: %ld\n",
-                   routineName, gd->pivotNumber);
-    }
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "\n%s: Total allocated %g MByte storage so far.\n",
@@ -820,70 +1443,79 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\nRunning...\n - Completed pivot node:\n");
-
-    debug_tracking("005");
+    int allocation_failed = FALSE;
 
 //
 // Check that all posibilities are taken in to account...
 //
 #ifdef DEBUG
 #ifndef SMOOTHPIVOT
-    error("%s: DEBUG can not be used with SMOOTHPIVOT turned OFF.");
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "%s: DEBUG can not be used with SMOOTHPIVOT turned OFF.",
+             routineName);
+    return FAILURE;
 #else
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,outpivots,                         \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id, \
+           allocation_failed)
 #endif // ! SMOOTHPIVOT
 #else // ! DEBUG
 #ifdef NMultipoles
 #ifndef BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
            icountNbRmin,icountNbRminOverlap,                                \
-           gdl, gdlN, main_thread_id)
+           gdl, gdlN, main_thread_id, allocation_failed)
 #else // ! SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipmask,                                    \
-           gdl, gdlN, main_thread_id)
+           gdl, gdlN, main_thread_id, allocation_failed)
 #endif // ! SMOOTHPIVOT
 #else // ! BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, gdlN, main_thread_id, \
+           allocation_failed)
 #else // ! SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
-           ipmin,ipmax,cat1,cat2,ipmask, gdl, gdlN, main_thread_id)
+           ipmin,ipmax,cat1,cat2,ipmask, gdl, gdlN, main_thread_id, \
+           allocation_failed)
 #endif // ! SMOOTHPIVOT
 #endif // ! BALLS4SCANLEV
 #else // ! NMultipoles
 #ifndef BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,                                   \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id, \
+           allocation_failed)
 #else // ! SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,                                   \
-           ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id)
+           ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id, \
+           allocation_failed)
 #endif // ! SMOOTHPIVOT
 #else // ! BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
            ipmin,ipmax,cat1,cat2,ipfalse,ipmask,                            \
-           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id)
+           icountNbRmin,icountNbRminOverlap, gdl, main_thread_id, \
+           allocation_failed)
 #else // ! SMOOTHPIVOT
-#pragma omp parallel default(none)                                          \
+#pragma omp parallel default(shared)                                        \
     shared(cmd,gd,btable,nbody,roottable,nodetablescanlevB4,                \
-           ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id)
+           ipmin,ipmax,cat1,cat2,ipmask, gdl, main_thread_id, \
+           allocation_failed)
 #endif // ! SMOOTHPIVOT
 #endif // ! BALLS4SCANLEV
 #endif // ! NMultipoles
@@ -900,25 +1532,32 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     INTEGER n, m, ip;
     INTEGER i;
 
-      if (main_thread_id == current_thread_id)
-          debug_tracking_search("006");
-
     //B init:
     gdhist_sincos_omp_ggg hist;
-    search_init_sincos_omp_ggg(cmd, gd, &hist);
+    int hist_ready =
+        search_init_sincos_omp_ggg(cmd, gd, &hist) == SUCCESS;
+    int worker_ready = hist_ready;
 #ifdef NMultipoles
     gdhist_sincos_omp_ggg_N histN;
-    search_init_sincos_omp_ggg_N(cmd, gd, &histN);
+    int hist_n_ready = !run_threepcf;
+    if (run_threepcf)
+        hist_n_ready = hist_ready &&
+            search_init_sincos_omp_ggg_N(cmd, gd, &histN) == SUCCESS;
+    worker_ready = worker_ready && hist_n_ready;
 #endif
+    if (!worker_ready) {
+#pragma omp atomic write
+        allocation_failed = TRUE;
+    }
+
+#pragma omp barrier
       if (main_thread_id == current_thread_id)
           verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\n\t Total allocated %g MByte storage so far (threads).\n",
                 gd->bytes_tot*INMB);
     //E
 
-    INTEGER ipmaskthreads;
-      if (scanopt(cmd->options, "read-mask"))
-          ipmaskthreads = 0;
+    INTEGER ipmaskthreads = 0;
 
 #ifdef SMOOTHPIVOT
     INTEGER ipfalsethreads;
@@ -930,28 +1569,107 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
 #endif
 
-      if (main_thread_id == current_thread_id)
-          debug_tracking_search("007");
-
-#pragma omp for nowait schedule(dynamic)
-#ifndef BALLS4SCANLEV
-      for (p = btable[cat1] + ipmin -1; p < btable[cat1] + ipmax[cat1]; p++) {
-#else
-      for (INTEGER i=0; i< gd->nnodescanlevTableB4[cat1]; i++) {
-          p = nodetablescanlevB4[cat1][i];
+#ifdef OCTREEGGGMPI
+      if (distributed) {
+#pragma omp master
+        {
+          if (fcfc_octree_ggg_mpi_consensus(
+                  cmd, allocation_failed ? FAILURE : SUCCESS,
+                  "MPI OpenMP histogram allocation") == FAILURE)
+              allocation_failed = TRUE;
+        }
+#pragma omp barrier
+      }
 #endif
+
+      for (;;) {
+#pragma omp master
+        {
+          if (!distributed) {
+              task_first = 0;
+              task_last = pivot_task_count;
+              scheduler_status = SUCCESS;
+          }
+#ifdef OCTREEGGGMPI
+          else {
+              scheduler_status = fcfc_octree_ggg_mpi_scheduler_claim(
+                  cmd, &scheduler, &task_first, &task_last);
+          }
+#endif
+          if (scheduler_status == FAILURE) allocation_failed = TRUE;
+          work_done = task_first == task_last;
+        }
+#pragma omp barrier
+        if (allocation_failed || work_done) break;
+
+      INTEGER chunk_count =
+          (task_last - task_first + GGG_OMP_PIVOT_CHUNK_SIZE - 1)
+          / GGG_OMP_PIVOT_CHUNK_SIZE;
+#pragma omp for schedule(dynamic, 1) ordered
+      for (INTEGER ichunk = 0; ichunk < chunk_count; ichunk++) {
+          INTEGER chunk_first = task_first
+              + ichunk * GGG_OMP_PIVOT_CHUNK_SIZE;
+          INTEGER chunk_last = MIN(
+              chunk_first + GGG_OMP_PIVOT_CHUNK_SIZE, task_last);
+
+          /* These are chunk accumulators.  Clearing them here gives every
+           * run exactly the same floating-point grouping. */
+#ifdef TWOPCF
+          for (n = 1; n <= cmd->sizeHistN; n++) {
+              hist.histNthread[n] = 0.0;
+              hist.histWWthread[n] = 0.0;
+              hist.histNNSubXi2pcfthread[n] = 0.0;
 #ifdef SMOOTHPIVOT
-          NbRmin(p) = 1;
-          NbRminOverlap(p) = 0;
-          KappaRmin(p) = Kappa(p);
-          WeightRmin(p) = Weight(p);
+              hist.histNNSubXi2pcfthreadtotal[n] = 0.0;
+#endif
+              hist.histXi2pcfthread[n] = 0.0;
+          }
+#endif
+          for (n = 1; n <= cmd->sizeHistN; n++)
+              hist.histNNSubthread[n] = 0.0;
+#ifdef THREEPCFCONVERGENCE
+          if (run_threepcf) {
+          for (m = 1; m <= cmd->mChebyshev+1; m++) {
+              CLRM_ext(hist.histZetaMthreadcos[m], cmd->sizeHistN);
+              CLRM_ext(hist.histZetaMthreadsin[m], cmd->sizeHistN);
+              CLRM_ext(hist.histZetaMthreadsincos[m], cmd->sizeHistN);
+              CLRM_ext(hist.histZetaMthreadcossin[m], cmd->sizeHistN);
+          }
+#ifdef NMultipoles
+          for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+              CLRM_ext(histN.histZetaMthreadcos[m], cmd->sizeHistN);
+              CLRM_ext(histN.histZetaMthreadsin[m], cmd->sizeHistN);
+              CLRM_ext(histN.histZetaMthreadsincos[m], cmd->sizeHistN);
+              CLRM_ext(histN.histZetaMthreadcossin[m], cmd->sizeHistN);
+          }
+#endif
+          }
+#endif
+          hist.nbbcalcthread = 0;
+          hist.nbccalcthread = 0;
+          ipmaskthreads = 0;
+#ifdef SMOOTHPIVOT
+          ipfalsethreads = 0;
+          icountNbRminthread = 0;
+          icountNbRminOverlapthread = 0;
+#endif
+
+          for (INTEGER itask = chunk_first; itask < chunk_last; itask++) {
+#ifndef BALLS4SCANLEV
+              p = btable[cat1] + ipmin - 1 + itask;
+#else
+              i = itask;
+              p = nodetablescanlevB4[cat1][i];
+#endif
+          if (allocation_failed) continue;
+#ifdef SMOOTHPIVOT
           if (Update(p) == FALSE) {
               ipfalsethreads++;
               continue;
           }
 #endif
 
-          if (scanopt(cmd->options, "read-mask")) {
+          if (cballs_opt_read_mask(cmd)) {
             if (Mask(p) == FALSE) {
                 ipmaskthreads++;
                 continue;
@@ -959,7 +1677,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           }
 
 #if defined(NMultipoles) && defined(NONORMHIST)
-          if (scanopt(cmd->options, "patch-with-all")) {
+          if (run_threepcf && cballs_opt_patch_with_all(cmd)) {
               if (UpdatePivot(p) == FALSE) {
                   continue;
               }
@@ -981,15 +1699,23 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
               hist.histNNSubthread[n] = 0.0;
           //B 3pcf convergence & shear counting
 #ifdef NMultipoles
-          for (n = 1; n <= cmd->sizeHistN; n++)
-              histN.histNNSubthread[n] = 0.0;
+          if (run_threepcf)
+              for (n = 1; n <= cmd->sizeHistN; n++)
+                  histN.histNNSubthread[n] = 0.0;
 #endif
 
           //B Set histograms to zero for the pivot
 #ifdef THREEPCFCONVERGENCE
+          if (run_threepcf) {
           CLRM_ext_ext(hist.histXithreadcos,
                        cmd->mChebyshev+1, cmd->sizeHistN);
           CLRM_ext_ext(hist.histXithreadsin,
+                       cmd->mChebyshev+1, cmd->sizeHistN);
+          CLRM_ext_ext(hist.histXithreaddiagcos,
+                       cmd->mChebyshev+1, cmd->sizeHistN);
+          CLRM_ext_ext(hist.histXithreaddiagsin,
+                       cmd->mChebyshev+1, cmd->sizeHistN);
+          CLRM_ext_ext(hist.histXithreaddiagsincos,
                        cmd->mChebyshev+1, cmd->sizeHistN);
 #endif
 
@@ -997,14 +1723,22 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifdef NMultipoles
           //B 3pcf convergence & shear counting
           CLRM_ext_ext(histN.histXithreadcos,
-                       cmd->mChebyshev+1, cmd->sizeHistN);
+                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
           CLRM_ext_ext(histN.histXithreadsin,
-                       cmd->mChebyshev+1, cmd->sizeHistN);
+                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+          CLRM_ext_ext(histN.histXithreaddiagcos,
+                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+          CLRM_ext_ext(histN.histXithreaddiagsin,
+                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+          CLRM_ext_ext(histN.histXithreaddiagsincos,
+                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
           //E
 #endif
+          }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
+          if (run_threepcf) {
           CLRM_ext_ext(hist.histg1threadcos,
                        cmd->mChebyshev+1, cmd->sizeHistN);
           CLRM_ext_ext(hist.histg1threadsin,
@@ -1013,16 +1747,19 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                        cmd->mChebyshev+1, cmd->sizeHistN);
           CLRM_ext_ext(hist.histg2threadsin,
                        cmd->mChebyshev+1, cmd->sizeHistN);
+          }
 #endif
           //E
 
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
           //B 3pcf convergence & shear
+          if (run_threepcf) {
 #ifndef BALLS4SCANLEV
           polarix_init(cmd, gd, p, &hist);
 #else
           polarix_init(cmd, gd, (bodyptr)p, &hist);
 #endif
+          }
           //E 3pcf convergence & shear
 #endif
 //E segment to be included below...
@@ -1032,9 +1769,14 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //================
 
 #ifndef BALLS4SCANLEV
-          normal_walktree_sincos_N(cmd, gd, btable, cat2,
-                                   p, ((nodeptr) roottable[cat2]),
-                                   gd->rSizeTable[cat2], &hist, &histN);
+          if (run_threepcf)
+              normal_walktree_sincos_N(cmd, gd, btable, cat2,
+                                       p, ((nodeptr) roottable[cat2]),
+                                       gd->rSizeTable[cat2], &hist, &histN);
+          else
+              normal_walktree_sincos(cmd, gd, btable, cat2,
+                                     p, ((nodeptr) roottable[cat2]),
+                                     gd->rSizeTable[cat2], &hist);
 
 #ifdef TWOPCF
           //B kappa Avg Rmin
@@ -1061,12 +1803,20 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
           computeBodyProperties_sincos_ggg(cmd, gd, p,
                                            ipmax[cat1]-ipmin+1, &hist);
-          computeBodyProperties_sincos_ggg_N(cmd, gd, p,
-                                             ipmax[cat1]-ipmin+1, &histN);
+          if (run_threepcf)
+              computeBodyProperties_sincos_ggg_N(
+                  cmd, gd, p, ipmax[cat1]-ipmin+1, &histN);
 #else // ! BALLS4SCANLEV
-          normal_walktree_sincos_N(cmd, gd, btable, cat2,
-                                   (bodyptr)p, ((nodeptr) roottable[cat2]),
-                                   gd->rSizeTable[cat2], &hist, &histN);
+          if (run_threepcf)
+              normal_walktree_sincos_N(cmd, gd, btable, cat2,
+                                       (bodyptr)p,
+                                       ((nodeptr) roottable[cat2]),
+                                       gd->rSizeTable[cat2], &hist, &histN);
+          else
+              normal_walktree_sincos(cmd, gd, btable, cat2,
+                                     (bodyptr)p,
+                                     ((nodeptr) roottable[cat2]),
+                                     gd->rSizeTable[cat2], &hist);
 
 #ifdef TWOPCF
 #ifdef SMOOTHPIVOT
@@ -1092,8 +1842,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
                                            gd->nnodescanlevTableB4[cat1], &hist);
-          computeBodyProperties_sincos_ggg_N(cmd, gd, (bodyptr)p,
-                                             gd->nnodescanlevTableB4[cat1], &histN);
+          if (run_threepcf)
+              computeBodyProperties_sincos_ggg_N(
+                  cmd, gd, (bodyptr)p,
+                  gd->nnodescanlevTableB4[cat1], &histN);
 #endif // ! BALLS4SCANLEV
 
 //================
@@ -1179,86 +1931,140 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
           if (ip%cmd->stepState == 0)
           verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "%d ", ip);
-      } // end do body p
+          } // end do body p
+
+          /* OpenMP's ordered region follows logical chunk order, regardless
+           * of which worker computed the chunk. */
+#pragma omp ordered
+          {
+#ifdef TWOPCF
+            for (n = 1; n <= cmd->sizeHistN; n++) {
+                gdl.histNN[n] += hist.histNthread[n];
+                gdl.histWW[n] += hist.histWWthread[n];
+                gdl.histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
+#ifdef SMOOTHPIVOT
+                gdl.histNNSubXi2pcftotal[n] +=
+                    hist.histNNSubXi2pcfthreadtotal[n];
+#endif
+                gdl.histXi2pcf[n] += hist.histXi2pcfthread[n];
+            }
+#endif
+            for (n = 1; n <= cmd->sizeHistN; n++)
+                gdl.histNNSub[n] += hist.histNNSubthread[n];
+
+#ifdef THREEPCFCONVERGENCE
+            if (run_threepcf) {
+            for (m = 1; m <= cmd->mChebyshev+1; m++) {
+                ADDM_ext(gdl.histZetaMcos[m], gdl.histZetaMcos[m],
+                         hist.histZetaMthreadcos[m], cmd->sizeHistN);
+                ADDM_ext(gdl.histZetaMsin[m], gdl.histZetaMsin[m],
+                         hist.histZetaMthreadsin[m], cmd->sizeHistN);
+                ADDM_ext(gdl.histZetaMsincos[m], gdl.histZetaMsincos[m],
+                         hist.histZetaMthreadsincos[m], cmd->sizeHistN);
+                ADDM_ext(gdl.histZetaMcossin[m], gdl.histZetaMcossin[m],
+                         hist.histZetaMthreadcossin[m], cmd->sizeHistN);
+            }
+#ifdef NMultipoles
+            for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+                ADDM_ext(gdlN.histZetaMcos[m], gdlN.histZetaMcos[m],
+                         histN.histZetaMthreadcos[m], cmd->sizeHistN);
+                ADDM_ext(gdlN.histZetaMsin[m], gdlN.histZetaMsin[m],
+                         histN.histZetaMthreadsin[m], cmd->sizeHistN);
+                ADDM_ext(gdlN.histZetaMsincos[m], gdlN.histZetaMsincos[m],
+                         histN.histZetaMthreadsincos[m], cmd->sizeHistN);
+                ADDM_ext(gdlN.histZetaMcossin[m], gdlN.histZetaMcossin[m],
+                         histN.histZetaMthreadcossin[m], cmd->sizeHistN);
+            }
+#endif
+            }
+#endif
+            gd->nbbcalc += hist.nbbcalcthread;
+            gd->nbccalc += hist.nbccalcthread;
+            if (cballs_opt_read_mask(cmd))
+                ipmask += ipmaskthreads;
+#ifdef SMOOTHPIVOT
+            ipfalse += ipfalsethreads;
+            icountNbRmin += icountNbRminthread;
+            icountNbRminOverlap += icountNbRminOverlapthread;
+#endif
+          }
+      } // end deterministic chunk loop
+        if (!distributed) break;
+      } // end FCFC MPI claim/process loop
 
       if (main_thread_id == current_thread_id)
           verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
 
-      if (main_thread_id == current_thread_id)
-          debug_tracking_search("008");
-
-#pragma omp critical
-    {
-#ifdef TWOPCF
-        for (n = 1; n <= cmd->sizeHistN; n++) {
-            gdl.histNN[n] += hist.histNthread[n];
-            gdl.histWW[n] += hist.histWWthread[n];
-            gdl.histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
-#ifdef SMOOTHPIVOT
-            gdl.histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
-#endif
-
-// Check this line and the histogram array histXi2pcfthread
-//  in source search.c and correct if necessary
-            gdl.histXi2pcf[n] += hist.histXi2pcfthread[n];
-//            gdl.histXi2pcf[n] += hist.histXi2pcfthreadsub[n];
-        }
-#endif
-
-        for (n = 1; n <= cmd->sizeHistN; n++)
-            gdl.histNNSub[n] += hist.histNNSubthread[n];
-
-#ifdef THREEPCFCONVERGENCE
-        for (m=1; m<=cmd->mChebyshev+1; m++) {
-            ADDM_ext(gdl.histZetaMcos[m],gdl.histZetaMcos[m],
-                     hist.histZetaMthreadcos[m],cmd->sizeHistN);
-            ADDM_ext(gdl.histZetaMsin[m],gdl.histZetaMsin[m],
-                     hist.histZetaMthreadsin[m],cmd->sizeHistN);
-            ADDM_ext(gdl.histZetaMsincos[m],gdl.histZetaMsincos[m],
-                     hist.histZetaMthreadsincos[m],cmd->sizeHistN);
-            ADDM_ext(gdl.histZetaMcossin[m],gdl.histZetaMcossin[m],
-                     hist.histZetaMthreadcossin[m],cmd->sizeHistN);
-        }
-#endif
-
-        gd->nbbcalc += hist.nbbcalcthread;
-        gd->nbccalc += hist.nbccalcthread;
-
-#ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
-        //B 3pcf convergence & shear
-        for (m=1; m<=cmd->mChebyshev+1; m++) {
-            ADDM_ext(gdlN.histZetaMcos[m],gdlN.histZetaMcos[m],
-                     histN.histZetaMthreadcos[m],cmd->sizeHistN);
-            ADDM_ext(gdlN.histZetaMsin[m],gdlN.histZetaMsin[m],
-                     histN.histZetaMthreadsin[m],cmd->sizeHistN);
-            ADDM_ext(gdlN.histZetaMsincos[m],gdlN.histZetaMsincos[m],
-                     histN.histZetaMthreadsincos[m],cmd->sizeHistN);
-            ADDM_ext(gdlN.histZetaMcossin[m],gdlN.histZetaMcossin[m],
-                     histN.histZetaMthreadcossin[m],cmd->sizeHistN);
-        }
-        //E 3pcf convergence & shear
+    if (run_threepcf && hist_n_ready)
+        search_free_sincos_omp_ggg_N(cmd, gd, &histN);  // free memory
 #endif
-#endif
-
-        if (scanopt(cmd->options, "read-mask"))
-            ipmask += ipmaskthreads;
-
-#ifdef SMOOTHPIVOT
-        ipfalse += ipfalsethreads;
-        icountNbRmin += icountNbRminthread;
-        icountNbRminOverlap += icountNbRminOverlapthread;
-#endif
-    } // ! critical
-
-          if (main_thread_id == current_thread_id)
-              debug_tracking("009");
-
-#ifdef NMultipoles
-    search_free_sincos_omp_ggg_N(cmd, gd, &histN);  // free memory
-#endif
-    search_free_sincos_omp_ggg(cmd, gd, &hist);     // free memory
+    if (hist_ready)
+        search_free_sincos_omp_ggg(cmd, gd, &hist);     // free memory
   } // end pragma omp parallel
+
+#ifdef OCTREEGGGMPI
+    if (distributed) {
+        if (fcfc_octree_ggg_mpi_consensus(
+                cmd, allocation_failed ? FAILURE : SUCCESS,
+                "MPI octree-GGG workers") == FAILURE)
+            allocation_failed = TRUE;
+        if (scheduler.ready
+            && fcfc_octree_ggg_mpi_scheduler_destroy(
+                   cmd, &scheduler) == FAILURE)
+            allocation_failed = TRUE;
+        if (fcfc_octree_ggg_mpi_consensus(
+                cmd, allocation_failed ? FAILURE : SUCCESS,
+                "MPI octree-GGG scheduler cleanup") == FAILURE)
+            allocation_failed = TRUE;
+    }
+#endif
+
+    if (allocation_failed) {
+#ifdef DEBUG
+        fclose(outpivots);
+#endif
+#ifdef NMultipoles
+        if (run_threepcf)
+            search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+        search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: OpenMP histogram allocation failed", routineName);
+        return FAILURE;
+    }
+
+#ifdef OCTREEGGGMPI
+    if (distributed) {
+        if (reduce_octree_ggg_histograms(
+                cmd, gd, &gdl, run_threepcf,
+#ifdef NMultipoles
+                &gdlN,
+#endif
+                &ipmask,
+#ifdef SMOOTHPIVOT
+                &ipfalse, &icountNbRmin, &icountNbRminOverlap
+#else
+                NULL, NULL, NULL
+#endif
+                ) == FAILURE) {
+#ifdef NMultipoles
+            if (run_threepcf)
+                search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+            search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+            return FAILURE;
+        }
+        if (!fcfc_octree_ggg_mpi_is_root()) {
+#ifdef NMultipoles
+            if (run_threepcf)
+                search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+            search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+            return SUCCESS;
+        }
+    }
+#endif
 
     //B end of completed pivot
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n\n");
@@ -1284,6 +2090,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                "%s: p falses found = %ld and %e %e %e\n",
                                routineName, ipfalse, num, den, xi);
 #ifdef THREEPCFCONVERGENCE
+        if (run_threepcf) {
         for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
             MULMS_ext(gdl.histZetaMcos[mm],
                       gdl.histZetaMcos[mm],xi,cmd->sizeHistN);
@@ -1294,11 +2101,13 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
             MULMS_ext(gdl.histZetaMcossin[mm],
                       gdl.histZetaMcossin[mm],xi,cmd->sizeHistN);
         }
+        }
 #endif
 
 #ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
-        for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
+        if (run_threepcf) {
+        for (mm=1; mm<=GGG_WINDOW_ORDERS(cmd); mm++) {
             MULMS_ext(gdlN.histZetaMcos[mm],
                       gdlN.histZetaMcos[mm],xi,cmd->sizeHistN);
             MULMS_ext(gdlN.histZetaMsin[mm],
@@ -1308,19 +2117,18 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
             MULMS_ext(gdlN.histZetaMcossin[mm],
                       gdlN.histZetaMcossin[mm],xi,cmd->sizeHistN);
         }
+        }
 #endif
 #endif
 
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: p falses found = %ld\n", routineName, ipfalse);
-//#ifdef SMOOTHPIVOT
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: count NbRmin found = %ld\n",
                                routineName, icountNbRmin);
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: count overlap found = %ld\n",
                                routineName, icountNbRminOverlap);
-//#endif
 
         bodyptr pp;
         INTEGER ifalsecount;
@@ -1345,7 +2153,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                routineName, itruecount+ifalsecount);
 #endif
 
-    if (scanopt(cmd->options, "read-mask"))
+    if (cballs_opt_read_mask(cmd))
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: p masked found = %ld\n", routineName, ipmask);
 
@@ -1356,7 +2164,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #ifdef TWOPCF
     //B asymmetric,weights-norm options give same results without them...
     int nn;
-    if (!scanopt(cmd->options, "asymmetric")) {
+    if (!cballs_opt_asymmetric(cmd)) {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
 #ifdef SMOOTHPIVOT
             if (cmd->verbose>3)
@@ -1368,7 +2176,7 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                 printf("%d %e %e\n",
                        nn, gdl.histNNSubXi2pcf[nn], gdl.histNN[nn]);
 #endif
-            if (scanopt(cmd->options, "weights-norm")) {
+            if (cballs_opt_weights_norm(cmd)) {
 //           gdl.histXi2pcf[nn] /= MAX(gdl.histNN[nn],1.0);// gives same as below
 //                gdl.histXi2pcf[nn] /= MAX(gdl.histWW[nn],1.0);
                 gdl.histXi2pcf[nn] /= gdl.histWW[nn];   // gives same as above
@@ -1385,24 +2193,28 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
         }
     } else {
         for (nn = 1; nn <= cmd->sizeHistN; nn++) {
+//B verbose should be 0--3.
+//  But there is special place (debuging) where is useful to have > 3.
 #ifdef SMOOTHPIVOT
             if (cmd->verbose>3)
-            printf(0,"%d %e %e\n", nn,
+                verb_print_debug(cmd->verbose,"%d %e %e\n", nn,
                    gdl.histNNSubXi2pcf[nn], gdl.histNNSubXi2pcftotal[nn]);
             gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcftotal[nn],1.0);
 #else
             if (cmd->verbose>3)
-                printf(0,"%d %e\n", nn, gdl.histNNSubXi2pcf[nn]);
-            if (scanopt(cmd->options, "weights-norm"))
+                verb_print_debug(cmd->verbose,"%d %e\n", nn,
+                                 gdl.histNNSubXi2pcf[nn]);
+            if (cballs_opt_weights_norm(cmd))
                 gdl.histXi2pcf[nn] /= gdl.histWW[nn];
             else
                 gdl.histXi2pcf[nn] /= MAX(gdl.histNNSubXi2pcf[nn],1.0);
 #endif
+//E
         }
     }
     //E
 
-    if (scanopt(cmd->options, "compute-HistN")) {
+    if (cballs_opt_compute_histn(cmd)) {
 #ifdef SMOOTHPIVOT
             search_compute_HistN_ggg(cmd, gd, nbody[cat1]-ipfalse, &gdl);
 #else
@@ -1411,7 +2223,19 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
     }
 #endif // ! TWOPCF
 
-      debug_tracking("010");
+#if defined(THREEPCFCONVERGENCE) && defined(NMultipoles) \
+    && defined(NONORMHIST)
+    if (run_threepcf
+        && cballs_opt_no_normalize_histzeta(cmd)
+        && cballs_opt_edge_corrections(cmd)) {
+        if (compute_edge_corrections_ggg(cmd, gd, &gdl, &gdlN)
+            == FAILURE) {
+            search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+            search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+            return FAILURE;
+        }
+    }
+#endif
 
 // ===============================================
 //B Saving histograms section: case GGGCORRELATION:
@@ -1419,68 +2243,71 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 
       if (gd->rootDirFlag == TRUE) {
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-            "\n\t%s: printing octree-ggg-omp method...\n\n", routineName);
+            "\n\t%s: printing %s method...\n\n",
+            routineName, cmd->searchMethod);
 
 #ifdef TWOPCF
-    if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd, &gdl);
-    PrintHistXi2pcf(cmd, gd, &gdl);
+    if (cballs_opt_compute_histn(cmd)) PRINT_OR_FAIL(PrintHistNN(cmd, gd, &gdl));
+    PRINT_OR_FAIL(PrintHistXi2pcf(cmd, gd, &gdl));
 #endif
 
-    PrintHistrBins(cmd, gd);
+    PRINT_OR_FAIL(PrintHistrBins(cmd, gd));
 
 #ifdef THREEPCFCONVERGENCE
+    if (run_threepcf) {
 #ifdef NMultipoles
 
 #ifdef NONORMHIST
-        if (scanopt(cmd->options, "no-normalize-HistZeta"))
-            PrintHistZetaM_sincos(cmd, gd, &gdl);
+        if (cballs_opt_no_normalize_histzeta(cmd))
+            PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd, &gdl));
         else
-            PrintHistZetaM_sincos_normalized(cmd, gd, &gdl, &gdlN);
+            PRINT_OR_FAIL(PrintHistZetaM_sincos_normalized(cmd, gd, &gdl, &gdlN));
 #else
-        PrintHistZetaM_sincos(cmd, gd, &gdl);
+        PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd, &gdl));
 #endif // ! NONORMHIST
 
-        PrintHistZetaM_sincos_N(cmd, gd, &gdlN);
+          PRINT_OR_FAIL(PrintHistZetaM_sincos_N(cmd, gd, &gdlN));
 
 #else // ! NMultipoles
-    PrintHistZetaM_sincos(cmd, gd, &gdl);
+    PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd, &gdl));
 #endif // ! NMultipoles
 
-        if (scanopt(cmd->options, "out-m-HistZeta")) {
+        if (cballs_opt_out_m_histzeta(cmd)) {
 #ifdef NMultipoles
 
 #ifdef NONORMHIST
-            if (scanopt(cmd->options, "no-normalize-HistZeta"))
-                PrintHistZetaMm_sincos(cmd, gd, &gdl);
+            if (cballs_opt_no_normalize_histzeta(cmd))
+                PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd, &gdl));
             else
-                PrintHistZetaMm_sincos_normalized(cmd, gd, &gdl, &gdlN);
+                PRINT_OR_FAIL(PrintHistZetaMm_sincos_normalized(cmd, gd, &gdl, &gdlN));
 #else
-            PrintHistZetaMm_sincos(cmd, gd, &gdl);
+            PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd, &gdl));
 #endif // ! NONORMHIST
 
-            PrintHistZetaMm_sincos_N(cmd, gd, &gdlN);
+            PRINT_OR_FAIL(PrintHistZetaMm_sincos_N(cmd, gd, &gdlN));
 
 #else // ! NMultipoles
-            PrintHistZetaMm_sincos(cmd, gd, &gdl);
+            PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd, &gdl));
 #endif // ! NMultipoles
         }
 
-        if (scanopt(cmd->options, "out-HistZetaG")) {
-            PrintHistZetaGm_sincos(cmd, gd, &gdl);
-            PrintHistZetaG(cmd, gd, &gdl);
-            PrintHistZetaMZetaGm_sincos(cmd, gd, &gdl);
+        if (cballs_opt_out_histzetag(cmd)) {
+            PRINT_OR_FAIL(PrintHistZetaGm_sincos(cmd, gd, &gdl));
+            PRINT_OR_FAIL(PrintHistZetaG(cmd, gd, &gdl));
+            PRINT_OR_FAIL(PrintHistZetaMZetaGm_sincos(cmd, gd, &gdl));
         }
 
 #ifdef NMultipoles
 #ifdef NONORMHIST
     //  make this two questions more precise...
-        if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-            if (scanopt(cmd->options, "edge-corrections")) {
-                PrintHistZetaM_sincos_edge_effects(cmd, gd, &gdl, &gdlN);
+        if (cballs_opt_no_normalize_histzeta(cmd)) {
+            if (cballs_opt_edge_corrections(cmd)) {
+                PRINT_OR_FAIL(PrintHistZetaM_sincos_edge_effects(cmd, gd, &gdl, &gdlN));
             }
         }
 #endif // ! NONORMHIST
 #endif // ! NMultipoles
+    }
 #endif // ! THREEPCFCONVERGENCE
 
           gd->flagPrint = FALSE;
@@ -1489,8 +2316,6 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 // ===============================================
 //E Saving histograms section: case GGGCORRELATION
 // ===============================================
-
-      debug_tracking("011");
 
 // ===============================================
 //B Making histograms public (cballys PXD) section
@@ -1508,11 +2333,12 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //  gdl->histZetaMcos[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
 
 #ifdef THREEPCFCONVERGENCE
+    if (run_threepcf) {
     for (m=1; m<=cmd->mChebyshev+1; m++) {
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 //B Working OK in cyballs
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+                if (cballs_opt_no_normalize_histzeta(cmd)) {
                     gd->histZetaMcos[m][n1][n2] = gdl.histZetaMcos[m][n1][n2];
                     gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
                     gd->histZetaMsincos[m][n1][n2] = gdl.histZetaMsincos[m][n1][n2];
@@ -1520,13 +2346,17 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                 } else {
 #if defined(NMultipoles) && defined(NONORMHIST)
                     gd->histZetaMcos[m][n1][n2] =
-                    gdl.histZetaMcos[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    normalize_zeta_ggg(gdl.histZetaMcos[m][n1][n2],
+                                       &gdlN, n1, n2);
                     gd->histZetaMsin[m][n1][n2] =
-                    gdl.histZetaMsin[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    normalize_zeta_ggg(gdl.histZetaMsin[m][n1][n2],
+                                       &gdlN, n1, n2);
                     gd->histZetaMsincos[m][n1][n2] =
-                    gdl.histZetaMsincos[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    normalize_zeta_ggg(gdl.histZetaMsincos[m][n1][n2],
+                                       &gdlN, n1, n2);
                     gd->histZetaMcossin[m][n1][n2] =
-                    gdl.histZetaMcossin[m][n1][n2]/gdlN.histZetaMcos[1][n1][n2];
+                    normalize_zeta_ggg(gdl.histZetaMcossin[m][n1][n2],
+                                       &gdlN, n1, n2);
 #else
                     gd->histZetaMcos[m][n1][n2] = gdl.histZetaMcos[m][n1][n2];
                     gd->histZetaMsin[m][n1][n2] = gdl.histZetaMsin[m][n1][n2];
@@ -1535,11 +2365,17 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 #endif
                 }
                 // (EE) edge_effects
-                if (scanopt(cmd->options, "no-normalize-HistZeta"))
-                    if (scanopt(cmd->options, "edge-corrections"))
-                gd->histZetaM_EE[m][n1][n2] = gdl.histZetaM_EE[m][n1][n2];
+                if (cballs_opt_no_normalize_histzeta(cmd))
+                    if (cballs_opt_edge_corrections(cmd))
+                {
+                    gd->histZetaM_EE[m][n1][n2] =
+                        gdl.histZetaM_EE[m][n1][n2];
+                    gd->histZetaM_EE_Im[m][n1][n2] =
+                        gdl.histZetaM_EE_Im[m][n1][n2];
+                }
             }
         }
+    }
     }
 #endif
 #endif
@@ -1547,11 +2383,10 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
 //E Making histograms public (cballys PXD) section
 // ===============================================
 
-      debug_tracking("012");
-
 //B free memory
 #ifdef NMultipoles
-    search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+    if (run_threepcf)
+        search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
     search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
 //E
@@ -1561,10 +2396,30 @@ global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                         "\nGoing out: CPU time = %lf %s\n",
                         CPUTIME-cpustart, PRNUNITOFTIMEUSED);
 
-      debug_tracking_s("013 ...final", routineName);
-
     return SUCCESS;
 }
+
+global int searchcalc_octree_ggg_omp(struct cmdline_data *cmd,
+                                     struct global_data *gd,
+                                     bodyptr *btable, INTEGER *nbody,
+                                     INTEGER ipmin, INTEGER *ipmax,
+                                     int cat1, int cat2)
+{
+    return searchcalc_octree_ggg_driver(cmd, gd, btable, nbody,
+                                        ipmin, ipmax, cat1, cat2, FALSE);
+}
+
+#ifdef OCTREEGGGMPI
+global int searchcalc_octree_ggg_mpi(struct cmdline_data *cmd,
+                                     struct global_data *gd,
+                                     bodyptr *btable, INTEGER *nbody,
+                                     INTEGER ipmin, INTEGER *ipmax,
+                                     int cat1, int cat2)
+{
+    return searchcalc_octree_ggg_driver(cmd, gd, btable, nbody,
+                                        ipmin, ipmax, cat1, cat2, TRUE);
+}
+#endif
 
 local void normal_walktree_sincos(struct  cmdline_data* cmd, 
                                   struct  global_data* gd,
@@ -1573,19 +2428,19 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   gdhistptr_sincos_omp_ggg hist)
 {
     nodeptr l;
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
     real dr1;
-    vector dr;
-#endif
+    compute_vector dr;
 
     if (Update(p)==FALSE) return;
     if ( ((nodeptr) p) != q ) {
         if (Type(q) == CELL) {
-            if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-                if (!scanopt(cmd->options, "no-one-ball")) {
+            if (cballs_opt_read_mask(cmd)
+                && Mask(q) == MASK_NODE_MASKED)
+                return;
+            if (!reject_cell_ggg(cmd, gd, (nodeptr)p, q)) {
+                if (!cballs_opt_no_one_ball(cmd)
+                    && (!cballs_opt_read_mask(cmd)
+                        || mask_node_can_approximate(Mask(q)))) {
                     accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
 
 #ifndef NORMALHISTSCALE
@@ -1628,49 +2483,21 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                           gdhistptr_sincos_omp_ggg hist)
 {
     cellptr q;
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
     real dr1;
-    vector dr;
-#endif
+    compute_vector dr;
     int n;
     real xi;
     REAL cosphi,sinphi;
     int iq;
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     real gamma1, gamma2;
 #endif
 
     q = start;
-    if (scanopt(cmd->options, "read-mask"))
-        if (Mask(q)==FALSE) return;
+    if (cballs_opt_read_mask(cmd))
+        if (Mask(q) != MASK_NODE_VALID) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-#ifdef SMOOTHPIVOT
-            if (dr1<=gd->rsmooth[0]) {
-                if (Update(q)==TRUE) {
-                    Update(q) = FALSE;
-                    NbRmin(p) += 1;
-#ifndef NOWKAvg
-                    // ... this definition will give tests OK
-                    KappaRmin(p) += Weight(q)*Kappa(q);
-                    //B Added this line and SMOOTHPIVOT works for
-                    //      NMultipoles=0 and NONORMHIST=0
-                    WeightRmin(p) += Weight(q);
-                    //E
-#else
-                    KappaRmin(p) += Kappa(q);       // when use it in
-                    WeightRmin(p) += Weight(q);     //  computeProperties
-                                                    //  multiply by Weight
-#endif
-                } else {
-                    NbRminOverlap(p) += 1;
-                }
-            }
-#endif
-
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
@@ -1696,11 +2523,12 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
                 xi = Weight(q)*Kappa(q);
 
-#ifdef THREEPCFSHEAR
+                if (hist->threepcf_enabled) {
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
@@ -1711,9 +2539,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
+                }
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
@@ -1742,11 +2571,12 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
                 xi = Weight(q)*Kappa(q);
 
-#ifdef THREEPCFSHEAR
+                if (hist->threepcf_enabled) {
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
@@ -1757,9 +2587,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
+                }
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
@@ -1780,25 +2611,20 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 {
     cellptr q;
 //B implement these memory optimization and check its results
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
     real dr1;
-    vector dr;
-#endif
+    compute_vector dr;
 //E
     int n;
     real xi;
     REAL cosphi,sinphi;
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     real gamma1, gamma2;
 #endif
 
     q = start;
 
-    if (scanopt(cmd->options, "read-mask"))
-        if (Mask(q)==FALSE) return;
+    if (cballs_opt_read_mask(cmd))
+        if (Mask(q) != MASK_NODE_VALID) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
         
@@ -1817,27 +2643,28 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
-                                            hist->histNNSubXi2pcfthread[n] + 1.0;
+                                            hist->histNNSubXi2pcfthread[n] + Nb(q);
 #ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
-                                            hist->histNNSubXi2pcfthreadp[n] + 1.;
+                                            hist->histNNSubXi2pcfthreadp[n] + Nb(q);
 #endif
 #endif
 
-                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + Nb(q);
 
 #ifndef NOWKAvg
-                xi = Kappa(q);
-#else
                 xi = Weight(q)*Kappa(q);
+#else
+                xi = Nb(q)*Kappa(q);
 #endif
 //E
 
-#ifdef THREEPCFSHEAR
+                if (hist->threepcf_enabled) {
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
@@ -1848,9 +2675,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
+                }
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
@@ -1868,28 +2696,29 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
-                                            hist->histNNSubXi2pcfthread[n] + 1.0;
+                                            hist->histNNSubXi2pcfthread[n] + Nb(q);
 #ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
-                                            hist->histNNSubXi2pcfthreadp[n] + 1.;
+                                            hist->histNNSubXi2pcfthreadp[n] + Nb(q);
 #endif
 #endif
 
-                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + Nb(q);
 
 #ifndef NOWKAvg
                 //B ... this definition will give tests OK
-                xi = Kappa(q);
+                xi = Weight(q)*Kappa(q);
                 //E
 #else
-                xi = Weight(q)*Kappa(q);
+                xi = Nb(q)*Kappa(q);
 #endif
 
-#ifdef THREEPCFSHEAR
+                if (hist->threepcf_enabled) {
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
@@ -1900,9 +2729,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
+                }
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
 #endif
@@ -2071,6 +2901,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #endif // ! NOWKAvg
 //E
 
+    if (hist->threepcf_enabled) {
 #ifndef NONORMHIST
 #ifdef THREEPCFCONVERGENCE
     for (m=1; m<=cmd->mChebyshev+1; m++) {
@@ -2092,6 +2923,14 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
             hist->histXithreadsin[m], hist->histXithreadcos[m],cmd->sizeHistN);
         OUTVP_ext(hist->xiOUTVPcossin,
             hist->histXithreadcos[m], hist->histXithreadsin[m],cmd->sizeHistN);
+        for (n=1; n<=cmd->sizeHistN; n++) {
+            hist->xiOUTVPcos[n][n] -= hist->histXithreaddiagcos[m][n];
+            hist->xiOUTVPsin[n][n] -= hist->histXithreaddiagsin[m][n];
+            hist->xiOUTVPsincos[n][n] -=
+                hist->histXithreaddiagsincos[m][n];
+            hist->xiOUTVPcossin[n][n] -=
+                hist->histXithreaddiagsincos[m][n];
+        }
         CLRM_ext(hist->histZetaMtmpcos,cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsin,cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsincos,cmd->sizeHistN);
@@ -2113,7 +2952,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     for (m=1; m<=cmd->mChebyshev+1; m++) {
         MULVS_ext(hist->histg2threadsin[m],hist->histg2threadsin[m],
                   -1.0,cmd->sizeHistN);
@@ -2133,6 +2972,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
             hist->histg2threadcos[m], cmd->sizeHistN);
     }
 #endif
+    }
 #ifdef TWOPCF
     for (n=1; n<=cmd->sizeHistN; n++) {
         hist->histXi2pcfthread[n] += xi_2p*hist->histXi2pcfthreadsub[n];
@@ -2152,19 +2992,19 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                     gdhistptr_sincos_omp_ggg_N histN)
 {
     nodeptr l;
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
     real dr1;
-    vector dr;
-#endif
+    compute_vector dr;
 
     if (Update(p)==FALSE) return;
     if ( ((nodeptr) p) != q ) {
         if (Type(q) == CELL) {
-            if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-                if (!scanopt(cmd->options, "no-one-ball")) {
+            if (cballs_opt_read_mask(cmd)
+                && Mask(q) == MASK_NODE_MASKED)
+                return;
+            if (!reject_cell_ggg(cmd, gd, (nodeptr)p, q)) {
+                if (!cballs_opt_no_one_ball(cmd)
+                    && (!cballs_opt_read_mask(cmd)
+                        || mask_node_can_approximate(Mask(q)))) {
                     accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
 
 #ifndef NORMALHISTSCALE
@@ -2215,40 +3055,22 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                             gdhistptr_sincos_omp_ggg_N histN)
 {
     cellptr q;
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
     real dr1;
-    vector dr;
-#endif
+    compute_vector dr;
     int n;
     real xi;
     real xiN;
     REAL cosphi,sinphi;
     int iq;
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     real gamma1, gamma2;
 #endif
 
     q = start;
-    if (scanopt(cmd->options, "read-mask"))
-        if (Mask(q)==FALSE) return;
+    if (cballs_opt_read_mask(cmd))
+        if (Mask(q) != MASK_NODE_VALID) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-#ifdef SMOOTHPIVOT
-            if (dr1<=gd->rsmooth[0]) {
-                if (Update(q)==TRUE) {
-                    Update(q) = FALSE;
-                    NbRmin(p) += 1;
-                    KappaRmin(p) += Kappa(q);
-                    WeightRmin(p) += Weight(q);
-                } else {
-                    NbRminOverlap(p) += 1;
-                }
-            }
-#endif
-
 #ifndef NORMALHISTSCALE
 //B useLogHist section
         if(dr1>cmd->rminHist) {
@@ -2277,24 +3099,20 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 xi = Weight(q)*Kappa(q);
                 xiN = Weight(q);
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPNANY;
-                    CHEBYSHEVTUOMPSINCOSANY
-                } else {
-                    CHEBYSHEVTUOMPN;
-                    CHEBYSHEVTUOMP;
-                }
+                GGG_ACCUMULATE_WINDOW_MODES;
+                CHEBYSHEVTUOMPSINCOSANY;
+                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
@@ -2328,24 +3146,20 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 xi = Weight(q)*Kappa(q);
                 xiN = Weight(q);
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPNANY;
-                    CHEBYSHEVTUOMPSINCOSANY
-                } else {
-                    CHEBYSHEVTUOMPN;
-                    CHEBYSHEVTUOMP;
-                }
+                GGG_ACCUMULATE_WINDOW_MODES;
+                CHEBYSHEVTUOMPSINCOSANY;
+                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
@@ -2369,24 +3183,19 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                                  gdhistptr_sincos_omp_ggg_N histN)
 {
     cellptr q;
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
     real dr1;
-    vector dr;
-#endif
+    compute_vector dr;
     int n;
     real xi;
     real xiN;
     REAL cosphi,sinphi;
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     real gamma1, gamma2;
 #endif
 
     q = start;
-    if (scanopt(cmd->options, "read-mask"))
-        if (Mask(q)==FALSE) return;
+    if (cballs_opt_read_mask(cmd))
+        if (Mask(q) != MASK_NODE_VALID) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
 
@@ -2404,89 +3213,44 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
-                                            hist->histNNSubXi2pcfthread[n] + 1.0;
+                                            hist->histNNSubXi2pcfthread[n] + Nb(q);
 #ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
-                                        hist->histNNSubXi2pcfthreadp[n] + 1.0;
+                                        hist->histNNSubXi2pcfthreadp[n] + Nb(q);
 #endif
 #endif
 
                 //B 3pcf convergence
-                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
-                histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.0;
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + Nb(q);
+                histN->histNNSubthread[n] = histN->histNNSubthread[n] + Nb(q);
                 //E
 
 #ifndef NOWKAvg
-//B ... this definition will give tests OK
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    xi = Nb(q)*Kappa(q);            // Kappa is cell average
-                    xiN = Weight(q);                // Weight sum in cell
-                } else {
-//                    xi = Weight(q)*Kappa(q);
-                    xi = Kappa(q);                  // original line
-                    xiN = 1.0;                      // original line
-//                    xiN = Weight(q);              // average of weights
-                }
-#else // ! NONORMHIST
-                xi = Kappa(q);                      // original line
-//                xi = Weight(q)*Kappa(q);
-                xiN = 1.0;                          // original line
-//                xiN = Weight(q);                  // average of weights
-#endif // ! NONORMHIST
-//E
-#else // ! NOWKAvg
-//B Weight:: this segment not corrected yet... use Weight(q) below?
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    // check this line... must be Nb(q)^2? should be Nb(q)
-                    xi = Nb(q)*Weight(q)*Kappa(q);  // Kappa is cell average
-                    xiN = Nb(q)*Weight(q);          // Weight sum in cell
-                } else {
-                    xi = Weight(q)*Kappa(q);
-//                    xi = Kappa(q);                  // original line
-//                    xiN = 1.0;                      // original line
-                    xiN = Weight(q);                // average of weights
-                }
-#else // ! NONORMHIST
-//                xi = Kappa(q);                      // original line
                 xi = Weight(q)*Kappa(q);
-//                xiN = 1.0;                          // original line
-                xiN = Weight(q);                    // average of weights
-#endif // ! NONORMHIST
-//E Weight:: this segment not corrected yet... use Weight(q) above?
-#endif // ! NOWKAvg
+                xiN = Weight(q);
+#else
+                xi = Nb(q)*Kappa(q);
+                xiN = Nb(q)*Weight(q);
+#endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPNANY;
-                    CHEBYSHEVTUOMPSINCOSANY
-                } else {
-                    CHEBYSHEVTUOMPN;
-                    CHEBYSHEVTUOMP;
-                }
+                GGG_ACCUMULATE_WINDOW_MODES;
+                CHEBYSHEVTUOMPSINCOSANY;
+                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    hist->histXi2pcfthreadsub[n] += xi/Nb(q);
-                } else {
-                    hist->histXi2pcfthreadsub[n] += xi;
-                }
-#else
                 hist->histXi2pcfthreadsub[n] += xi;
-#endif
 #endif
 
                 hist->nbccalcthread += 1;
@@ -2504,88 +3268,44 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
                 hist->histWthread[n] = hist->histWthread[n] +  Nb(q);
                 hist->histNNSubXi2pcfthread[n] =
-                                            hist->histNNSubXi2pcfthread[n] + 1.0;
+                                            hist->histNNSubXi2pcfthread[n] + Nb(q);
 #ifdef SMOOTHPIVOT
                 hist->histNNSubXi2pcfthreadp[n] =
-                                        hist->histNNSubXi2pcfthreadp[n] + 1.0;
+                                        hist->histNNSubXi2pcfthreadp[n] + Nb(q);
 #endif
 #endif
 
                 //B 3pcf convergence
-                hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
-                histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.0;
+                hist->histNNSubthread[n] = hist->histNNSubthread[n] + Nb(q);
+                histN->histNNSubthread[n] = histN->histNNSubthread[n] + Nb(q);
                 //E
 
 #ifndef NOWKAvg
-//B ... this definition will give tests OK
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    xi = Nb(q)*Kappa(q);            // Kappa is cell average
-                    xiN = Weight(q);                // Weight sum in cell
-                } else {
-//                    xi = Weight(q)*Kappa(q);
-                    xi = Kappa(q);                  // original line
-//                    xiN = 1.0;                      // original line
-                    xiN = Weight(q);              // average of weights
-                }
-#else // ! NONORMHIST
-                xi = Kappa(q);                      // original line
-//                xi = Weight(q)*Kappa(q);
-                xiN = 1.0;                          // original line
-//                xiN = Weight(q);                  // average of weights
-#endif // ! NONORMHIST
-//E
-#else // ! NOWKAvg
-//B Weight:: this segment not corrected yet... use Weight(q) below?
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    xi = Nb(q)*Weight(q)*Kappa(q);  // Kappa is cell average
-                    xiN = Nb(q)*Weight(q);                // Weight sum in cell
-                } else {
-                    xi = Weight(q)*Kappa(q);
-//                    xi = Kappa(q);                  // original line
-//                    xiN = 1.0;                      // original line
-                    xiN = Weight(q);              // average of weights
-                }
-#else // ! NONORMHIST
-//                xi = Kappa(q);                      // original line
                 xi = Weight(q)*Kappa(q);
-//                xiN = 1.0;                          // original line
-                xiN = Weight(q);                  // average of weights
-#endif // ! NONORMHIST
-//E Weight:: this segment not corrected yet... use Weight(q) above?
-#endif // ! NOWKAvg
+                xiN = Weight(q);
+#else
+                xi = Nb(q)*Kappa(q);
+                xiN = Nb(q)*Weight(q);
+#endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 gamma1 = Gamma1(q);
                 gamma2 = Gamma2(q);
 #endif
-#if defined(THREEPCFCONVERGENCE) || defined(THREEPCFSHEAR)
+#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPNANY;
-                    CHEBYSHEVTUOMPSINCOSANY
-                } else {
-                    CHEBYSHEVTUOMPN;
-                    CHEBYSHEVTUOMP;
-                }
+                GGG_ACCUMULATE_WINDOW_MODES;
+                CHEBYSHEVTUOMPSINCOSANY;
+                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
                 CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
-#ifdef NONORMHIST
-                if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-                    hist->histXi2pcfthreadsub[n] += xi/Nb(q);
-                } else {
-                    hist->histXi2pcfthreadsub[n] += xi;
-                }
-#else
                 hist->histXi2pcfthreadsub[n] += xi;
-#endif
 #endif
 
                 hist->nbccalcthread += 1;
@@ -2615,7 +3335,7 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
 //E
 
 #ifndef NONORMHIST
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
+    for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
         for (n=1; n<=cmd->sizeHistN; n++) {
             hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
             hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
@@ -2625,7 +3345,7 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
 
 
 #ifdef THREEPCFCONVERGENCE
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
+    for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
         OUTVP_ext(hist->xiOUTVPcos,
             hist->histXithreadcos[m], hist->histXithreadcos[m], cmd->sizeHistN);
         OUTVP_ext(hist->xiOUTVPsin,
@@ -2634,6 +3354,14 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
             hist->histXithreadsin[m], hist->histXithreadcos[m],cmd->sizeHistN);
         OUTVP_ext(hist->xiOUTVPcossin,
             hist->histXithreadcos[m], hist->histXithreadsin[m],cmd->sizeHistN);
+        for (n=1; n<=cmd->sizeHistN; n++) {
+            hist->xiOUTVPcos[n][n] -= hist->histXithreaddiagcos[m][n];
+            hist->xiOUTVPsin[n][n] -= hist->histXithreaddiagsin[m][n];
+            hist->xiOUTVPsincos[n][n] -=
+                hist->histXithreaddiagsincos[m][n];
+            hist->xiOUTVPcossin[n][n] -=
+                hist->histXithreaddiagsincos[m][n];
+        }
         CLRM_ext(hist->histZetaMtmpcos, cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsin, cmd->sizeHistN);
         CLRM_ext(hist->histZetaMtmpsincos, cmd->sizeHistN);
@@ -2665,13 +3393,44 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
 
 //B Routines as in cballsutils
 
-local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
-                                        struct  global_data* gd,
+typedef struct {
+    struct cmdline_data *cmd;
+    struct global_data *gd;
+    gdlptr_sincos_omp_ggg gdl;
+} ggg_global_hist_init_context;
+
+local int search_init_gd_sincos_omp_ggg_callback(void *argument)
+{
+    ggg_global_hist_init_context *context = argument;
+    return search_init_gd_sincos_omp_ggg_unguarded(
+        context->cmd, context->gd, context->gdl);
+}
+
+local int search_init_gd_sincos_omp_ggg(struct cmdline_data *cmd,
+                                        struct global_data *gd,
+                                        gdlptr_sincos_omp_ggg gdl)
+{
+    ggg_global_hist_init_context context = {cmd, gd, gdl};
+
+    memset(gdl, 0, sizeof(*gdl));
+    if (cballs_allocation_guard(search_init_gd_sincos_omp_ggg_callback,
+                                &context, cmd->error_message,
+                                sizeof(cmd->error_message)) == FAILURE) {
+        search_free_gd_sincos_omp_ggg(cmd, gd, gdl);
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+local int search_init_gd_sincos_omp_ggg_unguarded(struct cmdline_data *cmd,
+                                        struct global_data *gd,
                                         gdlptr_sincos_omp_ggg gdl)
 {
     int n;
     int m;
     INTEGER bytes_tot_local=0;
+
+    gdl->threepcf_enabled = !cballs_opt_only_2pcf(cmd);
 
 #ifdef TWOPCF
     gdl->histNN = dvector(1,cmd->sizeHistN);
@@ -2689,31 +3448,34 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     bytes_tot_local += 1*cmd->sizeHistN*sizeof(real);
 
 #ifdef THREEPCFCONVERGENCE
-    gdl->histZetaMcos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gdl->histZetaMsin =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gdl->histZetaMsincos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    if (gdl->threepcf_enabled) {
+    gdl->histZetaMcos = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMsin = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMsincos = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-    gdl->histZetaMcossin =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    // (EE) edge_effects
-    gdl->histZetaM_EE =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaMcossin = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaM_EE = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaM_EE_Im = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
-            6*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+            7*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
-    gdl->histZetaGmRe =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gdl->histZetaGmIm =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaGmRe = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histZetaGmIm = dmatrix3D(
+            1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
             2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    gdl->histXi3pcf = dmatrix3D(1,cmd->sizeHistPhi,
-                                1,cmd->sizeHistN,1,cmd->sizeHistN);
+    gdl->histXi3pcf = dmatrix3D(
+            1,cmd->sizeHistPhi,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
-                (cmd->sizeHistN*cmd->sizeHistN*cmd->sizeHistPhi)*sizeof(real);
+            cmd->sizeHistN*cmd->sizeHistN*cmd->sizeHistPhi*sizeof(real);
+    }
 #endif
 
     gd->bytes_tot += bytes_tot_local;
@@ -2739,6 +3501,7 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
         gdl->histNNSub[n] = 0.0;
 
 #ifdef THREEPCFCONVERGENCE
+    if (gdl->threepcf_enabled) {
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         CLRM_ext(gdl->histZetaMcos[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMsin[m], cmd->sizeHistN);
@@ -2746,6 +3509,8 @@ local int search_init_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
         CLRM_ext(gdl->histZetaMcossin[m], cmd->sizeHistN);
         // (EE) edge_effects
         CLRM_ext(gdl->histZetaM_EE[m], cmd->sizeHistN);
+        CLRM_ext(gdl->histZetaM_EE_Im[m], cmd->sizeHistN);
+    }
     }
 #endif
 
@@ -2759,6 +3524,7 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
                                         gdlptr_sincos_omp_ggg gdl)
 {
 #ifdef THREEPCFCONVERGENCE
+    if (gdl->threepcf_enabled) {
     free_dmatrix3D(gdl->histXi3pcf,1,cmd->sizeHistPhi,
                    1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaGmIm,
@@ -2767,6 +3533,8 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
     // (EE) edge_effects
+    free_dmatrix3D(gdl->histZetaM_EE_Im,
+                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaM_EE,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
@@ -2778,6 +3546,7 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaMcos,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    }
 #endif
 
     free_dvector(gdl->histNNSub,1,cmd->sizeHistN);
@@ -2790,19 +3559,52 @@ local int search_free_gd_sincos_omp_ggg(struct  cmdline_data* cmd,
     free_dvector(gdl->histNNSubXi2pcf,1,cmd->sizeHistN);
     //
     free_dvector(gdl->histCF,1,cmd->sizeHistN);
+    free_dvector(gdl->histWW,1,cmd->sizeHistN);
     free_dvector(gdl->histNN,1,cmd->sizeHistN);
 #endif
 
     return SUCCESS;
 }
 
-local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
-                                     struct  global_data* gd,
+typedef struct {
+    struct cmdline_data *cmd;
+    struct global_data *gd;
+    gdhistptr_sincos_omp_ggg hist;
+} ggg_hist_init_context;
+
+local int search_init_sincos_omp_ggg_callback(void *argument)
+{
+    ggg_hist_init_context *context = argument;
+    return search_init_sincos_omp_ggg_unguarded(
+        context->cmd, context->gd, context->hist);
+}
+
+local int search_init_sincos_omp_ggg(struct cmdline_data *cmd,
+                                     struct global_data *gd,
+                                     gdhistptr_sincos_omp_ggg hist)
+{
+    ggg_hist_init_context context = {cmd, gd, hist};
+    ErrorMsg allocation_error;
+
+    memset(hist, 0, sizeof(*hist));
+    if (cballs_allocation_guard(search_init_sincos_omp_ggg_callback,
+                                &context, allocation_error,
+                                sizeof(allocation_error)) == FAILURE) {
+        search_free_sincos_omp_ggg(cmd, gd, hist);
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+local int search_init_sincos_omp_ggg_unguarded(struct cmdline_data *cmd,
+                                     struct global_data *gd,
                                      gdhistptr_sincos_omp_ggg hist)
 {
     int n;
     int m;
     INTEGER bytes_tot_local=0;
+
+    hist->threepcf_enabled = !cballs_opt_only_2pcf(cmd);
 
 #ifdef TWOPCF
     hist->histNthread = dvector(1,cmd->sizeHistN);
@@ -2820,19 +3622,26 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
     bytes_tot_local += 6*cmd->sizeHistN*sizeof(real);
 #endif
 
-    //B 3pcf convergence & shear
-    hist->ChebsT = dvector(1,cmd->mChebyshev+1);
-    hist->ChebsU = dvector(1,cmd->mChebyshev+1);
-    //E 3pcf convergence & shear
-    bytes_tot_local += 2.0*(cmd->mChebyshev+1)*sizeof(real);
+    if (hist->threepcf_enabled) {
+        hist->ChebsT = dvector(1,cmd->mChebyshev+1);
+        hist->ChebsU = dvector(1,cmd->mChebyshev+1);
+        bytes_tot_local += 2.0*(cmd->mChebyshev+1)*sizeof(real);
+    }
 
     hist->histNNSubthread = dvector(1,cmd->sizeHistN);
     bytes_tot_local += cmd->sizeHistN*sizeof(real);
 
 #ifdef THREEPCFCONVERGENCE
+    if (hist->threepcf_enabled) {
     hist->histXithreadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     hist->histXithreadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-    bytes_tot_local += 2.0*(cmd->mChebyshev+1)*cmd->sizeHistN*sizeof(real);
+    hist->histXithreaddiagcos =
+            dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    hist->histXithreaddiagsin =
+            dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    hist->histXithreaddiagsincos =
+            dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    bytes_tot_local += 5.0*(cmd->mChebyshev+1)*cmd->sizeHistN*sizeof(real);
     hist->histZetaMthreadcos =
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMthreadsin =
@@ -2853,9 +3662,11 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
     hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local += 4.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+    }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
+    if (hist->threepcf_enabled) {
     hist->histg1threadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     hist->histg1threadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     hist->histg2threadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
@@ -2866,6 +3677,7 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
     hist->histReGNthread = dmatrix(1,cmd->mChebyshev,1,cmd->sizeHistN);
     hist->histImGNthread = dmatrix(1,cmd->mChebyshev,1,cmd->sizeHistN);
     bytes_tot_local += 2.0*(cmd->mChebyshev)*cmd->sizeHistN*sizeof(real);
+    }
 #endif
 
 #ifdef TWOPCF
@@ -2887,15 +3699,21 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
         hist->histNNSubthread[n] = 0.0;
 
 #ifdef THREEPCFCONVERGENCE
+    if (hist->threepcf_enabled) {
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         CLRM_ext(hist->histZetaMthreadcos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsincos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
+        CLRV_ext(hist->histXithreaddiagcos[m], cmd->sizeHistN);
+        CLRV_ext(hist->histXithreaddiagsin[m], cmd->sizeHistN);
+        CLRV_ext(hist->histXithreaddiagsincos[m], cmd->sizeHistN);
+    }
     }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
+    if (hist->threepcf_enabled) {
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         CLRV_ext(hist->histg1threadcos[m], cmd->sizeHistN);
         CLRV_ext(hist->histg1threadsin[m], cmd->sizeHistN);
@@ -2907,6 +3725,7 @@ local int search_init_sincos_omp_ggg(struct  cmdline_data* cmd,
     for (m = 1; m <= cmd->mChebyshev; m++) {
         CLRV_ext(hist->histReGNthread[m], cmd->sizeHistN);
         CLRV_ext(hist->histImGNthread[m], cmd->sizeHistN);
+    }
     }
 #endif
 
@@ -2922,7 +3741,8 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
                                          struct  global_data* gd,
                                       gdhistptr_sincos_omp_ggg hist)
 {
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
+    if (hist->threepcf_enabled) {
     free_dmatrix(hist->histImGNthread,1,cmd->mChebyshev,1,cmd->sizeHistN);
     free_dmatrix(hist->histReGNthread,1,cmd->mChebyshev,1,cmd->sizeHistN);
     free_dmatrix(hist->histImGthread,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
@@ -2931,9 +3751,11 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
     free_dmatrix(hist->histg2threadcos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     free_dmatrix(hist->histg1threadsin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     free_dmatrix(hist->histg1threadcos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    }
 #endif
 
 #ifdef THREEPCFCONVERGENCE
+    if (hist->threepcf_enabled) {
     free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->histZetaMtmpsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -2950,16 +3772,23 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadcos,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreaddiagsincos,
+                 1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreaddiagsin,
+                 1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreaddiagcos,
+                 1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     free_dmatrix(hist->histXithreadsin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     free_dmatrix(hist->histXithreadcos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    }
 #endif
 
     free_dvector(hist->histNNSubthread,1,cmd->sizeHistN);
 
-    //B 3pcf convergence & shear
-    free_dvector(hist->ChebsU,1,cmd->mChebyshev+1);
-    free_dvector(hist->ChebsT,1,cmd->mChebyshev+1);
-    //E 3pcf convergence & shear
+    if (hist->threepcf_enabled) {
+        free_dvector(hist->ChebsU,1,cmd->mChebyshev+1);
+        free_dvector(hist->ChebsT,1,cmd->mChebyshev+1);
+    }
 
 #ifdef TWOPCF
     free_dvector(hist->histXi2pcfthread,1,cmd->sizeHistN);
@@ -2980,12 +3809,42 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
 
 
 #ifdef NMultipoles
-local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
-                                        struct  global_data* gd,
-                                          gdlptr_sincos_omp_ggg_N gdl)
+typedef struct {
+    struct cmdline_data *cmd;
+    struct global_data *gd;
+    gdlptr_sincos_omp_ggg_N gdl;
+} ggg_global_hist_n_init_context;
+
+local int search_init_gd_sincos_omp_ggg_N_callback(void *argument)
+{
+    ggg_global_hist_n_init_context *context = argument;
+    return search_init_gd_sincos_omp_ggg_N_unguarded(
+        context->cmd, context->gd, context->gdl);
+}
+
+local int search_init_gd_sincos_omp_ggg_N(struct cmdline_data *cmd,
+                                        struct global_data *gd,
+                                        gdlptr_sincos_omp_ggg_N gdl)
+{
+    ggg_global_hist_n_init_context context = {cmd, gd, gdl};
+
+    memset(gdl, 0, sizeof(*gdl));
+    if (cballs_allocation_guard(search_init_gd_sincos_omp_ggg_N_callback,
+                                &context, cmd->error_message,
+                                sizeof(cmd->error_message)) == FAILURE) {
+        search_free_gd_sincos_omp_ggg_N(cmd, gd, gdl);
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+local int search_init_gd_sincos_omp_ggg_N_unguarded(struct cmdline_data *cmd,
+                                        struct global_data *gd,
+                                        gdlptr_sincos_omp_ggg_N gdl)
 {
     int n;
     int m;
+    int orders = GGG_WINDOW_ORDERS(cmd);
     INTEGER bytes_tot_local=0;
 
 #ifdef TWOPCF
@@ -3005,30 +3864,16 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 
 #ifdef THREEPCFCONVERGENCE
     gdl->histZetaMcos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     gdl->histZetaMsin =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     gdl->histZetaMsincos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     gdl->histZetaMcossin =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    // (EE) edge_effects
-    gdl->histZetaM_EE =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
-            6*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-
-    gdl->histZetaGmRe =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    gdl->histZetaGmIm =
-                dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    bytes_tot_local +=
-            2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    gdl->histXi3pcf = dmatrix3D(1,cmd->sizeHistPhi,
-                                1,cmd->sizeHistN,1,cmd->sizeHistN);
-    bytes_tot_local +=
-                (cmd->sizeHistN*cmd->sizeHistN*cmd->sizeHistPhi)*sizeof(real);
+            4*orders*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 #endif
 
     gd->bytes_tot += bytes_tot_local;
@@ -3054,13 +3899,11 @@ local int search_init_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
         gdl->histNNSub[n] = 0.0;
 
 #ifdef THREEPCFCONVERGENCE
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+    for (m = 1; m <= orders; m++) {
         CLRM_ext(gdl->histZetaMcos[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMsin[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMsincos[m], cmd->sizeHistN);
         CLRM_ext(gdl->histZetaMcossin[m], cmd->sizeHistN);
-        // (EE) edge_effects
-        CLRM_ext(gdl->histZetaM_EE[m], cmd->sizeHistN);
     }
 #endif
 
@@ -3074,25 +3917,15 @@ local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                         gdlptr_sincos_omp_ggg_N gdl)
 {
 #ifdef THREEPCFCONVERGENCE
-    free_dmatrix3D(gdl->histXi3pcf,1,cmd->sizeHistPhi,
-                   1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(gdl->histZetaGmIm,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(gdl->histZetaGmRe,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-
-    // (EE) edge_effects
-    free_dmatrix3D(gdl->histZetaM_EE,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     free_dmatrix3D(gdl->histZetaMcossin,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaMsincos,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaMsin,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(gdl->histZetaMcos,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
 #endif
 
     free_dvector(gdl->histNNSub,1,cmd->sizeHistN);
@@ -3105,18 +3938,50 @@ local int search_free_gd_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     free_dvector(gdl->histNNSubXi2pcf,1,cmd->sizeHistN);
     //
     free_dvector(gdl->histCF,1,cmd->sizeHistN);
+    free_dvector(gdl->histWW,1,cmd->sizeHistN);
     free_dvector(gdl->histNN,1,cmd->sizeHistN);
 #endif
 
     return SUCCESS;
 }
 
-local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
-                                     struct  global_data* gd,
+typedef struct {
+    struct cmdline_data *cmd;
+    struct global_data *gd;
+    gdhistptr_sincos_omp_ggg_N hist;
+} ggg_hist_n_init_context;
+
+local int search_init_sincos_omp_ggg_N_callback(void *argument)
+{
+    ggg_hist_n_init_context *context = argument;
+    return search_init_sincos_omp_ggg_N_unguarded(
+        context->cmd, context->gd, context->hist);
+}
+
+local int search_init_sincos_omp_ggg_N(struct cmdline_data *cmd,
+                                     struct global_data *gd,
+                                     gdhistptr_sincos_omp_ggg_N hist)
+{
+    ggg_hist_n_init_context context = {cmd, gd, hist};
+    ErrorMsg allocation_error;
+
+    memset(hist, 0, sizeof(*hist));
+    if (cballs_allocation_guard(search_init_sincos_omp_ggg_N_callback,
+                                &context, allocation_error,
+                                sizeof(allocation_error)) == FAILURE) {
+        search_free_sincos_omp_ggg_N(cmd, gd, hist);
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+local int search_init_sincos_omp_ggg_N_unguarded(struct cmdline_data *cmd,
+                                     struct global_data *gd,
                                      gdhistptr_sincos_omp_ggg_N hist)
 {
     int n;
     int m;
+    int orders = GGG_WINDOW_ORDERS(cmd);
     INTEGER bytes_tot_local=0;
 
 #ifdef TWOPCF
@@ -3134,25 +3999,31 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 #endif
 
     //B 3pcf convergence & shear
-    hist->ChebsT = dvector(1,cmd->mChebyshev+1);
-    hist->ChebsU = dvector(1,cmd->mChebyshev+1);
+    hist->ChebsT = dvector(1,orders);
+    hist->ChebsU = dvector(1,orders);
     //E 3pcf convergence & shear
-    bytes_tot_local += 2.0*(cmd->mChebyshev+1)*sizeof(real);
+    bytes_tot_local += 2.0*orders*sizeof(real);
 
     hist->histNNSubthread = dvector(1,cmd->sizeHistN);
     bytes_tot_local += cmd->sizeHistN*sizeof(real);
 
 #ifdef THREEPCFCONVERGENCE
-    hist->histXithreadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-    hist->histXithreadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    hist->histXithreadcos = dmatrix(1,orders,1,cmd->sizeHistN);
+    hist->histXithreadsin = dmatrix(1,orders,1,cmd->sizeHistN);
+    hist->histXithreaddiagcos = dmatrix(1,orders,1,cmd->sizeHistN);
+    hist->histXithreaddiagsin = dmatrix(1,orders,1,cmd->sizeHistN);
+    hist->histXithreaddiagsincos = dmatrix(1,orders,1,cmd->sizeHistN);
+    bytes_tot_local += 5.0*orders*cmd->sizeHistN*sizeof(real);
     hist->histZetaMthreadcos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMthreadsin =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMthreadsincos =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMthreadcossin =
-            dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+            dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local +=
+        4.0*orders*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
     hist->xiOUTVPcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->xiOUTVPsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
@@ -3161,9 +4032,10 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
+    bytes_tot_local += 8.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     hist->histg1threadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     hist->histg1threadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
     hist->histg2threadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
@@ -3193,15 +4065,18 @@ local int search_init_sincos_omp_ggg_N(struct  cmdline_data* cmd,
         hist->histNNSubthread[n] = 0.0;
 
 #ifdef THREEPCFCONVERGENCE
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
+    for (m = 1; m <= orders; m++) {
         CLRM_ext(hist->histZetaMthreadcos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsincos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
+        CLRV_ext(hist->histXithreaddiagcos[m], cmd->sizeHistN);
+        CLRV_ext(hist->histXithreaddiagsin[m], cmd->sizeHistN);
+        CLRV_ext(hist->histXithreaddiagsincos[m], cmd->sizeHistN);
     }
 #endif
 
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         CLRV_ext(hist->histg1threadcos[m], cmd->sizeHistN);
         CLRV_ext(hist->histg1threadsin[m], cmd->sizeHistN);
@@ -3226,7 +4101,7 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
                                          struct  global_data* gd,
                                       gdhistptr_sincos_omp_ggg_N hist)
 {
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     free_dmatrix(hist->histImGNthread,1,cmd->mChebyshev,1,cmd->sizeHistN);
     free_dmatrix(hist->histReGNthread,1,cmd->mChebyshev,1,cmd->sizeHistN);
     free_dmatrix(hist->histImGthread,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
@@ -3247,22 +4122,30 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
     free_dmatrix(hist->xiOUTVPsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix(hist->xiOUTVPcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadcossin,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadsincos,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadsin,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadcos,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histXithreadsin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-    free_dmatrix(hist->histXithreadcos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+                   1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreaddiagsincos,
+                 1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreaddiagsin,
+                 1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreaddiagcos,
+                 1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreadsin,
+                 1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN);
+    free_dmatrix(hist->histXithreadcos,
+                 1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN);
 #endif
 
     free_dvector(hist->histNNSubthread,1,cmd->sizeHistN);
 
     //B 3pcf convergence & shear
-    free_dvector(hist->ChebsU,1,cmd->mChebyshev+1);
-    free_dvector(hist->ChebsT,1,cmd->mChebyshev+1);
+    free_dvector(hist->ChebsU,1,GGG_WINDOW_ORDERS(cmd));
+    free_dvector(hist->ChebsT,1,GGG_WINDOW_ORDERS(cmd));
     //E 3pcf convergence & shear
 
 #ifdef TWOPCF
@@ -3305,7 +4188,7 @@ local int search_compute_Xi_ggg(struct  cmdline_data* cmd,
         Vol = Vol*gd->Box[k];
 
 if (!cmd->useLogHist) {
-    if ((scanopt(cmd->options, "cute-box"))) {
+    if ((cballs_opt_cute_box(cmd))) {
         gdl->histNN[1]-=nbody;
     }
 }
@@ -3342,7 +4225,7 @@ if (!cmd->useLogHist) {
             }
 
 #if (NDIM==3)
-            if (scanopt(cmd->options, "cute-box")) {
+            if (cballs_opt_cute_box(cmd)) {
                 //B this version does not give same results as CB
                 //      although the programming is the same...
                 vr=4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
@@ -3359,7 +4242,7 @@ if (!cmd->useLogHist) {
                 gdl->histCF[n] = gdl->histNN[n] * normFac / rsqr((int)n-0.5) -1.0;
             }
 #else
-            if (scanopt(cmd->options, "cute-box")) {
+            if (cballs_opt_cute_box(cmd)) {
                 // This should be CB version...
                 normFac = Vol/(PI*rpow(gd->deltaR,2.0)*nbody*nbody);
                 gdl->histCF[n] = gdl->histNN[n] * normFac / ((int)n-0.5) - 1.0;
@@ -3395,7 +4278,7 @@ local int search_compute_HistN_ggg(struct  cmdline_data* cmd,
     for (n = 1; n <= cmd->sizeHistN; n++)
         gdl->histNN[n] *= normFac;
 
-    if (scanopt(cmd->options, "and-CF"))
+    if (cballs_opt_and_cf(cmd))
         search_compute_Xi_ggg(cmd, gd, nbody, gdl);
 
     return SUCCESS;
@@ -3410,12 +4293,10 @@ local int print_info(struct cmdline_data* cmd,
 {
     string routineName = "print_info";
 
-    debug_tracking_s("001", routineName);
-
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "searchcalc: Using octree-ggg-omp... \n");
+                        "searchcalc: Using %s... \n", cmd->searchMethod);
 
-    if (scanopt(cmd->options, "GGGCorrelation"))
+    if (cballs_opt_ggg_correlation(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "computing using GGG routine... \n");
 
@@ -3439,17 +4320,18 @@ local int print_info(struct cmdline_data* cmd,
 #endif
 #ifdef THREEPCFCONVERGENCE
 #ifndef TPCF
-    error("\ncan´t have computeTPCF=false and THREEPCFCONVERGENCE definition\n",
-          routineName);
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "\n%s: can´t have computeTPCF=false and THREEPCFCONVERGENCE definition\n",
+                   routineName);
+    return FAILURE;
 #endif
 #endif
-#ifdef THREEPCFSHEAR
+#ifdef TPCFSHEAR
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with 3pcf shear computation... \n");
 #endif
 
 #if NDIM == 2
-//error("CheckParameters: OCTREEGGGOMP definition works only in a 3D unit sphere");
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "OCTREEGGGOMP definition working in a 2D box... \n");
 #endif
@@ -3464,7 +4346,7 @@ local int print_info(struct cmdline_data* cmd,
 #ifdef NONORMHIST
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with NONORMHIST... \n");
-    if (scanopt(cmd->options, "no-normalize-HistZeta"))
+    if (cballs_opt_no_normalize_histzeta(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option no-normalize-HistZeta...\n");
 #else
@@ -3473,31 +4355,37 @@ local int print_info(struct cmdline_data* cmd,
 #endif
 
 #if defined(NMultipoles) && defined(NONORMHIST)
-    if (scanopt(cmd->options, "no-normalize-HistZeta")) {
-        if (scanopt(cmd->options, "edge-corrections"))
+    if (cballs_opt_no_normalize_histzeta(cmd)) {
+        if (cballs_opt_edge_corrections(cmd))
             verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                 "with option edge-corrections... \n");
     } else {
-        if (scanopt(cmd->options, "edge-corrections")) {
+        if (cballs_opt_edge_corrections(cmd)) {
             verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "option edge-corrections only works with %s... \n",
                                 "no-normalize-HistZeta option added");
             // Check freeing allocated memory...
-            error("going out...\n");
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "option edge-corrections only works with %s... \n",
+                         "no-normalize-HistZeta option added");
+            return FAILURE;
         }
     }
 #else
-    if (scanopt(cmd->options, "edge-corrections")) {
+    if (cballs_opt_edge_corrections(cmd)) {
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "option edge-corrections only works with %s activated... \n",
                     "NMultipoles && NONORMHIST");
         // Check freeing allocated memory...
-        error("going out...");
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "option edge-corrections only works with %s activated... \n",
+                 "NMultipoles && NONORMHIST");
+        return FAILURE;
     }
 #endif
 
 #ifndef USEGSL
-    if (scanopt(cmd->options, "edge-corrections"))
+    if (cballs_opt_edge_corrections(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "option edge-corrections is better computed with %s activated... \n",
             "USEGSL");
@@ -3507,7 +4395,7 @@ local int print_info(struct cmdline_data* cmd,
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "with POLARAXIS... \n");
 #endif
-    if (scanopt(cmd->options, "no-one-ball"))
+    if (cballs_opt_no_one_ball(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option no-one-ball... \n");
 #ifdef SMOOTHPIVOT
@@ -3515,10 +4403,10 @@ local int print_info(struct cmdline_data* cmd,
                             "with option smooth-pivot... rsmooth=%g\n",
                             gd->rsmooth[0]);
 #endif
-    if (scanopt(cmd->options, "default-rsmooth"))
+    if (cballs_opt_default_rsmooth(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option default-rsmooth... \n");
-    if (scanopt(cmd->options, "fix-rsmooth"))
+    if (cballs_opt_fix_rsmooth(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option fix-rsmooth... \n");
 #ifdef BALLS4SCANLEV
@@ -3536,21 +4424,19 @@ local int print_info(struct cmdline_data* cmd,
                         "with NOWKAvg to correct WK product... \n");
 #endif
 
-    if (scanopt(cmd->options, "read-mask"))
+    if (cballs_opt_read_mask(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option read-mask... \n");
 
-    if (scanopt(cmd->options, "kappa-constant"))
+    if (cballs_opt_kappa_constant(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option kappa-constant... \n");
-    if (scanopt(cmd->options, "celestial"))
+    if (cballs_opt_celestial(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option celestial... \n");
-    if (scanopt(cmd->options, "ra-reversed"))
+    if (cballs_opt_ra_reversed(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option ra-reversed... \n");
-
-    debug_tracking("002... final");
 
     return SUCCESS;
 }
@@ -3559,11 +4445,12 @@ local int print_info(struct cmdline_data* cmd,
 
 local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistrBins";
     real rBin, rbinlog;
     int n;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistrBinsFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistrBinsFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistrBinsFileName);
@@ -3581,9 +4468,10 @@ local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e\n",rBin);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistrBinsFileName,
+                             "%16.8e\n",rBin);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistrBinsFileName);
 
     return SUCCESS;
 }
@@ -3602,62 +4490,78 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
                                 struct  global_data* gd,
                                 gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistZetaM_sincos";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cos", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaMcos[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMcos[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sin", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaMsin[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMsin[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sincos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sincos", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaMsincos[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMsincos[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cossin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cossin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaMcossin[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMcossin[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -3669,6 +4573,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                                 struct  global_data* gd,
                                  gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistZetaMm_sincos";
     real rBin, rbinlog;
     int n1, m;
     stream outstr;
@@ -3683,11 +4588,13 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
     Nbins = cmd->sizeHistN;
 
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -3705,17 +4612,20 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
             Zeta3 = gdl->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gdl->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gdl->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
         
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -3734,17 +4644,20 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                 Zeta3 = gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
                 Zeta4 = gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
                 Zeta5 = gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                             MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sincos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sincos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -3763,18 +4676,21 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
             Zeta3 = gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cossin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cossin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -3793,9 +4709,10 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
             Zeta3 = gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -3806,6 +4723,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
 local int PrintHistZetaG(struct  cmdline_data* cmd,
                         struct  global_data* gd, gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistZetaG";
     int n1, n2, l, m;
     stream outstr;
     char namebuf[256];
@@ -3816,12 +4734,14 @@ local int PrintHistZetaG(struct  cmdline_data* cmd,
         dmatrix3D(1,cmd->sizeHistPhi,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
     for (l=1; l<=cmd->sizeHistPhi; l++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
-                "_Xi3pcf_",l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                           "_Xi3pcf_",l, EXTFILES) != 0)
+            return FAILURE;
         theta = (real)l * gd->deltaPhi;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s with theta %g...\n",namebuf, theta);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 gdl->histXi3pcf[l][n1][n2] = gdl->histZetaMcos[1][n1][n2]
@@ -3841,11 +4761,12 @@ local int PrintHistZetaG(struct  cmdline_data* cmd,
                                                  )*rcos((real)m*theta);
                     //E
                 }
-                fprintf(outstr,"%16.8e ",gdl->histXi3pcf[l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histXi3pcf[l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     free_dmatrix3D(histXi3pcfIm,1,cmd->sizeHistPhi,
@@ -3862,35 +4783,42 @@ local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
                                  struct  global_data* gd,
                                  gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistZetaGm_sincos";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Re", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Re", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaGmRe[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmRe[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Im", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Im", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaGmIm[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmIm[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -3903,24 +4831,39 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                      struct  global_data* gd,
                                       gdlptr_sincos_omp_ggg gdl)
 {
+#define OPEN_OUTPUT_OR_FAIL_local(outstr, filename, mode)              \
+    do {                                                               \
+        if (stropen_checked((filename), (mode), &(outstr),             \
+                            cmd->error_message, _ERRORMSGSIZE_)        \
+            == FAILURE)                                                \
+            goto cleanup;                                            \
+    } while (0)
+
+    string routineName = "PrintHistZetaMZetaGm_sincos";
     int n1, n2, m, l;
     stream outstr;
     char namebuf[256];
 
     int NP = 2*(cmd->mChebyshev+1);
-    double ***histZetaG;
-    double ***histZetaG_Im;
+
+    //B
+    int status = FAILURE;
+    double ***histZetaG = NULL;
+    double ***histZetaG_Im = NULL;
+    double *data = NULL;
+
+    #ifdef USEGSL
+    gsl_fft_real_wavetable *real = NULL;
+    gsl_fft_real_workspace *work = NULL;
+    gsl_fft_halfcomplex_wavetable *hc = NULL;
+    #endif
+    //E
+    
     histZetaG = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
     histZetaG_Im = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
 #ifdef USEGSL
-    double *data;
-    gsl_fft_real_wavetable * real;
-    gsl_fft_real_workspace * work;
-    gsl_fft_halfcomplex_wavetable * hc;
-
     //B Test and check this allocation of memory...
-    //data=dvector(0,NP-1);
     data=(double *)allocate(NP*sizeof(double));
     //E
 
@@ -3928,7 +4871,6 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     real = gsl_fft_real_wavetable_alloc (NP);
     hc = gsl_fft_halfcomplex_wavetable_alloc (NP);
 #else
-    double *data;
     data=dvector(1,NP);
 #endif
 
@@ -3974,62 +4916,74 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     //E
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Re", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Re", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaGmRe[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmRe[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Im", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Im", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdl->histZetaGmIm[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmIm[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (l=1; l<=cmd->mChebyshev+1; l++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
-                "_fftinv_Re",l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                           "_fftinv_Re",l, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG[2*l-1][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG[2*l-1][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (l=1; l<=cmd->mChebyshev+1; l++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
-                "_fftinv_Im",l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                           "_fftinv_Im",l, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG[2*l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG[2*l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     //B Sum cos^2 + sin^2 and sincos - sincos
@@ -4059,47 +5013,60 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     }
     //E
     for (l=1; l<=NP; l++) {
-        sprintf(namebuf, "%s_%s_%d%s",
-                gd->fpfnamehistZetaGFileName, "Re", l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s_%s_%d%s",
+                           gd->fpfnamehistZetaGFileName, "Re", l, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG[l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG[l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (l=1; l<=NP; l++) {
-        sprintf(namebuf, "%s_%s_%d%s",
-                gd->fpfnamehistZetaGFileName, "Im", l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s_%s_%d%s",
+                           gd->fpfnamehistZetaGFileName, "Im", l, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG_Im[l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG_Im[l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
+    
+    status = SUCCESS;
 
-#ifdef USEGSL
-    gsl_fft_halfcomplex_wavetable_free (hc);
-    gsl_fft_real_wavetable_free (real);
-    gsl_fft_real_workspace_free (work);
-    free(data);
-#else
-    free_dvector(data,1,NP);
-#endif
+cleanup:
+    #ifdef USEGSL
+    if (hc) gsl_fft_halfcomplex_wavetable_free(hc);
+    if (real) gsl_fft_real_wavetable_free(real);
+    if (work) gsl_fft_real_workspace_free(work);
+    if (data) free(data);
+    #else
+    if (data) free_dvector(data, 1, NP);
+    #endif
 
-    free_dmatrix3D(histZetaG_Im,1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(histZetaG,1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    if (histZetaG_Im)
+        free_dmatrix3D(histZetaG_Im, 1, NP, 1, cmd->sizeHistN, 1, cmd->sizeHistN);
+    if (histZetaG)
+        free_dmatrix3D(histZetaG, 1, NP, 1, cmd->sizeHistN, 1, cmd->sizeHistN);
 
-    return SUCCESS;
+#undef OPEN_OUTPUT_OR_FAIL_local
+
+    return status;
 }
 
 #endif // ! THREEPCFCONVERGENCE
@@ -4113,62 +5080,75 @@ local int PrintHistZetaM_sincos_N(struct  cmdline_data* cmd,
                                 struct  global_data* gd,
                                   gdlptr_sincos_omp_ggg_N gdlN)
 {
+    string routineName = "PrintHistZetaM_sincos_N";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
 
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cos_N", m, EXTFILES);
+    for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cos_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdlN->histZetaMcos[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gdlN->histZetaMcos[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sin_N", m, EXTFILES);
+    for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sin_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+       for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdlN->histZetaMsin[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gdlN->histZetaMsin[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+           WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sincos_N", m, EXTFILES);
+    for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sincos_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdlN->histZetaMsincos[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gdlN->histZetaMsincos[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-    for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cossin_N", m, EXTFILES);
+    for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cossin_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+       for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gdlN->histZetaMcossin[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gdlN->histZetaMcossin[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+           WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -4179,6 +5159,7 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
                                 struct  global_data* gd,
                                    gdlptr_sincos_omp_ggg_N gdlN)
 {
+    string routineName = "PrintHistZetaMm_sincos_N";
     real rBin, rbinlog;
     int n1, m;
     stream outstr;
@@ -4192,12 +5173,14 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
 
     Nbins = cmd->sizeHistN;
 
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cos_N", m, EXTFILES);
+    for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cos_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4215,17 +5198,20 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
             Zeta3 = gdlN->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gdlN->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gdlN->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
         
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sin_N", m, EXTFILES);
+    for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sin_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4244,17 +5230,20 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
                 Zeta3 = gdlN->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
                 Zeta4 = gdlN->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
                 Zeta5 = gdlN->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                             MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sincos_N", m, EXTFILES);
+    for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sincos_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4273,18 +5262,21 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
             Zeta3 = gdlN->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gdlN->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gdlN->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cossin_N", m, EXTFILES);
+    for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cossin_N", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4302,9 +5294,10 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
             Zeta3 = gdlN->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gdlN->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gdlN->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -4321,66 +5314,79 @@ local int PrintHistZetaM_sincos_normalized(struct  cmdline_data* cmd,
                                            gdlptr_sincos_omp_ggg gdl,
                                            gdlptr_sincos_omp_ggg_N gdlN)
 {
+    string routineName = "PrintHistZetaM_sincos_normalized";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",
-                    gdl->histZetaMcos[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                    normalize_zeta_ggg(gdl->histZetaMcos[m][n1][n2],
+                                       gdlN, n1, n2));
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",
-                    gdl->histZetaMsin[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                    normalize_zeta_ggg(gdl->histZetaMsin[m][n1][n2],
+                                       gdlN, n1, n2));
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sincos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sincos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",
-                gdl->histZetaMsincos[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                    normalize_zeta_ggg(gdl->histZetaMsincos[m][n1][n2],
+                                       gdlN, n1, n2));
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cossin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cossin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",
-                gdl->histZetaMcossin[m][n1][n2]/gdlN->histZetaMcos[1][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                    normalize_zeta_ggg(gdl->histZetaMcossin[m][n1][n2],
+                                       gdlN, n1, n2));
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -4396,6 +5402,7 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
                                             gdlptr_sincos_omp_ggg gdl,
                                             gdlptr_sincos_omp_ggg_N gdlN)
 {
+    string routineName = "PrintHistZetaMm_sincos_normalized";
     real rBin, rbinlog;
     int n1, m;
     stream outstr;
@@ -4412,11 +5419,13 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
     real Norm;
 
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4430,47 +5439,34 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
             } else {
                 rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            Zeta  = gdl->histZetaMcos[m][n1][n1]
-                  /
-                    (
-                     gdlN->histZetaMcos[1][n1][n1]
-                     + gdlN->histZetaMsin[1][n1][n1]
-                     );
-            Zeta2 = gdl->histZetaMcos[m][n1][(int)(Nbins/4.0)]
-                  /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
-                     );
-            Zeta3 = gdl->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)]
-                  /
-                    (
-                    gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
-                     );
-            Zeta4 = gdl->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)]
-                  /
-                    (
-                    gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
-                     );
-            Zeta5 = gdl->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                  /
-                    (
-                    gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                     );
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            Zeta = normalize_zeta_ggg(gdl->histZetaMcos[m][n1][n1],
+                                      gdlN, n1, n1);
+            Zeta2 = normalize_zeta_ggg(
+                gdl->histZetaMcos[m][n1][(int)(Nbins/4.0)],
+                gdlN, n1, (int)(Nbins/4.0));
+            Zeta3 = normalize_zeta_ggg(
+                gdl->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)],
+                gdlN, n1, (int)(2.0*Nbins/4.0));
+            Zeta4 = normalize_zeta_ggg(
+                gdl->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)],
+                gdlN, n1, (int)(3.0*Nbins/4.0));
+            Zeta5 = normalize_zeta_ggg(
+                gdl->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)],
+                gdlN, n1, (int)(4.0*Nbins/4.0 - 1.0));
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
         
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4484,47 +5480,34 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
             } else {
                 rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-                Zeta = gdl->histZetaMsin[m][n1][n1]
-                     /
-                        (
-                        gdlN->histZetaMcos[1][n1][n1]
-                         + gdlN->histZetaMsin[1][n1][n1]
-                         );
-                Zeta2 = gdl->histZetaMsin[m][n1][(int)(Nbins/4.0)]
-                        /
-                        (
-                        gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
-                         + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
-                         );
-                Zeta3 = gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)]
-                        /
-                        (
-                         gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
-                         + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
-                         );
-                Zeta4 = gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)]
-                        /
-                        (
-                         gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
-                         + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
-                         );
-                Zeta5 = gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                        /
-                        (
-                         gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                         + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                         );
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            Zeta = normalize_zeta_ggg(gdl->histZetaMsin[m][n1][n1],
+                                      gdlN, n1, n1);
+            Zeta2 = normalize_zeta_ggg(
+                gdl->histZetaMsin[m][n1][(int)(Nbins/4.0)],
+                gdlN, n1, (int)(Nbins/4.0));
+            Zeta3 = normalize_zeta_ggg(
+                gdl->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)],
+                gdlN, n1, (int)(2.0*Nbins/4.0));
+            Zeta4 = normalize_zeta_ggg(
+                gdl->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)],
+                gdlN, n1, (int)(3.0*Nbins/4.0));
+            Zeta5 = normalize_zeta_ggg(
+                gdl->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)],
+                gdlN, n1, (int)(4.0*Nbins/4.0 - 1.0));
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sincos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sincos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4538,49 +5521,36 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
             } else {
                 rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            Zeta = gdl->histZetaMsincos[m][n1][n1]
-                    /
-                    (
-                    gdlN->histZetaMcos[1][n1][n1]
-                     + gdlN->histZetaMsin[1][n1][n1]
-                     );
-            Zeta2 = gdl->histZetaMsincos[m][n1][(int)(Nbins/4.0)]
-                    /
-                    (
-                    gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
-                     );
-            Zeta3 = gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)]
-                    /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
-                     );
-            Zeta4 = gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)]
-                    /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
-                     );
-            Zeta5 = gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                    /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                     );
+            Zeta = normalize_zeta_ggg(gdl->histZetaMsincos[m][n1][n1],
+                                      gdlN, n1, n1);
+            Zeta2 = normalize_zeta_ggg(
+                gdl->histZetaMsincos[m][n1][(int)(Nbins/4.0)],
+                gdlN, n1, (int)(Nbins/4.0));
+            Zeta3 = normalize_zeta_ggg(
+                gdl->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)],
+                gdlN, n1, (int)(2.0*Nbins/4.0));
+            Zeta4 = normalize_zeta_ggg(
+                gdl->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)],
+                gdlN, n1, (int)(3.0*Nbins/4.0));
+            Zeta5 = normalize_zeta_ggg(
+                gdl->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)],
+                gdlN, n1, (int)(4.0*Nbins/4.0 - 1.0));
 
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cossin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cossin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -4594,40 +5564,25 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
             } else {
                 rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
             }
-            Zeta = gdl->histZetaMcossin[m][n1][n1]
-                    /
-                    (
-                    gdlN->histZetaMcos[1][n1][n1]
-                     + gdlN->histZetaMsin[1][n1][n1]
-                     );
-            Zeta2 = gdl->histZetaMcossin[m][n1][(int)(Nbins/4.0)]
-                    /
-                    (
-                    gdlN->histZetaMcos[1][n1][(int)(Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(Nbins/4.0)]
-                     );
-            Zeta3 = gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)]
-                    /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(2.0*Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(2.0*Nbins/4.0)]
-                     );
-            Zeta4 = gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)]
-                    /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(3.0*Nbins/4.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(3.0*Nbins/4.0)]
-                     );
-            Zeta5 = gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                    /
-                    (
-                     gdlN->histZetaMcos[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                     + gdlN->histZetaMsin[1][n1][(int)(4.0*Nbins/4.0 - 1.0)]
-                     );
+            Zeta = normalize_zeta_ggg(gdl->histZetaMcossin[m][n1][n1],
+                                      gdlN, n1, n1);
+            Zeta2 = normalize_zeta_ggg(
+                gdl->histZetaMcossin[m][n1][(int)(Nbins/4.0)],
+                gdlN, n1, (int)(Nbins/4.0));
+            Zeta3 = normalize_zeta_ggg(
+                gdl->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)],
+                gdlN, n1, (int)(2.0*Nbins/4.0));
+            Zeta4 = normalize_zeta_ggg(
+                gdl->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)],
+                gdlN, n1, (int)(3.0*Nbins/4.0));
+            Zeta5 = normalize_zeta_ggg(
+                gdl->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)],
+                gdlN, n1, (int)(4.0*Nbins/4.0 - 1.0));
 
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -4639,70 +5594,48 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
                                               gdlptr_sincos_omp_ggg gdl,
                                               gdlptr_sincos_omp_ggg_N gdlN)
 {
+    string routineName = "PrintHistZetaM_sincos_edge_effects";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
     real rBin, rbinlog;
+    (void)routineName;
+    (void)gdlN;
 
-    real ***mat3;
-    real ***mat4;
-    real ***mat5;
-    mat3 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    mat4 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    mat5 = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        CLRM_ext(mat3[m], cmd->sizeHistN);
-        CLRM_ext(mat4[m], cmd->sizeHistN);
-        CLRM_ext(mat5[m], cmd->sizeHistN);
-    }
-
-    for (n1=1; n1<=cmd->sizeHistN; n1++) {
-        for (n2=1; n2<=cmd->sizeHistN; n2++) {
-            for (m=1; m<=cmd->mChebyshev+1; m++) {
-                mat3[m][n1][n2] = gdl->histZetaMcos[m][n1][n2]
-                                    + gdl->histZetaMsin[m][n1][n2];
-                mat4[m][n1][n2] = gdlN->histZetaMcos[m][n1][n2]
-                                    + gdlN->histZetaMsin[m][n1][n2];
+    for (m=1; m<=cmd->mChebyshev+1; m++) {
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_EE", m, EXTFILES) != 0)
+            return FAILURE;
+        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gdl->histZetaM_EE[m][n1][n2]);
             }
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-    }
-
-    for (n1=1; n1<=cmd->sizeHistN; n1++) {
-        for (n2=1; n2<=cmd->sizeHistN; n2++) {
-            matrixClm(cmd, gd, mat3, mat4, n1, n2, mat5);
-
-            if (cmd->verbose_log>=3)  {
-                verb_log_print(cmd->verbose_log, gd->outlog,
-                               "\n\nhistZetaM elements again (%d, %d):\n\n",
-                               n1, n2);
-                for (m=1; m<=cmd->mChebyshev+1; m++) {
-                        verb_log_print(cmd->verbose_log, gd->outlog,
-                                       "%g\n",
-                                       mat5[m][n1][n2]);
-                }
-            }
-
-        }
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_EE", m, EXTFILES);
-        verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        if (format_checked(namebuf, sizeof(namebuf), "namebuf",
+                           "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_EE_Im", m, EXTFILES) != 0)
+            return FAILURE;
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
-            for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",mat5[m][n1][n2]);
-                // (EE) edge_effects
-                gdl->histZetaM_EE[m][n1][n2] = mat5[m][n1][n2];
-            }
-            fprintf(outstr,"\n");
+            for (n2=1; n2<=cmd->sizeHistN; n2++)
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gdl->histZetaM_EE_Im[m][n1][n2]);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     //B  and saves matrix ZetaM for each m multipole at a set of theta2 angles
-    if (scanopt(cmd->options, "out-m-HistZeta")) {
+    if (cballs_opt_out_m_histzeta(cmd)) {
         real Zeta;
         real Zeta2;
         real Zeta3;
@@ -4712,12 +5645,14 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
         
         Nbins = cmd->sizeHistN;
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
-            sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                    "_EE", m, EXTFILES);
+            if (format_checked(namebuf, sizeof(namebuf),
+                "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                               "_EE", m, EXTFILES) != 0)
+                return FAILURE;
             verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",
                          namebuf);
-            outstr = stropen(namebuf, "w!");
-            fprintf(outstr,MHISTZETAHEADER);
+            OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
             for (n1=1; n1<=cmd->sizeHistN; n1++) {
                 if (cmd->useLogHist) {
                     if (cmd->rminHist==0) {
@@ -4731,24 +5666,18 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
                 } else {
                     rBin = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
                 }
-                Zeta = mat5[m][n1][n1];
-                Zeta2 = mat5[m][n1][(int)(Nbins/4.0)];
-                Zeta3 = mat5[m][n1][(int)(2.0*Nbins/4.0)];
-                Zeta4 = mat5[m][n1][(int)(3.0*Nbins/4.0)];
-                Zeta5 = mat5[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+                Zeta = gdl->histZetaM_EE[m][n1][n1];
+                Zeta2 = gdl->histZetaM_EE[m][n1][(int)(Nbins/4.0)];
+                Zeta3 = gdl->histZetaM_EE[m][n1][(int)(2.0*Nbins/4.0)];
+                Zeta4 = gdl->histZetaM_EE[m][n1][(int)(3.0*Nbins/4.0)];
+                Zeta5 = gdl->histZetaM_EE[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                    MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
             }
-            fclose(outstr);
+            CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
         }
     }
     //E
-
-    free_dmatrix3D(mat5,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(mat4,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(mat3,
-                   1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
     return SUCCESS;
 }
@@ -4766,11 +5695,12 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
 local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd,
                       gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistNN";
     real rBin, rbinlog;
     int n;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistNNFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistNNFileName);
@@ -4786,12 +5716,13 @@ local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd,
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gdl->histNN[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName,
+                             "%16.8e %16.8e\n",rBin,gdl->histNN[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName);
 
-    if (scanopt(cmd->options, "and-CF"))
-        PrintHistCF(cmd, gd, gdl);
+    if (cballs_opt_and_cf(cmd))
+        PRINT_OR_FAIL(PrintHistCF(cmd, gd, gdl));
 
     return SUCCESS;
 }
@@ -4799,11 +5730,12 @@ local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd,
 local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd,
                       gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistCF";
     real rBin, rbinlog;
     int n;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistCFFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistCFFileName);
@@ -4819,9 +5751,10 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd,
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gdl->histCF[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName,
+                             "%16.8e %16.8e\n",rBin,gdl->histCF[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName);
 
     return SUCCESS;
 }
@@ -4832,16 +5765,18 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd,
 local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd,
                           gdlptr_sincos_omp_ggg gdl)
 {
+    string routineName = "PrintHistXi2pcf";
     real rBin, rbinlog;
     int n;
     stream outstr;
     char namebuf[256];
 
-    sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
-            cmd->suffixOutFiles, EXTFILES);
+    if (format_checked(namebuf, sizeof(namebuf),
+        "namebuf", "%s%s%s", gd->fpfnamehistXi2pcfFileName,
+                       cmd->suffixOutFiles, EXTFILES) != 0)
+        return FAILURE;
     verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-    outstr = stropen(namebuf, "w!");
-
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
@@ -4855,14 +5790,15 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd,
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        if (scanopt(cmd->options, "rbin-arcmin"))
+        if (cballs_opt_rbin_arcmin(cmd))
             rBin = rBin*RADTOARCMIN;
         else
-            if (scanopt(cmd->options, "rbin-degree"))
+            if (cballs_opt_rbin_degree(cmd))
                 rBin = rBin*RADTOARCMIN/60.0;
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gdl->histXi2pcf[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                             "%16.8e %16.8e\n",rBin,gdl->histXi2pcf[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
 
     return SUCCESS;
 }

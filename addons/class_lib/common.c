@@ -1,11 +1,29 @@
 #include "common.h"
 
+//B wlcf
+/*
 void class_protect_sprintf(char* dest, char* tpl,...) {
   va_list args;
   va_start(args,tpl);
   vsnprintf(dest, 2048,tpl,args);
   va_end(args);
 }
+*/
+
+void class_protect_sprintf(char *dest, size_t dest_size, const char *tpl, ...) {
+  va_list args;
+
+  if (dest == NULL || dest_size == 0)
+    return;
+
+  va_start(args, tpl);
+  vsnprintf(dest, dest_size, tpl, args);
+  va_end(args);
+
+  dest[dest_size - 1] = '\0';
+}
+
+//E
 
 void class_protect_fprintf(FILE* stream, char* tpl,...) {
   va_list args;
@@ -21,7 +39,7 @@ void* class_protect_memcpy(void* dest, void* from, size_t sz) {
 }
 
 int get_number_of_titles(char * titlestring){
-  int i;
+  size_t i;
   int number_of_titles=0;
 
   for (i=0; i<strlen(titlestring); i++){
@@ -99,4 +117,3 @@ int string_begins_with(char* thestring, char beginchar){
 
   return result;
 }
-

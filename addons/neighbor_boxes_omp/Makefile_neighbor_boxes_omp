@@ -7,8 +7,10 @@
 #
 ifeq ($(NEIGHBORBOXESOMPON),1)
 OPT2 += -DNEIGHBORBOXESOMP
-NEIGHBORBOXESOMP = ../addons/neighbor_boxes_omp/
-vpath %.c ./addons/neighbor_boxes_omp/
+#NEIGHBORBOXESOMP = ../addons/neighbor_boxes_omp/
+NEIGHBORBOXESOMP = $(MDIR)/addons/neighbor_boxes_omp/
+#vpath %.c ./addons/neighbor_boxes_omp/
+vpath %.c $(MDIR)/addons/neighbor_boxes_omp/
 INCLUDES += -I$(NEIGHBORBOXESOMP)
 HEADERFILES = $(wildcard $(NEIGHBORBOXESOMP)/*.h)
 EXTERNAL += search_neighbor_boxes_omp.o

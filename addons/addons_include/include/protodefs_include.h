@@ -13,12 +13,49 @@
 #include "protodefs_octree_ggg_omp.h"
 #endif
 
+#ifdef OCTREEGGGMPI
+#include "protodefs_octree_ggg_omp.h"
+#include "protodefs_octree_ggg_mpi.h"
+#endif
+
+#ifdef OCTREESHEAROMP
+#include "protodefs_octree_shear_omp.h"
+#endif
+
 #ifdef OCTREEGGGCROSSOMP
 #include "protodefs_octree_ggg_cross_omp.h"
 #endif
 
 #ifdef KDTREEOMP
 #include "protodefs_kdtree_omp.h"
+#endif
+
+#if defined(BALLTREEOMP) || defined(BALLTREEMPI)
+#include "protodefs_balltree_omp.h"
+#endif
+
+#ifdef BALLTREE2BALLSOMP
+#include "protodefs_balltree_2balls_omp.h"
+#endif
+
+#ifdef BALLTREE2BALLSMPI
+#include "protodefs_balltree_2balls_mpi.h"
+#endif
+
+#ifdef OCTREE2BALLSOMP
+#include "protodefs_octree_2balls_omp.h"
+#endif
+
+#ifdef OCTREE2BALLSMPI
+#include "protodefs_octree_2balls_mpi.h"
+#endif
+
+#ifdef BALLTREE2BALLSOMP3PCF
+#include "protodefs_balltree_2balls_omp_3pcf.h"
+#endif
+
+#ifdef BALLTREE2BALLSMPI3PCF
+#include "protodefs_balltree_2balls_mpi_3pcf.h"
 #endif
 
 #ifdef KDTREEBOXOMP
@@ -89,6 +126,15 @@
 #include "protodefs_octree_kkk_balls4_omp_triangles.h"
 #endif
 
+#ifdef OCTREE3PCF3DOMP
+#include "protodefs_octree_3pcf_3d_omp.h"
+#endif
+
+#ifdef LYAFORESTOMP
+#include "protodefs_lya_forest_omp.h"
+#endif
+
+
 /*
  #E Addendum of some not important
  ############################
@@ -114,6 +160,10 @@
 
 #ifdef BALLS
 #include "protodefs_balls_omp.h"
+#endif
+
+#ifdef BALLS0357
+#include "protodefs_balls_omp_0357.h"
 #endif
 
 #ifdef OCTREEKKKOMP

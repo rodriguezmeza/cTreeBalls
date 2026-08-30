@@ -15,18 +15,26 @@
 		http://www.astro.inin.mx/mar
 
 	Major revisions:
-	Copyright: (c) 2005-2010 Mar.  All Rights Reserved
+	Copyright: (c) 2005-2026 Mar.  All Rights Reserved
 ================================================================================
 	Legal matters:
 	The author does not warrant that the program and routines it contains
 	listed below are free from error or suitable for particular applications,
 	and he disclaims all liability from any consequences arising from their use.
 ==============================================================================*/
+//        1          2          3          4        ^ 5          6          7
 
 #ifndef _inout_h
 #define _inout_h
 
+#include "globaldefs.h"
+
 #include "vectdefs.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // ------------[	inout normal definitions	 	]------------
 
@@ -34,19 +42,14 @@ void in_int(stream, int *);
 void in_int_long(stream, INTEGER *);
 void in_short(stream, short *);
 void in_bool(stream, bool *);
-#ifdef SINGLEP
-void in_real(stream, REAL *);
-void in_real_double(stream, double *);
-#else
 void in_real(stream, real *);
-#endif
+void in_real_double(stream, double *);
 void in_vector(stream, vector);
 void out_int(stream, int);
 void out_int_long(stream, INTEGER);
 void out_short(stream, short);
 void out_real(stream, real);
 void out_vector(stream, vector);
-
 
 // ------------[	inout mar definitions	 		]------------
 
@@ -57,17 +60,40 @@ void out_real_mar(stream, real);
 void out_vector_mar(stream, vector);      
 
 
+//B added by cBalls
+int out_vector_checked(stream, vector, string routineName,
+                       string filename, char *errmsg, size_t errmsg_size);
+int out_vector_mar_checked(stream str, vector vec, string routineName,
+                           string filename, char *errmsg, size_t errmsg_size);
+int out_vector_bin_checked(stream str, vector vec, string routineName,
+                           string filename, char *errmsg, size_t errmsg_size);
+int out_real_mar_checked(stream str, real rval, string routineName,
+                         string filename, char *errmsg, size_t errmsg_size);
+int out_real_checked(stream str, real rval, string routineName,
+                     string filename, char *errmsg, size_t errmsg_size);
+int out_short_mar_checked(stream str, short ival, string routineName,
+                          string filename, char *errmsg, size_t errmsg_size);
+int out_bool_mar_checked(stream str, bool bval, string routineName,
+                         string filename, char *errmsg, size_t errmsg_size);
+int out_int_bin_checked(stream str, int ival, string routineName,
+                        string filename, char *errmsg, size_t errmsg_size);
+int out_short_bin_checked(stream str, short ival, string routineName,
+                        string filename, char *errmsg, size_t errmsg_size);
+int out_bool_bin_checked(stream str, bool ival, string routineName,
+                        string filename, char *errmsg, size_t errmsg_size);
+int out_int_bin_long_checked(stream str, INTEGER ival, string routineName,
+                             string filename, char *errmsg, size_t errmsg_size);
+int out_real_bin_checked(stream str, real rval, string routineName,
+                          string filename, char *errmsg, size_t errmsg_size);
+//E
+
 // ------------[	inout binary definitions	 	]------------
 
 void in_int_bin(stream, int *);
 void in_int_bin_long(stream, INTEGER *);
 void in_short_bin(stream, short *);
-#ifdef SINGLEP
-void in_real_bin(stream, float *);
-void in_real_bin_double(stream, double *);
-#else
 void in_real_bin(stream, real *);
-#endif
+void in_real_bin_double(stream, double *);
 void in_vector_bin(stream, vector);
 void out_int_bin(stream, int);
 void out_int_bin_long(stream, INTEGER);
@@ -109,10 +135,15 @@ void InputData_check_file(string filename);
 
 //B InputData's (like the one used by nplot2d)
 void inout_InputData(string, int, int, int *);
-void InputData_2c(string, int, int, int *);         // same as inout_InputData
-void InputData_3c(string, int, int, int, int *);
-void InputData_4c(string filename, int, int, int, int, int *);
-void InputData_5c(string filename, int, int, int, int, int, int *);
+struct cmdline_data;
+
+int InputData_2c(struct cmdline_data *cmd, string filename,
+                 int col1, int col2, int *npts);
+
+int InputData_3c(struct cmdline_data* cmd, string, int, int, int, int *);
+int InputData_4c(struct cmdline_data* cmd, string filename, int, int, int, int, int *);
+int InputData_5c(struct cmdline_data* cmd, string filename,
+                 int, int, int, int, int, int *);
 //E
 
 
@@ -135,8 +166,9 @@ int inout_InputDataMatrix(
 
 //E
 
-int extractInputRootDir(char *infilenames,
-                        char *rootDirPath, char *preFileName, int ifile,
+int extractInputRootDir(const char *infilenames,
+                        char *rootDirPath, size_t rootDirPathSize,
+                        char *preFileName, size_t preFileNameSize, int ifile,
                         short verbose, short verbose_log, FILE *outlog
                         );
 
@@ -149,5 +181,11 @@ int extractInputRootDir(char *infilenames,
 
 
 void error_open_file_kd(char *fname);
+
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif	// ! _inout_h

@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MPIEXEC=${MPIEXEC:-mpiexec}
+MPIEXEC_ARGS=${MPIEXEC_ARGS:-}
+MPI_RANKS=${MPI_RANKS:-2}
+MPI_THREADS=${MPI_THREADS:-2}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-octree-ggg-mpi.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+mpi_command=("$MPIEXEC")
+if [ -n "$MPIEXEC_ARGS" ]; then
+    mpi_extra_args=()
+    read -r -a mpi_extra_args <<<"$MPIEXEC_ARGS"
+    mpi_command+=("${mpi_extra_args[@]}")
+fi
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s \
+    OCTREEGGGMPION=1 print-cyballs-build-env)
+grep -q -- '-DOCTREEGGGMPI\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable OCTREEGGGMPI"
+grep -q -- '-DOCTREEGGGOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the OpenMP reference engine is not enabled"
+
+run_case()
+{
+    local name=$1
+    local method=$2
+    local ranks=$3
+    local threads=$4
+    local only_2pcf=${5:-0}
+    local output="$TMP_ROOT/$name"
+    local options="compute-HistN,out-m-HistZeta,no-one-ball"
+    local -a command
+
+    if [ "$only_2pcf" -eq 1 ]; then
+        options+=",only-2pcf"
+    fi
+
+    mkdir -p "$output"
+    command=("$CBALLS"
+        search="$method"
+        testmodel=simple-cubic-random
+        nbody=1000
+        lengthBox=2
+        rootDir="$output"
+        numberThreads="$threads"
+        usePeriodic=false
+        useLogHist=false
+        rangeN=0.4
+        rminHist=0.005
+        sizeHistN=4
+        mChebyshev=2
+        nsmooth=8
+        seed=123
+        stepState=1000000
+        verbose=1
+        verbose_log=0
+        "options=$options")
+
+    if [ "$ranks" -gt 1 ]; then
+        "${mpi_command[@]}" -n "$ranks" "${command[@]}" \
+            >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    else
+        "${command[@]}" >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    fi
+    [ -f "$output/histNN.txt" ] \
+        || fail_with_log "$name produced no root-rank output" "$output/run.log"
+}
+
+compare_numeric_outputs()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+import math
+import pathlib
+import sys
+
+reference = pathlib.Path(sys.argv[1])
+candidate = pathlib.Path(sys.argv[2])
+names = sorted(path.name for path in reference.glob("*.txt"))
+if not names or names != sorted(path.name for path in candidate.glob("*.txt")):
+    raise SystemExit("histogram output sets differ")
+
+for name in names:
+    def values(path):
+        tokens = []
+        for line in path.read_text().splitlines():
+            tokens.extend(line.split("#", 1)[0].split())
+        return tokens
+
+    left = values(reference / name)
+    right = values(candidate / name)
+    if len(left) != len(right):
+        raise SystemExit(f"{name}: value counts differ")
+    for index, (a, b) in enumerate(zip(left, right)):
+        x = float(a)
+        y = float(b)
+        if math.isnan(x) and math.isnan(y):
+            continue
+        if not math.isclose(x, y, rel_tol=5e-11, abs_tol=5e-12):
+            raise SystemExit(f"{name}:{index}: {x!r} != {y!r}")
+PY
+}
+
+run_case omp-reference octree-ggg-omp 1 1
+run_case mpi-singleton octree-ggg-mpi 1 "$MPI_THREADS"
+run_case mpi-hybrid octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS"
+run_case mpi-repeat octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS"
+run_case omp-2pcf octree-ggg-omp 1 1 1
+run_case mpi-2pcf octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS" 1
+
+grep -q "octree-ggg-mpi: $MPI_RANKS ranks" \
+    "$TMP_ROOT/mpi-hybrid/run.log" \
+    || fail_with_log "the requested MPI rank count was not used" \
+                     "$TMP_ROOT/mpi-hybrid/run.log"
+
+for candidate in mpi-singleton mpi-hybrid mpi-repeat; do
+    compare_numeric_outputs "$TMP_ROOT/omp-reference" "$TMP_ROOT/$candidate" \
+        || fail_with_log "$candidate histograms differ from octree-ggg-omp" \
+                         "$TMP_ROOT/$candidate/run.log"
+done
+compare_numeric_outputs "$TMP_ROOT/omp-2pcf" "$TMP_ROOT/mpi-2pcf" \
+    || fail_with_log "MPI only-2pcf histograms differ from octree-ggg-omp" \
+                     "$TMP_ROOT/mpi-2pcf/run.log"
+
+echo "PASS: FCFC-style OCTREEGGGMPI RMA scheduling and histogram reduction"

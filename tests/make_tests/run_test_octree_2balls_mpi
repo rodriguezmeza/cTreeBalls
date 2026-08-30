@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MPIEXEC=${MPIEXEC:-mpiexec}
+MPIEXEC_ARGS=${MPIEXEC_ARGS:-}
+MPI_RANKS=${MPI_RANKS:-2}
+MPI_THREADS=${MPI_THREADS:-2}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-octree-2balls-mpi.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+mpi_command=("$MPIEXEC")
+if [ -n "$MPIEXEC_ARGS" ]; then
+    mpi_extra_args=()
+    read -r -a mpi_extra_args <<<"$MPIEXEC_ARGS"
+    mpi_command+=("${mpi_extra_args[@]}")
+elif "$MPIEXEC" --version 2>&1 | grep -qi 'Open MPI'; then
+    mpi_command+=(--oversubscribe --map-by slot)
+fi
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s \
+    OCTREE2BALLSMPION=1 print-cyballs-build-env)
+grep -q -- '-DOCTREE2BALLSMPI\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable OCTREE2BALLSMPI"
+grep -q -- '-DOCTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the OpenMP reference engine is not enabled"
+
+run_case()
+{
+    local name=$1
+    local method=$2
+    local ranks=$3
+    local threads=$4
+    local mode=${5:-combined}
+    local acceptance=${6:-exact}
+    local extra_options=${7:-}
+    local output="$TMP_ROOT/$name"
+    local options="compute-HistN,out-m-HistZeta"
+    local -a command
+
+    case "$mode" in
+        only-2pcf) options+=",only-2pcf" ;;
+        only-3pcf) options+=",only-3pcf" ;;
+        combined) ;;
+        *) fail_with_log "unknown test mode: $mode" ;;
+    esac
+    if [ "$acceptance" = exact ]; then
+        options+=",no-two-balls"
+    fi
+    if [ -n "$extra_options" ]; then
+        options+=",$extra_options"
+    fi
+
+    mkdir -p "$output"
+    command=("$CBALLS"
+        search="$method"
+        testmodel=simple-cubic-random
+        nbody=512
+        lengthBox=2
+        rootDir="$output"
+        numberThreads="$threads"
+        usePeriodic=false
+        useLogHist=false
+        rangeN=0.5
+        rminHist=0.005
+        sizeHistN=4
+        mChebyshev=2
+        nsmooth=8
+        theta=1
+        seed=123
+        stepState=1000000
+        verbose=1
+        verbose_log=0
+        "options=$options")
+
+    if [ "$ranks" -gt 1 ]; then
+        "${mpi_command[@]}" -n "$ranks" "${command[@]}" \
+            >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    else
+        "${command[@]}" >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    fi
+    [ -f "$output/rBins.txt" ] \
+        || fail_with_log "$name produced no root-rank output" "$output/run.log"
+}
+
+compare_numeric_outputs()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+import math
+import pathlib
+import sys
+
+reference = pathlib.Path(sys.argv[1])
+candidate = pathlib.Path(sys.argv[2])
+names = sorted(path.name for path in reference.glob("*.txt"))
+if not names or names != sorted(path.name for path in candidate.glob("*.txt")):
+    raise SystemExit("histogram output sets differ")
+
+for name in names:
+    def values(path):
+        tokens = []
+        for line in path.read_text().splitlines():
+            tokens.extend(line.split("#", 1)[0].split())
+        return tokens
+
+    left = values(reference / name)
+    right = values(candidate / name)
+    if len(left) != len(right):
+        raise SystemExit(f"{name}: value counts differ")
+    for index, (a, b) in enumerate(zip(left, right)):
+        x = float(a)
+        y = float(b)
+        if math.isnan(x) and math.isnan(y):
+            continue
+        if not math.isclose(x, y, rel_tol=2e-12, abs_tol=2e-13):
+            raise SystemExit(f"{name}:{index}: {x!r} != {y!r}")
+PY
+}
+
+run_case omp-exact octree-2balls-omp 1 1 combined exact
+run_case mpi-singleton octree-2balls-mpi 1 "$MPI_THREADS" combined exact
+run_case mpi-hybrid octree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" combined exact
+run_case mpi-repeat octree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" combined exact
+run_case omp-aggregate octree-2balls-omp 1 1 combined aggregate
+run_case mpi-aggregate octree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" combined aggregate
+run_case omp-2pcf octree-2balls-omp 1 1 only-2pcf exact
+run_case mpi-2pcf octree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-2pcf exact
+run_case omp-3pcf octree-2balls-omp 1 1 only-3pcf exact
+run_case mpi-3pcf octree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-3pcf exact
+run_case omp-and-cf octree-2balls-omp 1 1 only-2pcf exact and-CF
+run_case mpi-and-cf octree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-2pcf exact and-CF
+
+grep -q "octree-2balls-mpi: $MPI_RANKS ranks" \
+    "$TMP_ROOT/mpi-hybrid/run.log" \
+    || fail_with_log "the requested MPI rank count was not used" \
+                     "$TMP_ROOT/mpi-hybrid/run.log"
+
+for candidate in mpi-singleton mpi-hybrid mpi-repeat; do
+    compare_numeric_outputs "$TMP_ROOT/omp-exact" "$TMP_ROOT/$candidate" \
+        || fail_with_log "$candidate differs from octree-2balls-omp" \
+                         "$TMP_ROOT/$candidate/run.log"
+done
+compare_numeric_outputs "$TMP_ROOT/mpi-hybrid" "$TMP_ROOT/mpi-repeat" \
+    || fail_with_log "repeated MPI execution is not deterministic" \
+                     "$TMP_ROOT/mpi-repeat/run.log"
+for output in "$TMP_ROOT/mpi-hybrid"/*.txt; do
+    name=${output##*/}
+    cmp -s "$output" "$TMP_ROOT/mpi-repeat/$name" \
+        || fail_with_log "repeated MPI output $name is not byte deterministic" \
+                         "$TMP_ROOT/mpi-repeat/run.log"
+done
+compare_numeric_outputs "$TMP_ROOT/omp-aggregate" "$TMP_ROOT/mpi-aggregate" \
+    || fail_with_log "aggregate MPI output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-aggregate/run.log"
+compare_numeric_outputs "$TMP_ROOT/omp-2pcf" "$TMP_ROOT/mpi-2pcf" \
+    || fail_with_log "MPI only-2pcf output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-2pcf/run.log"
+compare_numeric_outputs "$TMP_ROOT/omp-3pcf" "$TMP_ROOT/mpi-3pcf" \
+    || fail_with_log "MPI only-3pcf output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-3pcf/run.log"
+compare_numeric_outputs "$TMP_ROOT/omp-and-cf" "$TMP_ROOT/mpi-and-cf" \
+    || fail_with_log "MPI and-CF output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-and-cf/run.log"
+
+echo "PASS: OCTREE2BALLSMPI exactness, aggregation, modes, and rank determinism"

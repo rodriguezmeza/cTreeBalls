@@ -4,8 +4,18 @@
 #ifndef _startrun_include_12_h
 #define _startrun_include_12_h
 
+#ifndef OCTREESMOOTHING
+#ifdef BALLS
+#include "startrun_balls_omp_12.h"
+#endif
+#endif
+
 #ifdef OCTREESMOOTHING
 #include "startrun_octree_smoothing_12.h"
+#endif
+
+#ifdef BALLS0357
+#include "startrun_balls_omp_0357_12.h"
 #endif
 
 #ifdef IOLIB

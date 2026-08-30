@@ -1,5 +1,10 @@
 // Use:
 //#include "cballs_include_03.h"
+//
+//  it is included in (the socket):
+//      source/cballs.c
+//      in the PrintEvalHist routine
+//
 
 #ifndef _cballs_include_03_h
 #define _cballs_include_03_h
@@ -16,17 +21,61 @@
 #include "cballs_print_balls_omp.h"
 #endif
 
+#ifdef BALLS0357
+#include "cballs_print_balls_omp_0357.h"
+#endif
+
 #ifdef KDTREEOMP
 #include "cballs_print_kdtree_omp.h"
+#endif
+
+#if defined(BALLTREEOMP) || defined(BALLTREEMPI)
+#include "cballs_print_balltree_omp.h"
+#endif
+
+#ifdef BALLTREE2BALLSOMP
+#include "cballs_print_balltree_2balls_omp.h"
+#endif
+
+#ifdef BALLTREE2BALLSMPI
+#include "cballs_print_balltree_2balls_mpi.h"
+#endif
+
+#ifdef OCTREE2BALLSOMP
+#include "cballs_print_octree_2balls_omp.h"
+#endif
+
+#ifdef OCTREE2BALLSMPI
+#include "cballs_print_octree_2balls_mpi.h"
+#endif
+
+#ifdef BALLTREE2BALLSOMP3PCF
+#include "cballs_print_balltree_2balls_omp_3pcf.h"
+#endif
+
+#ifdef BALLTREE2BALLSMPI3PCF
+#include "cballs_print_balltree_2balls_mpi_3pcf.h"
 #endif
 
 #ifdef OCTREEKKKOMP
 #include "cballs_print_octree_kkk_omp.h"
 #endif
 
-//#ifdef NEIGHBORBOXESOMP
-//#include "cballs_print_neighbor_boxes_omp.h"
-//#endif
+#ifdef OCTREEGGGOMP
+#include "cballs_print_octree_ggg_omp.h"
+#endif
+
+#ifdef OCTREEGGGMPI
+#include "cballs_print_octree_ggg_mpi.h"
+#endif
+
+#ifdef OCTREESHEAROMP
+#include "cballs_print_octree_shear_omp.h"
+#endif
+
+#ifdef NEIGHBORBOXESOMP
+#include "cballs_print_neighbor_boxes_omp.h"
+#endif
 
 /*
  Add your addon item here
@@ -58,6 +107,15 @@
 #ifdef OCTREEBOXOMP
 #include "cballs_print_octree_box_omp.h"
 #endif
+
+#ifdef OCTREE3PCF3DOMP
+#include "cballs_print_octree_3pcf_3d_omp.h"
+#endif
+
+#ifdef LYAFORESTOMP
+#include "cballs_print_lya_forest_omp.h"
+#endif
+
 
 /*
  #B Addendum of some not important

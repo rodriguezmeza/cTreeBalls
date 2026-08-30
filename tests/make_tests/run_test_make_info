@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cballs=${CBALLS:-"${root_dir}/cballs"}
+output=$(mktemp "${TMPDIR:-/tmp}/ctreeballs-make-info.XXXXXX")
+trap 'rm -f "${output}"' EXIT
+
+set +e
+"${cballs}" options=make-info >"${output}" 2>&1
+status=$?
+set -e
+
+# make-info currently uses the normal startup stop path, which returns 1.
+if (( status > 1 )); then
+    printf 'FAIL: cballs options=make-info exited with status %d\n' "${status}" >&2
+    exit 1
+fi
+
+for section in \
+    '[Makefile_settings]' \
+    '[Makefile_machine switches]' \
+    '[addons/Makefile_addons_settings]' \
+    '[Makefile_machine toolchain and resolved paths]' \
+    '[effective compile-time features (enabled)]'; do
+    if ! grep -Fq "${section}" "${output}"; then
+        printf 'FAIL: make-info is missing section %s\n' "${section}" >&2
+        exit 1
+    fi
+done
+
+settings=$(
+    sed -nE \
+        's/^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*(\?=|:=|\+=|=).*/\1/p' \
+        "${root_dir}/Makefile_settings" \
+        "${root_dir}/Makefile_machine" \
+        "${root_dir}/addons/Makefile_addons_settings" |
+    sort -u
+)
+
+missing=0
+while IFS= read -r name; do
+    case "${name}" in
+        BUILD_*)
+            ;;
+        *ON|_DEBUGON_|DEFDIMENSION|USEGSL|GSLINTERNAL|OPENMPMACHINE|THETA|ALLOW_BALLS_WITH_SMOOTHING)
+            if ! grep -Eq "^[[:space:]]+${name}[[:space:]]+=" "${output}"; then
+                printf 'FAIL: make-info does not publish %s\n' "${name}" >&2
+                missing=1
+            fi
+            ;;
+    esac
+done <<<"${settings}"
+
+if (( missing != 0 )); then
+    exit 1
+fi
+
+if [[ -n "${EXPECTED_SINGLEPON:-}" ]] &&
+   ! grep -Eq "^[[:space:]]+SINGLEPON[[:space:]]+= ${EXPECTED_SINGLEPON}$" "${output}"; then
+    printf 'FAIL: make-info does not report SINGLEPON=%s\n' \
+        "${EXPECTED_SINGLEPON}" >&2
+    exit 1
+fi
+
+printf 'PASS: make-info publishes every configurable Make switch.\n'

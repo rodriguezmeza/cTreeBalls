@@ -26,12 +26,48 @@
 #include "startrun_kdtree_omp_11.h"                         // 59
 #endif
 
+#if defined(BALLTREEOMP) || defined(BALLTREEMPI)
+#include "startrun_balltree_omp_11.h"                       // 167
+#endif
+
+#ifdef BALLTREE2BALLSOMP
+#include "startrun_balltree_2balls_omp_11.h"               // 174
+#endif
+
+#ifdef BALLTREE2BALLSMPI
+#include "startrun_balltree_2balls_mpi_11.h"               // 179
+#endif
+
+#ifdef OCTREE2BALLSOMP
+#include "startrun_octree_2balls_omp_11.h"                 // 176
+#endif
+
+#ifdef OCTREE2BALLSMPI
+#include "startrun_octree_2balls_mpi_11.h"                 // 177
+#endif
+
+#ifdef BALLTREE2BALLSOMP3PCF
+#include "startrun_balltree_2balls_omp_3pcf_11.h"          // 175
+#endif
+
+#ifdef BALLTREE2BALLSMPI3PCF
+#include "startrun_balltree_2balls_mpi_3pcf_11.h"          // 178
+#endif
+
 #ifdef OCTREEKKKOMP
 #include "startrun_octree_kkk_omp_11.h"                     // 61
 #endif
 
 #ifdef OCTREEGGGOMP
 #include "startrun_octree_ggg_omp_11.h"                     // 66
+#endif
+
+#ifdef OCTREEGGGMPI
+#include "startrun_octree_ggg_mpi_11.h"                     // 172
+#endif
+
+#ifdef OCTREESHEAROMP
+#include "startrun_octree_shear_omp_11.h"                   // 173
 #endif
 
 #ifdef OCTREESINCOSOMP
@@ -108,6 +144,18 @@
 #include "startrun_direct_method_simple_loopId.h"           // 78
 #endif
 
+#ifdef BALLS0357
+#include "startrun_balls_omp_0357_06.h"                     // 79
+#endif
+
+#ifdef OCTREE3PCF3DOMP
+#include "startrun_octree_3pcf_3d_omp_11.h"                 // 166
+#endif
+
+#ifdef LYAFORESTOMP
+#include "startrun_lya_forest_omp_11.h"                    // 169-171, 180-182
+#endif
+
 
 /*
  #E Addendum of some not important
@@ -116,4 +164,3 @@
 
 
 #endif    // ! _startrun_include_11_h
-

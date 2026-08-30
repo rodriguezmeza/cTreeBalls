@@ -275,17 +275,35 @@ int GetParamStat(string name)
 
 int GetiParam(string name)
 {
-    return (atoi(GetParam(name)));
+    char errmsg[256];
+    int value;
+
+    if (parse_int_checked(GetParam(name), &value,
+                          errmsg, sizeof(errmsg), name) != 0)
+        error("getiparam: %s\n", errmsg);
+    return value;
 }
 
 long GetlParam(string name)
 {
-    return (atol(GetParam(name)));
+    char errmsg[256];
+    long value;
+
+    if (parse_long_checked(GetParam(name), &value,
+                           errmsg, sizeof(errmsg), name) != 0)
+        error("getlparam: %s\n", errmsg);
+    return value;
 }
 
 double GetdParam(string name)
 {
-    return (atof(GetParam(name)));              
+    char errmsg[256];
+    double value;
+
+    if (parse_double_checked(GetParam(name), &value,
+                             errmsg, sizeof(errmsg), name) != 0)
+        error("getdparam: %s\n", errmsg);
+    return value;
 }
 
 bool GetbParam(string name)

@@ -1,0 +1,15 @@
+# ----- TreeCorr-style two-ball traversal over the native octree -----
+
+ifeq ($(OCTREE2BALLSOMPON),1)
+OPT2 += -DOCTREE2BALLSOMP
+OCTREE2BALLSOMP = $(MDIR)/addons/octree_2balls_omp/
+vpath %.c $(OCTREE2BALLSOMP)
+INCLUDES += -I$(OCTREE2BALLSOMP) \
+            -I$(MDIR)/addons/balltree_2balls_omp \
+            -I$(MDIR)/addons/balltree_omp
+HEADERFILES += $(wildcard $(OCTREE2BALLSOMP)/*.h)
+EXTERNAL += octree_2balls_tree.o search_octree_2balls_omp.o
+search_octree_2balls_omp.o: \
+	$(OCTREE2BALLSOMP)/search_octree_2balls_omp.c \
+	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c
+endif

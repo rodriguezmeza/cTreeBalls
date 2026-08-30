@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/../.."
+
+build_env=$(make --no-print-directory -s OCTREESHEAROMPON=1 \
+    print-cyballs-build-env)
+if ! grep -q -- '-DOCTREESHEAROMP\([[:space:]]\|$\)' <<<"$build_env"; then
+    echo "ERROR: active profile does not enable OCTREESHEAROMP" >&2
+    exit 2
+fi
+
+PYTHONDONTWRITEBYTECODE=1 python3 tests/make_tests/test_shear_octree_omp.py

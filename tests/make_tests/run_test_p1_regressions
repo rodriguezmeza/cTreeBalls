@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/../.."
+
+PYTHON=${PYTHON:-python3}
+
+disabled_env=$(make --no-print-directory -s \
+    USEGSL=0 COMPLEXLIBON=0 print-cyballs-build-env)
+if grep -q -- '-DOCTREEGGGOMP' <<< "$disabled_env"; then
+    echo "ERROR: octree-GGG remained enabled without GSL or COMPLEXLIB" >&2
+    exit 1
+fi
+
+enabled_env=$(make --no-print-directory -s print-cyballs-build-env)
+if ! grep -q -- '-DOCTREEGGGOMP' <<< "$enabled_env"; then
+    echo "ERROR: default profile did not enable octree-GGG" >&2
+    exit 1
+fi
+
+"$PYTHON" tests/make_tests/test_p1_cython.py
+echo "PASS: octree-GGG dependency guard"

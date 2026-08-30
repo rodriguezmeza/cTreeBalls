@@ -1,5 +1,10 @@
 // Use:
 //#include "startrun_include_02.h"
+//
+//  it is included in (the socket):
+//      source/startrun.c
+//      in the ReadParametersCmdline routine
+//
 
 #ifndef _startrun_include_02_h
 #define _startrun_include_02_h
@@ -8,12 +13,26 @@
 //#include "startrun_balls_omp_01.h"
 //#endif
 
+#ifndef OCTREESMOOTHING
+#ifdef BALLS
+#include "startrun_balls_omp_02.h"
+#endif
+#endif
+
 #ifdef OCTREESMOOTHING
 #include "startrun_octree_smoothing_02.h"
 #endif
 
+#ifdef BALLS0357
+#include "startrun_balls_omp_0357_01.h"
+#endif
+
 #ifdef IOLIB
 #include "startrun_iolib_01.h"
+#endif
+
+#ifdef LYAFORESTOMP
+#include "startrun_lya_forest_omp_01.h"
 #endif
 
 #ifdef SAVERESTORE

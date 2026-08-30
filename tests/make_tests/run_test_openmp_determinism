@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-openmp.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+if [ "$MULTI_THREADS" -le 1 ]; then
+    echo "ERROR: MULTI_THREADS must be greater than one" >&2
+    exit 2
+fi
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+
+profile_has()
+{
+    grep -q -- "-D$1\([[:space:]]\|$\)" <<<"$build_env"
+}
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=$2
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+histogram_list()
+{
+    local directory=$1
+
+    (cd "$directory" &&
+        find . -maxdepth 1 -type f -name 'hist*.txt' -print | LC_ALL=C sort)
+}
+
+compare_histograms()
+{
+    local method=$1
+    local reference=$2
+    local threaded=$3
+    local reference_list threaded_list filename
+
+    reference_list=$(histogram_list "$reference")
+    threaded_list=$(histogram_list "$threaded")
+    [ -n "$reference_list" ] \
+        || fail_with_log "$method produced no histogram output" \
+                         "$reference/run.log"
+    [ "$reference_list" = "$threaded_list" ] \
+        || fail_with_log "$method produced different output file sets" \
+                         "$threaded/run.log"
+
+    while IFS= read -r filename; do
+        cmp -s "$reference/$filename" "$threaded/$filename" \
+            || fail_with_log \
+                "$method is not deterministic between 1 and $MULTI_THREADS threads: $filename" \
+                "$threaded/run.log"
+    done <<<"$reference_list"
+}
+
+run_sky_method()
+{
+    local method=$1
+    local threads=$2
+    local output_dir=$3
+    local options=compute-HistN,and-CF,out-m-HistZeta
+
+    [ "$method" != "octree-ggg-omp" ] || options+=,KKKCorrelation
+    mkdir -p "$output_dir"
+    "$CBALLS" \
+        search="$method" \
+        in=./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin \
+        infmt=binary \
+        rootDir="$output_dir" \
+        numberThreads="$threads" \
+        rangeN=0.0633205 \
+        rminHist=0.00213811 \
+        sizeHistN=20 \
+        mChebyshev=7 \
+        nsmooth=8 \
+        stepState=1000000 \
+        verbose=0 \
+        verbose_log=0 \
+        options="$options" >"$output_dir/run.log" 2>&1 \
+        || fail_with_log "$method failed with $threads threads" \
+                         "$output_dir/run.log"
+}
+
+run_box_method()
+{
+    local method=$1
+    local threads=$2
+    local output_dir=$3
+
+    mkdir -p "$output_dir"
+    "$CBALLS" \
+        search="$method" \
+        in=./test_cute_box/example_cola/files_out_064/example_filename_z0p000 \
+        infmt=gadget \
+        rootDir="$output_dir" \
+        numberThreads="$threads" \
+        usePeriodic=true \
+        useLogHist=false \
+        lengthBox=512 \
+        rangeN=30 \
+        rminHist=0.1 \
+        sizeHistN=20 \
+        stepState=1000000 \
+        verbose=0 \
+        verbose_log=0 \
+        options=compute-HistN,and-CF,cute-box-fmt \
+        >"$output_dir/run.log" 2>&1 \
+        || fail_with_log "$method failed with $threads threads" \
+                         "$output_dir/run.log"
+}
+
+run_pair()
+{
+    local method=$1
+    local fixture=$2
+    local one_dir="$TMP_ROOT/$method-one"
+    local many_dir="$TMP_ROOT/$method-many"
+
+    if [ "$fixture" = sky ]; then
+        run_sky_method "$method" 1 "$one_dir"
+        run_sky_method "$method" "$MULTI_THREADS" "$many_dir"
+    else
+        run_box_method "$method" 1 "$one_dir"
+        run_box_method "$method" "$MULTI_THREADS" "$many_dir"
+    fi
+    compare_histograms "$method" "$one_dir" "$many_dir"
+    echo "PASS: $method is deterministic with 1 and $MULTI_THREADS threads"
+}
+
+profile_has OPENMPCODE \
+    || fail_with_log "the active build does not enable OpenMP" /dev/null
+
+run_pair octree-sincos-omp sky
+profile_has OCTREEGGGOMP && run_pair octree-ggg-omp sky
+profile_has KDTREEOMP && run_pair kdtree-omp sky
+profile_has BALLTREEOMP && run_pair balltree-omp sky
+profile_has KDTREEBOXOMP && run_pair kdtree-box-omp box
+profile_has NEIGHBORBOXESOMP && run_pair neighbor-boxes-omp box
+profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_openmp_internal_determinism.py
+profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_only_2pcf.py

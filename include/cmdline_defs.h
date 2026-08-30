@@ -51,7 +51,7 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "paramfile=",			            ";Parameter input file. Overwrite what follows",
 
     //B Parameters related to the searching method
-    "searchMethod=tree-omp-sincos",     ";Searching method to use", ":search",
+    "searchMethod=octree-sincos-omp",     ";Searching method to use", ":search",
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
     "nsmooth=8",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
@@ -105,6 +105,8 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
     "verbose_log=0",                    ";Option to activate the amount of information sent to log file", ":verblog",
 #ifdef OPENMPCODE
     "numberThreads=16",                  ";To set the number of threads to use (OpenMP)", ":nthreads",
+#else
+    "numberThreads=1",                  ";No OpenMP then always set to 1", ":nthreads",
 #endif
     "options=",                         ";Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc.", ":opt",
     //E

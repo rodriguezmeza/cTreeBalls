@@ -19,14 +19,14 @@ typedef struct {
     vector maxb;                                    // max pos of bounding box
     vector width;                                   // width of bounding box
     vector center;                                  // center of bounding box
-    real radius;                                    // radius of bounding box
+    cballs_storage_real radius;                     // conservative radius
 } bound;
 
 //  Structure representing a node of a ball-tree
 typedef struct {
     bound bnd;                                      // min, max bnd of ball-cell
     int dim;                                        // splitting dimension
-    real split;                                     // median coordinate value
+    cballs_storage_real split;                      // median coordinate value
     int first;                                      // index of frst body in node
     int last;                                       // index of last body in node
     real kappa;                                     // scalar field at cmpos

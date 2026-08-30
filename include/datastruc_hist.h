@@ -61,15 +61,9 @@ typedef struct {
     real *histXi2pcfthread;
     real *histXi2pcfthreadsub;
 
-#ifdef SINGLEP
-    float q0[NDIM];
-    float drpq2, drpq;
-    float dr0[NDIM];
-#else
-    vector q0;
+    compute_vector q0;
     real drpq2, drpq;
-    vector dr0;
-#endif
+    compute_vector dr0;
     INTEGER ipcount;
 
     int actlen;
@@ -109,15 +103,9 @@ typedef struct {
     real ***histNNNSubthread;
     real ***histXi3pcfthread;
 
-#ifdef SINGLEP
-    float q0[NDIM];
-    float drpq2, drpq;
-    float dr0[NDIM];
-#else
-    vector q0;
+    compute_vector q0;
     real drpq2, drpq;
-    vector dr0;
-#endif
+    compute_vector dr0;
     INTEGER ipcount;
 
     int actlen;

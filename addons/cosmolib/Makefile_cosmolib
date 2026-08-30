@@ -1,0 +1,19 @@
+# ----- MAKE FILE machine definitions (cosmo library routines) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifeq ($(COSMOLIBON),1)
+OPT2 += -DCOSMOLIB
+#COSMOLIB = ../addons/cosmolib/
+COSMOLIB = $(MDIR)/addons/cosmolib/
+#vpath %.c ./addons/cosmolib/
+vpath %.c $(MDIR)/addons/cosmolib/
+INCLUDES += -I$(COSMOLIB)
+HEADERFILES += $(wildcard $(COSMOLIB)/*.h)
+EXTERNAL += cosmolib.o
+endif
+#
+#E

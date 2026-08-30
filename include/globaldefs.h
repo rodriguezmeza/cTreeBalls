@@ -18,6 +18,7 @@
 #define _globaldefs_h
 
 //B ===============================================
+//B general includes section
 #include <string.h>                                 // Incluido para quitar
                                                     //  el warning:
                                                     // "Implicit declaration of
@@ -27,18 +28,32 @@
 #include <sys/stat.h>
 #include <sys/time.h>                               // To get time of the day
 
+//B
+#include <stdio.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+//E
+
 #include "stdinc.h"
 #include "vectdefs.h"
 #include "vectmath.h"
+#ifdef GETPARAM
 #include "getparam.h"
+#endif
 #include "mathfns.h"
 #include "mathutil.h"
 #include "inout.h"
 #include "constant.h"
 
+#include "common_defs.h"
 
 
 //B GSL section
+//  so far only needed to compute edge-corrections and
+//  testsmodels
+//  however, generating test models can be done with NR randoms
 #ifdef USEGSL
 
 #ifndef NOINTERNALGSL
@@ -87,32 +102,42 @@
 #else // ! USEGSL
 #include "numrec.h"
 #endif // ! USEGSL
-//E
-
-#include "datastruc_defs.h"
-
-#ifdef USEGSL
-global gsl_rng * r_gsl;                             // seed for random generators
-#else
-global long idum;                                   // seed for random generators
-#endif
+//E GSL section
 
 //B OpenMP section
-//  Timing variables
 #ifdef OPENMPCODE
 #include "omp.h"
-global double relstart,relend,absstart,absend;
-#else
-#include <time.h>
-global time_t relstart,relend,absstart,absend;
 #endif
 //E
 
-#include "common_defs.h"
+#if !defined(global)
+#  define global extern
+#endif
 
+#if !defined(global)
+#  define global extern
+#endif
+
+#ifdef USEGSL
+global gsl_rng * r_gsl;
+#else
+global long idum;
+#endif
+
+#include "datastruc_defs.h"                         // node, body, cell...
+//E general includes section
 //E ===============================================
 
+#ifdef CLASSLIB
+#include "common.h"
+#endif
+global ErrorMsg errmsg;
+
+#define _ERRORMSGSIZE_ 2048
+typedef char ErrorMsg[_ERRORMSGSIZE_];
+
 #include "cmdline_data.h"
+#include "options_cache.h"
 #include "global_data.h"
 
 global bodyptr bodytable[MAXITEMS];
@@ -120,7 +145,7 @@ global nodeptr *nodetablescanlev[MAXITEMS];
 global nodeptr *nodetablescanlev_root[MAXITEMS];
 global cellptr roottable[MAXITEMS];
 
-#ifdef BALLS4SCANLEV
+#ifdef CBALLS_NEEDS_BALLS4_SCAN
 global nodeptr *nodetablescanlevB4[MAXITEMS];
 #endif
 
@@ -155,86 +180,73 @@ global real *inout_wval;
 #endif
 //E
 
-//B CLASSLIB section
-// standard libraries from Julien Lesgourges CLASS
-#ifdef CLASSLIB
-#include "common.h"
-global ErrorMsg errmsg;
-#else // ! CLASSLIB
-
-#if !defined(TRUE)
-#define TRUE 1                                      // integer associated to true
-                                                    //  statement
-#endif
-#if !defined(FALSE)
-#define FALSE 0                                     // integer associated to false
-                                                    //  statement
-#endif
-#define SUCCESS 0                                   // integer returned after successful
-                                                    //  call of a function
-#define FAILURE 1                                   // integer returned after failure in
-                                                    //  a function
-#define _ERRORMSGSIZE_ 2048                         // generic error messages are cut
-                                                    //  beyond this number of characters
-typedef char ErrorMsg[_ERRORMSGSIZE_];              // Generic error messages
-#ifndef MIN
-#define MIN(a,b) (((a)<(b)) ? (a) : (b) )           // the usual "min" function
-#endif
-#ifndef MAX
-#define MAX(a,b) (((a)<(b)) ? (b) : (a) )           // the usual "max" function
-#endif
-#define SIGN(a) (((a)>0) ? 1. : -1. )
-#define NRSIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
-global ErrorMsg errmsg;
-
-//B common section
-
-//B Routines defined in general_libs/stdinc.c:
-// needed because of weird openmp bug on macosx lion...
-void class_protect_sprintf(char* dest, char* tpl,...);
-void class_protect_fprintf(FILE* dest, char* tpl,...);
-void* class_protect_memcpy(void* dest, void* from, size_t sz);
-// some general functions
-int get_number_of_titles(char * titlestring);
-int file_exists(const char *fname);
-int compare_doubles(const void * a,
-                    const void * b);
-int string_begins_with(char* thestring, char beginchar);
-//E
-
-#define class_build_error_string(dest,tmpl,...) {                       \
-  ErrorMsg FMsg;                                                        \
-  class_protect_sprintf(FMsg,tmpl,__VA_ARGS__);                         \
-  class_protect_sprintf(dest,"%s(L:%d) :%s",__func__,__LINE__,FMsg);    \
-}
-
-
-#define class_test_message(err_out,extra,args...) {                      \
-  ErrorMsg Optional_arguments;                                           \
-  class_protect_sprintf(Optional_arguments,args);                        \
-  class_build_error_string(err_out,"condition (%s) is true; %s",extra,Optional_arguments); \
-}
-
-
-#define class_test(condition, error_message_output, args...) {           \
-  if (condition) {                                                       \
-    class_test_message(error_message_output,#condition, args);           \
-    return FAILURE;                                                      \
-  }                                                                      \
-}
-
-//E
-#endif // ! CLASSLIB
-//E
-
-
 //B socket:
 #ifdef ADDONS
 #include "globaldefs_include_05.h"
 #endif
 //E
 
+/*
+ * Mutable process globals are retained for the standalone executable and for
+ * the existing OpenMP shared clauses.  The Python wrapper switches these
+ * values through one runtime state per cballs object before entering C.
+ */
+#if ((defined(BALLS) && !defined(OCTREESMOOTHING)) || \
+     defined(OCTREESMOOTHING) || defined(BALLS0357))
+#define CBALLS_RUNTIME_BALLS_GLOBALS 1
+#endif
+
+global bool tree_is_threaded[MAXITEMS];
+
+typedef struct cballs_runtime_state {
+#ifdef USEGSL
+    gsl_rng *r_gsl;
+    mMatrix_ptr histZetaMatrix;
+#else
+    long idum;
+#endif
+    ErrorMsg errmsg;
+    bodyptr bodytable[MAXITEMS];
+    nodeptr *nodetablescanlev[MAXITEMS];
+    nodeptr *nodetablescanlev_root[MAXITEMS];
+    cellptr roottable[MAXITEMS];
+#ifdef CBALLS_NEEDS_BALLS4_SCAN
+    nodeptr *nodetablescanlevB4[MAXITEMS];
+#endif
+#ifndef MACONLY
+    cellptr *celltable[MAXITEMS];
+#endif
+    bool tree_is_threaded[MAXITEMS];
+    real *histXi2pcf_omp;
+    cellptr rootnode;
+    real *inout_xval;
+    real *inout_yval;
+    real *inout_zval;
+    real *inout_uval;
+    real *inout_vval;
+    real *inout_wval;
+#ifdef CBALLS_RUNTIME_BALLS_GLOBALS
+    bodyptr bodytabbf;
+    bodyptr bodytabsm;
+    bodyptr bodytabSel;
+    nodeptr *nodetab;
+    nodeptr *nodetabscanlev;
+    nodeptr *nodetabscanlev_root;
+    bodyptr nodetable;
+    bodyptr nodetable_root;
+#endif
+} cballs_runtime_state;
+
+global cballs_runtime_state *cballs_runtime_create(void);
+global int cballs_runtime_activate(cballs_runtime_state *state);
+global const void *cballs_runtime_bodytable_at(
+    const cballs_runtime_state *state, int ifile);
+global void cballs_runtime_destroy(cballs_runtime_state *state);
+
 #include "protodefs.h"
+#ifdef CBALLS_MPI_ENABLED
+#include "cballs_mpi_dispatch.h"
+#endif
 
 #endif // ! _globaldefs_h
 

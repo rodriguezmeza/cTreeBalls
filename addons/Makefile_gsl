@@ -9,7 +9,7 @@
 #
 # eventually update flags for including gsl (see at the end, below)
 ifeq ($(GSLINTERNAL),1)
-GSL = ./addons/gsl
+GSL = $(MDIR)/addons/gsl
 vpath %.c $(GSL) \
 	$(GSL)/err \
 	$(GSL)/sys \
@@ -29,8 +29,10 @@ vpath %.c $(GSL) \
 CCFLAG += -DGSLINTER
 OPT2 += -DGSLINTER
 #LDFLAGS += -DGSL
-INCLUDES += -I../addons/gsl
-INCLUDES += -I../addons/gsl/gsl
+#INCLUDES += -I../addons/gsl
+#INCLUDES += -I../addons/gsl/gsl
+INCLUDES += -I$(GSL)
+INCLUDES += -I$(GSL)/gsl
 EXTERNAL += gamma.o  \
 	error.o trig.o log.o ldfrexp.o infnan.o \
 	fdiv.o exp.o psi.o math.o zeta.o elementary.o coerce.o stream.o

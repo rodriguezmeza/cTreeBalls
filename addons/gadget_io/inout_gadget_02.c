@@ -4,6 +4,13 @@
 
 #include "globaldefs.h"
 
+#ifdef CLASSLIB
+#define GADGET_SET_ERROR(cmd, ...) \
+    snprintf((cmd)->error_message, _ERRORMSGSIZE_, __VA_ARGS__)
+#else
+#define GADGET_SET_ERROR(cmd, ...) error(__VA_ARGS__)
+#endif
+
 //B Some gadget definitions
 typedef struct {
     double  Pos[3];
@@ -31,6 +38,16 @@ typedef struct {
   double *pos;
 } Catalog_tpcf;                                     //Catalog (double precision)
 
+static Catalog_tpcf catalog_failure_tpcf(void)
+{
+    Catalog_tpcf cat;
+    cat.np = -1;
+    cat.pos = NULL;
+    return cat;
+}
+
+
+
 typedef struct {
   int npart[6];
   double mass[6];
@@ -56,9 +73,6 @@ typedef struct {
 
 
 lint linecount_tpcf(FILE *f);
-void error_mem_out_tpcf(void);
-void error_read_line_tpcf(char *fname,lint nlin);
-void error_open_file_tpcf(char *fname);
 
 static Catalog_tpcf read_gadget(struct cmdline_data* cmd,
                                 struct  global_data* gd,
@@ -96,7 +110,9 @@ global int inputdata_gadget(struct cmdline_data* cmd,
 
     gd->input_comment = "Gadget input file";
 
-    read_catalog_tpcf(cmd, gd, ifile, cmd->infile, &NumPart, Ppointer);
+    if (read_catalog_tpcf(cmd, gd, ifile, cmd->infile, &NumPart, Ppointer) == FAILURE)
+        return FAILURE;
+    
     particle_data_ptr PP;
     PP = (particle_data_ptr) allocate(cmd->nbody * sizeof(particle_data));
 
@@ -235,47 +251,33 @@ void PtoMesh(struct cmdline_data* cmd,
 //  Adapted to cBalls
 //
 
-void error_open_file_tpcf(char *fname)
+static int my_fread(struct cmdline_data *cmd, void *p, size_t size,
+                    size_t nmemb, FILE *stream)
 {
-  // Open error handler
-  fprintf(stderr,"CUTE: Couldn't open file %s \n",fname);
-  exit(1);
+    string routineName = "my_fread";
+    if (fread(p, size, nmemb, stream) != nmemb) {
+        GADGET_SET_ERROR(cmd, "%s: error reading binary file\n", routineName);
+        return FAILURE;
+    }
+    return SUCCESS;
 }
 
-static size_t my_fread(void *p,size_t size,
-               size_t nmemb,FILE *stream)
+static int gad_check_block(struct cmdline_data *cmd, int b1, int b2)
 {
-  // Self-checked binary reading routine
-  size_t nread;
-
-  if((nread=fread(p,size,nmemb,stream))!=nmemb) {
-    fprintf(stderr,"CUTE: error reading binary file \n");
-    exit(1);
-  }
-  return nread;
-}
-
-void error_mem_out_tpcf(void)
-{
-  // Memory shortage handler
-  fprintf(stderr,"CUTE: Out of memory!!\n");
-  exit(1);
-}
-
-static void gad_check_block(int b1,int b2)
-{
-  // Checks that a block from a snapshot is
-  // consistent from its begin/end values
-  if(b1!=b2) {
-    fprintf(stderr,"CUTE: Corrupted block!\n");
-    exit(1);
-  }
+    string routineName = "gad_check_block";
+    if (b1 != b2) {
+        GADGET_SET_ERROR(cmd, "%s: Corrupted block!\n", routineName);
+        return FAILURE;
+    }
+    return SUCCESS;
 }
 
 
-static int gad_seek_block(FILE *snap,char name[])
+//static int gad_seek_block(FILE *snap,char name[])
+static int gad_seek_block(struct cmdline_data *cmd, FILE *snap, char name[])
 {
   // Seeks block from title
+    string routineName = "gad_seek_block";
   gad_title_tpcf tit;
   int block1,block2;
 
@@ -284,23 +286,36 @@ static int gad_seek_block(FILE *snap,char name[])
   while(1>0) {
     if(!(fread(&block1,sizeof(int),1,snap))||
        feof(snap)||ferror(snap)) {
-      fprintf(stderr,"CUTE: Block %s not found!!\n",name);
-      exit(1);
+        GADGET_SET_ERROR(cmd, "%s: Block %s not found!!\n", routineName, name);
+        goto fail;
+        
     }
-    my_fread(&tit,sizeof(gad_title_tpcf),1,snap);
-    my_fread(&block2,sizeof(int),1,snap);
-    gad_check_block(block1,block2);
+      if (my_fread(cmd, &tit,sizeof(gad_title_tpcf),1,snap) == FAILURE)
+          goto fail;
+    
+      if (my_fread(cmd, &block2,sizeof(int),1,snap) == FAILURE)
+          goto fail;
+
+      if (gad_check_block(cmd, block1, block2) == FAILURE)
+          goto fail;
+      
     if(strncmp(tit.label,name,3)!=0)
       fseek(snap,tit.size,SEEK_CUR);
     else
       break;
   }
+    
+    return SUCCESS;
 
-  return 0;
+fail:
+    return FAILURE;
 }
+    
+//}
 
 static int check_num_files(char *prefix)
 {
+    string routineName = "check_num_files";
   FILE *fil;
 
   fil=fopen(prefix,"r");
@@ -312,7 +327,14 @@ static int check_num_files(char *prefix)
     int nfils=0;
     while(nfils>=0) {
       char fname[256];
-      sprintf(fname,"%s.%d",prefix,nfils);
+//      sprintf(fname,"%s.%d",prefix,nfils);
+//        if (format_checked(fname, sizeof(fname),
+//            "fname", "!%s/%s", "%s.%d",prefix,nfils) != 0)
+//            return FAILURE;
+        
+        if (format_checked(fname, sizeof(fname), "fname", "%s.%d", prefix, nfils) != 0)
+            return -1;
+        
       fil=fopen(fname,"r");
       if(fil!=NULL) {
     fclose(fil);
@@ -320,11 +342,13 @@ static int check_num_files(char *prefix)
       }
       else {
     if(nfils==0) {
-      fprintf(stderr,"check_num_files: can't find file %s or %s.x\n",prefix,prefix);
+      fprintf(stderr,"%s: can't find file %s or %s.x\n",
+              routineName, prefix,prefix);
       return -1;
     }
     else if(nfils==1) {
-      fprintf(stderr,"check_num_files: only file %s found. Weird.\n",fname);
+      fprintf(stderr,"%s: only file %s found. Weird.\n",
+              routineName, fname);
       return -1;
     }
     else {
@@ -334,7 +358,7 @@ static int check_num_files(char *prefix)
     }
   }
   
-  fprintf(stderr,"check_num_files: this shouldn't have happened \n");
+  fprintf(stderr,"%s: this shouldn't have happened \n", routineName);
   return -1;
 }
 
@@ -343,25 +367,44 @@ static Catalog_tpcf read_snapshot_single(struct cmdline_data* cmd,
                                          char *fname,lint *np,int input)
 {
     // Creates catalog from a single snapshot file
-    Catalog_tpcf cat;
+    string routineName = "read_snapshot_single";
     lint ii;
     gad_header_tpcf head;
     int block1,block2;
     
-    FILE *snap=fopen(fname,"r");
-    if(snap==NULL) error_open_file_tpcf(fname);
+    Catalog_tpcf cat = catalog_failure_tpcf();
+    FILE *snap = NULL;
+    
+     snap=fopen(fname,"r");
+    
+    if (snap == NULL) {
+        GADGET_SET_ERROR(cmd, "%s: Couldn't open file %s\n",
+                         routineName, fname);
+        goto fail;
+    }
     
     //Read header
-    if(input==2)
-        gad_seek_block(snap,"HEAD");
-    my_fread(&block1,sizeof(int),1,snap);
-    my_fread(&head,sizeof(gad_header_tpcf),1,snap);
-    my_fread(&block2,sizeof(int),1,snap);
-    gad_check_block(block1,block2);
+    if (input == 2) {
+        if (gad_seek_block(cmd, snap, "HEAD") == FAILURE)
+            goto fail;
+    }
+    if (my_fread(cmd, &block1,sizeof(int),1,snap) == FAILURE)
+        goto fail;
+
+    if (my_fread(cmd, &head,sizeof(gad_header_tpcf),1,snap) == FAILURE)
+        goto fail;
+
+    if (my_fread(cmd, &block2, sizeof(int), 1, snap) == FAILURE)
+        goto fail;
+
+    if (gad_check_block(cmd, block1, block2) == FAILURE)
+        goto fail;
     
+
     if(head.num_files!=1) {
-        fprintf(stderr,"CUTE: Multi-file input not expected \n");
-        exit(1);
+        GADGET_SET_ERROR(cmd,
+            "%s: Multi-file input not expected \n", routineName);
+        goto fail;
     }
 
     if (cmd->verbose>=2) {
@@ -386,40 +429,72 @@ static Catalog_tpcf read_snapshot_single(struct cmdline_data* cmd,
   for(ii=0;ii<6;ii++) {
     cat.np+=head.npart[ii];
     if(head.npart[ii]!=head.npartTotal[ii]) {
-      fprintf(stderr,"CUTE: error reading snapshot \n");
-      exit(1);
+        GADGET_SET_ERROR(cmd,
+                         "%s: error reading snapshot \n", routineName);
+        goto fail;
     }
   }
   *np=cat.np;
 
   cat.pos=(double *)malloc(3*cat.np*sizeof(double));
-  if(cat.pos==NULL)
-    error_mem_out_tpcf();
+
+    if (cat.pos==NULL) {
+        GADGET_SET_ERROR(cmd, "%s: Out of memory!!\n", routineName);
+        goto fail;
+    }
+    
+
 
   if(input==2)
-    gad_seek_block(snap,"POS");
-  my_fread(&block1,sizeof(int),1,snap);
+      if (gad_seek_block(cmd, snap, "POS") == FAILURE)
+          goto fail;
+    if (my_fread(cmd, &block1, sizeof(int), 1, snap) == FAILURE)
+        goto fail;
+
   for(ii=0;ii<cat.np;ii++) {
     float pos[3];
-    my_fread(pos,sizeof(float),3,snap);
+      if (my_fread(cmd, pos, sizeof(float), 3, snap) == FAILURE)
+          goto fail;
+
     cat.pos[3*ii]=(double)(pos[0]);
     cat.pos[3*ii+1]=(double)(pos[1]);
     cat.pos[3*ii+2]=(double)(pos[2]);
   }
-  my_fread(&block2,sizeof(int),1,snap);
-  gad_check_block(block1,block2);
-  fclose(snap);
+    if (my_fread(cmd, &block2,sizeof(int),1,snap) == FAILURE)
+        goto fail;
 
-  return cat;
+    if (gad_check_block(cmd, block1, block2) == FAILURE)
+        goto fail;
+
+    fclose(snap);
+    snap = NULL;
+    return cat;
+
+fail:
+    if (snap != NULL) {
+        fclose(snap);
+        snap = NULL;
+    }
+    free(cat.pos);
+    *np = 0;
+    return catalog_failure_tpcf();
+    
 }
 
 static Catalog_tpcf read_gadget(struct cmdline_data* cmd,
                                 struct  global_data* gd,
                                 char *prefix,lint *np,int input)
 {
-  Catalog_tpcf cat;
+    string routineName = "read_gadget";
+    Catalog_tpcf cat = catalog_failure_tpcf();
+    FILE *snap = NULL;
+    
   int nfils=check_num_files(prefix);
-  if(nfils<=0) exit(1);
+    if(nfils<=0) {
+        GADGET_SET_ERROR(cmd,
+            "%s: nfils <= 0\n", routineName);
+        goto fail;
+    }
 
     verb_print_q(2, cmd->verbose, "  Reading from GADGET snapshot format \n");
   
@@ -433,28 +508,48 @@ static Catalog_tpcf read_gadget(struct cmdline_data* cmd,
     char fname[256];
     gad_header_tpcf head;
     int block1,block2;
-    FILE *snap;
 
       verb_print_q(2, cmd->verbose, "  Reading %d snapshot files \n",nfils);
 
-    sprintf(fname,"%s.0",prefix);
+//    sprintf(fname,"%s.0",prefix);
+//      if (format_checked(fname, sizeof(fname),
+//          "fname", "%s.0",prefix) != 0)
+//          return FAILURE;
+      if (format_checked(fname, sizeof(fname), "fname", "%s.0", prefix) != 0) {
+          GADGET_SET_ERROR(cmd, "%s: filename too long for %s.0\n", routineName, prefix);
+          goto fail;
+      }
+      
     snap=fopen(fname,"r");
-    if(snap==NULL) error_open_file_tpcf(fname);
-  
+      if (snap == NULL) {
+          GADGET_SET_ERROR(cmd, "%s: Couldn't open file %s\n",
+                           routineName, fname);
+          goto fail;
+      }
+      
+
     //Read header
     if(input==2)
-      gad_seek_block(snap,"HEAD");
-    my_fread(&block1,sizeof(int),1,snap);
-    my_fread(&head,sizeof(gad_header_tpcf),1,snap);
-    my_fread(&block2,sizeof(int),1,snap);
-    gad_check_block(block1,block2);
+        if (gad_seek_block(cmd, snap, "HEAD") == FAILURE)
+            goto fail;
+      if (my_fread(cmd, &block1,sizeof(int),1,snap) == FAILURE)
+          goto fail;
+      
+      if (my_fread(cmd, &head,sizeof(gad_header_tpcf),1,snap) == FAILURE)
+          goto fail;
+      
+      if (my_fread(cmd, &block2,sizeof(int),1,snap) == FAILURE)
+          goto fail;
+
+      if (gad_check_block(cmd, block1, block2) == FAILURE)
+          goto fail;
 
     if(head.num_files!=nfils) {
-      fprintf(stderr,
-          "CUTE: Header and existing files do not match %d != %d.\n",
-          nfils,head.num_files);
-      fprintf(stderr,"      There may be some files missing\n");
-      exit(1);
+        GADGET_SET_ERROR(cmd,
+            "%s: Header and existing files do not match %d != %d.\n %s",
+            routineName, nfils,head.num_files,
+            "      There may be some files missing\n");
+        goto fail;
     }
 
       if (cmd->verbose>=2) {
@@ -481,27 +576,54 @@ static Catalog_tpcf read_gadget(struct cmdline_data* cmd,
     *np=cat.np;
 
     cat.pos=(double *)malloc(3*cat.np*sizeof(double));
-    if(cat.pos==NULL)
-      error_mem_out_tpcf();
+      if (cat.pos==NULL) {
+          GADGET_SET_ERROR(cmd, "%s: Out of memory!!\n", routineName);
+          goto fail;
+      }
+      
     fclose(snap);
+      snap = NULL;
 
     lint np_read=0;
       for(ii=0;ii<nfils;ii++) {
           lint np_new;
           lint jj;
 
-          sprintf(fname,"%s.%d",prefix,(int)ii);
+//          sprintf(fname,"%s.%d",prefix,(int)ii);
+//          if (format_checked(fname, sizeof(fname),
+//              "fname", "%s.%d",prefix,(int)ii) != 0)
+//              return FAILURE;
+          if (format_checked(fname, sizeof(fname), "fname", "%s.%d", prefix, (int)ii) != 0) {
+              GADGET_SET_ERROR(cmd, "%s: filename too long for %s.%d\n", routineName, prefix, (int)ii);
+              goto fail;
+          }
+          
       snap=fopen(fname,"r");
-        if(snap==NULL) error_open_file_tpcf(fname);
+          if (snap == NULL) {
+              GADGET_SET_ERROR(cmd, "%s: Couldn't open file %s\n",
+                               routineName, fname);
+              goto fail;
+          }
+          
         verb_print_q(2, cmd->verbose,"  Reading file  %s \n",fname);
 
       //Read header
-      if(input==2)
-    gad_seek_block(snap,"HEAD");
-      my_fread(&block1,sizeof(int),1,snap);
-      my_fread(&head,sizeof(gad_header_tpcf),1,snap);
-      my_fread(&block2,sizeof(int),1,snap);
-      gad_check_block(block1,block2);
+      if (input == 2) {
+          if (gad_seek_block(cmd, snap, "HEAD") == FAILURE)
+              goto fail;
+      }
+      if (my_fread(cmd, &block1,sizeof(int),1,snap) == FAILURE)
+              goto fail;
+
+          if (my_fread(cmd, &head,sizeof(gad_header_tpcf),1,snap) == FAILURE)
+              goto fail;
+
+            if (my_fread(cmd, &block2, sizeof(int), 1, snap) == FAILURE)
+              goto fail;
+
+          if (gad_check_block(cmd, block1, block2) == FAILURE)
+              goto fail;
+          
 
       np_new=0;
       for(jj=0;jj<6;jj++)
@@ -509,45 +631,65 @@ static Catalog_tpcf read_gadget(struct cmdline_data* cmd,
       printf("  %ld parts in file %ld \n",(long)np_new,(long)ii);
 
       if(np_read+np_new>cat.np) {
-    fprintf(stderr,
-        "CUTE: files seem to contain too many particles\n");
-    fprintf(stderr,"      file %s, %ld > %ld \n",
-        fname,(long)(np_read+np_new),(long)(cat.np));
-    exit(1);
+          GADGET_SET_ERROR(cmd,
+    "%s: files seem to contain too many particles\n     file %s, %ld > %ld \n",
+            routineName, fname,(long)(np_read+np_new),(long)(cat.np));
+          goto fail;
       }
 
-      if(input==2)
-    gad_seek_block(snap,"POS");
-      my_fread(&block1,sizeof(int),1,snap);
+      if (input == 2) {
+          if (gad_seek_block(cmd, snap, "POS") == FAILURE)
+              goto fail;
+      }
+      if (my_fread(cmd, &block1,sizeof(int),1,snap) == FAILURE)
+              goto fail;
+
       for(jj=np_read;jj<np_read+np_new;jj++) {
     float pos[3];
-    my_fread(pos,sizeof(float),3,snap);
+          if (my_fread(cmd, pos,sizeof(float),3,snap) == FAILURE)
+              goto fail;
+
     cat.pos[3*jj]=(double)(pos[0]);
     cat.pos[3*jj+1]=(double)(pos[1]);
     cat.pos[3*jj+2]=(double)(pos[2]);
       }
-      my_fread(&block2,sizeof(int),1,snap);
-      gad_check_block(block1,block2);
+          if (my_fread(cmd, &block2,sizeof(int),1,snap) == FAILURE)
+              goto fail;
+
+          if (gad_check_block(cmd, block1, block2) == FAILURE)
+              goto fail;
+          
       fclose(snap);
+          snap = NULL;
 
       np_read+=np_new;
     }
       
     if(np_read!=cat.np) {
-      fprintf(stderr,
-          "CUTE: #particles read disagrees with header: %ld != %ld\n",
-          (long)np_read,(long)(cat.np));
-      exit(1);
+        GADGET_SET_ERROR(cmd,
+            "%s: #particles read disagrees with header: %ld != %ld\n",
+            routineName, (long)np_read,(long)(cat.np));
+        goto fail;
     }
 
     return cat;
+      
   }
+
+fail:
+    if (snap != NULL) {
+        fclose(snap);
+        snap = NULL;
+    }
+    free(cat.pos);
+    *np = 0;
+    return catalog_failure_tpcf();
+
 }
 
 
 static double wrap_double(double x)
 {
-  //////
   // Returns x mod(l_box)
   if(x<0)
     return wrap_double(x+l_box_tpcf);
@@ -559,7 +701,6 @@ static double wrap_double(double x)
 
 lint linecount_tpcf(FILE *f)
 {
-  //////
   // Returns #lines in f
   lint i0=0;
   char ch[1024];
@@ -569,27 +710,26 @@ lint linecount_tpcf(FILE *f)
   return i0;
 }
 
-void error_read_line_tpcf(char *fname,lint nlin)
-{
-  // Reading error handler
-  fprintf(stderr,"CUTE: Couldn't read file %s, line %d \n",
-      fname,(int)nlin);
-  exit(1);
-}
-
 static Catalog_tpcf read_ascii(struct cmdline_data* cmd,
                                struct  global_data* gd,
                                char *fname,lint *np)
 {
   // Reads catalog from ascii file with
   // default format.
-  Catalog_tpcf cat;
+    string routineName = "read_ascii";
   lint ii,n_lin;
-  FILE *fd;
+    
+    Catalog_tpcf cat = catalog_failure_tpcf();
+    FILE *fd = NULL;
 
   //Open file and count lines
   fd=fopen(fname,"r");
-  if(fd==NULL) error_open_file_tpcf(fname);
+    if (fd == NULL) {
+        GADGET_SET_ERROR(cmd, "%s: Couldn't open file %s\n",
+                         routineName, fname);
+        goto fail;
+    }
+
   if(n_objects_tpcf==-1)
     n_lin=linecount_tpcf(fd);
   else
@@ -597,32 +737,53 @@ static Catalog_tpcf read_ascii(struct cmdline_data* cmd,
   rewind(fd);
       
     verb_print_q(2, cmd->verbose,"  %ld objects will be read \n",(long)n_lin);
-      
+
   //Allocate catalog memory
   *np=n_lin;
   cat.np=n_lin;
   cat.pos=(double *)malloc(3*cat.np*sizeof(double));
-  if(cat.pos==NULL)
-    error_mem_out_tpcf();
-  
+    if (cat.pos==NULL) {
+        GADGET_SET_ERROR(cmd, "%s: Out of memory!!\n", routineName);
+        goto fail;
+    }
+    
+
   rewind(fd);
   //Read galaxies in mask
   for(ii=0;ii<n_lin;ii++) {
     double xx,yy,zz;
     char s0[1024];
     int sr;
-    if(fgets(s0,sizeof(s0),fd)==NULL)
-      error_read_line_tpcf(fname,ii+1);
-    sr=sscanf(s0,"%lf %lf %lf",&xx,&yy,&zz);
-    if(sr!=3)
-      error_read_line_tpcf(fname,ii+1);
+
+      if (fgets(s0, sizeof(s0), fd) == NULL) {
+          GADGET_SET_ERROR(cmd, "%s: Couldn't read file %s, line %d\n",
+                           routineName, fname, (int)(ii + 1));
+          goto fail;
+      }
+
+      sr = sscanf(s0, "%lf %lf %lf", &xx, &yy, &zz);
+      if (sr != 3) {
+          GADGET_SET_ERROR(cmd, "%s: Couldn't read file %s, line %d\n",
+                           routineName, fname, (int)(ii + 1));
+          goto fail;
+      }
+      
     cat.pos[3*ii]=xx;
     cat.pos[3*ii+1]=yy;
     cat.pos[3*ii+2]=zz;
   }
   fclose(fd);
 
+    fd = NULL;
+
   return cat;
+    
+fail:
+    if (fd != NULL)
+        fclose(fd);
+    free(cat.pos);
+    *np = 0;
+    return catalog_failure_tpcf();
 }
 
 int read_catalog_tpcf(struct cmdline_data* cmd,
@@ -639,13 +800,17 @@ int read_catalog_tpcf(struct cmdline_data* cmd,
     input_format_tpcf=1;
 
     if(input_format_tpcf) {
-        cat=read_gadget(cmd, gd, fname,np,input_format_tpcf);
+        cat = read_gadget(cmd, gd, fname, np, input_format_tpcf);
+        if (cat.np < 0 || cat.pos == NULL)
+            return FAILURE;
+        
     } else {
         cat=read_ascii(cmd, gd, fname,np);
     }
 
     gd->nbodyTable[ifile] = cmd->nbody = *np;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     bodyptr p;
 
     //Correct particles out of bounds and calculate CoM
@@ -676,7 +841,3 @@ int read_catalog_tpcf(struct cmdline_data* cmd,
   
     return 0;
 }
-
-//
-//E !Cute_box
-//

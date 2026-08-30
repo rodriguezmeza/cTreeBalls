@@ -1,5 +1,10 @@
+//=============================================================================
+//        1          2          3          4        ^ 5          6          7
+
 #include "parser.h"
 #include "stdinc.h"
+
+#include <limits.h>
 
 int parser_read_file(char * filename,
                      struct file_content * pfc,
@@ -9,39 +14,133 @@ int parser_read_file(char * filename,
   char line[_LINE_LENGTH_MAX_];
   int counter;
   int is_data;
+  int has_line;
+  unsigned long line_number;
   FileArg name;
   FileArg value;
+
+    pfc->size = 0; pfc->filename = NULL; pfc->name = NULL; pfc->value = NULL; pfc->read = NULL;
 
   class_open(inputfile,filename,"r",errmsg);
 
   counter = 0;
-  while (fgets(line,_LINE_LENGTH_MAX_,inputfile) != NULL) {
-    class_call(parser_read_line(line,&is_data,name,value,errmsg),errmsg,errmsg);
-    if (is_data == TRUE) counter++;
+  line_number = 0;
+  while (TRUE) {
+      class_call_except(
+          read_parameter_line_checked(inputfile, line, sizeof(line),
+                                      &has_line, &line_number, filename,
+                                      errmsg, _ERRORMSGSIZE_),
+          errmsg,
+          errmsg,
+          fclose(inputfile););
+      if (has_line == FALSE) break;
+
+      class_call_except(parse_parameter_line_checked(
+                            line,
+                            name, sizeof(name),
+                            value, sizeof(value),
+                            &is_data, filename, line_number,
+                            errmsg, _ERRORMSGSIZE_),
+                        errmsg,
+                        errmsg,
+                        fclose(inputfile););
+
+    if (is_data == TRUE) {
+      if (counter == INT_MAX) {
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "%s:%lu: too many parameter records",
+                 filename, line_number);
+        fclose(inputfile);
+        return FAILURE;
+      }
+      counter++;
+    }
   }
 
-  class_test(counter == 0,
-             errmsg,
-             "No readable input in file %s",filename);
+    class_test_except(counter == 0,
+                      errmsg,
+                      fclose(inputfile);,
+                      "No readable input in file %s", filename);
 
-  class_call(parser_init(pfc,counter,filename,errmsg),
-             errmsg,
-             errmsg);
+    class_call_except(parser_init(pfc, counter, filename, errmsg),
+                      errmsg,
+                      errmsg,
+                      fclose(inputfile););
 
-  rewind(inputfile);
+  if (fseek(inputfile, 0L, SEEK_SET) != 0) {
+    snprintf(errmsg, _ERRORMSGSIZE_,
+             "could not rewind parameter file '%s'", filename);
+    fclose(inputfile);
+    parser_free(pfc);
+    return FAILURE;
+  }
 
   counter = 0;
-  while (fgets(line,_LINE_LENGTH_MAX_,inputfile) != NULL) {
-    class_call(parser_read_line(line,&is_data,name,value,errmsg),errmsg,errmsg);
+  line_number = 0;
+  while (TRUE) {
+      class_call_except(
+          read_parameter_line_checked(inputfile, line, sizeof(line),
+                                      &has_line, &line_number, filename,
+                                      errmsg, _ERRORMSGSIZE_),
+          errmsg,
+          errmsg,
+          fclose(inputfile);
+          parser_free(pfc););
+      if (has_line == FALSE) break;
+
+      class_call_except(parse_parameter_line_checked(
+                            line,
+                            name, sizeof(name),
+                            value, sizeof(value),
+                            &is_data, filename, line_number,
+                            errmsg, _ERRORMSGSIZE_),
+                        errmsg,
+                        errmsg,
+                        fclose(inputfile);
+                        parser_free(pfc););
+
     if (is_data == TRUE) {
-      strcpy(pfc->name[counter],name);
-      strcpy(pfc->value[counter],value);
+        if (counter >= pfc->size) {
+            snprintf(errmsg, _ERRORMSGSIZE_,
+                     "%s changed while it was being parsed",
+                     filename);
+            fclose(inputfile);
+            parser_free(pfc);
+            return FAILURE;
+        }
+        if (copy_checked(pfc->name[counter], sizeof(FileArg),
+                         name, "parameter name") != 0) {
+            fclose(inputfile);
+            parser_free(pfc);
+            return FAILURE;
+        }
+
+        if (copy_checked(pfc->value[counter], sizeof(FileArg),
+                         value, "parameter value") != 0) {
+            fclose(inputfile);
+            parser_free(pfc);
+            return FAILURE;
+        }
+
       pfc->read[counter]=FALSE;
       counter++;
     }
   }
 
-  fclose(inputfile);
+  if (counter != pfc->size) {
+    snprintf(errmsg, _ERRORMSGSIZE_,
+             "%s changed while it was being parsed", filename);
+    fclose(inputfile);
+    parser_free(pfc);
+    return FAILURE;
+  }
+
+  if (fclose(inputfile) != 0) {
+    snprintf(errmsg, _ERRORMSGSIZE_,
+             "could not close parameter file '%s'", filename);
+    parser_free(pfc);
+    return FAILURE;
+  }
 
   return SUCCESS;
 
@@ -52,116 +151,92 @@ int parser_init(struct file_content * pfc,
                 char * filename,
                 ErrorMsg errmsg) {
 
+  pfc->size = 0;
+  pfc->filename = NULL;
+  pfc->name = NULL;
+  pfc->value = NULL;
+  pfc->read = NULL;
+
   if (size > 0) {
-    pfc->size=size;
-    class_alloc(pfc->filename,(strlen(filename)+1)*sizeof(char),errmsg);
-    strcpy(pfc->filename,filename);
-    class_alloc(pfc->name,size*sizeof(FileArg),errmsg);
-    class_alloc(pfc->value,size*sizeof(FileArg),errmsg);
-    class_alloc(pfc->read,size*sizeof(short),errmsg);
+    pfc->size = size;
+
+    pfc->filename = malloc((strlen(filename)+1)*sizeof(char));
+    if (pfc->filename == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc->filename with size %zu",
+               (strlen(filename)+1)*sizeof(char));
+      parser_free(pfc);
+      return FAILURE;
+    }
+
+    if (copy_checked(pfc->filename, strlen(filename) + 1,
+                     filename, "parser filename") != 0) {
+      parser_free(pfc);
+      return FAILURE;
+    }
+
+    pfc->name = malloc(size*sizeof(FileArg));
+    if (pfc->name == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc->name with size %zu",
+               size*sizeof(FileArg));
+      parser_free(pfc);
+      return FAILURE;
+    }
+
+    pfc->value = malloc(size*sizeof(FileArg));
+    if (pfc->value == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc->value with size %zu",
+               size*sizeof(FileArg));
+      parser_free(pfc);
+      return FAILURE;
+    }
+
+    pfc->read = malloc(size*sizeof(short));
+    if (pfc->read == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc->read with size %zu",
+               size*sizeof(short));
+      parser_free(pfc);
+      return FAILURE;
+    }
   }
 
   return SUCCESS;
 }
+
 
 int parser_free(struct file_content * pfc) {
 
-  if (pfc->size > 0) {
-    free(pfc->name);
-    free(pfc->value);
-    free(pfc->read);
-    free(pfc->filename);
-  }
+  if (pfc == NULL)
+    return SUCCESS;
+
+  free(pfc->name);
+  free(pfc->value);
+  free(pfc->read);
+  free(pfc->filename);
+
+  pfc->name = NULL;
+  pfc->value = NULL;
+  pfc->read = NULL;
+  pfc->filename = NULL;
+  pfc->size = 0;
 
   return SUCCESS;
 }
+
 
 int parser_read_line(char * line,
                      int * is_data,
                      char * name,
                      char * value,
                      ErrorMsg errmsg) {
-
-  char * phash;
-  char * pequal;
-  char * left;
-  char * right;
-
-  /* check that there is an '=' (if you want the role of '=' to be
-     played by ':' you only need to substitute it in the next line and
-     recompile) */
-
-  pequal=strchr(line,'=');
-  if (pequal == NULL) {*is_data = FALSE; return SUCCESS;}
-
-  /* if yes, check that there is not an '#' before the '=' */
-
-  phash=strchr(line,'#');
-  if ((phash != NULL) && (phash-pequal<2)) {*is_data = FALSE; return SUCCESS;}
-
-  phash=strchr(line,'%');
-  if ((phash != NULL) && (phash-pequal<2)) {*is_data = FALSE; return SUCCESS;}
-
-  /* get the name, i.e. the block before the '=' */
-
-  left=line;
-  while (left[0]==' ') {
-    left++;
-  }
-  /* Ignore any of " ' */
-  if(left[0]=='\'' || left[0]=='\"'){
-    left++;
-  }
-
-  right=pequal-1;
-  while (right[0]==' ') {
-    right--;
-  }
-  if(right[0]=='\'' || right[0]=='\"'){
-    right--;
-  }
-
-  /* deal with missing variable names */
-
-  class_test(right-left < 0,
-             errmsg,
-             "Syntax error in the input line '%s': no name passed on the left of the '=' sign",line);
-
-  class_test(right-left+1 >= _ARGUMENT_LENGTH_MAX_,
-             errmsg,
-             "name starting by '%s' too long; shorten it or increase _ARGUMENT_LENGTH_MAX_",strncpy(name,left,(_ARGUMENT_LENGTH_MAX_-1)));
-
-  strncpy(name,left,right-left+1);
-  name[right-left+1]='\0';
-
-  /* get the value, i.e. the block after the '=' */
-
-  left = pequal+1;
-  while (left[0]==' ') {
-    left++;
-  }
-
-  if (phash == NULL)
-    right = line+strlen(line)-1;
-  else
-    right = phash-1;
-
-  while (right[0]<=' ') {
-    right--;
-  }
-
-  if (right-left < 0) {*is_data = FALSE; return SUCCESS;}
-
-  class_test(right-left+1 >= _ARGUMENT_LENGTH_MAX_,
-             errmsg,
-             "value starting by '%s' too long; shorten it or increase _ARGUMENT_LENGTH_MAX_",strncpy(value,left,(_ARGUMENT_LENGTH_MAX_-1)));
-
-  strncpy(value,left,right-left+1);
-  value[right-left+1]='\0';
-
-  *is_data = TRUE;
-
-  return SUCCESS;
+  return parse_parameter_line_checked(line,
+                                      name, _ARGUMENT_LENGTH_MAX_,
+                                      value, _ARGUMENT_LENGTH_MAX_,
+                                      is_data, NULL, 0,
+                                      errmsg, _ERRORMSGSIZE_);
 
 }
 
@@ -191,9 +266,9 @@ int parser_read_int(struct file_content * pfc,
 
   /* read parameter value. If this fails, return an error */
 
-  class_test(sscanf(pfc->value[index],"%d",value) != 1,
-             errmsg,
-             "could not read value of parameter '%s' in file '%s'\n",name,pfc->filename);
+  if (parse_int_checked(pfc->value[index], value,
+                        errmsg, _ERRORMSGSIZE_, name) == FAILURE)
+    return FAILURE;
 
   /* if parameter read correctly, set 'found' flag to true, as well as the flag
      associated with this parameter in the file_content structure */
@@ -204,11 +279,14 @@ int parser_read_int(struct file_content * pfc,
   /* check for multiple entries of the same parameter. If another occurence is found,
      return an error. */
 
-  for (i=index+1; i < pfc->size; i++) {
-      if (strcmp(pfc->name[i],name) == 0) {
-          error("multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
-      }
-  }
+    for (i=index+1; i < pfc->size; i++) {
+        if (strcmp(pfc->name[i], name) == 0) {
+            snprintf(errmsg, _ERRORMSGSIZE_,
+                     "multiple entry of parameter '%s' in file '%s'\n",
+                     name, pfc->filename);
+            return FAILURE;
+        }
+    }
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
 
@@ -241,9 +319,9 @@ int parser_read_double(struct file_content * pfc,
 
   /* read parameter value. If this fails, return an error */
 
-  class_test(sscanf(pfc->value[index],"%lg",value) != 1,
-             errmsg,
-             "could not read value of parameter '%s' in file '%s'\n",name,pfc->filename);
+  if (parse_double_checked(pfc->value[index], value,
+                           errmsg, _ERRORMSGSIZE_, name) == FAILURE)
+    return FAILURE;
 
   /* if parameter read correctly, set 'found' flag to true, as well as the flag
      associated with this parameter in the file_content structure */
@@ -254,11 +332,14 @@ int parser_read_double(struct file_content * pfc,
   /* check for multiple entries of the same parameter. If another occurence is found,
      return an error. */
 
-  for (i=index+1; i < pfc->size; i++) {
-      if (strcmp(pfc->name[i],name) == 0) {
-          error("multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
-      }
-  }
+    for (i=index+1; i < pfc->size; i++) {
+        if (strcmp(pfc->name[i], name) == 0) {
+            snprintf(errmsg, _ERRORMSGSIZE_,
+                     "multiple entry of parameter '%s' in file '%s'\n",
+                     name, pfc->filename);
+            return FAILURE;
+        }
+    }
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
 
@@ -292,9 +373,9 @@ int parser_read_double_and_position(struct file_content * pfc,
 
   /* read parameter value. If this fails, return an error */
 
-  class_test(sscanf(pfc->value[index],"%lg",value) != 1,
-             errmsg,
-             "could not read value of parameter '%s' in file '%s'\n",name,pfc->filename);
+  if (parse_double_checked(pfc->value[index], value,
+                           errmsg, _ERRORMSGSIZE_, name) == FAILURE)
+    return FAILURE;
 
   /* if parameter read correctly, set 'found' flag to true, as well as the flag
      associated with this parameter in the file_content structure */
@@ -338,7 +419,9 @@ int parser_read_string(struct file_content * pfc,
   if (index == pfc->size)                 // if parameter not found, return with
     return SUCCESS;                       //  'found' flag still equal to false
 
-  strcpy(*value,pfc->value[index]);         // read parameter value.
+  if (copy_checked(*value, sizeof(FileArg),
+                   pfc->value[index], "parser string value") != 0)
+    return FAILURE;
 
 // Set 'found' flag to true, as well as the flag
 //     associated with this parameter in the file_content structure
@@ -347,12 +430,15 @@ int parser_read_string(struct file_content * pfc,
 
 //B check for multiple entries of the same parameter. 
 // If another occurence is found, return an error.
-  for (i=index+1; i < pfc->size; i++) {
-      if (strcmp(pfc->name[i],name) == 0) {
-          error("multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
-      }
+    for (i=index+1; i < pfc->size; i++) {
+        if (strcmp(pfc->name[i], name) == 0) {
+            snprintf(errmsg, _ERRORMSGSIZE_,
+                     "multiple entry of parameter '%s' in file '%s'\n",
+                     name, pfc->filename);
+            return FAILURE;
+        }
+    }
 //E
-  }
 
 // if everything proceeded normally, return with 'found' flag equal to true
   return SUCCESS;
@@ -393,15 +479,16 @@ int parser_read_list_of_doubles(struct file_content * pfc,
   string = pfc->value[index];
   do {
     i ++;
-    substring = strchr(string,',');
-    string = substring+1;
+    substring = strchr(string, ',');
+    if (substring == NULL)
+        break;
+    string = substring + 1;
   } while(substring != NULL);
 
   *size = i;
 
   /* free and re-allocate array of values */
   class_alloc(list,*size*sizeof(double),errmsg);
-  *pointer_to_list = list;
 
   /* read one double between each comas */
   i = 0;
@@ -409,34 +496,58 @@ int parser_read_list_of_doubles(struct file_content * pfc,
   do {
     i ++;
     substring = strchr(string,',');
-    if (substring == NULL) {
-      strcpy(string_with_one_value,string);
-    }
-    else {
-      strncpy(string_with_one_value,string,(substring-string));
-      string_with_one_value[substring-string]='\0';
-    }
-    class_test(sscanf(string_with_one_value,"%lg",&(list[i-1])) != 1,
-               errmsg,
-               "could not read %dth value of list of parameters '%s' in file '%s'\n",
-               i,name,pfc->filename);
-    string = substring+1;
+
+      size_t len = (substring == NULL)
+                 ? strlen(string)
+                 : (size_t)(substring - string);
+
+      if (len >= sizeof(string_with_one_value)) {
+        free(list);
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "value too long in list parameter '%s' in file '%s'\n",
+                 name, pfc->filename);
+        return FAILURE;
+      }
+
+      memcpy(string_with_one_value, string, len);
+      string_with_one_value[len] = '\0';
+      
+
+      if (parse_double_checked(string_with_one_value, &(list[i-1]),
+                               errmsg, _ERRORMSGSIZE_, name) == FAILURE) {
+          free(list);
+          return FAILURE;
+      }
+
+      if (substring == NULL)
+          break;
+
+      string = substring + 1;
   } while(substring != NULL);
+
+
+  /* check for multiple entries of the same parameter. If another occurence is found,
+     return an error. */
+
+  for (i=index+1; i < pfc->size; i++) {
+
+      if (strcmp(pfc->name[i], name) == 0) {
+          free(list);
+          snprintf(errmsg, _ERRORMSGSIZE_,
+                   "multiple entry of parameter '%s' in file '%s'\n",
+                   name, pfc->filename);
+          return FAILURE;
+      }
+
+  }
+
+    *pointer_to_list = list;
 
   /* if parameter read correctly, set 'found' flag to true, as well as the flag
      associated with this parameter in the file_content structure */
 
   * found = TRUE;
   pfc->read[index] = TRUE;
-
-  /* check for multiple entries of the same parameter. If another occurence is found,
-     return an error. */
-
-  for (i=index+1; i < pfc->size; i++) {
-    class_test(strcmp(pfc->name[i],name) == 0,
-               errmsg,
-               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
-  }
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
 
@@ -479,15 +590,17 @@ int parser_read_list_of_integers(struct file_content * pfc,
   string = pfc->value[index];
   do {
     i ++;
-    substring = strchr(string,',');
-    string = substring+1;
+    substring = strchr(string, ',');
+    if (substring == NULL)
+        break;
+
+    string = substring + 1;
   } while(substring != NULL);
 
   *size = i;
 
   /* free and re-allocate array of values */
   class_alloc(list,*size*sizeof(int),errmsg);
-  *pointer_to_list = list;
 
   /* read one integer between each comas */
   i = 0;
@@ -495,34 +608,58 @@ int parser_read_list_of_integers(struct file_content * pfc,
   do {
     i ++;
     substring = strchr(string,',');
-    if (substring == NULL) {
-      strcpy(string_with_one_value,string);
-    }
-    else {
-      strncpy(string_with_one_value,string,(substring-string));
-      string_with_one_value[substring-string]='\0';
-    }
-    class_test(sscanf(string_with_one_value,"%d",&(list[i-1])) != 1,
-               errmsg,
-               "could not read %dth value of list of parameters '%s' in file '%s'\n",
-               i,name,pfc->filename);
-    string = substring+1;
+      
+      size_t len = (substring == NULL)
+                 ? strlen(string)
+                 : (size_t)(substring - string);
+
+      if (len >= sizeof(string_with_one_value)) {
+        free(list);
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "value too long in list parameter '%s' in file '%s'\n",
+                 name, pfc->filename);
+        return FAILURE;
+      }
+
+      memcpy(string_with_one_value, string, len);
+      string_with_one_value[len] = '\0';
+
+
+      if (parse_int_checked(string_with_one_value, &(list[i-1]),
+                            errmsg, _ERRORMSGSIZE_, name) == FAILURE) {
+          free(list);
+          return FAILURE;
+      }
+
+    if (substring == NULL)
+        break;
+
+    string = substring + 1;
   } while(substring != NULL);
+
+
+  /* check for multiple entries of the same parameter. If another occurence is found,
+     return an error. */
+
+  for (i=index+1; i < pfc->size; i++) {
+
+      if (strcmp(pfc->name[i], name) == 0) {
+          free(list);
+          snprintf(errmsg, _ERRORMSGSIZE_,
+                   "multiple entry of parameter '%s' in file '%s'\n",
+                   name, pfc->filename);
+          return FAILURE;
+      }
+
+  }
+
+    *pointer_to_list = list;
 
   /* if parameter read correctly, set 'found' flag to true, as well as the flag
      associated with this parameter in the file_content structure */
 
   * found = TRUE;
   pfc->read[index] = TRUE;
-
-  /* check for multiple entries of the same parameter. If another occurence is found,
-     return an error. */
-
-  for (i=index+1; i < pfc->size; i++) {
-    class_test(strcmp(pfc->name[i],name) == 0,
-               errmsg,
-               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
-  }
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
   return SUCCESS;
@@ -540,7 +677,6 @@ int parser_read_list_of_strings(struct file_content * pfc,
 
   char * string;
   char * substring;
-  FileArg string_with_one_value;
 
   char * list;
 
@@ -564,48 +700,71 @@ int parser_read_list_of_strings(struct file_content * pfc,
   string = pfc->value[index];
   do {
     i ++;
-    substring = strchr(string,',');
-    string = substring+1;
+    substring = strchr(string, ',');
+    if (substring == NULL)
+        break;
+    string = substring + 1;
   } while(substring != NULL);
 
   *size = i;
 
   /* free and re-allocate array of values */
   class_alloc(list,*size*sizeof(FileArg),errmsg);
-  *pointer_to_list = list;
 
   /* read one string between each comas */
   i = 0;
   string = pfc->value[index];
-  do {
-    i ++;
-    substring = strchr(string,',');
-    if (substring == NULL) {
-      strcpy(string_with_one_value,string);
-    }
-    else {
-      strncpy(string_with_one_value,string,(substring-string));
-      string_with_one_value[substring-string]='\0';
-    }
-    strcpy(list+(i-1)*_ARGUMENT_LENGTH_MAX_,string_with_one_value);
-    //Insert EOL character:
-    *(list+i*_ARGUMENT_LENGTH_MAX_-1) = '\n';
-    string = substring+1;
-  } while(substring != NULL);
 
-  /* if parameter read correctly, set 'found' flag to true, as well as the flag
-     associated with this parameter in the file_content structure */
-  * found = TRUE;
-  pfc->read[index] = TRUE;
+    do {
+      i++;
+      substring = strchr(string, ',');
+
+      char *slot = list + (i-1)*_ARGUMENT_LENGTH_MAX_;
+      size_t len = (substring == NULL)
+                 ? strlen(string)
+                 : (size_t)(substring - string);
+
+        if (len >= _ARGUMENT_LENGTH_MAX_) {
+          free(list);
+            
+            snprintf(errmsg, _ERRORMSGSIZE_,
+                     "string too long in list parameter '%s' in file '%s'\n",
+                     name, pfc->filename);
+
+          return FAILURE;
+        }
+
+      memcpy(slot, string, len);
+      slot[len] = '\0';
+
+      if (substring == NULL)
+        break;
+
+      string = substring + 1;
+    } while (substring != NULL);
+
 
   /* check for multiple entries of the same parameter. If another occurence is
      found,
      return an error. */
   for (i=index+1; i < pfc->size; i++) {
-    class_test(strcmp(pfc->name[i],name) == 0,
-               errmsg,
-               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
+
+      if (strcmp(pfc->name[i], name) == 0) {
+          free(list);
+          snprintf(errmsg, _ERRORMSGSIZE_,
+                   "multiple entry of parameter '%s' in file '%s'\n",
+                   name, pfc->filename);
+          return FAILURE;
+      }
+
   }
+
+    *pointer_to_list = list;
+
+  /* if parameter read correctly, set 'found' flag to true, as well as the flag
+     associated with this parameter in the file_content structure */
+  * found = TRUE;
+  pfc->read[index] = TRUE;
 
   /* if everything proceeded normally, return with 'found' flag equal to true */
   return SUCCESS;
@@ -618,6 +777,15 @@ int parser_cat(struct file_content * pfc1,
 
   int i;
 
+    size_t filename_size;
+    int nwrite;
+
+    pfc3->filename = NULL;
+    pfc3->value = NULL;
+    pfc3->name = NULL;
+    pfc3->read = NULL;
+    pfc3->size = 0;
+
   class_test(pfc1->size < 0.,
              errmsg,
              "size of file_content structure probably not initialized properly\n");
@@ -626,48 +794,149 @@ int parser_cat(struct file_content * pfc1,
              errmsg,
              "size of file_content structure probably not initialized properly\n");
 
-  if (pfc1->size == 0) {
-    class_alloc(pfc3->filename,(strlen(pfc2->filename)+1)*sizeof(char),errmsg);
-    sprintf(pfc3->filename,"%s",pfc2->filename);
-  }
-  if (pfc2->size == 0) {
-    class_alloc(pfc3->filename,(strlen(pfc1->filename)+1)*sizeof(char),errmsg);
-    sprintf(pfc3->filename,"%s",pfc1->filename);
-  }
-  if ((pfc1->size !=0) && (pfc2->size != 0)) {
-    class_alloc(pfc3->filename,(strlen(pfc1->filename)+strlen(pfc2->filename)+5)*sizeof(char),errmsg);
-    sprintf(pfc3->filename,"%s or %s",pfc1->filename,pfc2->filename);
-  }
+    if ((pfc1->size == 0) && (pfc2->size == 0)) {
+      filename_size = strlen("empty") + 1;
+      pfc3->filename = malloc(filename_size * sizeof(char));
+      if (pfc3->filename == NULL) {
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "could not allocate pfc3->filename with size %zu",
+                 filename_size * sizeof(char));
+        return FAILURE;
+      }
 
-  pfc3->size = pfc1->size + pfc2->size;
-  class_alloc(pfc3->value,pfc3->size*sizeof(FileArg),errmsg);
-  class_alloc(pfc3->name,pfc3->size*sizeof(FileArg),errmsg);
-  class_alloc(pfc3->read,pfc3->size*sizeof(short),errmsg);
+      nwrite = snprintf(pfc3->filename, filename_size, "%s", "empty");
+      if (nwrite < 0 || (size_t)nwrite >= filename_size) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+    }
+    else if (pfc1->size == 0) {
+      filename_size = strlen(pfc2->filename) + 1;
+      pfc3->filename = malloc(filename_size * sizeof(char));
+      if (pfc3->filename == NULL) {
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "could not allocate pfc3->filename with size %zu",
+                 filename_size * sizeof(char));
+        return FAILURE;
+      }
 
-  for (i=0; i < pfc1->size; i++) {
-    strcpy(pfc3->value[i],pfc1->value[i]);
-    strcpy(pfc3->name[i],pfc1->name[i]);
-    pfc3->read[i]=pfc1->read[i];
-  }
+      nwrite = snprintf(pfc3->filename, filename_size, "%s", pfc2->filename);
+      if (nwrite < 0 || (size_t)nwrite >= filename_size) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+    }
+    else if (pfc2->size == 0) {
+      filename_size = strlen(pfc1->filename) + 1;
+      pfc3->filename = malloc(filename_size * sizeof(char));
+      if (pfc3->filename == NULL) {
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "could not allocate pfc3->filename with size %zu",
+                 filename_size * sizeof(char));
+        return FAILURE;
+      }
 
-  for (i=0; i < pfc2->size; i++) {
-    strcpy(pfc3->value[i+pfc1->size],pfc2->value[i]);
-    strcpy(pfc3->name[i+pfc1->size],pfc2->name[i]);
-    pfc3->read[i+pfc1->size]=pfc2->read[i];
-  }
+      nwrite = snprintf(pfc3->filename, filename_size, "%s", pfc1->filename);
+      if (nwrite < 0 || (size_t)nwrite >= filename_size) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+    }
+    else {
+      filename_size = strlen(pfc1->filename) + strlen(pfc2->filename) + 5;
+      pfc3->filename = malloc(filename_size * sizeof(char));
+      if (pfc3->filename == NULL) {
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "could not allocate pfc3->filename with size %zu",
+                 filename_size * sizeof(char));
+        return FAILURE;
+      }
+
+      nwrite = snprintf(pfc3->filename, filename_size, "%s or %s",
+                        pfc1->filename, pfc2->filename);
+      if (nwrite < 0 || (size_t)nwrite >= filename_size) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+    }
+
+
+    pfc3->size = pfc1->size + pfc2->size;
+
+    if (pfc3->size == 0) {
+      return SUCCESS;
+    }
+
+    pfc3->value = malloc(pfc3->size * sizeof(FileArg));
+    if (pfc3->value == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc3->value with size %zu",
+               pfc3->size * sizeof(FileArg));
+      parser_free(pfc3);
+      return FAILURE;
+    }
+
+    pfc3->name = malloc(pfc3->size * sizeof(FileArg));
+    if (pfc3->name == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc3->name with size %zu",
+               pfc3->size * sizeof(FileArg));
+      parser_free(pfc3);
+      return FAILURE;
+    }
+
+    pfc3->read = malloc(pfc3->size * sizeof(short));
+    if (pfc3->read == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "could not allocate pfc3->read with size %zu",
+               pfc3->size * sizeof(short));
+      parser_free(pfc3);
+      return FAILURE;
+    }
+
+    for (i=0; i < pfc1->size; i++) {
+      if (copy_checked(pfc3->value[i], sizeof(FileArg),
+                       pfc1->value[i], "parameter value") != 0) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+
+      if (copy_checked(pfc3->name[i], sizeof(FileArg),
+                       pfc1->name[i], "parameter name") != 0) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+
+      pfc3->read[i]=pfc1->read[i];
+    }
+
+    for (i=0; i < pfc2->size; i++) {
+      if (copy_checked(pfc3->value[i+pfc1->size], sizeof(FileArg),
+                       pfc2->value[i], "parameter value") != 0) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+
+      if (copy_checked(pfc3->name[i+pfc1->size], sizeof(FileArg),
+                       pfc2->name[i], "parameter name") != 0) {
+        parser_free(pfc3);
+        return FAILURE;
+      }
+
+      pfc3->read[i+pfc1->size]=pfc2->read[i];
+    }
 
   return SUCCESS;
 
 }
-
-
 
 int parser_check_options(char * strinput, char ** options, int N_options, int* valid){
 
   int i, j, n_option, string_length, option_length;
   int found;
   char str[_ARGUMENT_LENGTH_MAX_];
-  strcpy(str,strinput);
+  if (copy_checked(str, sizeof(str), strinput, "options") != 0)
+    return FAILURE;
 
   *valid = TRUE;
 

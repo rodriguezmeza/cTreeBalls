@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")/.."
+
+#
+# in $(MDIR)
+# $ make clean; make test-octree-ggg-omp
+#
+#   at the end of this session if necessary restore original profile and clean:
+#       $ make clean
+#
+# use this profile (edit addons/Makefile_addons_settings):
+#=====================================================
+#SEARCHMETHOD = []  EXEC = [cballs]
+#External options = [ -DTHREEDIMCODE -DOPENMPCODE -DLONGINT -DADDONS -DTWOPCF -DTHREEPCFCONVERGENCE -DTPCF -DPRUNING  -DTHETA=1.25 -DLOGBINCBON -DKDTREEOMP -DOCTREEGGGOMP -DKDTREEBOXOMP -DNEIGHBORBOXESOMP -DGADGETIO -DCLASSLIB -DIOLIB -DCFITSIO -DPXD -DNMultipoles -DNONORMHIST -DCMDLINE_DEFS_UNITSPHERE -DGETPARAM -DUSEGSL]
+#=====================================================
+
+
+MAKE_PROFILE_ARGS=${MAKE_PROFILE_ARGS:-}
+make_profile_args=()
+if [ -n "$MAKE_PROFILE_ARGS" ]; then
+  read -r -a make_profile_args <<< "$MAKE_PROFILE_ARGS"
+fi
+
+build_env=$(cd .. && make -s "${make_profile_args[@]}" print-cyballs-build-env)
+
+if [[ "$build_env" != *"-DOCTREEGGGOMP"* ]]; then
+  echo "ERROR: octree-ggg-omp profile requires OCTREEGGGOMPON=1."
+  echo "Rebuild with OCTREEGGGOMPON=1 before running this test."
+  exit 2
+fi
+
+
+CBALLS=../cballs
+PYTHON='python'
+InDir='./In'
+scriptsDir='./scripts'
+
+# Test 11 ::
+echo ""
+echo "Test 11 :: octree-ggg-omp"
+echo ""
+/bin/rm -rf ./Output/*
+time $CBALLS search=octree-ggg-omp in=./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin infmt=binary options=compute-HistN,and-CF,out-m-HistZeta || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_octree-ggg-omp.py || exit
+$PYTHON $scriptsDir/Xi2pcf_plots_test.py || exit

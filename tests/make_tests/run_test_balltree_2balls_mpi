@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MPIEXEC=${MPIEXEC:-mpiexec}
+MPIEXEC_ARGS=${MPIEXEC_ARGS:-}
+MPI_RANKS=${MPI_RANKS:-2}
+MPI_THREADS=${MPI_THREADS:-2}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-balltree-2balls-mpi.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+mpi_command=("$MPIEXEC")
+if [ -n "$MPIEXEC_ARGS" ]; then
+    mpi_extra_args=()
+    read -r -a mpi_extra_args <<<"$MPIEXEC_ARGS"
+    mpi_command+=("${mpi_extra_args[@]}")
+elif "$MPIEXEC" --version 2>&1 | grep -qi 'Open MPI'; then
+    mpi_command+=(--oversubscribe --map-by slot)
+fi
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s \
+    BALLTREE2BALLSMPION=1 TWOPCFON=1 TPCFON=1 print-cyballs-build-env)
+for macro in BALLTREE2BALLSMPI BALLTREE2BALLSOMP TWOPCF THREEPCFCONVERGENCE; do
+    grep -q -- "-D${macro}\\([[:space:]]\\|$\\)" <<<"$build_env" \
+        || fail_with_log "the active build does not enable $macro"
+done
+
+"$PYTHON" - "$TMP_ROOT/pivots.txt" "$TMP_ROOT/legs.txt" \
+              "$TMP_ROOT/aggregate.txt" <<'PY'
+import math
+import pathlib
+import sys
+
+pivot_path, leg_path, aggregate_path = map(pathlib.Path, sys.argv[1:])
+
+def rows(count, phase, offset):
+    result = []
+    for i in range(count):
+        angle = phase + 0.413 * i
+        radius = 0.13 + 0.003 * (i % 19)
+        result.append((
+            offset + radius * math.cos(angle),
+            0.42 + radius * math.sin(angle),
+            0.19 + 0.006 * (i % 23),
+            -0.7 + 0.16 * (i % 11),
+            0.6 + 0.07 * (i % 9),
+        ))
+    return result
+
+for path, values in ((pivot_path, rows(31, 0.2, 0.37)),
+                     (leg_path, rows(47, 0.8, 0.55))):
+    path.write_text(
+        "".join(" ".join(f"{value:.17g}" for value in row) + "\n"
+                for row in values),
+        encoding="ascii",
+    )
+
+aggregate = []
+for i in range(384):
+    angle = 0.173 * i
+    radius = 0.15 + 0.0015 * (i % 71)
+    aggregate.append((
+        0.55 + radius * math.cos(angle) + 0.0007 * (i % 5),
+        0.48 + radius * math.sin(angle) + 0.0009 * (i % 7),
+        0.25 + 0.003 * (i % 83),
+        0.4 + 0.02 * (i % 13),
+    ))
+aggregate_path.write_text(
+    "".join(" ".join(f"{value:.17g}" for value in row) + "\n"
+            for row in aggregate),
+    encoding="ascii",
+)
+PY
+
+run_auto()
+{
+    local name=$1
+    local method=$2
+    local ranks=$3
+    local threads=$4
+    local mode=$5
+    local acceptance=$6
+    local normalization=$7
+    local extra_options=${8:-}
+    local output="$TMP_ROOT/$name"
+    local options="compute-HistN,out-m-HistZeta"
+    local theta=1
+    local nsmooth=4
+    local nbody=128
+    local range_n=0.65
+    local use_log=false
+    local -a command
+
+    case "$mode" in
+        combined) ;;
+        only-2pcf) options+=",only-2pcf" ;;
+        only-3pcf) options+=",only-3pcf" ;;
+        *) fail_with_log "unknown test mode: $mode" ;;
+    esac
+    case "$acceptance" in
+        exact)
+            options+=",no-two-balls"
+            ;;
+        pair)
+            nbody=4096
+            nsmooth=8
+            range_n=0.8
+            use_log=true
+            ;;
+        triple)
+            options+=",pos-and-convergence"
+            theta=4
+            nsmooth=8
+            range_n=1.4
+            ;;
+        *) fail_with_log "unknown acceptance profile: $acceptance" ;;
+    esac
+    if [ "$normalization" = raw ]; then
+        options+=",no-normalize-HistZeta"
+    fi
+    if [ -n "$extra_options" ]; then
+        options+=",$extra_options"
+    fi
+
+    mkdir -p "$output"
+    command=("$CBALLS"
+        "search=$method"
+        "rootDir=$output"
+        "numberThreads=$threads"
+        usePeriodic=false
+        "useLogHist=$use_log"
+        "rangeN=$range_n"
+        rminHist=0.005
+        sizeHistN=4
+        mChebyshev=2
+        "nsmooth=$nsmooth"
+        "theta=$theta"
+        stepState=1000000
+        verbose=1
+        verbose_log=0
+        "options=$options")
+    if [ "$acceptance" = triple ]; then
+        command+=("in=$TMP_ROOT/aggregate.txt"
+                  infmt=multi-columns-ascii columns=1,2,3,4 iCatalogs=1)
+    else
+        command+=(testmodel=simple-cubic-random "nbody=$nbody" lengthBox=2
+                  seed=123)
+    fi
+
+    if [ "$ranks" -gt 1 ]; then
+        "${mpi_command[@]}" -n "$ranks" "${command[@]}" \
+            >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    else
+        "${command[@]}" >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    fi
+    [ -f "$output/rBins.txt" ] \
+        || fail_with_log "$name produced no root-rank output" "$output/run.log"
+}
+
+run_cross()
+{
+    local name=$1
+    local method=$2
+    local ranks=$3
+    local threads=$4
+    local output="$TMP_ROOT/$name"
+    local options="pos-and-convergence-weight,weights-norm,compute-HistN,"
+    local -a command
+
+    options+="no-two-balls,no-normalize-HistZeta,out-m-HistZeta"
+    mkdir -p "$output"
+    command=("$CBALLS"
+        "search=$method"
+        "in=$TMP_ROOT/pivots.txt,$TMP_ROOT/legs.txt"
+        infmt=multi-columns-ascii,multi-columns-ascii
+        columns=1,2,3,4,5
+        iCatalogs=1,2
+        "rootDir=$output"
+        "numberThreads=$threads"
+        usePeriodic=false
+        useLogHist=false
+        rangeN=1.1
+        rminHist=0.01
+        sizeHistN=5
+        mChebyshev=2
+        nsmooth=3
+        theta=1
+        stepState=1000000
+        verbose=1
+        verbose_log=0
+        "options=$options")
+
+    if [ "$ranks" -gt 1 ]; then
+        "${mpi_command[@]}" -n "$ranks" "${command[@]}" \
+            >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    else
+        "${command[@]}" >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    fi
+    [ -f "$output/rBins.txt" ] \
+        || fail_with_log "$name produced no root-rank output" "$output/run.log"
+}
+
+compare_numeric_outputs()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+import math
+import pathlib
+import sys
+
+reference = pathlib.Path(sys.argv[1])
+candidate = pathlib.Path(sys.argv[2])
+names = sorted(path.name for path in reference.glob("*.txt"))
+if not names or names != sorted(path.name for path in candidate.glob("*.txt")):
+    raise SystemExit("histogram output sets differ")
+
+def values(path):
+    tokens = []
+    for line in path.read_text(encoding="ascii").splitlines():
+        tokens.extend(line.split("#", 1)[0].split())
+    return tokens
+
+for name in names:
+    left = values(reference / name)
+    right = values(candidate / name)
+    if len(left) != len(right):
+        raise SystemExit(f"{name}: value counts differ")
+    for index, (a, b) in enumerate(zip(left, right)):
+        x = float(a)
+        y = float(b)
+        if math.isnan(x) and math.isnan(y):
+            continue
+        if not math.isclose(x, y, rel_tol=2.0e-12, abs_tol=2.0e-13):
+            raise SystemExit(f"{name}:{index}: {x!r} != {y!r}")
+PY
+}
+
+run_auto omp-exact balltree-2balls-omp 1 1 combined exact raw
+run_auto mpi-singleton balltree-2balls-mpi 1 "$MPI_THREADS" combined exact raw
+run_auto mpi-hybrid balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" combined exact raw
+run_auto mpi-repeat balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" combined exact raw
+run_auto omp-pair-aggregate balltree-2balls-omp 1 1 only-2pcf pair raw
+run_auto mpi-pair-aggregate balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-2pcf pair raw
+run_auto omp-triple-aggregate balltree-2balls-omp 1 1 only-3pcf triple raw
+run_auto mpi-triple-aggregate balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-3pcf triple raw
+run_auto omp-2pcf balltree-2balls-omp 1 1 only-2pcf exact raw
+run_auto mpi-2pcf balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-2pcf exact raw
+run_auto omp-3pcf balltree-2balls-omp 1 1 only-3pcf exact raw
+run_auto mpi-3pcf balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-3pcf exact raw
+run_auto omp-normalized balltree-2balls-omp 1 1 only-3pcf exact normalized
+run_auto mpi-normalized balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-3pcf exact normalized
+run_auto omp-and-cf balltree-2balls-omp 1 1 only-2pcf exact raw and-CF
+run_auto mpi-and-cf balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-2pcf exact raw and-CF
+run_cross omp-cross balltree-2balls-omp 1 1
+run_cross mpi-cross balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS"
+
+grep -q "balltree-2balls-mpi: $MPI_RANKS ranks" \
+    "$TMP_ROOT/mpi-hybrid/run.log" \
+    || fail_with_log "the requested MPI rank count was not used" \
+                     "$TMP_ROOT/mpi-hybrid/run.log"
+
+for candidate in mpi-singleton mpi-hybrid mpi-repeat; do
+    compare_numeric_outputs "$TMP_ROOT/omp-exact" "$TMP_ROOT/$candidate" \
+        || fail_with_log "$candidate differs from balltree-2balls-omp" \
+                         "$TMP_ROOT/$candidate/run.log"
+done
+compare_numeric_outputs "$TMP_ROOT/mpi-hybrid" "$TMP_ROOT/mpi-repeat" \
+    || fail_with_log "repeated MPI execution is not deterministic" \
+                     "$TMP_ROOT/mpi-repeat/run.log"
+for output in "$TMP_ROOT/mpi-hybrid"/*.txt; do
+    name=${output##*/}
+    cmp -s "$output" "$TMP_ROOT/mpi-repeat/$name" \
+        || fail_with_log "repeated MPI output $name is not byte deterministic" \
+                         "$TMP_ROOT/mpi-repeat/run.log"
+done
+
+for profile in pair-aggregate triple-aggregate 2pcf 3pcf normalized and-cf cross; do
+    compare_numeric_outputs "$TMP_ROOT/omp-$profile" "$TMP_ROOT/mpi-$profile" \
+        || fail_with_log "$profile MPI output differs from OpenMP" \
+                         "$TMP_ROOT/mpi-$profile/run.log"
+done
+
+pair_cells=$(sed -n \
+    's/.*balltree-2balls-mpi: nbbcalc = [0-9][0-9]*, nbccalc = \([0-9][0-9]*\).*/\1/p' \
+    "$TMP_ROOT/mpi-pair-aggregate/run.log" | tail -1)
+triple_cells=$(sed -n \
+    's/.*accepted cell orientations = \([0-9][0-9]*\).*/\1/p' \
+    "$TMP_ROOT/mpi-triple-aggregate/run.log" | tail -1)
+[ "${pair_cells:-0}" -gt 0 ] \
+    || fail_with_log "the MPI aggregate run accepted no node pairs" \
+                     "$TMP_ROOT/mpi-pair-aggregate/run.log"
+[ "${triple_cells:-0}" -gt 0 ] \
+    || fail_with_log "the MPI aggregate run accepted no triple cells" \
+                     "$TMP_ROOT/mpi-triple-aggregate/run.log"
+
+echo "PASS: BALLTREE2BALLSMPI 2PCF/3PCF equivalence, cross catalogs, aggregation, normalization, and rank determinism"

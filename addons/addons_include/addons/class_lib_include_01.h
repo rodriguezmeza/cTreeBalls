@@ -1,5 +1,10 @@
 // Use:
 //#include "class_lib_include_01.h"
+//
+//  it is included in (the socket):
+//      addons/class_lib/input.c
+//      in the input_read_parameters_general routine
+//
 
 #ifndef _class_lib_include_01_h
 #define _class_lib_include_01_h
@@ -8,8 +13,16 @@
 #include "class_lib_octree_smoothing_01.h"
 #endif
 
+#ifdef BALLS0357
+#include "input_balls_omp_0357_01.h"
+#endif
+
 #ifdef IOLIB
 #include "input_iolib_01.h"
+#endif
+
+#ifdef LYAFORESTOMP
+#include "input_lya_forest_omp_01.h"
 #endif
 
 /*

@@ -1,0 +1,27 @@
+# ----- Makefile definitions: FCFC-style balltree OpenMP/MPI addon -----
+
+ifeq ($(BALLTREEOMPON),1)
+OPT2 += -DBALLTREEOMP
+endif
+
+ifeq ($(BALLTREEMPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DBALLTREEMPI -DCBALLS_MPI_ENABLED
+endif
+
+ifneq ($(filter 1,$(BALLTREEOMPON) $(BALLTREEMPION) $(BALLTREE2BALLSOMPON) $(BALLTREE2BALLSMPION) $(BALLTREE2BALLSOMP3PCFON) $(BALLTREE2BALLSMPI3PCFON)),)
+BALLTREEOMP = $(MDIR)/addons/balltree_omp/
+vpath %.c $(BALLTREEOMP)
+INCLUDES += -I$(BALLTREEOMP)
+HEADERFILES += $(wildcard $(BALLTREEOMP)/*.h)
+EXTERNAL += fcfc_balltree.o
+endif
+
+ifneq ($(filter 1,$(BALLTREEOMPON) $(BALLTREEMPION)),)
+EXTERNAL += search_balltree_omp.o
+endif
+
+ifeq ($(BALLTREEMPION),1)
+EXTERNAL += fcfc_balltree_mpi.o
+endif

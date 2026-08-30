@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/../.."
+
+CBALLS=${CBALLS:-./cballs_standalone_parser}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-parser.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=$2
+
+    echo "ERROR: $message" >&2
+    if [ -f "$logfile" ]; then
+        cat "$logfile" >&2
+    fi
+    exit 1
+}
+
+expect_failure()
+{
+    local name=$1
+    local pattern=$2
+    local parameter_file=$3
+    local logfile="$TMP_ROOT/$name.log"
+
+    if "$CBALLS" "$parameter_file" >"$logfile" 2>&1; then
+        fail_with_log "$name unexpectedly succeeded" "$logfile"
+    fi
+    grep -Eq "$pattern" "$logfile" \
+        || fail_with_log "$name did not report the expected diagnostic" \
+                         "$logfile"
+    if grep -Eq 'AddressSanitizer|UndefinedBehaviorSanitizer|pointer being freed|malloc: \*\*\*' \
+        "$logfile"; then
+        fail_with_log "$name triggered a memory-safety failure" "$logfile"
+    fi
+}
+
+seed_dir="$TMP_ROOT/seed"
+mkdir -p "$seed_dir"
+"$CBALLS" \
+    search=octree-ggg-omp \
+    testmodel=simple-cubic \
+    nbody=8 \
+    rootDir="$seed_dir" \
+    numberThreads=2 \
+    verbose=0 \
+    verbose_log=0 \
+    useLogHist=false \
+    rangeN=1 \
+    rminHist=0 \
+    sizeHistN=8 \
+    mChebyshev=3 \
+    sizeHistPhi=16 \
+    options=no-out-Hist >"$TMP_ROOT/seed.log" 2>&1 \
+    || fail_with_log "could not create a valid parameter file" \
+                     "$TMP_ROOT/seed.log"
+
+base="$seed_dir/parameters_null-cballs-usedvalues"
+[ -f "$base" ] \
+    || fail_with_log "standalone run did not publish used values" \
+                     "$TMP_ROOT/seed.log"
+
+"$CBALLS" "$base" >"$TMP_ROOT/valid.log" 2>&1 \
+    || fail_with_log "valid standalone parameter file was rejected" \
+                     "$TMP_ROOT/valid.log"
+
+missing_name="$TMP_ROOT/missing-name.params"
+{
+    printf '   = 1\n'
+    cat "$base"
+} >"$missing_name"
+expect_failure missing-name 'no parameter name before' "$missing_name"
+
+unterminated="$TMP_ROOT/unterminated.params"
+{
+    printf 'preScript = "unterminated\n'
+    cat "$base"
+} >"$unterminated"
+expect_failure unterminated-quote 'unterminated quote' "$unterminated"
+
+invalid_bool="$TMP_ROOT/invalid-bool.params"
+sed 's/^usePeriodic[[:space:]]*=.*/usePeriodic = truejunk/' \
+    "$base" >"$invalid_bool"
+expect_failure invalid-boolean 'invalid boolean value for usePeriodic' \
+               "$invalid_bool"
+
+duplicate="$TMP_ROOT/duplicate.params"
+cat "$base" >"$duplicate"
+printf '\nsizeHistN = 8\n' >>"$duplicate"
+expect_failure duplicate-parameter 'unknown or duplicated' "$duplicate"
+
+overlong="$TMP_ROOT/overlong.params"
+awk '
+    BEGIN {
+        printf "options = "
+        for (i = 0; i < 1100; i++) printf "x"
+        printf "\n"
+    }
+    { print }
+' "$base" >"$overlong"
+expect_failure overlong-line 'parameter line exceeds' "$overlong"
+
+embedded_nul="$TMP_ROOT/embedded-nul.params"
+{
+    printf 'sizeHistN = 8\0hidden\n'
+    cat "$base"
+} >"$embedded_nul"
+expect_failure embedded-nul 'embedded NUL' "$embedded_nul"
+
+echo "PASS: parameter-file parsing rejects malformed input safely"

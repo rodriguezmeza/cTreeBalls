@@ -9,7 +9,82 @@ recursive-include main *.c
 recursive-include include *.h
 recursive-include general_libs *.c *.h
 recursive-include getparam *.c *.h
-recursive-include python *.pyx *.pxd
-graft addons
+include scripts/generate_make_info_header.sh
+recursive-include python *.pyx
+include python/ccyballs.pxd.in
+include python/kappa_corr_all_engines.py
+include python/README_kappa_corr_all_engines.md
+recursive-include examples *.py *.ipynb
+recursive-include docs *.rst *.py Makefile
+prune docs/_build
+recursive-include tests/make_tests README.md run_test* *.py
+
+prune addons
+
+include addons/Makefile_addons
+include addons/Makefile_addons_settings
+include addons/Makefile_gsl
+include addons/cfitsiolib/Makefile_cfitsiolib
+
+# Sources required by the default self-contained build profile.
+include addons/gsl/COPYING
+include addons/gsl/*.c
+include addons/gsl/*.h
+recursive-include addons/gsl/gsl *.h
+recursive-include addons/gsl/err *.c *.h
+recursive-include addons/gsl/sys *.c *.h
+recursive-include addons/gsl/complex *.c *.h
+recursive-include addons/gsl/cheb *.c *.h
+recursive-include addons/gsl/specfunc *.c *.h
+recursive-include addons/gsl/rng *.c *.h
+recursive-include addons/gsl/matrix *.c *.h
+recursive-include addons/gsl/vector *.c *.h
+recursive-include addons/gsl/block *.c *.h
+recursive-include addons/gsl/blas *.c *.h
+recursive-include addons/gsl/cblas *.c *.h
+recursive-include addons/gsl/fft *.c *.h
+recursive-include addons/gsl/integration *.c *.h
+recursive-include addons/gsl/linalg *.c *.h
+recursive-include addons/gsl/permutation *.c *.h
+
+recursive-include addons/cfitsiolib/cfitsio_ver_4.6.3 *.c *.h *.md *.txt
+
+recursive-include addons/addons_include *.h
+recursive-include addons/kdtree_omp *.c *.h Makefile*
+recursive-include addons/balltree_omp *.c *.h *.md Makefile*
+recursive-include addons/balltree_2balls_omp *.c *.h *.md Makefile*
+include addons/balltree_2balls_omp/TreeCorr_LICENSE
+recursive-include addons/balltree_2balls_mpi *.c *.h *.md Makefile*
+recursive-include addons/balltree_2balls_omp_3pcf *.c *.h *.md Makefile*
+recursive-include addons/balltree_2balls_mpi_3pcf *.c *.h *.md Makefile*
+recursive-include addons/octree_2balls_omp *.c *.h *.md Makefile*
+recursive-include addons/octree_2balls_mpi *.c *.h *.md Makefile*
+recursive-include addons/octree_ggg_omp *.c *.h Makefile*
+recursive-include addons/octree_ggg_mpi *.c *.h *.md Makefile*
+recursive-include addons/kdtree_box_omp *.c *.h Makefile*
+recursive-include addons/neighbor_boxes_omp *.c *.h Makefile*
+recursive-include addons/lya_forest_omp *.c *.h *.py *.md Makefile*
+recursive-include addons/octree_shear_omp *.c *.h *.md Makefile*
+recursive-include addons/octree_3pcf_3d_omp *.c *.h *.md Makefile*
+prune addons/octree_3pcf_3d_omp/backup_before_correction_following_Encore
+recursive-include addons/octree_kkk_balls4_omp *.c *.h *.md Makefile*
+recursive-include addons/gadget_io *.c *.h Makefile*
+recursive-include addons/class_lib *.c *.h Makefile*
+recursive-include addons/iolib *.c *.h Makefile*
+recursive-include addons/cfitsio *.c *.h Makefile*
+recursive-include addons/pxd *.c *.h Makefile*
+recursive-include addons/cmdline_defs_settings *.h Makefile*
+# Optional profiles still support intentionally
+recursive-include addons/balls_omp *.c *.h Makefile*
+recursive-include addons/octree_smoothing *.c *.h Makefile*
+recursive-include addons/octree_kkk_omp *.c *.h Makefile*
+recursive-include addons/octree_sincos_omp *.c *.h Makefile*
+
 global-exclude .DS_Store
 global-exclude *.Po *.Plo
+
+global-exclude *.o *.a *.so *.dylib
+global-exclude __pycache__/*
+global-exclude *.pyc
+
+recursive-exclude addons/octree_sincos_omp/backup *

@@ -5,12 +5,14 @@
 #ifndef _cballsio_cfitsio_02_h
 #define _cballsio_cfitsio_02_h
 
+#include <ctype.h>
 
 // input in: addons/source/cballsio/cballsio_include_11a.h
 
 local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
+    string routineName = "inputdata_cfitsio";
     fitsfile *fptr;
     char card[FLEN_CARD];
     int status = 0, nkeys, ii;                      // MUST initialize status
@@ -30,12 +32,11 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
         fits_open_file(&fptr, filename, READONLY, &status);
     else
         fits_open_data(&fptr, filename, READONLY, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: open status: %d...\n\n",
-                   status);
+    
+    if (status) {
         fits_report_error(stderr, status);
-        if (status==104) exit(1);
+        cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
+                    routineName, filename, status);
     }
 
     fits_get_hdrspace(fptr, &nkeys, NULL, &status);
@@ -65,10 +66,13 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
+            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
+            "... and number of columns = %d\n\n",
             cmd->nbody, ncols);
         if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+            cBALLS_FAIL(cmd,
+                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                        cmd->nbody);
 
         int typecode;
         long repeat;
@@ -106,26 +110,35 @@ local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n",
+            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
+            "... and number of columns = %d\n",
             cmd->nbody, ncols);
         if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+            cBALLS_FAIL(cmd,
+                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                        cmd->nbody);
     }
 
     if (scanopt(cmd->options, "stop-fits")) {
         if (strnull(cmd->outfile)) {
             fits_close_file(fptr, &status);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
             if (status) {                           // print error message
                 verb_print(cmd->verbose,
                            "\tinputdata_cfitsio: status: %d...\n\n",
                            status);
                 fits_report_error(stderr, status);
             }
-            exit(1);
+            return SUCCESS;
+            
         }
     }
 
-    inputdata_cfitsio_xyz(cmd, gd, filename, ifile, fptr);
+    if (inputdata_cfitsio_xyz(cmd, gd, filename, ifile, fptr) == FAILURE) {
+        fits_close_file(fptr, &status);
+        return FAILURE;
+    }
 
     //B once data has been read, close fits file
     verb_print(cmd->verbose,
@@ -149,6 +162,7 @@ local int inputdata_cfitsio_radec_field(struct cmdline_data* cmd,
                                              struct  global_data* gd,
                                              string filename, int ifile)
 {
+    string routineName = "inputdata_cfitsio_radec_field";
     fitsfile *fptr;
     char card[FLEN_CARD];
     int status = 0, nkeys, ii;                      // MUST init status
@@ -169,12 +183,11 @@ local int inputdata_cfitsio_radec_field(struct cmdline_data* cmd,
         fits_open_file(&fptr, filename, READONLY, &status);
     else
         fits_open_data(&fptr, filename, READONLY, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: open status: %d...\n\n",
-                   status);
+
+    if (status) {
         fits_report_error(stderr, status);
-        if (status==104) exit(1);
+        cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
+                    routineName, filename, status);
     }
 
     fits_get_hdrspace(fptr, &nkeys, NULL, &status);
@@ -204,10 +217,13 @@ local int inputdata_cfitsio_radec_field(struct cmdline_data* cmd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
+            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
+            "... and number of columns = %d\n\n",
             cmd->nbody, ncols);
         if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+            cBALLS_FAIL(cmd,
+                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                        cmd->nbody);
 
         int typecode;
         long repeat;
@@ -245,26 +261,27 @@ local int inputdata_cfitsio_radec_field(struct cmdline_data* cmd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n",
+            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
+            "... and number of columns = %d\n",
             cmd->nbody, ncols);
         if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+            cBALLS_FAIL(cmd,
+                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                        cmd->nbody);
     }
 
     if (scanopt(cmd->options, "stop-fits")) {
         if (strnull(cmd->outfile)) {
             fits_close_file(fptr, &status);
-            if (status) {                           // print any error messages
-                verb_print(cmd->verbose,
-                           "\tinputdata_cfitsio: status: %d...\n\n",
-                           status);
-                fits_report_error(stderr, status);
-            }
-            exit(1);
+            cBALLS_FAIL(cmd, "%s: stop-fits requested for '%s'\n",
+                        routineName, filename);
         }
     }
 
-    inputdata_cfitsio_ra_dec(cmd, gd, filename, ifile, fptr);
+    if (inputdata_cfitsio_ra_dec(cmd, gd, filename, ifile, fptr) == FAILURE) {
+        fits_close_file(fptr, &status);
+        return FAILURE;
+    }
 
     //B once data has been read, close fits file
     verb_print(cmd->verbose,
@@ -318,12 +335,11 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     firstrow = 1;
     firstelem = 1;
     nelements = cmd->nbody;
-//    fits_read_tdim(fptr, colnum, firstrow, firstelem,
-//                   nelements, &nulval, arrayKappa, &anynul, &status);
     arrayKappa = (float*) allocate(cmd->nbody * sizeof(float));
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Kappa(p) = arrayKappa[p-bodytable[ifile]];
         if (scanopt(cmd->options, "kappa-constant")) {
@@ -442,16 +458,18 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "inputdata_cfitsio: done.\n");
         if (flag)
-        error("inputdata_cfitsio: at least two bodies have same position\n");
+            cBALLS_FAIL(cmd,
+                "inputdata_cfitsio: at least two bodies have same position\n");
     }
     //E
 #else
-//#error `DEFDIMENSION` is not set to 3. Do so in Makefile_settings
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: `DEFDIMENSION` is not set to 3. Do so in Makefile_settings\n",
         routineName);
 
 #endif
+
+    return SUCCESS;
 }
 
 //B RADECR_FIELD
@@ -482,13 +500,13 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
         fits_open_file(&fptr, filename, READONLY, &status);
     else
         fits_open_data(&fptr, filename, READONLY, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: open status: %d...\n\n",
-                   status);
+
+    if (status) {
         fits_report_error(stderr, status);
-        if (status==104) exit(1);
+        cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
+                    routineName, filename, status);
     }
+
 
     fits_get_hdrspace(fptr, &nkeys, NULL, &status);
     if (status) {                                   // print error message
@@ -517,10 +535,13 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n\n",
+            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
+            "... and number of columns = %d\n\n",
             cmd->nbody, ncols);
         if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+            cBALLS_FAIL(cmd,
+                "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                cmd->nbody);
 
         int typecode;
         long repeat;
@@ -558,10 +579,13 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %d... and number of columns = %d\n",
+            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
+            "... and number of columns = %d\n",
             cmd->nbody, ncols);
         if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+            cBALLS_FAIL(cmd,
+                "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                cmd->nbody);
     }
 
     if (scanopt(cmd->options, "stop-fits")) {
@@ -574,12 +598,15 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
                 fits_report_error(stderr, status);
             }
             gd->inputHeaderFlag=TRUE;
-            return FAILURE;                         // it is not FAILURE indeed
-                                                    //  change to SUCCESS
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
 
-    inputdata_cfitsio_ra_dec_r(cmd, gd, filename, ifile, fptr);
+    if (inputdata_cfitsio_ra_dec_r(cmd, gd, filename, ifile, fptr) == FAILURE) {
+        fits_close_file(fptr, &status);
+        return FAILURE;
+    }
 
     //B once data has been read, close fits file
     verb_print(cmd->verbose,
@@ -710,7 +737,8 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     //E arrayKappa
 
 #if NDIM == 3
-    real ra, dec;
+    real ra = 0.0;
+    real dec = 0.0;
 
     //B arrayRA
     double *arrayRA;
@@ -837,7 +865,7 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     //E arrayR
 
     //B arrayWEIGHT
-    double *arrayWEIGHT;
+    double *arrayWEIGHT = NULL;
     if (scanopt(cmd->options, "with-weight")) {
         colnum = gd->columns[4];
         verb_print(cmd->verbose, "Column info details (weight):\n");
@@ -871,7 +899,8 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     }
     int repeatWeight = repeat;
     if (repeatKappa != repeatWeight)
-        error("\nSize of Kappa array must be equal to Weight's one.");
+        cBALLS_FAIL(cmd,
+            "\nSize of Kappa array must be equal to Weight's one.");
     //E
 
     ij=1;
@@ -957,6 +986,7 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     gd->nbodyTable[ifile] = cmd->nbody;
     bodyptr q;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     verb_print(cmd->verbose_log, "\n%s: Created bodies = %ld",
                routineName, cmd->nbody);
 
@@ -1030,8 +1060,8 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "inputdata_cfitsio: done.\n");
         if (flag)
-            error("%s: at least two bodies have same position\n",
-                  routineName);
+            cBALLS_FAIL(cmd, "%s: at least two bodies have same position\n",
+                        routineName);
     }
     //E
 
@@ -1054,8 +1084,37 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
 //        "\n%s: `DEFDIMENSION` is not set to 3. Do so in Makefile_settings\n",
 //        routineName);
 #endif
+
+    return SUCCESS;
 }
 //E RADECR_FIELD
+
+#if defined(OCTREE3PCF3DOMP) && NDIM == 3
+local int cb3d_cfitsio_count_columns_tokens(string columns)
+{
+    int count = 0;
+    int in_token = FALSE;
+    const char *cursor;
+
+    if (columns == NULL) return 0;
+    for (cursor = columns; *cursor != '\0'; cursor++) {
+        if (*cursor == ',' || isspace((unsigned char)*cursor)) {
+            in_token = FALSE;
+        } else if (!in_token) {
+            count++;
+            in_token = TRUE;
+        }
+    }
+    return count;
+}
+
+local int cb3d_cfitsio_exclude_same_los_option(struct cmdline_data* cmd)
+{
+    return scanopt(cmd->options, "exclude-same-los")
+        || scanopt(cmd->options, "exclude-los")
+        || scanopt(cmd->options, "exclude-pivot-los");
+}
+#endif
 
 local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                                 struct  global_data* gd,
@@ -1074,6 +1133,17 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     double *arrayKappa;
     int anynul;
     int status = 0;
+#if defined(OCTREE3PCF3DOMP) && NDIM == 3
+    double *arrayWeight = NULL;
+    LONGLONG *arrayLosId = NULL;
+    int read_weight = scanopt(cmd->options, "with-weight");
+    int read_los_id = cb3d_cfitsio_count_columns_tokens(cmd->columns) >= 6;
+    int invalid_los_id = FALSE;
+
+    if (cb3d_cfitsio_exclude_same_los_option(cmd) && !read_los_id)
+        cBALLS_FAIL(cmd,
+                    "inputdata_cfitsio_xyz: LOS exclusion requires six FITS columns: x,y,z,delta,weight,los_id");
+#endif
 
     datatype = 82;                                  // double
     firstrow = 1;
@@ -1089,6 +1159,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                   nelements, &nulval, arrayKappa, &anynul, &status);
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Kappa(p) = arrayKappa[p-bodytable[ifile]];
         if (scanopt(cmd->options, "kappa-constant")) {
@@ -1146,15 +1217,62 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                    status);
         fits_report_error(stderr, status);
     }
+
+#ifdef OCTREE3PCF3DOMP
+    if (read_weight) {
+        colnum = gd->columns[4];
+        arrayWeight = (double*) allocate(cmd->nbody * sizeof(double));
+        fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
+                      nelements, &nulval, arrayWeight, &anynul, &status);
+    }
+    if (read_los_id) {
+        LONGLONG nulval_los = 0;
+        colnum = gd->columns[5];
+        arrayLosId = (LONGLONG*) allocate(cmd->nbody * sizeof(LONGLONG));
+        fits_read_col(fptr, TLONGLONG, colnum, firstrow, firstelem,
+                      nelements, &nulval_los, arrayLosId, &anynul, &status);
+    }
+    if (status) {
+        free(arrayX);
+        free(arrayY);
+        free(arrayZ);
+        free(arrayWeight);
+        free(arrayLosId);
+        cBALLS_FAIL(cmd,
+                    "inputdata_cfitsio_xyz: FITS column read failed with status=%d",
+                    status);
+    }
+#endif
+
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        Pos(p)[0] = arrayX[p-bodytable[ifile]];
-        Pos(p)[1] = arrayY[p-bodytable[ifile]];
-        Pos(p)[2] = arrayZ[p-bodytable[ifile]];
+        size_t index = (size_t)(p-bodytable[ifile]);
+        Pos(p)[0] = arrayX[index];
+        Pos(p)[1] = arrayY[index];
+        Pos(p)[2] = arrayZ[index];
+#ifdef OCTREE3PCF3DOMP
+        Weight(p) = read_weight ? arrayWeight[index] : weight;
+        if (arrayLosId != NULL) {
+            Octree3pcf3dLosId(p) = (INTEGER)arrayLosId[index];
+            if ((LONGLONG)Octree3pcf3dLosId(p) != arrayLosId[index])
+                invalid_los_id = TRUE;
+        } else {
+            Octree3pcf3dLosId(p) = (INTEGER)index + 1;
+        }
+        Mask(p) = MASK_NODE_VALID;
+#endif
     }
 
     free(arrayX);
     free(arrayY);
     free(arrayZ);
+#ifdef OCTREE3PCF3DOMP
+    free(arrayWeight);
+    free(arrayLosId);
+    if (invalid_los_id)
+        cBALLS_FAIL(cmd,
+                    "inputdata_cfitsio_xyz: LOS_ID cannot be represented by INTEGER");
+    gd->octree3pcf3d_los_ids[ifile] = TRUE;
+#endif
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -1162,7 +1280,9 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
         Type(p) = BODY;
         Mass(p) = mass;
+#ifndef OCTREE3PCF3DOMP
         Weight(p) = weight;
+#endif
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }
@@ -1197,15 +1317,16 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "inputdata_cfitsio: done.\n");
         if (flag)
-            error("inputdata_cfitsio: %s\n",
-                  "at least two bodies have same position");
+            cBALLS_FAIL(cmd, "inputdata_cfitsio: %s\n",
+                        "at least two bodies have same position");
     }
     //E
 #else
-    error("inputdata_cfitsio_xyz: %s\n\n",
-        "this routine works only in 3D. exiting...");
-//#error `DEFDIMENSION` is not set to 3. Do so in Makefile_settings
+    cBALLS_FAIL(cmd, "inputdata_cfitsio_xyz: %s\n\n",
+                "this routine works only in 3D. exiting...");
 #endif
+
+    return SUCCESS;
 }
 
 // Routine to read fits-healpix files
@@ -1219,7 +1340,7 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
     char card[FLEN_CARD];
     int status = 0, nkeys, ii;                      // MUST initialize status
 
-    debug_tracking_s("001", routineName);
+    int rc;
 
     gd->input_comment = "fits-healpix input file";
 
@@ -1241,7 +1362,11 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
                    "\t%s: open status: %d...\n\n",
                    routineName,status);
         fits_report_error(stderr, status);
-        if (status==104) exit(1);
+        if (status) {
+            fits_report_error(stderr, status);
+            cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
+                        routineName, filename, status);
+        }
     }
 
     fits_get_hdrspace(fptr, &nkeys, NULL, &status);
@@ -1271,10 +1396,15 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody (nrows) = %d... %s = %d\n\n",
+            "\tinputdata_cfitsio: nbody (nrows) = %" INTEGER_FMT
+            "... %s = %d\n\n",
             cmd->nbody, "and number of columns", ncols);
-        if (cmd->nbody < 1)
-            error("tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+        if (cmd->nbody < 1) {
+            fits_close_file(fptr, &status);
+            cBALLS_FAIL(cmd,
+                "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                cmd->nbody);
+        }
 
         int typecode;
         long repeat;
@@ -1312,10 +1442,14 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
         int ncols;
         fits_get_num_cols(fptr, &ncols, &status);
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                    "\t%s: nbody(nrows) = %d... %s = %d\n",
+                    "\t%s: nbody(nrows) = %" INTEGER_FMT "... %s = %d\n",
                     routineName, cmd->nbody, "and number of columns", ncols);
-        if (cmd->nbody < 1)
-            error("\tinputdata_cfitsio:: nbody = %d is absurd\n", cmd->nbody);
+        if (cmd->nbody < 1) {
+            fits_close_file(fptr, &status);
+            cBALLS_FAIL(cmd,
+                "\tinputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
+                cmd->nbody);
+        }
     }
 
     if (scanopt(cmd->options, "stop-fits")) {
@@ -1327,31 +1461,38 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
                            status);
                 fits_report_error(stderr, status);
             }
-            exit(1);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
-
+    
     if (scanopt(cmd->options, "read-mask")) {
-        if (ifile == 0) {                 // needs mask file be second... (?)
-            inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
+        if (ifile == 0) {
+            rc = inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
         } else {
-            if (ifile != 1)
-                error("\t%s: read-mask ifile = %d is absurd\n",
-                      routineName, ifile);
-            inputdata_cfitsio_healpix_map_mask(cmd, gd, filename, ifile, fptr);
+            if (ifile != 1) {
+                fits_close_file(fptr, &status);
+                cBALLS_FAIL(cmd, "\t%s: read-mask ifile = %d is absurd\n",
+                            routineName, ifile);
+            }
+
+            rc = inputdata_cfitsio_healpix_map_mask(cmd, gd, filename, ifile, fptr);
         }
     } else {
         if (scanopt(cmd->options, "mask-inside")) {
-            inputdata_cfitsio_healpix_map_mask_inside(cmd, gd,
-                                                      filename, ifile, fptr);
+            rc = inputdata_cfitsio_healpix_map_mask_inside(cmd, gd,
+                                                           filename, ifile, fptr);
         } else {
-            debug_tracking("002");
-
-            inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
-            debug_tracking("003");
-
+            rc = inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
         }
     }
+
+    if (rc == FAILURE) {
+        fits_close_file(fptr, &status);
+        return FAILURE;
+    }
+    
 
     //B once data has been read, close fits file
     verb_print(cmd->verbose,
@@ -1366,9 +1507,33 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
     }
     //E
 
-//    debug_tracking("004... final");
-    debug_tracking_s("004... final", routineName);
+    return SUCCESS;
+}
 
+local int cfitsio_healpix_map_to_ring(struct cmdline_data *cmd,
+                                      const char *routine_name,
+                                      long nside,
+                                      const char *size_ordering,
+                                      const char *map_ordering,
+                                      float **map)
+{
+    int hp_status;
+
+    if (strcmp(size_ordering, map_ordering) != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: inconsistent HEALPix ordering '%s' and '%s'",
+                 routine_name, size_ordering, map_ordering);
+        return FAILURE;
+    }
+
+    hp_status = healpix_map_to_ring_status(map, nside, map_ordering);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: cannot normalize HEALPix ordering '%s' to RING "
+                 "for nside=%ld status=%d",
+                 routine_name, map_ordering, nside, hp_status);
+        return FAILURE;
+    }
 
     return SUCCESS;
 }
@@ -1398,29 +1563,55 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     char order2[10];
     char coord[10];
 
+    int hp_status;
+    int rc = SUCCESS;
+    
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n")
+    cBALLS_FAIL(cmd, "\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
-    npixel = get_fits_size(filename, &nside, order1);
+    hp_status = get_fits_size_status(filename, &nside, order1, &npixel);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: get_fits_size failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    
     verb_print(cmd->verbose,
         "filename, ifile, nside, npixel, order1:");
+    
+    //B
+    map = NULL;
+    hp_status = read_healpix_map_status(filename, &nside, coord, order2, &map);
+    if (hp_status != 0 || map == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: read_healpix_map failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
+                                    order1, order2, &map) == FAILURE) {
+        free(map);
+        return FAILURE;
+    }
+    
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
-    map = read_healpix_map(filename, &nside, coord, order2);
+    //E
+    
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)/(1024.0*1024.0),
                npixel);
 
-    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
     verb_print(cmd->verbose,
-               "%s: nbody = %d...\n",
+               "%s: nbody = %ld...\n",
                routineName, npixel);
     if (npixel < 1)
-        error("%s: npixel = %d is absurd\n", routineName, npixel);
+        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
 
     bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
@@ -1433,8 +1624,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     char namebuf[256];
     stream outstr;
     if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)) {
-        sprintf(namebuf, gd->fpfnameOutputFileName);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnameOutputFileName, "w!");
     }
     //E
 
@@ -1467,9 +1657,24 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                     //B save optional RA-DEC to a file...
                     if (scanopt(cmd->options, "save-ra-dec")
                         &&!strnull(cmd->outfile)) {
-                        out_real_mar(outstr, phi);
-                        out_real_mar(outstr, theta);
-                        out_real(outstr, Kappa(p));
+                        if (out_real_mar_checked(outstr, phi, routineName,
+                                                 gd->fpfnameOutputFileName,
+                                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                            if (outstr != NULL) fclose(outstr);
+                            return FAILURE;
+                        }
+                        if (out_real_mar_checked(outstr, theta, routineName,
+                                                 gd->fpfnameOutputFileName,
+                                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                            if (outstr != NULL) fclose(outstr);
+                            return FAILURE;
+                        }
+                        if (out_real_checked(outstr, Kappa(p), routineName,
+                                             gd->fpfnameOutputFileName,
+                                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                            if (outstr != NULL) fclose(outstr);
+                            return FAILURE;
+                        }
                     }
                     //E
                     Type(p) = BODY;
@@ -1498,9 +1703,23 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             //B save optional RA-DEC to a file...
             if (scanopt(cmd->options, "save-ra-dec")
                 &&!strnull(cmd->outfile)) {
-                out_real_mar(outstr, phi);
-                out_real_mar(outstr, theta);
-                out_real(outstr, Kappa(p));
+                //B
+                if (out_real_mar_checked(outstr, phi, routineName, gd->fpfnameOutputFileName,
+                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                    if (outstr != NULL) fclose(outstr);
+                        return FAILURE;
+                }
+                if (out_real_mar_checked(outstr, theta, routineName, gd->fpfnameOutputFileName,
+                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                    if (outstr != NULL) fclose(outstr);
+                        return FAILURE;
+                }
+                if (out_real_checked(outstr, Kappa(p), routineName, gd->fpfnameOutputFileName,
+                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                    if (outstr != NULL) fclose(outstr);
+                        return FAILURE;
+                }
+                //E
             }
             //E
             Type(p) = BODY;
@@ -1542,8 +1761,10 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     //B save optional RA-DEC to a file...
     if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)
                             &&scanopt(cmd->options, "stop")) {
-        fclose(outstr);
-        exit(1);            // need to free all mem allocation...
+        CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnameOutputFileName);
+        gd->stopflag = TRUE;
+        rc = SUCCESS;
+        goto cleanup;
     }
     //E
 
@@ -1558,6 +1779,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     //E
 
     free(map);
+    map = NULL;
     verb_print(cmd->verbose,
                "\nFreed %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)/(1024.0*1024.0),
@@ -1569,6 +1791,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
     INTEGER ij=0;
@@ -1604,14 +1827,17 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
         //B add ifile tag...
-        sprintf(fileforce, "!%s/%s",                // leading !
-                cmd->rootDir, file);                //  to allow overwrite
+        // leading ! to allow overwrite
+        if (format_checked(fileforce, sizeof(fileforce),
+            "fileforce", "!%s/%s", cmd->rootDir, file) != 0)
+            return FAILURE;
         //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
         map = (float *)malloc(npixel*sizeof(float));
-        for(ipix=0;ipix<npixel;ipix++){             // all pixels in the sphere are filled
+        for(ipix=0;ipix<npixel;ipix++){             // all pixels in
+                                                    //  the sphere are filled
             q = bodytabtmp+ipix;
             if(Update(q)) {
                 map[ipix] = Kappa(q);
@@ -1622,9 +1848,19 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         //B write healpix map in RING order: "0"
         //      and
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
-        write_healpix_map(map, nside, fileforce, 0, "C");  // choose COORDSYS...
+        hp_status = write_healpix_map_status(map, nside, fileforce, 0, "C");
+        if (hp_status != 0) {
+            free(map);
+            map = NULL;
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: write_healpix_map failed for '%s' status=%d",
+                     routineName, fileforce, hp_status);
+            return FAILURE;
+        }
+        
         fprintf(stdout,"\t\tfile written\n");
         free(map);
+        map = NULL;
     }
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1638,6 +1874,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                           routineName, zmin, zmax);
 
     free(bodytabtmp);
+    bodytabtmp = NULL;
     verb_print(cmd->verbose,
             "\nFreed %g MByte for temporal particle (%ld) storage.\n",
             npixel*sizeof(body)/(1024.0*1024.0),npixel);
@@ -1654,7 +1891,14 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             "%s: average of kappa (%ld particles) = %le\n",
                routineName, cmd->nbody, kavg/((real)cmd->nbody) );
 
-    return SUCCESS;
+    rc = SUCCESS;
+
+cleanup:
+    if (map != NULL) free(map);
+    if (bodytabtmp != NULL) free(bodytabtmp);
+
+    return rc;
+
 }
 #else // !  THREEDIMCODE
 
@@ -1680,24 +1924,44 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     char order2[10];
     char coord[10];
 
+    int hp_status;
+
     verb_print(cmd->verbose, "\nWorking 2D map...\n");
 
-    npixel = get_fits_size(filename, &nside, order1);
+    hp_status = get_fits_size_status(filename, &nside, order1, &npixel);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: get_fits_size failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    
     verb_print(cmd->verbose,
         "filename, ifile, nside, npixel, order1:");
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
-    map = read_healpix_map(filename, &nside, coord, order2);
+    hp_status = read_healpix_map_status(filename, &nside, coord, order2, &map);
+    if (hp_status != 0 || map == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: read_healpix_map failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
+                                    order1, order2, &map) == FAILURE) {
+        free(map);
+        return FAILURE;
+    }
+
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)*INMB, npixel);
 
-    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
     verb_print(cmd->verbose,
-               "%s: nbody = %d...\n",
+               "%s: nbody = %ld...\n",
                routineName, npixel);
     if (npixel < 1)
-        error("%s: npixel = %d is absurd\n", routineName, npixel);
+        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
 
     bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
@@ -1709,8 +1973,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     char namebuf[256];
     stream outstr;
     if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)) {
-        sprintf(namebuf, gd->fpfnameOutputFileName);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnameOutputFileName, "w!");
     }
     //E
 
@@ -1746,9 +2009,24 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                     //B save optional RA-DEC to a file...
                     if (scanopt(cmd->options, "save-ra-dec")
                         &&!strnull(cmd->outfile)) {
-                        out_real_mar(outstr, Pos(p)[0]);
-                        out_real_mar(outstr, Pos(p)[1]);
-                        out_real(outstr, Kappa(p));
+                        //B
+                        if (out_real_mar_checked(outstr, Pos(p)[0], routineName, gd->fpfnameOutputFileName,
+                            cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                            if (outstr != NULL) fclose(outstr);
+                                return FAILURE;
+                        }
+                        if (out_real_mar_checked(outstr, Pos(p)[1], routineName, gd->fpfnameOutputFileName,
+                            cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                            if (outstr != NULL) fclose(outstr);
+                                return FAILURE;
+                        }
+                        if (out_real_checked(outstr, Kappa(p), routineName,
+                                             gd->fpfnameOutputFileName,
+                            cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                            if (outstr != NULL) fclose(outstr);
+                                return FAILURE;
+                        }
+                        //E
                     }
                     //E
                     Type(p) = BODY;
@@ -1778,9 +2056,24 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             //B save optional RA-DEC to a file...
             if (scanopt(cmd->options, "save-ra-dec")
                 &&!strnull(cmd->outfile)) {
-                out_real_mar(outstr, Pos(p)[0]);
-                out_real_mar(outstr, Pos(p)[1]);
-                out_real(outstr, Kappa(p));
+                //B
+                if (out_real_mar_checked(outstr, Pos(p)[0], routineName,
+                                         gd->fpfnameOutputFileName,
+                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                    if (outstr != NULL) fclose(outstr);
+                        return FAILURE;
+                }
+                if (out_real_mar_checked(outstr, Pos(p)[1], routineName, gd->fpfnameOutputFileName,
+                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                    if (outstr != NULL) fclose(outstr);
+                        return FAILURE;
+                }
+                if (out_real_checked(outstr, Kappa(p), routineName, gd->fpfnameOutputFileName,
+                    cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                    if (outstr != NULL) fclose(outstr);
+                        return FAILURE;
+                }
+                //E
             }
             //E
             Type(p) = BODY;
@@ -1817,8 +2110,9 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     //B save optional RA-DEC to a file...
     if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)
                             &&scanopt(cmd->options, "stop")) {
-        fclose(outstr);
-        exit(1);            // need to free all mem allocation...
+        CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnameOutputFileName);
+        gd->stopflag = TRUE;
+        return SUCCESS;
     }
     //E
 
@@ -1843,6 +2137,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
     INTEGER ij=0;
@@ -1871,8 +2166,10 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
         //B add ifile tag...
-        sprintf(fileforce, "!%s/%s",                // leading !
-                cmd->rootDir, file);               //  to allow overwrite
+        // leading ! to allow overwrite
+        if (format_checked(fileforce, sizeof(fileforce),
+            "fileforce", "!%s/%s", cmd->rootDir, file) != 0)
+            return FAILURE;
         //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
@@ -1890,7 +2187,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         //B write healpix map in RING order: "0"
         //      and
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
-        write_healpix_map(map, nside, fileforce, 0, "C");  // choose COORDSYS...
+        hp_status = write_healpix_map_status(map, nside, fileforce, 0, "C");
         fprintf(stdout,"\t\tfile written\n");
         free(map);
     }
@@ -1919,11 +2216,12 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             "%s: average of kappa (%ld particles) = %le\n",
                routineName, cmd->nbody, kavg/((real)cmd->nbody) );
 
+//    free(map);
+
     return SUCCESS;
 }
 
 #endif // !  THREEDIMCODE
-
 
 
 // reading healpix mask map
@@ -1933,7 +2231,7 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
                                         string filename,
                                         int ifile, fitsfile *fptr)
 {
-    string routine_name = "inputdata_cfitsio_healpix_map_mask";
+    string routineName = "inputdata_cfitsio_healpix_map_mask";
     bodyptr p;
     vector q;
     int k;
@@ -1948,32 +2246,59 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
     char order2[10];
     char coord[10];
 
+    int hp_status;
+
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n");
+    cBALLS_FAIL(cmd, "\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
-    npixel = get_fits_size(filename, &nside, order1);
+    hp_status = get_fits_size_status(filename, &nside, order1, &npixel);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: get_fits_size failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    
     verb_print(cmd->verbose,
         "filename, ifile, nside, npixel, order1:");
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
-    map = read_healpix_map(filename, &nside, coord, order2);
+    hp_status = read_healpix_map_status(filename, &nside, coord, order2, &map);
+    if (hp_status != 0 || map == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: read_healpix_map failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
+                                    order1, order2, &map) == FAILURE) {
+        free(map);
+        return FAILURE;
+    }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)/(1024.0*1024.0),
                npixel);
 
-    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
-        verb_print(cmd->verbose, "%s: nbody = %d...\n",
-               routine_name, npixel);
-    if (npixel < 1)
-        error("%s: npixel = %d is absurd\n", routine_name, npixel);
+    verb_print(cmd->verbose, "%s: nbody = %ld...\n",
+               routineName, npixel);
 
-    if (npixel != gd->nbodyTable[gd->iCatalogs[0]])
-        error("%s: npixel = %ld is not equal to npixel in cat 0: %ld\n",
-              routine_name, npixel, gd->nbodyTable[gd->iCatalogs[0]]);
+    //B
+    if (npixel < 1) {
+        free(map);
+        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
+    }
+
+    if (npixel != gd->nbodyTable[gd->iCatalogs[0]]) {
+        free(map);
+        cBALLS_FAIL(cmd,
+            "%s: npixel = %ld is not equal to npixel in cat 0: %ld\n",
+            routineName, npixel, gd->nbodyTable[gd->iCatalogs[0]]);
+    }
+    //E
 
     INTEGER iselect = 0;
     for(ipix=0;ipix<npixel;ipix++) {                // RING loop order
@@ -1981,9 +2306,11 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
         pix2ang_ring(nside, ipix, &theta, &phi);
         coordinate_transformation(cmd, gd, theta, phi, q);
         DO_COORD(k) {
-            if (Pos(p)[k] != q[k])
-                error("%s: mask position is not equal: %g %g\n",
-                      routine_name, Pos(p)[k], q[k]);
+            if (Pos(p)[k] != q[k]) {
+                free(map);
+                cBALLS_FAIL(cmd, "%s: mask position is not equal: %g %g\n",
+                            routineName, Pos(p)[k], q[k]);
+            }
         }
 
         Mask(p) = map[ipix];
@@ -1994,11 +2321,13 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
 
     verb_print(cmd->verbose,
         "\n\t%s: masked pixels = %ld\n",
-               routine_name, iselect);
+               routineName, iselect);
     verb_print(cmd->verbose,
         "\t%s: unmasked pixels = %ld\n",
-               routine_name, gd->nbodyTable[gd->iCatalogs[0]]-iselect);
+               routineName, gd->nbodyTable[gd->iCatalogs[0]]-iselect);
     
+    free(map);
+
     return SUCCESS;
 }
 
@@ -2021,37 +2350,65 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
     double thetamin, thetamax;
     double phimin, phimax;
 
-    float *map;
+//    float *map;
     long npixel, nside;
     char order1[10];
     char order2[10];
     char coord[10];
+    
+    int hp_status;
+    
+    //B
+    float *map = NULL;
+    float *plot_map = NULL;
+    bodyptr bodytabtmp = NULL;
+    int bodytable_owned = FALSE;
+    //E
 
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n");
+    cBALLS_FAIL(cmd, "\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
-    npixel = get_fits_size(filename, &nside, order1);
+    hp_status = get_fits_size_status(filename, &nside, order1, &npixel);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: get_fits_size failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    
     verb_print(cmd->verbose,
         "filename, ifile, nside, npixel, order1:");
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
-    map = read_healpix_map(filename, &nside, coord, order2);
+    hp_status = read_healpix_map_status(filename, &nside, coord, order2, &map);
+    if (hp_status != 0 || map == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: read_healpix_map failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        goto fail;
+    }
+    if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
+                                    order1, order2, &map) == FAILURE)
+        goto fail;
+    //B
+    if (npixel < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: npixel = %ld is absurd", routineName, npixel);
+        goto fail;
+    }
+    //E
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)*INMB,
                npixel);
 
-    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
     verb_print(cmd->verbose,
-               "%s: nbody = %d...\n",
+               "%s: nbody = %ld...\n",
                routineName, npixel);
-    if (npixel < 1)
-        error("%s: npixel = %d is absurd\n", routineName, npixel);
 
-    bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
@@ -2161,6 +2518,7 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
     //E
 
     free(map);
+    map = NULL;
     verb_print(cmd->verbose,
                "\nFreed %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)/(1024.0*1024.0),
@@ -2170,7 +2528,16 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
     bodyptr q;
     cmd->nbody = iselect;
     gd->nbodyTable[ifile] = cmd->nbody;
+    //B
+    if (iselect < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: mask-inside selected no pixels", routineName);
+        goto fail;
+    }
+    //E
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
+    bodytable_owned = TRUE;
 
     real kavg = 0;
     INTEGER ij=0;
@@ -2201,26 +2568,49 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
     char file[180] = "outputmap.fits" ;
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
-        sprintf(fileforce, "!%s/%s",                // leading !
-                cmd->rootDir, file);               //  to allow overwrite
+        //B
+        // leading ! to allow overwrite
+        if (format_checked(fileforce, sizeof(fileforce),
+                           "fileforce", "!%s/%s",cmd->rootDir, file) != 0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: output FITS path too long", routineName);
+            goto fail;
+        }
+        //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
-        map = (float *)malloc(npixel*sizeof(float));
+        //B
+        plot_map = (float *) malloc(npixel * sizeof(float));
+        if (plot_map == NULL) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: cannot allocate plot map", routineName);
+            goto fail;
+        }
+        //E
         for(ipix=0;ipix<npixel;ipix++){
             q = bodytabtmp+ipix;
             if(Update(q)) {
-                map[ipix] = Kappa(q);
+                plot_map[ipix] = Kappa(q);
             } else {
-                map[ipix] = 0.0;
+                plot_map[ipix] = 0.0;
             }
         }
         //B write healpix map in RING order "0"
         //      and
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
-        write_healpix_map(map, nside, fileforce, 0, "C");
+        hp_status = write_healpix_map_status(plot_map, nside, fileforce, 0, "C");
+        //B
+        if (hp_status != 0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: write_healpix_map failed for '%s' status=%d",
+                     routineName, fileforce, hp_status);
+            goto fail;
+        }
+        //E
+        
         fprintf(stdout,"\t\tfile written\n");
-        free(map);
+        free(plot_map);
     }
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -2251,6 +2641,21 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
                routineName, cmd->nbody, kavg/((real)cmd->nbody) );
 
     return SUCCESS;
+
+fail:
+    if (plot_map != NULL)
+        free(plot_map);
+    if (map != NULL)
+        free(map);
+    if (bodytabtmp != NULL)
+        free(bodytabtmp);
+    if (bodytable_owned && bodytable[ifile] != NULL) {
+        free(bodytable[ifile]);
+        bodytable[ifile] = NULL;
+        gd->nbodyTable[ifile] = 0;
+        cmd->nbody = 0;
+    }
+    return FAILURE;
 }
 
 // Routine to read numpy-healpix files
@@ -2266,42 +2671,58 @@ local int inputdata_numpy_healpix(struct cmdline_data* cmd,
     char buf[200];
     string headerScript = "python header_script.py";
 
+    int rc = SUCCESS;
+
     gd->input_comment = "numpy-healpix input file";
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                           "\t%s: opening numpy-healpix file: %s...\n",
                           routineName,filename);
+
     if (scanopt(cmd->options, "header-info")){
         verb_print(cmd->verbose,"\nHeader information:");
-        sprintf(buf,"%s",headerScript);
+        if (format_checked(buf, sizeof(buf),
+            "buf", "%s",headerScript) != 0)
+            return FAILURE;
         verb_print(cmd->verbose,
                    "\n\t%s: header processing: executing %s...\n",
                    routineName, headerScript);
-        system(buf);
+        if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
+            return FAILURE;
+
         verb_print(cmd->verbose, "\tdone.\n");
+
         if (scanopt(cmd->options, "stop-numpy")) {
             if (strnull(cmd->outfile)) {
-                exit(1);
+                gd->inputHeaderFlag = TRUE;
+                gd->stopflag = TRUE;
+                return SUCCESS;
             }
         }
     }
 
     if (scanopt(cmd->options, "read-mask")) {
         if (ifile == 0) {
-            inputdata_numpy_healpix_map(cmd, gd, filename, ifile);
+            rc = inputdata_numpy_healpix_map(cmd, gd, filename, ifile);
         } else {
-            if (ifile != 1)
-                error("\t%s: read-mask ifile = %d is absurd\n",
-                      routineName, ifile+1);
-            inputdata_numpy_healpix_map_mask(cmd, gd, filename, ifile);
+            if (ifile != 1) {
+                cBALLS_FAIL(cmd, "\t%s: read-mask ifile = %d is absurd\n",
+                            routineName, ifile+1);
+            }
+
+            rc = inputdata_numpy_healpix_map_mask(cmd, gd, filename, ifile);
         }
     } else {
         if (scanopt(cmd->options, "mask-inside")) {
-            inputdata_numpy_healpix_map_mask_inside(cmd, gd,
-                                                      filename, ifile);
+            rc = inputdata_numpy_healpix_map_mask_inside(cmd, gd,
+                                                         filename, ifile);
         } else {
-            inputdata_numpy_healpix_map(cmd, gd, filename, ifile);
+            rc = inputdata_numpy_healpix_map(cmd, gd, filename, ifile);
         }
+    }
+
+    if (rc == FAILURE) {
+        return FAILURE;
     }
 
     return SUCCESS;
@@ -2326,16 +2747,17 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     double thetamin, thetamax;
     double phimin, phimax;
 
-//    float *map;
     double *map;
     long npixel, nside;
     string order = "RING";
     FILE *fp;
+    
+    int hp_status;
 
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n");
+    cBALLS_FAIL(cmd, "\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
     // info runing header_script.py and set it in cmd->nbody
@@ -2347,18 +2769,12 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order);
 
     fp = stropen(filename, "rb");       // open numpy file
-//    map=(float *)malloc(sizeof(float)*npixel);
     map=(double *)malloc(sizeof(double)*npixel);
-//    verb_print(cmd->verbose,
-//               "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
-//               npixel*sizeof(float)/(1024.0*1024.0),
-//               npixel);
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(double)*INMB,
                npixel);
     for(j=0;j<npixel;j++){
-//        fread(&map[j], sizeof(float), 1, fp);
         fread(&map[j], sizeof(double), 1, fp);
     }
     fclose(fp);             // close numpy file.
@@ -2367,7 +2783,7 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
                "%s: nbody = %ld...\n",
                routineName, npixel);
     if (npixel < 1)
-        error("%s: npixel = %ld is absurd\n", routineName, npixel);
+        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
 
     bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
@@ -2375,8 +2791,6 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)*INMB,
                npixel);
-
-//    cmd->nbody=npixel;
 
     real xmin, ymin, zmin;
     real xmax, ymax, zmax;
@@ -2482,6 +2896,7 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
     INTEGER ij=0;
@@ -2516,8 +2931,10 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     char file[180] = "outputmap.fits" ;
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
-        sprintf(fileforce, "!%s/%s",                // leading !
-                cmd->rootDir, file);               //  to allow overwrite
+        // leading ! to allow overwrite
+        if (format_checked(fileforce, sizeof(fileforce),
+            "fileforce", "!%s/%s",cmd->rootDir, file) != 0)
+            return FAILURE;
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
@@ -2533,9 +2950,17 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
         //B write healpix map in RING order "0"
         //      and
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
-        write_healpix_map(mapout, nside, fileforce, 0, "C");
+        hp_status = write_healpix_map_status(mapout, nside, fileforce, 0, "C");
+        if (hp_status != 0) {
+            free(mapout);
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: write_healpix_map failed for '%s' status=%d",
+                     routineName, fileforce, hp_status);
+            return FAILURE;
+        }
+        
         fprintf(stdout,"\t\tfile written\n");
-        free(map);
+        free(mapout);
     }
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -2577,7 +3002,7 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
                                         string filename,
                                         int ifile)
 {
-    string routine_name = "inputdata_cfitsio_healpix_map_mask";
+    string routineName = "inputdata_cfitsio_healpix_map_mask";
     bodyptr p;
     vector q;
     int k;
@@ -2591,33 +3016,57 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
     char order1[10];
     char order2[10];
     char coord[10];
+    
+    int hp_status;
 
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n");
+    cBALLS_FAIL(cmd, "\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
-    npixel = get_fits_size(filename, &nside, order1);
+    hp_status = get_fits_size_status(filename, &nside, order1, &npixel);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: get_fits_size failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    
     verb_print(cmd->verbose,
         "filename, ifile, nside, npixel, order1:");
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
-    map = read_healpix_map(filename, &nside, coord, order2);
+    hp_status = read_healpix_map_status(filename, &nside, coord, order2, &map);
+    if (hp_status != 0 || map == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: read_healpix_map failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        return FAILURE;
+    }
+    if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
+                                    order1, order2, &map) == FAILURE) {
+        free(map);
+        return FAILURE;
+    }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)*INMB,
                npixel);
 
-    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
-        verb_print(cmd->verbose, "%s: nbody = %d...\n",
-               routine_name, npixel);
-    if (npixel < 1)
-        error("%s: npixel = %d is absurd\n", routine_name, npixel);
+    verb_print(cmd->verbose, "%s: nbody = %ld...\n",
+               routineName, npixel);
+    if (npixel < 1) {
+        free(map);
+        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
+    }
 
-    if (npixel != gd->nbodyTable[gd->iCatalogs[0]])
-        error("%s: npixel = %ld is not equal to npixel in cat 0: %ld\n",
-              routine_name, npixel, gd->nbodyTable[gd->iCatalogs[0]]);
+    if (npixel != gd->nbodyTable[gd->iCatalogs[0]]) {
+        free(map);
+        cBALLS_FAIL(cmd,
+            "%s: npixel = %ld is not equal to npixel in cat 0: %ld\n",
+            routineName, npixel, gd->nbodyTable[gd->iCatalogs[0]]);
+    }
 
     INTEGER iselect = 0;
     for(ipix=0;ipix<npixel;ipix++) {                // RING loop order
@@ -2625,9 +3074,11 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
         pix2ang_ring(nside, ipix, &theta, &phi);
         coordinate_transformation(cmd, gd, theta, phi, q);
         DO_COORD(k) {
-            if (Pos(p)[k] != q[k])
-                error("%s: mask position is not equal: %g %g\n",
-                      routine_name, Pos(p)[k], q[k]);
+            if (Pos(p)[k] != q[k]) {
+                free(map);
+                cBALLS_FAIL(cmd, "%s: mask position is not equal: %g %g\n",
+                            routineName, Pos(p)[k], q[k]);
+            }
         }
 
         Mask(p) = map[ipix];
@@ -2638,11 +3089,13 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
 
     verb_print(cmd->verbose,
         "\n\t%s: masked pixels = %ld\n",
-               routine_name, iselect);
+               routineName, iselect);
     verb_print(cmd->verbose,
         "\t%s: unmasked pixels = %ld\n",
-               routine_name, gd->nbodyTable[gd->iCatalogs[0]]-iselect);
+               routineName, gd->nbodyTable[gd->iCatalogs[0]]-iselect);
     
+    free(map);
+
     return SUCCESS;
 }
 
@@ -2665,44 +3118,65 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
     double thetamin, thetamax;
     double phimin, phimax;
 
-    float *map;
+    float *map = NULL;
+    float *plot_map = NULL;
+    bodyptr bodytabtmp = NULL;
+    bodyptr selected_bodies = NULL;
     long npixel, nside;
     char order1[10];
     char order2[10];
     char coord[10];
+    
+    int hp_status;
+    int status = FAILURE;
 
 #if THREEDIMCODE
     verb_print(cmd->verbose, "\nWorking 3D map...\n");
 #else
-    error("\nOnly 3D is implemented so far... exiting...\n\n");
+    cBALLS_FAIL(cmd, "\nOnly 3D is implemented so far... exiting...\n\n");
 #endif
 
-    npixel = get_fits_size(filename, &nside, order1);
+    hp_status = get_fits_size_status(filename, &nside, order1, &npixel);
+    if (hp_status != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: get_fits_size failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        goto cleanup;
+    }
+    
     verb_print(cmd->verbose,
         "filename, ifile, nside, npixel, order1:");
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order1);
-    map = read_healpix_map(filename, &nside, coord, order2);
+    hp_status = read_healpix_map_status(filename, &nside, coord, order2, &map);
+    if (hp_status != 0 || map == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: read_healpix_map failed for '%s' status=%d",
+                 routineName, filename, hp_status);
+        goto cleanup;
+    }
+    if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
+                                    order1, order2, &map) == FAILURE)
+        goto cleanup;
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)*INMB,
                npixel);
 
-    if (strcmp(order1,order2)!=0) {printf("Error: Bad ordering\n");}
     verb_print(cmd->verbose,
-               "%s: nbody = %d...\n",
+               "%s: nbody = %ld...\n",
                routineName, npixel);
-    if (npixel < 1)
-        error("%s: npixel = %d is absurd\n", routineName, npixel);
+    if (npixel < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: npixel = %ld is absurd", routineName, npixel);
+        goto cleanup;
+    }
 
-    bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)*INMB,
                npixel);
-
-    cmd->nbody=npixel;
 
     real xmin, ymin, zmin;
     real xmax, ymax, zmax;
@@ -2714,6 +3188,7 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
     for(ipix=0;ipix<npixel;ipix++) {                // RING loop order
         p = bodytabtmp+ipix;
         Update(p) = FALSE;
+        Mask(p) = MASK_NODE_MASKED;
         pix2ang_ring(nside, ipix, &theta, &phi);
         if (scanopt(cmd->options, "patch")) {
             if (cmd->thetaL < theta && theta < cmd->thetaR) {
@@ -2730,6 +3205,7 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
                     Type(p) = BODY;
                     Mass(p) = mass;
                     Weight(p) = weight;
+                    Mask(p) = MASK_NODE_VALID;
                     Id(p) = p-bodytabtmp+iselect;
                     Update(p) = TRUE;
                     xmin = Pos(p)[0];
@@ -2791,7 +3267,7 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
 
     verb_print(cmd->verbose,
         "\n\t%s: masked pixels = %ld\n",
-               routineName, cmd->nbody-iselect);
+               routineName, npixel-iselect);
     verb_print(cmd->verbose,
         "\t%s: unmasked pixels = %ld\n",
                routineName, iselect);
@@ -2806,25 +3282,20 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
 #endif
     //E
 
-    free(map);
-    verb_print(cmd->verbose,
-               "\nFreed %g MByte for temporal map pixel (%ld) storage.\n",
-               npixel*sizeof(float)*INMB,
-               npixel);
-
-
     bodyptr q;
-    cmd->nbody = iselect;
-
-    gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (iselect < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: no pixels selected from '%s'", routineName, filename);
+        goto cleanup;
+    }
+    selected_bodies = (bodyptr) allocate(iselect * sizeof(body));
 
     real kavg = 0;
     INTEGER ij=0;
     for(ipix=0;ipix<npixel;ipix++){
         q = bodytabtmp+ipix;
         if(Update(q)) {
-            p = bodytable[ifile]+ij;
+            p = selected_bodies+ij;
             Pos(p)[0] = Pos(q)[0];
             Pos(p)[1] = Pos(q)[1];
             Pos(p)[2] = Pos(q)[2];
@@ -2832,8 +3303,13 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
             Type(p) = Type(q);
             Mass(p) = mass;
             Weight(p) = weight;
-            Id(p) = p-bodytable[ifile]+ipix;
+            Id(p) = ij + 1;
             Mask(p) = Mask(q);
+            Update(p) = TRUE;
+#if defined(NMultipoles) && defined(NONORMHIST)
+            if (scanopt(cmd->options, "patch-with-all"))
+                UpdatePivot(p) = UpdatePivot(q);
+#endif
             xmin = MIN(xmin,Pos(p)[0]);
             ymin = MIN(ymin,Pos(p)[1]);
             zmin = MIN(zmin,Pos(p)[2]);
@@ -2848,26 +3324,40 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
     char file[180] = "outputmap.fits" ;
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
-        sprintf(fileforce, "!%s/%s",                // leading !
-                cmd->rootDir, file);               //  to allow overwrite
+        // leading ! to allow overwrite
+        if (format_checked(fileforce, sizeof(fileforce),
+            "fileforce", "!%s/%s",cmd->rootDir, file) != 0)
+            goto cleanup;
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
-        map = (float *)malloc(npixel*sizeof(float));
+        plot_map = (float *)malloc(npixel*sizeof(float));
+        if (plot_map == NULL) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: unable to allocate output map", routineName);
+            goto cleanup;
+        }
         for(ipix=0;ipix<npixel;ipix++){
             q = bodytabtmp+ipix;
             if(Update(q)) {
-                map[ipix] = Kappa(q);
+                plot_map[ipix] = Kappa(q);
             } else {
-                map[ipix] = 0.0;
+                plot_map[ipix] = 0.0;
             }
         }
         //B write healpix map in RING order "0"
         //      and
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
-        write_healpix_map(map, nside, fileforce, 0, "C");
+        hp_status = write_healpix_map_status(plot_map, nside,
+                                             fileforce, 0, "C");
+        if (hp_status != 0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: write_healpix_map failed for '%s' status=%d",
+                     routineName, fileforce, hp_status);
+            goto cleanup;
+        }
+        
         fprintf(stdout,"\t\tfile written\n");
-        free(map);
     }
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -2880,11 +3370,6 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
                           "\t%s: min and max of z = %f %f\n",
                           routineName, zmin, zmax);
 
-    free(bodytabtmp);
-    verb_print(cmd->verbose,
-            "\nFreed %g MByte for temporal particle (%ld) storage.\n",
-            npixel*sizeof(body)*INMB,npixel);
-
     if (scanopt(cmd->options, "all"))
         verb_print(cmd->verbose,
             "\n\t%s: selected read points and nbody: %ld %ld\n",
@@ -2895,9 +3380,21 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
 
     verb_print(cmd->verbose,
             "%s: average of kappa (%ld particles) = %le\n",
-               routineName, cmd->nbody, kavg/((real)cmd->nbody) );
+               routineName, iselect, kavg/((real)iselect) );
 
-    return SUCCESS;
+    cmd->nbody = iselect;
+    gd->nbodyTable[ifile] = iselect;
+    bodytable[ifile] = selected_bodies;
+    gd->bodytable_allocated = TRUE;
+    selected_bodies = NULL;
+    status = SUCCESS;
+
+cleanup:
+    free(plot_map);
+    free(map);
+    free(bodytabtmp);
+    free(selected_bodies);
+    return status;
 }
 
 #endif	// ! _cballsio_cfitsio_02_h

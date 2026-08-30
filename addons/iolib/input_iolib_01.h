@@ -4,6 +4,7 @@
 #ifndef _input_iolib_01_h
 #define _input_iolib_01_h
 
+/*
 class_call(parser_read_string(pfc,"columns",&string1,&flag1,errmsg),
            errmsg,errmsg);
 gd->columnsFlag=FALSE;
@@ -15,6 +16,29 @@ if (flag1 == TRUE) {
           gd->columnsFlag=TRUE;
         break;
       }
+    }
+}
+*/
+
+class_call_except(parser_read_string(pfc, "columns", &string1, &flag1, errmsg),
+                  errmsg,
+                  errmsg,
+                  BASE_FREE_STRINGS_ON_FAILURE(););
+
+gd->columnsFlag = FALSE;
+
+if (flag1 == TRUE) {
+    for (index = 0; index < pfc->size; ++index) {
+        if (strcmp(pfc->name[index], "columns") == 0) {
+            cmd->columns = copy_param_string(pfc->value[index]);
+            if (cmd->columns == NULL) {
+                BASE_FREE_STRINGS_ON_FAILURE();
+                return FAILURE;
+            }
+
+            gd->columnsFlag = TRUE;
+            break;
+        }
     }
 }
 

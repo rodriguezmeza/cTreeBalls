@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")/.."
+
+MAKE_PROFILE_ARGS=${MAKE_PROFILE_ARGS:-}
+make_profile_args=()
+if [ -n "$MAKE_PROFILE_ARGS" ]; then
+  read -r -a make_profile_args <<< "$MAKE_PROFILE_ARGS"
+fi
+
+build_env=$(cd .. && make -s "${make_profile_args[@]}" print-cyballs-build-env)
+
+if [[ "$build_env" != *"-DBALLS"* ]]; then
+  echo "ERROR: balls-omp profile requires BALLSON=1 / -DBALLS."
+  echo "Rebuild with BALLSON=1 before running this test."
+  exit 2
+fi
+
+
+CBALLS=../cballs
+#CBALLS=../cballs_sincos
+PYTHON='python'
+InDir='./In'
+scriptsDir='./scripts'
+
+# Test 01 ::
+echo ""
+echo "Test 01 :: balls-omp"
+echo ""
+/bin/rm -rf ./Output/*
+time $CBALLS $InDir/parameters_to-test_nside256_balls-omp || exit
+$PYTHON $scriptsDir/mZetaM_test_kkk_balls-omp.py || exit
+$PYTHON $scriptsDir/Xi2pcf_plots_test.py || exit

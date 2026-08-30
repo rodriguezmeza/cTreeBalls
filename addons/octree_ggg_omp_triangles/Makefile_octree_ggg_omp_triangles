@@ -1,0 +1,22 @@
+# ----- MAKE FILE module definitions (octree_ggg_omp_triangles) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# OCTREEGGGOMPTRIANGLES
+ifeq ($(OCTREEGGGOMPTRIANGLESON),1)
+OPT2 += -DOCTREEGGGOMPTRIANGLES
+# add control flags for computing 2,3-point correlations functions
+#OPT2 += -DTWOPCFTRI
+#OPT2 += -DTHREEPCFCONVERGENCETRI
+#OPT2 += -DTHREEPCFSHEARTRI
+OCTREEGGGOMPTRIANGLES = ../addons/octree_ggg_omp_triangles/
+vpath %.c ./addons/octree_ggg_omp_triangles/
+INCLUDES += -I$(OCTREEGGGOMPTRIANGLES)
+HEADERFILES += $(wildcard $(OCTREEGGGOMPTRIANGLES)/*.h)
+EXTERNAL += search_octree_ggg_omp_triangles.o
+endif
+
+#E

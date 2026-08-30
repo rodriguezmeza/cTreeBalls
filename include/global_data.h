@@ -21,6 +21,18 @@
 #include "datastruc_defs.h"
 #include "common_defs.h"
 
+#ifndef n_data_max
+#define n_data_max 10000
+#endif
+#ifndef n_chi_data_max
+#define n_chi_data_max 10000
+#endif
+
+#ifndef MAXLENGTHOFPSPATH
+#define MAXLENGTHOFPSPATH 100
+#endif
+
+
 struct global_data{
 
     //B PXD functions
@@ -30,6 +42,7 @@ struct global_data{
     real **matPXD;
     real *histZetaMFlatten;
     real ***histZetaM_EE;
+    real ***histZetaM_EE_Im;
     //B cross
     real ***histZetaM_EE2;
     real ***histZetaM_EE3;
@@ -99,11 +112,7 @@ struct global_data{
                                                     //  globaldefs.h. Check!!!
 #endif
 
-#ifdef SINGLEP
-    double Box[NDIM];
-#else
-    vector Box;
-#endif
+    compute_vector Box;
 
 // -----------------------------------
     //B Histogram arrays PXD versions
@@ -158,8 +167,25 @@ struct global_data{
 //
     real **histXicos;
     real **histXisin;
+
+// Flat-sky weak-lensing shear correlations (octree-shear-omp).
+    real *histShearXiPlusRe;
+    real *histShearXiPlusIm;
+    real *histShearXiMinusRe;
+    real *histShearXiMinusIm;
+    real *histShearXiWeight;
+    real *histShearGammaNumeratorRe;
+    real *histShearGammaNumeratorIm;
+    real *histShearGammaMultipoleRe;
+    real *histShearGammaMultipoleIm;
+    real *histShearDenominatorRe;
+    real *histShearDenominatorIm;
+    real *histShearGammaRe;
+    real *histShearGammaIm;
+    int shearMultipoleMax;
+    int shearAngularBins;
 #ifdef USEGSL
-    gsl_matrix_complex *histXi_gsl;
+//    gsl_matrix_complex *histXi_gsl;
 #endif
 
 //B To save total 3pcf
@@ -252,6 +278,9 @@ struct global_data{
     int nsmooth[MAXITEMS];                          // deprecated, will be deleted
 
     //B to control memory allocation/deallocation
+    //B wlcf
+    bool startrun_cputime;
+    //E
     bool cmd_allocated;
     bool random_allocated;
     bool gd_allocated;
@@ -269,7 +298,7 @@ struct global_data{
                                                     //  scanLevel routine
 #undef MAXLEVEL
 
-#ifdef BALLS4SCANLEV
+#ifdef CBALLS_NEEDS_BALLS4_SCAN
     bool flagBalls4Scanlevel;
 #endif
 
@@ -290,6 +319,9 @@ struct global_data{
     bool outfilefmtFlag;
     bool outfileFlag;
     bool rsmoothFlagFree;
+    
+    bool outlogFlagFree;
+    
     bool rootDirFlagFree;
     bool iCatalogsFlag;
     bool histNNFileNameFlag;
@@ -300,6 +332,10 @@ struct global_data{
     bool preScriptFlag;
     bool posScriptFlag;
     bool optionsFlag;
+    //B new
+    bool statefileFlag;
+    bool restorefileFlag;
+    //E
     //E
 
 //B correction 2025-05-03 :: look for edge-effects
@@ -318,7 +354,8 @@ struct global_data{
 
 //B socket:
 #ifdef ADDONS
-#include "globaldefs_include_03.h"
+//#include "globaldefs_include_03.h" // change name to global_data_include.h
+#include "global_data_include.h" // change name to global_data_include.h
 #endif
 //E
 

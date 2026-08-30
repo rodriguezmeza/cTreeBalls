@@ -1,0 +1,18 @@
+# ----- MAKE FILE module definitions (octree_kkk_balls4_omp_triangles) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# OCTREEKKKBALLS4OMPTRIANGLES
+ifeq ($(OCTREEKKKBALLS4OMPTRIANGLESON),1)
+OPT2 += -DOCTREEKKKBALLS4OMPTRIANGLES
+OCTREEKKKBALLS4OMPTRIANGLES = ../addons/octree_kkk_balls4_omp_triangles/
+vpath %.c ./addons/octree_kkk_balls4_omp_triangles/
+INCLUDES += -I$(OCTREEKKKBALLS4OMPTRIANGLES)
+HEADERFILES += $(wildcard $(OCTREEKKKBALLS4OMPTRIANGLES)/*.h)
+EXTERNAL += search_octree_kkk_balls4_omp_triangles.o
+endif
+#
+#E

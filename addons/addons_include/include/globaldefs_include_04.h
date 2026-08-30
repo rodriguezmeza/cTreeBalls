@@ -8,12 +8,18 @@
 #include "cballsio_gadget_00.h"
 #endif
 
+#ifndef OCTREESMOOTHING
 #ifdef BALLS
 #include "globaldefs_balls_omp_04.h"
+#endif
 #endif
 
 #ifdef OCTREESMOOTHING
 #include "globaldefs_octree_smoothing_04.h"
+#endif
+
+#ifdef BALLS0357
+#include "globaldefs_octree_smoothing_0357_04.h"
 #endif
 
 /*

@@ -7,8 +7,10 @@
 #
 ifeq ($(CFITSIOON),1)
 OPT2 += -DCFITSIO
-CFITSIO = ../addons/cfitsio/
-vpath %.c ./addons/cfitsio/
+#CFITSIO = ../addons/cfitsio/
+CFITSIO = $(MDIR)/addons/cfitsio/
+#vpath %.c ./addons/cfitsio/
+vpath %.c $(MDIR)/addons/cfitsio/
 INCLUDES += -I$(CFITSIO)
 HEADERFILES += $(wildcard $(CFITSIO)/*.h)
 EXTERNAL += chealpix.o

@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cballs=${CBALLS:-"${root_dir}/cballs"}
+methods_output=$(mktemp "${TMPDIR:-/tmp}/ctreeballs-search-methods.XXXXXX")
+options_output=$(mktemp "${TMPDIR:-/tmp}/ctreeballs-options.XXXXXX")
+trap 'rm -f "${methods_output}" "${options_output}"' EXIT
+
+set +e
+"${cballs}" options=print-search-methods >"${methods_output}" 2>&1
+methods_status=$?
+"${cballs}" options=print-options >"${options_output}" 2>&1
+options_status=$?
+set -e
+
+# Startup information commands currently stop through the regular status-1 path.
+if (( methods_status > 1 || options_status > 1 )); then
+    printf 'FAIL: startup help command returned an unexpected status\n' >&2
+    exit 1
+fi
+
+for expected in \
+    'Searching methods registered in this executable' \
+    'Select one with search=<name>' \
+    'Common controls:' \
+    '- octree-sincos-omp (id=' \
+    'geometry:' \
+    'computes:' \
+    'use:'; do
+    if ! grep -Fq -- "${expected}" "${methods_output}"; then
+        printf 'FAIL: search-method help is missing: %s\n' "${expected}" >&2
+        exit 1
+    fi
+done
+
+method_names=$(sed -nE 's/^- ([^ ]+) \(id=[0-9]+\)$/\1/p' "${methods_output}")
+if [[ -z "${method_names}" ]]; then
+    printf 'FAIL: search-method help did not emit any parseable methods\n' >&2
+    exit 1
+fi
+if [[ $(printf '%s\n' "${method_names}" | sort | uniq -d | wc -l | tr -d ' ') != 0 ]]; then
+    printf 'FAIL: search-method help contains duplicate method names\n' >&2
+    exit 1
+fi
+
+check_method_help() {
+    local method=$1
+    local expected=$2
+
+    if grep -Fq -- "- ${method} (id=" "${methods_output}" \
+        && ! grep -Fq -- "${expected}" "${methods_output}"; then
+        printf 'FAIL: %s help is missing: %s\n' "${method}" "${expected}" >&2
+        exit 1
+    fi
+}
+
+check_method_help 'kdtree-omp' \
+    'Add behavior-ball for aggregate-node acceptance'
+check_method_help 'kdtree-omp' \
+    'no-one-ball disables it; aggregation requires useLogHist=true'
+check_method_help 'balltree-omp' \
+    'behavior-ball enables aggregate-node acceptance'
+check_method_help 'balltree-omp' \
+    'aggregation requires useLogHist=true'
+check_method_help 'balltree-2balls-omp' \
+    'TreeCorr-style cell aggregation is the default'
+check_method_help 'balltree-2balls-omp' \
+    'no-two-balls forces exact body pairs'
+check_method_help 'balltree-2balls-mpi' \
+    'deterministic MPI+OpenMP dual/triple-node scan'
+check_method_help 'balltree-2balls-mpi' \
+    'Runtime acceptance and normalization options match balltree-2balls-omp'
+check_method_help 'balltree-2balls-mpi' \
+    'The explicit triple-node 3PCF remains cubic even when distributed'
+check_method_help 'balltree-2balls-omp_3pcf' \
+    'accumulate radial field multipoles and form 3PCF bins from pair products'
+check_method_help 'balltree-2balls-omp_3pcf' \
+    'TreeCorr-style radial-bin slop and angular phase-error criteria'
+check_method_help 'balltree-2balls-omp_3pcf' \
+    'no-normalize-HistZeta returns raw sums'
+check_method_help 'balltree-2balls-omp_3pcf' \
+    'treecorr-direct-triples selects the slower validation traversal'
+check_method_help 'balltree-2balls-mpi_3pcf' \
+    'deterministic MPI+OpenMP LogMultipole frontier'
+check_method_help 'balltree-2balls-mpi_3pcf' \
+    'treecorr-direct-triples, which remains an OpenMP validation oracle'
+check_method_help 'octree-kkk-balls4-omp' \
+    'weighted convergence 2PCF and balls4 KKK 3PCF multipoles'
+check_method_help 'octree-kkk-balls4-omp' \
+    'Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF'
+check_method_help 'octree-kkk-balls4-omp' \
+    'compute-HistN,and-CF writes pair-count/CF files'
+check_method_help 'octree-kkk-balls4-omp' \
+    'Keep SMOOTHPIVOTON=0'
+
+if ! grep -Fq -- '- print-search-methods [startup]:' "${options_output}"; then
+    printf 'FAIL: print-options does not advertise print-search-methods\n' >&2
+    exit 1
+fi
+if grep -Fq -- '- balltree-2balls-omp_3pcf (id=' "${methods_output}" \
+    && ! grep -Fq -- '- treecorr-singleton-leaves [balltree-2balls-omp_3pcf]:' \
+        "${options_output}"; then
+    printf 'FAIL: print-options does not advertise treecorr-singleton-leaves\n' >&2
+    exit 1
+fi
+
+printf 'PASS: search-method help lists the registered runtime methods.\n'

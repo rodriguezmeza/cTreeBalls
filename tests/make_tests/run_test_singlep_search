@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+DOUBLE_CBALLS=${DOUBLE_CBALLS:?set DOUBLE_CBALLS to the SINGLEPON=0 executable}
+MIXED_CBALLS=${MIXED_CBALLS:?set MIXED_CBALLS to the SINGLEPON=1 executable}
+PYTHON=${PYTHON:-python3}
+THREADS=${THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-singlep.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+run_case()
+{
+    local executable=$1
+    local profile=$2
+    local method=$3
+    local output="$TMP_ROOT/$method-$profile"
+
+    mkdir -p "$output"
+    "$executable" \
+        search="$method" \
+        testmodel=simple-cubic \
+        nbody=4096 \
+        lengthBox=2 \
+        rootDir="$output" \
+        numberThreads="$THREADS" \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=0.4 \
+        rminHist=0.005 \
+        sizeHistN=4 \
+        mChebyshev=2 \
+        nsmooth=8 \
+        seed=123 \
+        stepState=1000000 \
+        verbose=1 \
+        verbose_log=0 \
+        options=compute-HistN,out-m-HistZeta,no-one-ball \
+        >"$output/run.log" 2>&1 \
+        || fail_with_log "$method ($profile) failed" "$output/run.log"
+}
+
+compare_case()
+{
+    local method=$1
+    local reference="$TMP_ROOT/$method-double"
+    local candidate="$TMP_ROOT/$method-mixed"
+
+    [ -f "$reference/histNN.txt" ] \
+        || fail_with_log "$method did not produce double-profile pair counts" \
+                         "$reference/run.log"
+    [ -f "$candidate/histNN.txt" ] \
+        || fail_with_log "$method did not produce mixed-profile pair counts" \
+                         "$candidate/run.log"
+    cmp -s "$reference/histNN.txt" "$candidate/histNN.txt" \
+        || fail_with_log "$method changed pair counts under SINGLEP" \
+                         "$candidate/run.log"
+
+    "$PYTHON" - "$method" "$reference" "$candidate" <<'PY'
+import math
+import pathlib
+import sys
+
+method = sys.argv[1]
+reference = pathlib.Path(sys.argv[2])
+candidate = pathlib.Path(sys.argv[3])
+
+
+def outputs(directory):
+    return sorted(
+        path.name
+        for path in directory.iterdir()
+        if path.is_file()
+        and (path.name.startswith("hist") or path.name.startswith("mhist"))
+        and path.suffix == ".txt"
+    )
+
+
+def values(path):
+    result = []
+    for line in path.read_text().splitlines():
+        result.extend(line.split("#", 1)[0].split())
+    return [float(token) for token in result]
+
+
+reference_names = outputs(reference)
+candidate_names = outputs(candidate)
+if not reference_names or reference_names != candidate_names:
+    raise SystemExit(f"{method}: histogram output sets differ")
+
+max_abs = 0.0
+max_rel = 0.0
+for name in reference_names:
+    left = values(reference / name)
+    right = values(candidate / name)
+    if len(left) != len(right):
+        raise SystemExit(f"{method}/{name}: value counts differ")
+    for index, (a, b) in enumerate(zip(left, right)):
+        if math.isnan(a) and math.isnan(b):
+            continue
+        if not math.isfinite(a) or not math.isfinite(b):
+            if a != b:
+                raise SystemExit(
+                    f"{method}/{name}:{index}: non-finite values differ"
+                )
+            continue
+        difference = abs(a - b)
+        scale = max(abs(a), abs(b), 1.0e-30)
+        relative = difference / scale
+        max_abs = max(max_abs, difference)
+        max_rel = max(max_rel, relative)
+        if not math.isclose(a, b, rel_tol=2.0e-6, abs_tol=2.0e-7):
+            raise SystemExit(
+                f"{method}/{name}:{index}: {a!r} != {b!r} "
+                f"(abs={difference:.3e}, rel={relative:.3e})"
+            )
+
+print(
+    f"PASS: {method} SINGLEP pair counts match; "
+    f"max_abs={max_abs:.3e}, max_rel={max_rel:.3e}"
+)
+PY
+}
+
+for method in octree-ggg-omp kdtree-omp balltree-omp; do
+    run_case "$DOUBLE_CBALLS" double "$method"
+    run_case "$MIXED_CBALLS" mixed "$method"
+    compare_case "$method"
+done
+
+echo "PASS: SINGLEP mixed-precision search regression"

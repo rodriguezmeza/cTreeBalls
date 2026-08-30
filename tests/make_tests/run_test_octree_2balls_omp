@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-octree-2balls.XXXXXX")
+cleanup()
+{
+    if [ "${KEEP_TEST_OUTPUT:-0}" = 1 ]; then
+        echo "Test output retained in $TMP_ROOT" >&2
+    else
+        rm -rf "$TMP_ROOT"
+    fi
+}
+trap cleanup EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- '-DOCTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable OCTREE2BALLSOMP"
+has_balltree_reference=false
+if grep -q -- '-DBALLTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env"; then
+    has_balltree_reference=true
+fi
+
+run_case()
+{
+    local name=$1
+    local method=$2
+    local threads=$3
+    local nbody=$4
+    local theta=$5
+    local options=$6
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search="$method" \
+        testmodel=simple-cubic-random \
+        nbody="$nbody" \
+        lengthBox=2 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=2.0 \
+        rminHist=0.005 \
+        sizeHistN=4 \
+        mChebyshev=2 \
+        nsmooth=8 \
+        theta="$theta" \
+        seed=123 \
+        stepState=1000000 \
+        verbose=1 \
+        verbose_log=0 \
+        options="$options" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+run_cross_case()
+{
+    local name=$1
+    local method=$2
+    local threads=$3
+    local options=$4
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search="$method" \
+        in="$TMP_ROOT/cross-left.txt,$TMP_ROOT/cross-right.txt" \
+        infmt=multi-columns-ascii,multi-columns-ascii \
+        columns=1,2,3,4,5 \
+        iCatalogs=1,2 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=1.25 \
+        rminHist=0.01 \
+        sizeHistN=8 \
+        nsmooth=2 \
+        theta=1 \
+        stepState=1000000 \
+        verbose=0 \
+        verbose_log=0 \
+        options="$options" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+compare_outputs()
+{
+    local left=$1
+    local right=$2
+    local pattern=$3
+    local file
+
+    for file in "$left"/$pattern; do
+        [ -e "$file" ] \
+            || fail_with_log "no files matched $pattern in $left"
+        local name=${file##*/}
+        cmp -s "$file" "$right/$name" \
+            || fail_with_log "$name differs between $left and $right"
+    done
+}
+
+compare_numeric_outputs()
+{
+    local left=$1
+    local right=$2
+    local pattern=$3
+
+    python3 - "$left" "$right" "$pattern" <<'PY'
+import math
+import pathlib
+import sys
+
+left = pathlib.Path(sys.argv[1])
+right = pathlib.Path(sys.argv[2])
+pattern = sys.argv[3]
+files = sorted(left.glob(pattern))
+if not files:
+    raise SystemExit(f"no files matched {pattern} in {left}")
+for path in files:
+    candidate = right / path.name
+    if not candidate.exists():
+        raise SystemExit(f"missing {candidate}")
+    actual = [float(value) for line in path.read_text().splitlines()
+              if line.strip() and not line.lstrip().startswith("#")
+              for value in line.split()]
+    expected = [float(value) for line in candidate.read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+                for value in line.split()]
+    if len(actual) != len(expected) or any(
+            not math.isclose(a, b, rel_tol=2.0e-12, abs_tol=2.0e-13)
+            for a, b in zip(actual, expected)):
+        raise SystemExit(f"{path.name} differs between {left} and {right}")
+PY
+}
+
+if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
+    exact_2pcf=compute-HistN,only-2pcf,no-two-balls
+    aggregate_2pcf=compute-HistN,only-2pcf
+
+    run_case pair-exact-one octree-2balls-omp 1 512 1 "$exact_2pcf"
+    run_case pair-exact-many octree-2balls-omp "$MULTI_THREADS" 512 1 \
+             "$exact_2pcf"
+    if $has_balltree_reference; then
+        run_case pair-reference balltree-2balls-omp 1 512 1 "$exact_2pcf"
+        compare_outputs "$TMP_ROOT/pair-reference" \
+                        "$TMP_ROOT/pair-exact-one" 'hist*.txt'
+
+        python3 - "$TMP_ROOT/cross-left.txt" \
+                    "$TMP_ROOT/cross-right.txt" <<'PY'
+import pathlib
+import sys
+
+left = [
+    (0.03 * i, 0.017 * (i % 4), 0.011 * (i % 3),
+     (-1.0 if i % 3 == 0 else 0.25 * (i + 1)), 0.7 + 0.08 * i)
+    for i in range(16)
+]
+right = [
+    (0.64 + 0.026 * i, 0.21 + 0.013 * (i % 5),
+     0.08 + 0.019 * (i % 2), 0.35 * (i - 4),
+     0.9 + 0.05 * (i % 6))
+    for i in range(13)
+]
+
+for path, rows in zip(map(pathlib.Path, sys.argv[1:]), (left, right)):
+    path.write_text(
+        "".join(" ".join(f"{value:.17g}" for value in row) + "\n"
+                for row in rows),
+        encoding="ascii",
+    )
+PY
+        cross_exact=pos-and-convergence-weight,weights-norm,compute-HistN,only-2pcf,no-two-balls
+        run_cross_case cross-reference balltree-2balls-omp 1 "$cross_exact"
+        run_cross_case cross-exact-one octree-2balls-omp 1 "$cross_exact"
+        run_cross_case cross-exact-many octree-2balls-omp \
+                       "$MULTI_THREADS" "$cross_exact"
+        compare_outputs "$TMP_ROOT/cross-reference" \
+                        "$TMP_ROOT/cross-exact-one" 'hist*.txt'
+        compare_outputs "$TMP_ROOT/cross-exact-one" \
+                        "$TMP_ROOT/cross-exact-many" 'hist*.txt'
+    fi
+    compare_outputs "$TMP_ROOT/pair-exact-one" \
+                    "$TMP_ROOT/pair-exact-many" 'hist*.txt'
+
+    run_case pair-aggregate-one octree-2balls-omp 1 512 1 "$aggregate_2pcf"
+    run_case pair-aggregate-many octree-2balls-omp "$MULTI_THREADS" 512 1 \
+             "$aggregate_2pcf"
+    compare_outputs "$TMP_ROOT/pair-exact-one" \
+                    "$TMP_ROOT/pair-aggregate-one" 'hist*.txt'
+    compare_outputs "$TMP_ROOT/pair-aggregate-one" \
+                    "$TMP_ROOT/pair-aggregate-many" 'hist*.txt'
+    pair_cells=$(sed -n \
+        's/.*octree-2balls-omp: nbbcalc = [0-9][0-9]*, nbccalc = \([0-9][0-9]*\).*/\1/p' \
+        "$TMP_ROOT/pair-aggregate-many/run.log" | tail -1)
+    [ "${pair_cells:-0}" -gt 0 ] \
+        || fail_with_log "the two-ball scan did not accept a node pair" \
+                         "$TMP_ROOT/pair-aggregate-many/run.log"
+else
+    echo "SKIP: octree-2balls-omp 2PCF is disabled (TWOPCFON=0)"
+fi
+
+if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
+    exact_3pcf=KKKCorrelation,only-3pcf,no-two-balls,no-normalize-HistZeta,out-m-HistZeta
+    aggregate_3pcf=KKKCorrelation,only-3pcf,no-normalize-HistZeta,out-m-HistZeta
+    normalized_3pcf=KKKCorrelation,only-3pcf,no-two-balls,out-m-HistZeta
+
+    run_case triple-exact-one octree-2balls-omp 1 24 1 "$exact_3pcf"
+    run_case triple-exact-many octree-2balls-omp "$MULTI_THREADS" 24 1 \
+             "$exact_3pcf"
+    grep -q -- 'with LogMultipole 3PCF' \
+        "$TMP_ROOT/triple-exact-one/run.log" \
+        || fail_with_log "the default 3PCF did not use LogMultipole" \
+                         "$TMP_ROOT/triple-exact-one/run.log"
+    run_case triple-direct octree-2balls-omp 1 24 1 \
+             "$exact_3pcf,treecorr-direct-triples"
+    grep -q -- 'with direct triple-node 3PCF' \
+        "$TMP_ROOT/triple-direct/run.log" \
+        || fail_with_log "the direct validation traversal was not selected" \
+                         "$TMP_ROOT/triple-direct/run.log"
+    compare_numeric_outputs "$TMP_ROOT/triple-direct" \
+                            "$TMP_ROOT/triple-exact-one" \
+                            'histZetaM_*.txt'
+    run_case triple-theta-limit octree-2balls-omp 1 24 1e-12 \
+             "$aggregate_3pcf"
+    compare_numeric_outputs "$TMP_ROOT/triple-exact-one" \
+                            "$TMP_ROOT/triple-theta-limit" \
+                            'histZetaM_*.txt'
+    run_case triple-normalized-log octree-2balls-omp 1 24 1 \
+             "$normalized_3pcf"
+    run_case triple-normalized-direct octree-2balls-omp 1 24 1 \
+             "$normalized_3pcf,treecorr-direct-triples"
+    compare_numeric_outputs "$TMP_ROOT/triple-normalized-log" \
+                            "$TMP_ROOT/triple-normalized-direct" \
+                            'histZetaM_*.txt'
+    if $has_balltree_reference; then
+        run_case triple-reference balltree-2balls-omp 1 24 1 "$exact_3pcf"
+        compare_numeric_outputs "$TMP_ROOT/triple-reference" \
+                                "$TMP_ROOT/triple-exact-one" \
+                                'histZetaM_*.txt'
+    fi
+    compare_outputs "$TMP_ROOT/triple-exact-one" \
+                    "$TMP_ROOT/triple-exact-many" 'histZetaM_*.txt'
+
+    if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
+        combined_exact=compute-HistN,KKKCorrelation,no-two-balls,no-normalize-HistZeta,out-m-HistZeta
+        run_case combined-pair-reference octree-2balls-omp 1 24 1 \
+                 "$exact_2pcf"
+        run_case combined-log octree-2balls-omp 1 24 1 "$combined_exact"
+        run_case combined-direct octree-2balls-omp 1 24 1 \
+                 "$combined_exact,treecorr-direct-triples"
+        for combined in combined-log combined-direct; do
+            compare_outputs "$TMP_ROOT/combined-pair-reference" \
+                            "$TMP_ROOT/$combined" 'histNN.txt'
+            compare_outputs "$TMP_ROOT/combined-pair-reference" \
+                            "$TMP_ROOT/$combined" 'histXi2pcf.txt'
+        done
+        compare_outputs "$TMP_ROOT/triple-exact-one" \
+                        "$TMP_ROOT/combined-log" 'histZetaM_*.txt'
+        compare_numeric_outputs "$TMP_ROOT/triple-direct" \
+                                "$TMP_ROOT/combined-direct" \
+                                'histZetaM_*.txt'
+    fi
+
+    run_case triple-aggregate-one octree-2balls-omp 1 160 4 \
+             "$aggregate_3pcf"
+    run_case triple-aggregate-many octree-2balls-omp "$MULTI_THREADS" 160 4 \
+             "$aggregate_3pcf"
+    compare_outputs "$TMP_ROOT/triple-aggregate-one" \
+                    "$TMP_ROOT/triple-aggregate-many" 'histZetaM_*.txt'
+    triple_cells=$(sed -n \
+        's/.*accepted cell orientations = \([0-9][0-9]*\).*/\1/p' \
+        "$TMP_ROOT/triple-aggregate-many/run.log" | tail -1)
+    [ "${triple_cells:-0}" -gt 0 ] \
+        || fail_with_log "the triple-node scan did not accept a node triple" \
+                         "$TMP_ROOT/triple-aggregate-many/run.log"
+else
+    echo "SKIP: octree-2balls-omp 3PCF is disabled (TPCFON=0)"
+fi
+
+echo "PASS: octree-2balls-omp exactness, aggregation, and OpenMP determinism"

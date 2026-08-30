@@ -54,6 +54,9 @@ ballxptr init_kdtree(struct cmdline_data* cmd,
 // Free kd tree memory
 void finish_kdtree(ballxptr kd)
 {
+#ifdef SINGLEP
+    free(kd->packed_points);
+#endif
     free(kd->bptr);
     free(kd->ntab);
     free(kd);
@@ -62,11 +65,11 @@ void finish_kdtree(ballxptr kd)
 // https://www.geeksforgeeks.org/bitwise-operators-in-c-cpp/
 // Build ball tree, compute number of nbodies, nodes, and nsplit
 //  alloc memory for ball tree nodes and set the main tree walking loop
-void build_kdtree(struct cmdline_data* cmd,
-                  struct  global_data* gd,
-                  ballxptr kd, int nbucket)
+int build_kdtree(struct cmdline_data* cmd,
+                 struct  global_data* gd,
+                 ballxptr kd, int nbucket)
 {
-    INTEGER n, m;
+    INTEGER n, m, j;
     int k, i, d, ct;
     ballnode *ntab;
 
@@ -137,6 +140,21 @@ void build_kdtree(struct cmdline_data* cmd,
     //E
 
     upward_pass(cmd, kd, KDROOT);
+
+#ifdef SINGLEP
+    if (cballs_malloc_checked((void **)&kd->packed_points,
+            (size_t)kd->npoint, sizeof(*kd->packed_points),
+            "KDTREEOMP packed leaf points", cmd->error_message,
+            _ERRORMSGSIZE_) == FAILURE)
+        return FAILURE;
+    for (j = 0; j < kd->npoint; j++) {
+        SETV(kd->packed_points[j].pos, Pos(kd->bptr[j]));
+        kd->packed_points[j].kappa = Kappa(kd->bptr[j]);
+    }
+    gd->bytes_tot += kd->npoint * sizeof(*kd->packed_points);
+#endif
+
+    return SUCCESS;
 }
 
 //  Compute cell radius
@@ -148,18 +166,22 @@ local void set_radius(struct cmdline_data* cmd,
 
     dmax = 0.0;
     DO_COORD(k)
-        dmax += rsqr(Pos(bptr[lo])[k] - kd->cmpos[k]);
+        dmax += rsqr((real)Pos(bptr[lo])[k] - (real)kd->cmpos[k]);
 
     for (i = lo + 1; i <= hi; ++i) {
         d = 0.0;
         DO_COORD(k)
-            d += rsqr(Pos(bptr[i])[k] - kd->cmpos[k]);
+            d += rsqr((real)Pos(bptr[i])[k] - (real)kd->cmpos[k]);
         if (d > dmax)
             dmax = d;
     }
 
-    kd->bnd.radius = rsqrt(dmax)/cmd->theta;        // set radius
-                                                    //  and rescale it
+    if (cmd->theta == 0.0) {
+        kd->bnd.radius = cballs_store_upper_bound(MAX_REAL_NUMBER);
+    } else {
+        const real radius = rsqrt(dmax)/cmd->theta;
+        kd->bnd.radius = cballs_store_search_bound(radius);
+    }
 }
 
 //  Compute cell inertia tensor and deformation factor
@@ -209,12 +231,12 @@ local void set_inertia(ballnode *kd, bodyptr *bptr, int lo, int hi)
 //  Computes cell center of mass and averages scalar fields
 local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
 {
-    vector tmpv;
+    compute_vector cmpos_sum;
     int i;
     real KappaAvg = 0.0;
 
     kd->weight = 0.0;
-    CLRV(kd->cmpos);
+    CLRV(cmpos_sum);
 
     for (i = lo; i <= hi; ++i) {
 #ifdef KappaAvgON
@@ -223,11 +245,15 @@ local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
         KappaAvg += Kappa(bptr[i]);
 #endif
         kd->weight += Mass(bptr[i]);
-        MULVS(tmpv, Pos(bptr[i]), Mass(bptr[i]));
-        ADDV(kd->cmpos, kd->cmpos, tmpv);
+        int k;
+        DO_COORD(k)
+            cmpos_sum[k] += Mass(bptr[i]) * (real)Pos(bptr[i])[k];
     }
     if (kd->weight > 0.0) {
-        DIVVS(kd->cmpos, kd->cmpos, kd->weight);
+        int k;
+        DO_COORD(k)
+            kd->cmpos[k] = (cballs_storage_real)
+                (cmpos_sum[k] / kd->weight);
     } else {
         SETV(kd->cmpos, kd->bnd.center);
     }
@@ -341,26 +367,30 @@ local void combine_nodes(struct cmdline_data* cmd,
     }
 
     // cmpos
-    vector tmpv;
+    compute_vector cmpos_sum;
     pout->weight = 0.0;
-    CLRV(pout->cmpos);
+    CLRV(cmpos_sum);
 
     pout->weight += p1->weight;
-    MULVS(tmpv, p1->cmpos, p1->weight);
-    ADDV(pout->cmpos, pout->cmpos, tmpv);
+    DO_COORD(k)
+        cmpos_sum[k] += (real)p1->cmpos[k] * p1->weight;
 
     pout->weight += p2->weight;
-    MULVS(tmpv, p2->cmpos, p2->weight);
-    ADDV(pout->cmpos, pout->cmpos, tmpv);
+    DO_COORD(k)
+        cmpos_sum[k] += (real)p2->cmpos[k] * p2->weight;
 
     if (pout->weight > 0.0) {
-        DIVVS(pout->cmpos, pout->cmpos, pout->weight);
+        DO_COORD(k)
+            pout->cmpos[k] = (cballs_storage_real)
+                (cmpos_sum[k] / pout->weight);
     } else {
         SETV(pout->cmpos, pout->bnd.center);
     }
 
     // KappaAvg
-    pout->kappa = 0.5*(p1->kappa + p2->kappa);
+    INTEGER n1 = p1->last - p1->first + 1;
+    INTEGER n2 = p2->last - p2->first + 1;
+    pout->kappa = (n1*p1->kappa + n2*p2->kappa)/((real)(n1+n2));
 
     // radius
     int i;
@@ -372,12 +402,12 @@ local void combine_nodes(struct cmdline_data* cmd,
 
     dmax = 0.0;
     DO_COORD(k)
-        dmax += rsqr(Pos(bptr[lo])[k] - pout->cmpos[k]);
+        dmax += rsqr((real)Pos(bptr[lo])[k] - (real)pout->cmpos[k]);
 
     for (i = lo + 1; i <= hi; ++i) {
         d = 0.0;
         DO_COORD(k)
-            d += rsqr(Pos(bptr[i])[k] - pout->cmpos[k]);
+            d += rsqr((real)Pos(bptr[i])[k] - (real)pout->cmpos[k]);
         if (d > dmax)
             dmax = d;
     }
@@ -388,13 +418,17 @@ local void combine_nodes(struct cmdline_data* cmd,
     for (i = lo; i <= hi; ++i) {
         d = 0.0;
         DO_COORD(k)
-            d += rsqr(Pos(bptr[i])[k] - pout->cmpos[k]);
+            d += rsqr((real)Pos(bptr[i])[k] - (real)pout->cmpos[k]);
         if (d > dmax)
             dmax = d;
     }
 
-    pout->bnd.radius = rsqrt(dmax)/cmd->theta;              // set radius
-                                                            //  and rescale it
+    if (cmd->theta == 0.0) {
+        pout->bnd.radius = cballs_store_upper_bound(MAX_REAL_NUMBER);
+    } else {
+        const real radius = rsqrt(dmax)/cmd->theta;
+        pout->bnd.radius = cballs_store_search_bound(radius);
+    }
     //B Computation of inertia and deformation factor
     int l;
 

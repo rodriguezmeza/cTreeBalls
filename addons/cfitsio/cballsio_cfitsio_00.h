@@ -55,11 +55,10 @@ local int inputdata_cfitsio_healpix_map_mask_inside(
 local int outputdata_cfitsio(struct cmdline_data*,
                              struct  global_data*,
                              bodyptr, INTEGER);
-void writebintable_kappa(struct cmdline_data* cmd,
+int writebintable_kappa(struct cmdline_data* cmd,
                          struct  global_data* gd,
                          bodyptr bodytab, INTEGER nbody,
                          string filename);
-void printerror( int status);
 
 //B infileformat: numpy-healpix
 local int inputdata_numpy_healpix(struct cmdline_data* cmd,

@@ -7,56 +7,6 @@
 #define _cballs_pxd_05_h
 
 //B parameters section
-/*
- paramfile=                      Parameter input file. Overwrite what follows
- searchMethod=balls-omp          Searching method to use [a: search]
- mChebyshev=7                    Number of Chebyshev polynomial to use (m+1) [a: mcheb]
- nsmooth=1                       Number of bodies to smooth out (or in a bucket) [a: nsm]
- rsmooth=                        Radius of the pivot smoothing neighbourhood. If empty a default is set [a: rsm]
- theta=1.0                       Control tree search parameter, can be used to increase speed
- computeTPCF=true                If true, compute 3pcf [a: tpcf]
- usePeriodic=false               If false, don't use periodic boundary condition [a: periodic]
- infile=                         File names with points to analyse [a: in]
- infileformat=columns-ascii      Data input files format (columns-ascii or binary) [a: infmt]
- iCatalogs=1                     index of point catalogs to analyse [a: icats]
- rootDir=Output                  Output dir, where output files will be written [a: root]
- outfile=                        Output file of the points analysed (default ext: .txt) [a: o]
- outfileformat=columns-ascii     Data output file format (columns-ascii or binary) [a: ofmt]
- thetaL=1.279928                 Angle theta left side of the region
- thetaR=1.861664                 Angle theta right side of the region
- phiL=1.280107                   Angle phi left side of the region
- phiR=1.861869                   Angle phi right side of the region
- useLogHist=true                 If true, use logaritmic scale for histograms [a: loghist]
- logHistBinsPD=5                 Bins per decades [a: binspd]
- sizeHistN=20                    array size for N histogram
- rangeN=0.0633205                Radial range for N histogram (217.68 arcmin)
- rminHist=0.00213811             Radial minimum value for histograms (7.35 arcmin) [a: rmin]
- sizeHistPhi=32                  array size for angular histogram
- histNNFileName=histNN           File name (without extension) to save histograms of NN [a: histNNfname]
- histXi2pcfFileName=histXi2pcf   File name (without extension) to save histograms of Xi2pcf [a: histXi2pcffname]
- histZetaFileName=histZeta       Prefix of file name to save histograms of matrix Zeta [a: histZfname]
- suffixOutFiles=                 Suffix to add to output filenames [a: suffix]
- seed=123                        Random number seed to test run or useful to change a random region in Takahasi simulations
- testmodel=unit-sphere-random    Test model name to analyse: simple-cubic-random, unit-sphere-random,... [a: tstmodel]
- nbody=262144                    Number of points to test (2^18)
- lengthBox=2                     Length of the box to test [a: lbox]
- preScript=                      Script in shell or python that can be run in pre-processing
- posScript=                      Script in shell or python that can be run in post-processing
- stepState=100000                number of steps to save a state-run info (pivot number completed in the log file)
- verbose=0                       Option to activate the amount of information sent to standard output [a: verb]
- verbose_log=0                   Option to activate the amount of information sent to log file [a: verblog]
- numberThreads=16                To set the number of threads to use (OpenMP) [a: nthreads]
- options=out-m-HistZeta          Various control options, i.e., no-one-ball (to use one-ball scheme),  compute-HistN, bh86, etc. [a: opt]
- scanLevel=6                     Scan level to start the search (look at tdepth value, will be the maximum for this parameter) [a: scl]
- scanLevelRoot=0                 Scan level of root cells to start the search (look at tdepth value, will be the maximum for this parameter) [a: sclroot]
- scanLevelMin=-0                 Scan level of size cells to stop the search. Integer negative values (look at tdepth value, will be tdepth-1+scanLevelMin+1) [a: sclmin]
-// does not used... it was remove from all instances...
- ntosave=1000                    Number of found bodies to save; use in combination with 'bodyfound', balls4' method [a: ntsav]
-//
- columns=1,2,3,4                 Columns to use as vector position and fields when using multi-columns-ascii or fits formats of point catalog [a: cols]
- Version=1.0.1                   Mario A. Rodríguez-Meza (2023-2025)
-
- */
 
 //B flags
 int get_tree_allocated(struct global_data* gd, short *value)
@@ -102,6 +52,48 @@ int get_nthreads(struct  cmdline_data* cmd, int *value)
     return SUCCESS;
 }
 
+//B from codex
+// This (the getters) approach is safer than accessing self.cmd.scanLevel directly from Cython,
+//  because the C helper is compiled with the same macros as the C library
+//  and can guard unsupported builds cleanly.
+int get_scanLevel(struct cmdline_data* cmd, int *value)
+{
+#if defined(OCTREESMOOTHING) || defined(BALLS)
+    *value = cmd->scanLevel;
+    return SUCCESS;
+#else
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "scanLevel is only available when OCTREESMOOTHING or BALLS is enabled");
+    return FAILURE;
+#endif
+}
+
+int get_scanLevelRoot(struct cmdline_data* cmd, int *value)
+{
+#if defined(OCTREESMOOTHING) || defined(BALLS)
+    *value = cmd->scanLevelRoot;
+    return SUCCESS;
+#else
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "scanLevelRoot is only available when OCTREESMOOTHING or BALLS is enabled");
+    return FAILURE;
+#endif
+}
+
+int get_scanLevelMin(struct cmdline_data* cmd, int *value)
+{
+#if defined(OCTREESMOOTHING) || defined(BALLS)
+    *value = cmd->scanLevelMin;
+    return SUCCESS;
+#else
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "scanLevelMin is only available when OCTREESMOOTHING or BALLS is enabled");
+    return FAILURE;
+#endif
+}
+//E
+
+
 //B version 1.0.1
 int get_nmultipoles(struct  cmdline_data* cmd, int *value)
 {
@@ -142,23 +134,33 @@ int get_version(struct  cmdline_data* cmd, char *param)
     return SUCCESS;
 }
 
-int get_rootDir(struct  cmdline_data* cmd, char *value)
+
+int get_rootDir(struct cmdline_data* cmd, char *value)
 {
-    sprintf(value,"%s",cmd->rootDir);
+    if (cmd->rootDir == NULL) {
+        sprintf(value, "%s", "");
+        return SUCCESS;
+    }
+
+    snprintf(value, MAXLENGTHOFFILES, "%s", cmd->rootDir);
     return SUCCESS;
 }
 //E parameters section
 
 //B global parameter section
-int get_nbody(struct  cmdline_data* cmd, struct  global_data* gd, int *value)
-{
-// update to get nbobdy as an array...
-    for (int ifile=0; ifile<gd->ninfiles; ifile++)
-        *value = gd->nbodyTable[ifile];
-    *value = cmd->nbody;
 
+//B
+int get_nbody(struct cmdline_data* cmd, struct global_data* gd, INTEGER *value)
+{
+    (void)gd;
+
+    if (cmd == NULL || value == NULL)
+        return FAILURE;
+
+    *value = cmd->nbody;
     return SUCCESS;
 }
+//E
 
 int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, short *value)
 {
@@ -168,11 +170,44 @@ int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, short *v
 }
 //E global parameter section
 
+
+//B added by cBalls
+local int require_live_hist_vector(struct cmdline_data* cmd,
+                                   struct global_data* gd,
+                                   string routineName,
+                                   realptr src,
+                                   string srcName)
+{
+    if (cmd->sizeHistN <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid sizeHistN=%d", routineName, cmd->sizeHistN);
+        return FAILURE;
+    }
+
+    if (gd->histograms_allocated != TRUE) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: histogram arrays are not allocated", routineName);
+        return FAILURE;
+    }
+
+    if (gd->vecPXD == NULL || src == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: missing PXD vector or source histogram %s", routineName, srcName);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+//E
+
 //B histograms section
 int get_rBins(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     real rBin, rbinlog;
     int n;
+
+    if (require_live_hist_vector(cmd, gd, "get_rBins", gd->rBins, "rBins") == FAILURE)
+        return FAILURE;
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
@@ -191,20 +226,28 @@ int get_rBins(struct  cmdline_data* cmd, struct  global_data* gd)
     return SUCCESS;
 }
 
-int get_HistNN(struct  cmdline_data* cmd, struct  global_data* gd)
+//B added by cBalls
+int get_HistNN(struct cmdline_data* cmd, struct global_data* gd)
 {
     int n;
 
-    for (n=1; n<=cmd->sizeHistN; n++) {
+    if (require_live_hist_vector(cmd, gd, "get_HistNN", gd->histNN, "histNN") == FAILURE)
+        return FAILURE;
+
+    for (n=1; n<=cmd->sizeHistN; n++)
         gd->vecPXD[n] = gd->histNN[n];
-    }
 
     return SUCCESS;
 }
+//E
+
 
 int get_HistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
+
+    if (require_live_hist_vector(cmd, gd, "get_HistCF", gd->histCF, "histCF") == FAILURE)
+        return FAILURE;
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         gd->vecPXD[n] = gd->histCF[n];
@@ -216,6 +259,9 @@ int get_HistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 int get_HistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
+
+    if (require_live_hist_vector(cmd, gd, "get_HistXi2pcf", gd->histXi2pcf, "histXi2pcf") == FAILURE)
+        return FAILURE;
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         gd->vecPXD[n] = gd->histXi2pcf[n];
@@ -229,6 +275,9 @@ int get_HistXi2pcf12(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
 
+    if (require_live_hist_vector(cmd, gd, "get_HistXi2pcf12", gd->histXi2pcf12, "histXi2pcf12") == FAILURE)
+        return FAILURE;
+
     for (n=1; n<=cmd->sizeHistN; n++) {
         gd->vecPXD[n] = gd->histXi2pcf12[n];
     }
@@ -239,6 +288,9 @@ int get_HistXi2pcf12(struct  cmdline_data* cmd, struct  global_data* gd)
 int get_HistXi2pcf13(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
+
+    if (require_live_hist_vector(cmd, gd, "get_HistXi2pcf13", gd->histXi2pcf13, "histXi2pcf13") == FAILURE)
+        return FAILURE;
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         gd->vecPXD[n] = gd->histXi2pcf13[n];
@@ -255,55 +307,54 @@ int get_HistXi2pcf13(struct  cmdline_data* cmd, struct  global_data* gd)
 #define _COSSIN_      4
 
 int get_HistZetaMsincos(struct  cmdline_data* cmd,
-                     struct  global_data* gd,
-                     int m, int type, ErrorMsg errmsg)
+                         struct  global_data* gd,
+                         int m, int type, ErrorMsg errmsg)
 {
     string routineName = "get_HistZetaMsincos";
     int n1, n2;
-    
+    real ***histZetaMptr = NULL;
+    string histName = "histZetaMcos";
+
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
-                   errmsg,"\nget_HistZetaM_sincos: not allowed value of m = %d\n",m);
+                   errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
+        class_test((gd->matPXD == NULL),
+                   errmsg,"\n%s: matPXD is not allocated; call cyballs Run(level=[\"MainLoop\"]) before PXD getters\n", routineName);
 
-        //B matPXD array begins at 0 offset. Working OK in cyballs
         switch(type) {
             case _COS_:
-                for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                        gd->matPXD[n1-1][n2-1] = gd->histZetaMcos[m][n1][n2];
-                    }
-                }
+                histZetaMptr = gd->histZetaMcos;
+                histName = "histZetaMcos";
                 break;
             case _SIN_:
-                for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                        gd->matPXD[n1-1][n2-1] = gd->histZetaMsin[m][n1][n2];
-                    }
-                }
+                histZetaMptr = gd->histZetaMsin;
+                histName = "histZetaMsin";
                 break;
             case _SINCOS_:
-                for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                        gd->matPXD[n1-1][n2-1] = gd->histZetaMsincos[m][n1][n2];
-                    }
-                }
+                histZetaMptr = gd->histZetaMsincos;
+                histName = "histZetaMsincos";
                 break;
             case _COSSIN_:
-                for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                        gd->matPXD[n1-1][n2-1] = gd->histZetaMcossin[m][n1][n2];
-                    }
-                }
+                histZetaMptr = gd->histZetaMcossin;
+                histName = "histZetaMcossin";
                 break;
             default:
-                for (n1=1; n1<=cmd->sizeHistN; n1++) {
-                    for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                        gd->matPXD[n1-1][n2-1] = gd->histZetaMcos[m][n1][n2];
-                    }
-                }
-                break;
+                class_test(TRUE,
+                           errmsg,"\n%s: not allowed value of type = %d (use 1=cos, 2=sin, 3=sincos, 4=cossin)\n", routineName, type);
         }
-        //E
+
+        class_test((histZetaMptr == NULL),
+                   errmsg,"\n%s: %s is not allocated\n", routineName, histName);
+        class_test((histZetaMptr[m] == NULL),
+                   errmsg,"\n%s: %s[%d] is not allocated\n", routineName, histName, m);
+
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            class_test((histZetaMptr[m][n1] == NULL),
+                       errmsg,"\n%s: %s[%d][%d] is not allocated\n", routineName, histName, m, n1);
+            for (n2=1; n2<=cmd->sizeHistN; n2++) {
+                gd->matPXD[n1-1][n2-1] = histZetaMptr[m][n1][n2];
+            }
+        }
     }
 
     return SUCCESS;
@@ -318,21 +369,56 @@ int get_HistZetaM_EE(struct  cmdline_data* cmd,
                      struct  global_data* gd,
                      int m, ErrorMsg errmsg)
 {
+    string routineName = "get_HistZetaM_EE";
     int n1, n2;
 
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
-                   errmsg,"\nget_HistZetaM_EE: not allowed value of m = %d\n",m);
-        
-        //B matPXD array begins at 0 offset. Working OK in cyballs
+                   errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
+        class_test((gd->matPXD == NULL),
+                   errmsg,"\n%s: matPXD is not allocated; call cyballs Run(level=[\"MainLoop\"]) before PXD getters\n", routineName);
+        class_test((gd->histZetaM_EE == NULL),
+                   errmsg,"\n%s: histZetaM_EE is not allocated\n", routineName);
+        class_test((gd->histZetaM_EE[m] == NULL),
+                   errmsg,"\n%s: histZetaM_EE[%d] is not allocated\n", routineName, m);
+
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            class_test((gd->histZetaM_EE[m][n1] == NULL),
+                       errmsg,"\n%s: histZetaM_EE[%d][%d] is not allocated\n", routineName, m, n1);
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 gd->matPXD[n1-1][n2-1] = gd->histZetaM_EE[m][n1][n2];
             }
         }
-        //E
     }
 
+    return SUCCESS;
+}
+
+int get_HistZetaM_EE_Im(struct cmdline_data* cmd,
+                        struct global_data* gd,
+                        int m, ErrorMsg errmsg)
+{
+    string routineName = "get_HistZetaM_EE_Im";
+    int n1, n2;
+
+    if (gd->computeTPCF==TRUE) {
+        class_test((m <= 0 || m > cmd->mChebyshev + 1),
+                   errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
+        class_test((gd->matPXD == NULL),
+                   errmsg,"\n%s: matPXD is not allocated; call cyballs Run(level=[\"MainLoop\"]) before PXD getters\n", routineName);
+        class_test((gd->histZetaM_EE_Im == NULL),
+                   errmsg,"\n%s: histZetaM_EE_Im is not allocated\n", routineName);
+        class_test((gd->histZetaM_EE_Im[m] == NULL),
+                   errmsg,"\n%s: histZetaM_EE_Im[%d] is not allocated\n", routineName, m);
+
+        for (n1=1; n1<=cmd->sizeHistN; n1++) {
+            class_test((gd->histZetaM_EE_Im[m][n1] == NULL),
+                       errmsg,"\n%s: histZetaM_EE_Im[%d][%d] is not allocated\n",
+                       routineName, m, n1);
+            for (n2=1; n2<=cmd->sizeHistN; n2++)
+                gd->matPXD[n1-1][n2-1] = gd->histZetaM_EE_Im[m][n1][n2];
+        }
+    }
     return SUCCESS;
 }
 

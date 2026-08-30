@@ -1,0 +1,23 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# BALLSOMP
+# For computing 3pcf using balls method
+#
+# This line is added to ../Makefile_addons_settings
+#BALLSON = 1
+ifeq ($(BALLSON),1)
+include ./addons/balls_omp/Makefile_settings_balls_omp
+include $(MACHINES_DIR)/addons/balls_omp/Makefile_balls_omp
+endif
+#
+
+

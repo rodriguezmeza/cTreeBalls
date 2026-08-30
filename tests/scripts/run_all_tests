@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 
 # set SMOOTHPIVOTON = 0 in addons/Makefile_addons_settings and then make "make clean; make all"
+#
+# If you want CFITSIO to remain optional, also move the FITS test out of run_all_tests.
+#
+# This block in tests/scripts/run_all_tests requires CFITSIO/FITS support.
+#   If CFITSIO is not guaranteed in the default build, move it to test-cfitsio in Makefile
+#
+
+#
+# in $(MDIR)
+# $ make clean; make test-default
+#
+#   at the end of this session if necessary restore original profile and clean:
+#       $ make clean
+#
+# use this profile (edit addons/Makefile_addons_settings):
+#=====================================================
+#SEARCHMETHOD = []  EXEC = [cballs]
+#External options = [ -DTHREEDIMCODE -DOPENMPCODE -DLONGINT -DADDONS -DTWOPCF -DTHREEPCFCONVERGENCE -DTPCF -DPRUNING  -DTHETA=1.25 -DLOGBINCBON -DKDTREEOMP -DOCTREEGGGOMP -DKDTREEBOXOMP -DNEIGHBORBOXESOMP -DGADGETIO -DCLASSLIB -DIOLIB -DCFITSIO -DPXD -DNMultipoles -DNONORMHIST -DCMDLINE_DEFS_UNITSPHERE -DGETPARAM -DUSEGSL]
+#=====================================================
 
 # Set cBalls exe PATH
 CBALLS=../cballs

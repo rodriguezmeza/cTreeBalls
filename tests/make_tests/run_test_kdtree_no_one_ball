@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-kdtree.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable KDTREEOMP"
+
+[ "$MULTI_THREADS" -gt 1 ] \
+    || fail_with_log "MULTI_THREADS must be greater than one"
+
+run_case()
+{
+    local name=$1
+    local threads=$2
+    local use_log_hist=$3
+    local options=$4
+    local output_dir="$TMP_ROOT/$name"
+
+    mkdir -p "$output_dir"
+    "$CBALLS" \
+        search=kdtree-omp \
+        testmodel=simple-cubic \
+        nbody=4096 \
+        lengthBox=2 \
+        rootDir="$output_dir" \
+        numberThreads="$threads" \
+        useLogHist="$use_log_hist" \
+        rangeN=0.4 \
+        rminHist=0.005 \
+        sizeHistN=4 \
+        mChebyshev=2 \
+        nsmooth=4 \
+        seed=123 \
+        stepState=1000000 \
+        verbose=2 \
+        verbose_log=0 \
+        options="$options" >"$output_dir/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output_dir/run.log"
+}
+
+histogram_list()
+{
+    local directory=$1
+
+    (cd "$directory" &&
+        find . -maxdepth 1 -type f \
+            \( -name 'hist*.txt' -o -name 'mhist*.txt' -o -name rbins.txt \) \
+            -print | LC_ALL=C sort)
+}
+
+compare_histograms()
+{
+    local label=$1
+    local reference=$2
+    local candidate=$3
+    local reference_list candidate_list filename
+
+    reference_list=$(histogram_list "$reference")
+    candidate_list=$(histogram_list "$candidate")
+    [ -n "$reference_list" ] \
+        || fail_with_log "$label produced no histogram output" \
+                         "$reference/run.log"
+    [ "$reference_list" = "$candidate_list" ] \
+        || fail_with_log "$label produced different output file sets" \
+                         "$candidate/run.log"
+
+    while IFS= read -r filename; do
+        cmp -s "$reference/$filename" "$candidate/$filename" \
+            || fail_with_log "$label differs in $filename" \
+                             "$candidate/run.log"
+    done <<<"$reference_list"
+}
+
+exact_options=compute-HistN,out-m-HistZeta,no-one-ball
+precedence_options=$exact_options,behavior-ball
+one_ball_options=compute-HistN,out-m-HistZeta,behavior-ball
+
+run_case exact 1 false "$exact_options"
+run_case precedence 1 false "$precedence_options"
+compare_histograms "no-one-ball option precedence" \
+                   "$TMP_ROOT/exact" "$TMP_ROOT/precedence"
+
+run_case one-ball-one 1 true "$one_ball_options"
+run_case one-ball-many "$MULTI_THREADS" true "$one_ball_options"
+compare_histograms "one-ball 1/$MULTI_THREADS-thread determinism" \
+                   "$TMP_ROOT/one-ball-one" "$TMP_ROOT/one-ball-many"
+
+nbccalc=$(awk '$1 == "nbccalc" { value=$3 } END { print value+0 }' \
+              "$TMP_ROOT/one-ball-one/run.log")
+[ "$nbccalc" -gt 0 ] \
+    || fail_with_log "one-ball traversal did not aggregate any KD cells" \
+                     "$TMP_ROOT/one-ball-one/run.log"
+
+echo "PASS: KDTREEOMP no-one-ball fast path and one-ball traversal"

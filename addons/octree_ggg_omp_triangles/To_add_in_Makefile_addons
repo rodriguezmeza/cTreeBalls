@@ -1,0 +1,28 @@
+# ----- MAKE FILE module definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# OCTREEGGGOMPTRIANGLES
+# For computing 3pcf using octree-ggg-omp-triangles
+#
+# These lines is added to ../Makefile_addons_settings
+#ifeq ($(USEGSL),1)
+#OCTREEGGGOMPTRIANGLESON = 1
+#else
+#$(info To compile with OCTREEGGGOMPTRIANGLES needs USEGSL = 1, deactivating...)
+#OCTREEGGGOMPTRIANGLESON = 0
+#endif
+#
+ifeq ($(OCTREEGGGOMPTRIANGLESON),1)
+include $(MACHINES_DIR)/addons/octree_ggg_omp_triangles/Makefile_octree_ggg_omp_triangles
+endif
+#
+
+

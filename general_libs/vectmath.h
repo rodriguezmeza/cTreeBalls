@@ -42,7 +42,7 @@
 {                                                                       \
     int _i;                                                             \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        (v)[_i] = (u)[_i] + (w)[_i];                                    \
+        (v)[_i] = (real)(u)[_i] + (real)(w)[_i];                        \
 }
 
 #define ADDV_ext(v,u,w,dim)                                             \
@@ -56,21 +56,21 @@
 {                                                                       \
     int _i;                                                             \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        (v)[_i] = (u)[_i] + (w)[_i] * (s);                              \
+        (v)[_i] = (real)(u)[_i] + (real)(w)[_i] * (real)(s);            \
 }
 
 #define SUBV(v,u,w)                                                     \
 {                                                                       \
     int _i;                                                             \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        (v)[_i] = (u)[_i] - (w)[_i];                                    \
+        (v)[_i] = (real)(u)[_i] - (real)(w)[_i];                        \
 }
 
 #define MULVS(v,u,s)                                                    \
 {                                                                       \
     int _i;                                                             \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        (v)[_i] = (u)[_i] * (s);                                        \
+        (v)[_i] = (real)(u)[_i] * (real)(s);                            \
 }
 
 #define MULVS_ext(v,u,s,dim)                                            \
@@ -84,7 +84,7 @@
 {                                                                       \
     int _i;                                                             \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        (v)[_i] = (u)[_i] / (s);                                        \
+        (v)[_i] = (real)(u)[_i] / (real)(s);                            \
 }
 
 #define DOTVP(s,v,u)                                                    \
@@ -92,7 +92,7 @@
     int _i;                                                             \
     (s) = 0.0;                                                          \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        (s) += (v)[_i] * (u)[_i];                                       \
+        (s) += (real)(v)[_i] * (real)(u)[_i];                           \
 }
 
 #define ABSV(s,v)                                                       \
@@ -101,7 +101,7 @@
     int _i;                                                             \
     _tmp = 0.0;                                                         \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        _tmp += (v)[_i] * (v)[_i];                                      \
+        _tmp += (real)(v)[_i] * (real)(v)[_i];                          \
     (s) = rsqrt(_tmp);                                                  \
 }
 
@@ -111,7 +111,8 @@
     int _i;                                                             \
     _tmp = 0.0;                                                         \
     for (_i = 0; _i < NDIM; _i++)                                       \
-        _tmp += ((u)[_i]-(v)[_i]) * ((u)[_i]-(v)[_i]);                  \
+        _tmp += ((real)(u)[_i]-(real)(v)[_i])                           \
+              * ((real)(u)[_i]-(real)(v)[_i]);                          \
     (s) = rsqrt(_tmp);                                                  \
 }
 
@@ -120,9 +121,9 @@
 #define DISTSQV(s,u,v)        /* DISTance SQuared between Vectors */    \
 {                                    \
     real _dx, _dy, _dz;                            \
-    _dx = (u)[0] - (v)[0];                        \
-    _dy = (u)[1] - (v)[1];                        \
-    _dz = (u)[2] - (v)[2];                        \
+    _dx = (real)(u)[0] - (real)(v)[0];            \
+    _dy = (real)(u)[1] - (real)(v)[1];            \
+    _dz = (real)(u)[2] - (real)(v)[2];            \
     (s) = _dx*_dx + _dy*_dy + _dz*_dz;                    \
 }
 
@@ -133,7 +134,8 @@
     int _i;                                \
     (s) = 0.0;                                \
     for (_i = 0; _i < NDIM; _i++)                    \
-    (s) += ((u)[_i]-(v)[_i]) * ((u)[_i]-(v)[_i]);                \
+    (s) += ((real)(u)[_i]-(real)(v)[_i])                         \
+         * ((real)(u)[_i]-(real)(v)[_i]);                        \
 }
 
 #endif
@@ -149,14 +151,14 @@
 
 #define CROSSVP_2D(s,v,u)                                                  \
 {                                                                        \
-    (s) = (v)[0]*(u)[1] - (v)[1]*(u)[0];                                \
+    (s) = (real)(v)[0]*(real)(u)[1] - (real)(v)[1]*(real)(u)[0];        \
 }
 
 #define CROSSVP_3D(v,u,w)                                                  \
 {                                                                       \
-    (v)[0] = (u)[1]*(w)[2] - (u)[2]*(w)[1];                             \
-    (v)[1] = (u)[2]*(w)[0] - (u)[0]*(w)[2];                             \
-    (v)[2] = (u)[0]*(w)[1] - (u)[1]*(w)[0];                             \
+    (v)[0] = (real)(u)[1]*(real)(w)[2] - (real)(u)[2]*(real)(w)[1];     \
+    (v)[1] = (real)(u)[2]*(real)(w)[0] - (real)(u)[0]*(real)(w)[2];     \
+    (v)[2] = (real)(u)[0]*(real)(w)[1] - (real)(u)[1]*(real)(w)[0];     \
 }
 //E
 //E
@@ -175,7 +177,7 @@
 
 #define CROSSVP(s,v,u)                                                  \
 {																		\
-    (s) = (v)[0]*(u)[1] - (v)[1]*(u)[0];                                \
+    (s) = (real)(v)[0]*(real)(u)[1] - (real)(v)[1]*(real)(u)[0];        \
 }
 
 #endif
@@ -185,9 +187,9 @@
 
 #define CROSSVP(v,u,w)                                                  \
 {                                                                       \
-    (v)[0] = (u)[1]*(w)[2] - (u)[2]*(w)[1];                             \
-    (v)[1] = (u)[2]*(w)[0] - (u)[0]*(w)[2];                             \
-    (v)[2] = (u)[0]*(w)[1] - (u)[1]*(w)[0];                             \
+    (v)[0] = (real)(u)[1]*(real)(w)[2] - (real)(u)[2]*(real)(w)[1];     \
+    (v)[1] = (real)(u)[2]*(real)(w)[0] - (real)(u)[0]*(real)(w)[2];     \
+    (v)[2] = (real)(u)[0]*(real)(w)[1] - (real)(u)[1]*(real)(w)[0];     \
 }
 
 #endif
@@ -345,18 +347,22 @@
 
 #define DOTPSUBVRADEC(s,v,u,w)                                          \
 {                                                                       \
-    (v)[0] = (u)[0] - (w)[0];    (s)  = (v)[0] * (v)[0];                \
-    (v)[1] = (u)[1] - (w)[1];    (s) += (v)[1] * (v)[1];                \
-    (v)[2] = (u)[2] - (w)[2];    (s) += (v)[2] * (v)[2];                \
+    real _d0 = (real)(u)[0] - (real)(w)[0];                             \
+    real _d1 = (real)(u)[1] - (real)(w)[1];                             \
+    real _d2 = (real)(u)[2] - (real)(w)[2];                             \
+    (v)[0] = _d0; (v)[1] = _d1; (v)[2] = _d2;                          \
+    (s) = _d0*_d0 + _d1*_d1 + _d2*_d2;                                \
 }
 
 #if defined(THREEDIM)
 
 #define DOTPSUBV(s,v,u,w)										        \
 {                                                                       \
-    (v)[0] = (u)[0] - (w)[0];    (s)  = (v)[0] * (v)[0];                \
-    (v)[1] = (u)[1] - (w)[1];    (s) += (v)[1] * (v)[1];                \
-    (v)[2] = (u)[2] - (w)[2];    (s) += (v)[2] * (v)[2];                \
+    real _d0 = (real)(u)[0] - (real)(w)[0];                             \
+    real _d1 = (real)(u)[1] - (real)(w)[1];                             \
+    real _d2 = (real)(u)[2] - (real)(w)[2];                             \
+    (v)[0] = _d0; (v)[1] = _d1; (v)[2] = _d2;                          \
+    (s) = _d0*_d0 + _d1*_d1 + _d2*_d2;                                \
 }
 
 #define DOTPMULMV(s,v,p,u)											    \
@@ -394,8 +400,10 @@
 
 #define DOTPSUBV(s,v,u,w)										        \
 {                                                                       \
-    (v)[0] = (u)[0] - (w)[0];    (s)  = (v)[0] * (v)[0];                \
-    (v)[1] = (u)[1] - (w)[1];    (s) += (v)[1] * (v)[1];                \
+    real _d0 = (real)(u)[0] - (real)(w)[0];                             \
+    real _d1 = (real)(u)[1] - (real)(w)[1];                             \
+    (v)[0] = _d0; (v)[1] = _d1;                                        \
+    (s) = _d0*_d0 + _d1*_d1;                                          \
 }
 
 #define DOTPMULMV(s,v,p,u)											    \
@@ -429,7 +437,9 @@
 
 #define DOTPSUBV(s,v,u,w)										        \
 {                                                                       \
-    (v)[0] = (u)[0] - (w)[0];    (s)  = (v)[0] * (v)[0];                \
+    real _d0 = (real)(u)[0] - (real)(w)[0];                             \
+    (v)[0] = _d0;                                                       \
+    (s) = _d0*_d0;                                                      \
 }
 
 #define DOTPMULMV(s,v,p,u)											    \

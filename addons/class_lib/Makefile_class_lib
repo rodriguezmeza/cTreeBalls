@@ -7,8 +7,10 @@
 #
 ifeq ($(CLASSLIBON),1)
 OPT2 += -DCLASSLIB
-CLASSLIB = ../addons/class_lib/
-vpath %.c ./addons/class_lib/
+#CLASSLIB = ../addons/class_lib/
+CLASSLIB = $(MDIR)/addons/class_lib
+#vpath %.c ./addons/class_lib/
+vpath %.c $(MDIR)/addons/class_lib/
 #CCFLAG += -DCLASSLIB
 #LDFLAGS += -DCLASSLIB
 INCLUDES += -I$(CLASSLIB)

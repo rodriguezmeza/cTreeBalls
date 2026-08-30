@@ -16,6 +16,18 @@
 
 #include "globaldefs.h"
 
+#ifndef cBALLS_FAIL
+#ifdef CLASSLIB
+#define cBALLS_FAIL(cmd, ...)                                           \
+    do {                                                                \
+        snprintf((cmd)->error_message, _ERRORMSGSIZE_, __VA_ARGS__);    \
+        return FAILURE;                                                 \
+    } while (0)
+#else
+#define cBALLS_FAIL(cmd, ...) error(__VA_ARGS__)
+#endif
+#endif
+
 local int PrintHistNN(struct cmdline_data* cmd, struct  global_data* gd);
 local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd);
 local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd);
@@ -71,7 +83,11 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
     int ifile = 0;
 
-    debug_tracking_s("001", routineName);
+    if (gd->stopflag || gd->inputHeaderFlag == TRUE) {
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                            "\n\t%s: stopping...\n\n", routineName);
+        return SUCCESS;
+    }
 
 //B socket:
 #ifdef ADDONS
@@ -79,13 +95,19 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
-    if ( scanopt(cmd->options, "make-tree") ) {
+    // this version won´t need 'stop' in options
+    if (scanopt(cmd->options, "make-tree")) {
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n\t%s: make-tree: try making tree...\n\n",
                             routineName);
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
+
+        DO_BODY(p, bodytable[ifile], bodytable[ifile] + cmd->nbody)
             Update(p) = TRUE;
-        MakeTree(cmd, gd, bodytable[ifile], cmd->nbody, 0);
+
+        class_call_cballs(MakeTree(cmd, gd, bodytable[ifile], cmd->nbody, ifile),
+                          errmsg, errmsg);
+
+        return SUCCESS;
     }
 
     if (gd->inputHeaderFlag==TRUE) {
@@ -97,44 +119,70 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 
     if (scanopt(cmd->options, "stop")) {
         if (!strnull(cmd->outfile)&&!scanopt(cmd->options, "save-ra-dec"))
-            OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
+        class_call_cballs(OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile),
+                              errmsg, errmsg);
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\t%s: stopping...\n\n", routineName);
-        exit(1);
+        gd->stopflag = TRUE;
+        return SUCCESS;
     }
 
-    EvalHist(cmd, gd);
+    int eval_status = EvalHist(cmd, gd);
+#ifdef CBALLS_MPI_ENABLED
+    eval_status = cballs_mpi_consensus(cmd, eval_status,
+                                       "MPI histogram evaluation");
+#endif
+    class_call_cballs(eval_status, errmsg, errmsg);
 
-    if (!gd->stopflag) {
-        if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE)
-            PrintEvalHist(cmd, gd);
-    }
+    int output_status = SUCCESS;
+    if (!gd->stopflag && gd->flagPrint==TRUE && gd->rootDirFlag==TRUE)
+        output_status = PrintEvalHist(cmd, gd);
+#ifdef CBALLS_MPI_ENABLED
+    output_status = cballs_mpi_consensus(
+        cmd, output_status, "MPI histogram output");
+#endif
+    if (output_status == FAILURE) return FAILURE;
 
 #ifdef DEBUG
     if (!strnull(cmd->outfile))
-        OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile);
+        class_call_cballs(OutputData(cmd, gd, bodytable, gd->nbodyTable, ifile),
+                              errmsg, errmsg);
 #endif
 
 //B Post-processing:
     double cpustart;
     char buf[BUFFERSIZE];
     if (scanopt(cmd->options, "post-processing")) {
+        int post_status = SUCCESS;
+#ifdef CBALLS_MPI_ENABLED
+        if (cballs_mpi_output_enabled(cmd)) {
+#endif
         cpustart = CPUTIME;
-        sprintf(buf,"%s",cmd->posScript);
-        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "\npost-processing: executing '%s'...",
-                            cmd->posScript);
-        system(buf);
-        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "done.\n");
-        gd->cputotal += CPUTIME - cpustart;
-        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "cpu time expended in this script %g\n\n",
-                            CPUTIME - cpustart);
+        if (format_checked(buf, sizeof(buf),
+                            "buf", "%s",cmd->posScript) != 0)
+            post_status = FAILURE;
+        if (post_status == SUCCESS) {
+            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                "\npost-processing: executing '%s'...",
+                                cmd->posScript);
+            post_status = cballs_system_checked(cmd, routineName, buf);
+        }
+        if (post_status == SUCCESS) {
+            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                "done.\n");
+            gd->cputotal += CPUTIME - cpustart;
+            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                "cpu time expended in this script %g\n\n",
+                                CPUTIME - cpustart);
+        }
+#ifdef CBALLS_MPI_ENABLED
+        }
+        post_status = cballs_mpi_consensus(
+            cmd, post_status, "MPI post-processing");
+#endif
+        if (post_status == FAILURE) return FAILURE;
     }
 //E
-
-    debug_tracking_s("002... final", routineName);
 
     return SUCCESS;
 }
@@ -153,6 +201,8 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
     bodyptr p;
     int ifile;
 
+    cballs_refresh_option_cache(cmd);
+
     correlation_string_to_int(cmd, gd, &correlation_int);
 
     switch(gd->searchMethod_int) {
@@ -164,13 +214,13 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
                 DO_BODY(p,bodytable[ifile],
                         bodytable[ifile]+gd->nbodyTable[ifile])
                 Update(p) = TRUE;
-                MakeTree(cmd, gd, bodytable[ifile],
-                         gd->nbodyTable[ifile], ifile);
+                if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile) == FAILURE)
+                    return FAILURE;
             }
-            class_call_cballs(searchcalc_normal_sincos(cmd, gd, bodytable,
-                            gd->nbodyTable, 1,
-                            gd->nbodyTable, gd->iCatalogs[0],
-                            gd->iCatalogs[1]), errmsg, errmsg);
+            if (searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                         gd->nbodyTable,
+                                         gd->iCatalogs[0], gd->iCatalogs[1]) == FAILURE)
+                return FAILURE;
             break;
 
 //B socket:
@@ -186,24 +236,18 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             for (ifile=0; ifile<gd->ninfiles; ifile++) {
                 DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
                 Update(p) = TRUE;
-                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+                if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile) == FAILURE)
+                    return FAILURE;
             }
-            searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
-                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            if (searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                         gd->nbodyTable,
+                                         gd->iCatalogs[0], gd->iCatalogs[1]) == FAILURE)
+                return FAILURE;
             break;
         default:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                   "\n\t%s: unknown (%s) method... using dafault search method.\n",
-                                   routineName, cmd->searchMethod);
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\n\twith normal tree method (sincos-omp)\n\n");
-            for (ifile=0; ifile<gd->ninfiles; ifile++) {
-                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
-                Update(p) = TRUE;
-                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
-            }
-            searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
-                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            cBALLS_FAIL(cmd,
+                "%s: internal error: unsupported searchMethod '%s' with id %d\n",
+                routineName, cmd->searchMethod, gd->searchMethod_int);
             break;
 
 #else
@@ -216,24 +260,18 @@ int EvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             for (ifile=0; ifile<gd->ninfiles; ifile++) {
                 DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
                 Update(p) = TRUE;
-                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+                if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile) == FAILURE)
+                    return FAILURE;
             }
-            searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
-                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            if (searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
+                                         gd->nbodyTable,
+                                         gd->iCatalogs[0], gd->iCatalogs[1]) == FAILURE)
+                return FAILURE;
             break;
         default:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                   "\n\t%s: dafault search method.\n",
-                                   routineName);
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\n\twith normal tree method (sincos-omp)\n\n");
-            for (ifile=0; ifile<gd->ninfiles; ifile++) {
-                DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
-                Update(p) = TRUE;
-                MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
-            }
-            searchcalc_normal_sincos(cmd, gd, bodytable, gd->nbodyTable, 1,
-                        gd->nbodyTable, gd->iCatalogs[0], gd->iCatalogs[1]);
+            cBALLS_FAIL(cmd,
+                "%s: internal error: unsupported searchMethod '%s' with id %d\n",
+                routineName, cmd->searchMethod, gd->searchMethod_int);
             break;
 #endif
 //E
@@ -252,15 +290,17 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n\t%s: printing normal tree method (omp-sincos)\n\n",
                             routineName);
-            if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
-            PrintHistrBins(cmd, gd);
-            PrintHistXi2pcf(cmd, gd);
+            if (scanopt(cmd->options, "compute-HistN"))
+                PRINT_OR_FAIL(PrintHistNN(cmd, gd));
+                
+            PRINT_OR_FAIL(PrintHistrBins(cmd, gd));
+            PRINT_OR_FAIL(PrintHistXi2pcf(cmd, gd));
 #ifdef TPCF
-                PrintHistZetaM_sincos(cmd, gd);
+            PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd));
                 if (scanopt(cmd->options, "out-m-HistZeta"))
-                    PrintHistZetaMm_sincos(cmd, gd);
+                    PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd));
                 if (scanopt(cmd->options, "out-HistZetaG")) {
-                    PrintHistZetaMZetaGm_sincos(cmd, gd);
+                    PRINT_OR_FAIL(PrintHistZetaMZetaGm_sincos(cmd, gd));
                 }
 #endif
             break;
@@ -268,32 +308,17 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\n\t%s: printing null search method.\n\n",
                         routineName);
-            if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
-            PrintHistrBins(cmd, gd);
-            PrintHistXi2pcf(cmd, gd);
+            if (scanopt(cmd->options, "compute-HistN"))
+                PRINT_OR_FAIL(PrintHistNN(cmd, gd));
+            PRINT_OR_FAIL(PrintHistrBins(cmd, gd));
+            PRINT_OR_FAIL(PrintHistXi2pcf(cmd, gd));
 #ifdef TPCF
-                PrintHistZetaM_sincos(cmd, gd);
+                PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd));
                 if (scanopt(cmd->options, "out-m-HistZeta"))
-                    PrintHistZetaMm_sincos(cmd, gd);
+                    PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd));
                 if (scanopt(cmd->options, "out-HistZetaG")) {
-                    PrintHistZetaMZetaGm_sincos(cmd, gd);
+                    PRINT_OR_FAIL(PrintHistZetaMZetaGm_sincos(cmd, gd));
                 }
-#endif
-            break;
-        default:
-            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                   "\n\t%s: printing dafault search method.\n\n",
-                                   routineName);
-            if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
-            PrintHistrBins(cmd, gd);
-            PrintHistXi2pcf(cmd, gd);
-#ifdef TPCF
-            PrintHistZetaM_sincos(cmd, gd);
-            if (scanopt(cmd->options, "out-m-HistZeta"))
-                PrintHistZetaMm_sincos(cmd, gd);
-            if (scanopt(cmd->options, "out-HistZetaG")) {
-                PrintHistZetaMZetaGm_sincos(cmd, gd);
-            }
 #endif
             break;
 
@@ -302,7 +327,11 @@ local int PrintEvalHist(struct  cmdline_data* cmd, struct  global_data* gd)
 #include "cballs_include_03.h"
 #endif
 //E
-
+        default:
+            cBALLS_FAIL(cmd,
+            "%s: internal error: unsupported print's search method '%s' with id %d\n",
+                routineName, cmd->searchMethod, gd->searchMethod_int);
+            break;
         } // ! switch
     } // ! scanoptions no-out-Hist
 
@@ -360,11 +389,12 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
 
 local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistNN";
     real rBin, rbinlog;
     int n;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistNNFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistNNFileName);
@@ -380,18 +410,20 @@ local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd)
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histNN[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName,
+                             "%16.8e %16.8e\n", rBin, gd->histNN[n]);
     }
-    fclose(outstr);
-
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName);
+    
     if (scanopt(cmd->options, "and-CF"))
-        PrintHistCF(cmd, gd);
+        PRINT_OR_FAIL(PrintHistCF(cmd, gd));
 
     return SUCCESS;
 }
 
 local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistCF";
     real rBin, rbinlog;
     int n;
     stream outstr;
@@ -401,7 +433,7 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
         deltaR = cmd->rangeN/cmd->sizeHistN;
     //E
 
-    outstr = stropen(gd->fpfnamehistCFFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistCFFileName);
@@ -424,20 +456,22 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
             }
             //E
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histCF[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName,
+                             "%16.8e %16.8e\n",rBin,gd->histCF[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName);
 
     return SUCCESS;
 }
 
 local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistrBins";
     real rBin, rbinlog;
     int n;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistrBinsFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistrBinsFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistrBinsFileName);
@@ -453,25 +487,28 @@ local int PrintHistrBins(struct  cmdline_data* cmd, struct  global_data* gd)
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e\n",rBin);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistrBinsFileName,
+                             "%16.8e\n",rBin);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistrBinsFileName);
 
     return SUCCESS;
 }
 
 local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistXi2pcf";
     real rBin, rbinlog;
     int n;
     stream outstr;
     char namebuf[256];
 
-    sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
-            cmd->suffixOutFiles, EXTFILES);
+    if (format_checked(namebuf, sizeof(namebuf),
+        "namebuf", "%s%s%s",
+        gd->fpfnamehistXi2pcfFileName, cmd->suffixOutFiles, EXTFILES) != 0)
+        return FAILURE;
     verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-    outstr = stropen(namebuf, "w!");
-
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
@@ -485,9 +522,10 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                             "%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
 
     return SUCCESS;
 }
@@ -495,15 +533,20 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 //B Update or delete. Seems the same as above routine
 local int PrintHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistXi3pcf";
     real rBin, rbinlog;
     int n;
     stream outstr;
     char namebuf[256];
 
-    sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
-            cmd->suffixOutFiles, EXTFILES);
+    if (format_checked(namebuf, sizeof(namebuf),
+                       "namebuf", "%s%s%s",
+                       gd->fpfnamehistXi2pcfFileName,
+                       cmd->suffixOutFiles, EXTFILES) != 0)
+        return FAILURE;
+
     verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-    outstr = stropen(namebuf, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
@@ -512,9 +555,10 @@ local int PrintHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd)
         } else {
             rBin = ((int)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                             "%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
 
     return SUCCESS;
 }
@@ -523,6 +567,7 @@ local int PrintHistXi3pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 
 local int PrintHistZetaM(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistZetaM";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
@@ -530,9 +575,13 @@ local int PrintHistZetaM(struct  cmdline_data* cmd, struct  global_data* gd)
     real rbinlog1, rbinlog2;
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s_%d%s", gd->fpfnamehistZetaMFileName, m, EXTFILES);
+
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s_%d%s", gd->fpfnamehistZetaMFileName, m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 if (scanopt(cmd->options, "xr1r2")) {
@@ -554,15 +603,16 @@ local int PrintHistZetaM(struct  cmdline_data* cmd, struct  global_data* gd)
                         rBin1 = cmd->rminHist + ((real)n1-0.5)*gd->deltaR;
                         rBin2 = cmd->rminHist + ((real)n2-0.5)*gd->deltaR;
                     }
-                    fprintf(outstr,"%16.8e ",
-                            rBin1*rBin2*gd->histZetaM[m][n1][n2]);
+                    WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                         rBin1*rBin2*gd->histZetaM[m][n1][n2]);
                 } else {
-                    fprintf(outstr,"%16.8e ",gd->histZetaM[m][n1][n2]);
+                    WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                         gd->histZetaM[m][n1][n2]);
                 }
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -571,26 +621,30 @@ local int PrintHistZetaM(struct  cmdline_data* cmd, struct  global_data* gd)
 #ifdef USEGSL
 local int PrintHistZetaM_exp(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistZetaM_exp";
     int n1, n2, m;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistZetaMFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistZetaMFileName, "w!");
     verb_print_q(2, cmd->verbose,
                "Printing : to a file %s ...\n",gd->fpfnamehistZetaMFileName);
 
     gsl_complex Atmp;
 
     for (m=0; m<=cmd->mChebyshev; m++) {
-        fprintf(outstr,"\n\nm=%d\n",m);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistZetaMFileName,
+                             "\n\nm=%d\n",m);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 Atmp = gsl_matrix_complex_get(histZetaMatrix[m].histZetaM,n1,n1);
-                fprintf(outstr,"%16.8e %16.8e ",GSL_REAL(Atmp),GSL_IMAG(Atmp));
+                WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistZetaMFileName,
+                                     "%16.8e %16.8e ",
+                                     GSL_REAL(Atmp),GSL_IMAG(Atmp));
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistZetaMFileName, "\n");
         }
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistZetaMFileName);
 
     return SUCCESS;
 }
@@ -600,62 +654,78 @@ local int PrintHistZetaM_exp(struct  cmdline_data* cmd, struct  global_data* gd)
 local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
                                 struct  global_data* gd)
 {
+    string routineName = "PrintHistZetaM_sincos";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cos", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaMcos[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMcos[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sin", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaMsin[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMsin[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_sincos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_sincos", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaMsincos[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMsincos[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
-                "_cossin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaMFileName,
+                           "_cossin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaMcossin[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
+                                     gd->histZetaMcossin[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -673,6 +743,7 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
 local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                                 struct  global_data* gd)
 {
+    string routineName = "PrintHistZetaMm_sincos";
     real rBin, rbinlog;
     int n1, m;
     stream outstr;
@@ -687,11 +758,13 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
     Nbins = cmd->sizeHistN;
 
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                        "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -709,17 +782,20 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
             Zeta3 = gd->histZetaMcos[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gd->histZetaMcos[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gd->histZetaMcos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
         
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sin", m, EXTFILES);
+         if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                            "_sin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -737,17 +813,20 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
                 Zeta3 = gd->histZetaMsin[m][n1][(int)(2.0*Nbins/4.0)];
                 Zeta4 = gd->histZetaMsin[m][n1][(int)(3.0*Nbins/4.0)];
                 Zeta5 = gd->histZetaMsin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-                fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_sincos", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_sincos", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -765,18 +844,21 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
             Zeta3 = gd->histZetaMsincos[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gd->histZetaMsincos[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gd->histZetaMsincos[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
-                "_cossin", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
+                           "_cossin", m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
-        fprintf(outstr,MHISTZETAHEADER);
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, MHISTZETAHEADER);
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             if (cmd->useLogHist) {
                 if (cmd->rminHist==0) {
@@ -794,9 +876,10 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
             Zeta3 = gd->histZetaMcossin[m][n1][(int)(2.0*Nbins/4.0)];
             Zeta4 = gd->histZetaMcossin[m][n1][(int)(3.0*Nbins/4.0)];
             Zeta5 = gd->histZetaMcossin[m][n1][(int)(4.0*Nbins/4.0 - 1.0)];
-            fprintf(outstr,MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                 MHISTZETA,rBin,Zeta,Zeta2,Zeta3,Zeta4,Zeta5);
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -807,24 +890,27 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
 local int PrintHistZetaG(struct  cmdline_data* cmd,
                                        struct  global_data* gd)
 {
+    string routineName = "PrintHistZetaG";
     int n1, n2, l;
     stream outstr;
     char namebuf[256];
 
-    fclose(outstr);
     for (l=1; l<=cmd->sizeHistPhi; l++) {
-        sprintf(namebuf, "%s_%d%s", gd->fpfnamehistZetaGFileName,
-                l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                            "namebuf", "%s_%d%s", gd->fpfnamehistZetaGFileName,
+                           l, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histXi3pcf[l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histXi3pcf[l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -834,35 +920,44 @@ local int PrintHistZetaG(struct  cmdline_data* cmd,
 local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
                                  struct  global_data* gd)
 {
+    string routineName = "PrintHistZetaGm_sincos";
     int n1, n2, m;
     stream outstr;
     char namebuf[256];
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Re", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+                "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Re",
+                           m, EXTFILES) != 0)
+            return FAILURE;
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaGmRe[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmRe[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Im", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Im", m, EXTFILES) != 0)
+            return FAILURE;
+
         verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaGmIm[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmIm[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     return SUCCESS;
@@ -875,35 +970,48 @@ local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
 local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                      struct  global_data* gd)
 {
+#define OPEN_OUTPUT_OR_FAIL_local(outstr, filename, mode)              \
+    do {                                                               \
+        if (stropen_checked((filename), (mode), &(outstr),             \
+                            cmd->error_message, _ERRORMSGSIZE_)        \
+            == FAILURE)                                                \
+            goto cleanup;                                            \
+    } while (0)
+
+    string routineName = "PrintHistZetaMZetaGm_sincos";
     int n1, n2, m, l;
     stream outstr;
     char namebuf[256];
 
     int NP = 2*(cmd->mChebyshev+1);
-    double ***histZetaG;
-    double ***histZetaG_Im;
+    
+    //B
+    int status = FAILURE;
+    double ***histZetaG = NULL;
+    double ***histZetaG_Im = NULL;
+    double *data = NULL;
+
+    #ifdef USEGSL
+    gsl_fft_real_wavetable *real = NULL;
+    gsl_fft_real_workspace *work = NULL;
+    gsl_fft_halfcomplex_wavetable *hc = NULL;
+    #endif
+    //E
+    
     histZetaG = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
     histZetaG_Im = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
 #ifdef USEGSL
-    double *data;
-    gsl_fft_real_wavetable * real;
-    gsl_fft_real_workspace * work;
-    gsl_fft_halfcomplex_wavetable * hc;
-
     //B Test and check this allocation of memory...
-    //data=dvector(0,NP-1);
     data=(double *)allocate(NP*sizeof(double));
     //E
-
     work = gsl_fft_real_workspace_alloc (NP);
     real = gsl_fft_real_wavetable_alloc (NP);
     hc = gsl_fft_halfcomplex_wavetable_alloc (NP);
 #else
-    double *data;
     data=dvector(1,NP);
 #endif
-
+    
     //B Sum cos^2 + sin^2 and sincos - sincos
     // mchebyshev + 1 < sizeHistPhi/2
     // and mchebyshev + 1 must be a power of 2 also
@@ -945,62 +1053,76 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     //E
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Re", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf",
+            "%s%s_%d%s", gd->fpfnamehistZetaGmFileName, "_Re", m, EXTFILES) != 0)
+            goto cleanup;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaGmRe[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmRe[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
-                "_Im", m, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGmFileName,
+                           "_Im", m, EXTFILES) != 0)
+            goto cleanup;
+
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",gd->histZetaGmIm[m][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",gd->histZetaGmIm[m][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     for (l=1; l<=cmd->mChebyshev+1; l++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
-                "_fftinv_Re",l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+        "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                           "_fftinv_Re",l, EXTFILES) != 0)
+            goto cleanup;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG[2*l-1][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG[2*l-1][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (l=1; l<=cmd->mChebyshev+1; l++) {
-        sprintf(namebuf, "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
-                "_fftinv_Im",l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+            "namebuf", "%s%s_%d%s", gd->fpfnamehistZetaGFileName,
+                           "_fftinv_Im",l, EXTFILES) != 0)
+            goto cleanup;
+
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG[2*l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG[2*l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
     //B Sum cos^2 + sin^2 and sincos - sincos
@@ -1030,48 +1152,60 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     }
     //E
     for (l=1; l<=NP; l++) {
-        sprintf(namebuf, "%s_%s_%d%s",
-                gd->fpfnamehistZetaGFileName, "Re", l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+        "namebuf", "%s_%s_%d%s",
+                           gd->fpfnamehistZetaGFileName, "Re", l, EXTFILES) != 0)
+            goto cleanup;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG[l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG[l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
     for (l=1; l<=NP; l++) {
-        sprintf(namebuf, "%s_%s_%d%s",
-                gd->fpfnamehistZetaGFileName, "Im", l, EXTFILES);
+        if (format_checked(namebuf, sizeof(namebuf),
+        "namebuf", "%s_%s_%d%s",
+                           gd->fpfnamehistZetaGFileName, "Im", l, EXTFILES) != 0)
+            goto cleanup;
         verb_print_q(2, cmd->verbose,
                     "Printing : to a file %s ...\n",namebuf);
-        outstr = stropen(namebuf, "w!");
+        OPEN_OUTPUT_OR_FAIL_local(outstr, namebuf, "w!");
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
-                fprintf(outstr,"%16.8e ",histZetaG_Im[l][n1][n2]);
+                WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                                     "%16.8e ",histZetaG_Im[l][n1][n2]);
             }
-            fprintf(outstr,"\n");
+            WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
-        fclose(outstr);
+        CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
 
-#ifdef USEGSL
-    gsl_fft_halfcomplex_wavetable_free (hc);
-    gsl_fft_real_wavetable_free (real);
-    gsl_fft_real_workspace_free (work);
-//    free_dvector(data,0,NP-1);
-    free(data);
-#else
-    free_dvector(data,1,NP);
-#endif
+    status = SUCCESS;
 
-    free_dmatrix3D(histZetaG_Im,1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix3D(histZetaG,1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
+    cleanup:
+    #ifdef USEGSL
+    if (hc) gsl_fft_halfcomplex_wavetable_free(hc);
+    if (real) gsl_fft_real_wavetable_free(real);
+    if (work) gsl_fft_real_workspace_free(work);
+    if (data) free(data);
+    #else
+    if (data) free_dvector(data, 1, NP);
+    #endif
 
-    return SUCCESS;
+    if (histZetaG_Im)
+        free_dmatrix3D(histZetaG_Im, 1, NP, 1, cmd->sizeHistN, 1, cmd->sizeHistN);
+    if (histZetaG)
+        free_dmatrix3D(histZetaG, 1, NP, 1, cmd->sizeHistN, 1, cmd->sizeHistN);
+
+#undef OPEN_OUTPUT_OR_FAIL_local
+
+    return status;
 }
 
 

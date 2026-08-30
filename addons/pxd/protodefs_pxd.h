@@ -18,6 +18,14 @@ int get_cmd_allocated(struct global_data* gd, short *value);
 //B parameters section
 int get_nthreads(struct  cmdline_data* cmd,
               int *value);
+
+//B from codex
+int get_scanLevel(struct cmdline_data* cmd, int *value);
+int get_scanLevelRoot(struct cmdline_data* cmd, int *value);
+int get_scanLevelMin(struct cmdline_data* cmd, int *value);
+int cballs_search_method_id(const char *method);
+//E
+
 //B version 1.0.1
 int get_nmultipoles(struct  cmdline_data* cmd,
               int *value);
@@ -31,7 +39,7 @@ int get_rootDir(struct  cmdline_data* cmd, char *value);
 //E parameters section
 
 //B global parameter section
-int get_nbody(struct  cmdline_data* cmd, struct  global_data* gd, int *value);
+int get_nbody(struct cmdline_data* cmd, struct global_data* gd, INTEGER *value);
 int get_computeTPCF(struct  cmdline_data* cmd, struct  global_data* gd, short *value);
 //E global parameter section
 
@@ -52,6 +60,9 @@ int get_HistZetaMsincos(struct  cmdline_data* cmd,
 int get_HistZetaM_EE(struct  cmdline_data* cmd,
                          struct  global_data* gd,
                          int m, ErrorMsg errmsg);
+int get_HistZetaM_EE_Im(struct cmdline_data* cmd,
+                        struct global_data* gd,
+                        int m, ErrorMsg errmsg);
 //E histograms section
 
 //E PXD functions

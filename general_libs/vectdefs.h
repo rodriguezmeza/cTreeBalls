@@ -45,11 +45,8 @@
 #define NDIM 1
 #endif
 
-#ifdef SINGLEP
-typedef float vector[NDIM];
-#else
-typedef real vector[NDIM];
-#endif
+typedef cballs_storage_real vector[NDIM];
+typedef cballs_compute_real compute_vector[NDIM];
 typedef real matrix[NDIM][NDIM];
 
 typedef INTEGER vectorI[NDIM];

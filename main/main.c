@@ -12,7 +12,8 @@
  Units:
  History:
  Acknowledgements: Abraham Arvizu, Alejandro Aviles, Juan Carlos Hidalgo,
-                    Eladio Moreno, Gustavo Niz and Sofia Samario
+                    Eladio Moreno, Gustavo Niz, Sadi Ramirez,
+                    Axel Romero-Tisnado and Sofia Samario
  Comments and notes: (palimsesto)... coding based on references below.
  References:    Zeno project, NEMO project, Gadget, COLA, CLASS,
                 NR, GSL, Rapaport's book, cute, cfitsio, Healpix...
@@ -43,6 +44,10 @@ int main(int argc, string argv[])
 {
     struct cmdline_data cmd;                        // share command parameters
     struct global_data gd;                          // share global parameters
+    int run_status = FAILURE;
+
+    memset(&cmd, 0, sizeof(cmd));
+    memset(&gd, 0, sizeof(gd));
 
     gd.cpuinit = CPUTIME;                           // init register of cpu time
     gd.cpurealinit = rcpu_time();                   // init register of real time
@@ -54,20 +59,46 @@ int main(int argc, string argv[])
     if(argc < 2) {
         verb_print(1, "Parameters are missing.\n");
         verb_print(1, "Call with <ParameterFile>\n");
-        exit(1);
+        goto finish;
     }
-    strcpy(cmd.ParameterFile, argv[1]);
+    if (format_checked(cmd.ParameterFile, sizeof(cmd.ParameterFile),
+        "cmd.ParameterFile", "%s", argv[1]) != 0)
+        goto finish;
     printf("\n -> Parameter file is %s\n",
            cmd.ParameterFile);
 #endif
 
-    StartRun(&cmd, &gd, argv[0],                    // get parameters and
-             HEAD1, HEAD2, HEAD3);                  //  init global structure
-                                                    //  and do other useful 
-                                                    //  process, like param check,
-                                                    //  read data points to analyze
-	MainLoop(&cmd, &gd);                            // make tree and search data
-	EndRun(&cmd, &gd);                              // close streams and free mem
-    return SUCCESS;
+    //B get parameters, init global structure, and do other useful
+    //      process, like param check, read data points to analyze
+    if (StartRun(&cmd, &gd, argv[0], HEAD1, HEAD2, HEAD3) == FAILURE) {
+        if (cmd.error_message[0] != '\0')
+            fprintf(stderr, "\nError in cballs: %s\n", cmd.error_message);
+        EndRun_FreeMemory(&cmd, &gd);
+        goto finish;
+    }
+    //E
+
+    if (MainLoop(&cmd, &gd) == FAILURE) {           // make tree and search data
+        if (cmd.error_message[0] != '\0')
+            fprintf(stderr, "\nError in cballs: %s\n", cmd.error_message);
+        EndRun(&cmd, &gd);                          // close streams and free mem
+        goto finish;
+    }
+
+    if (EndRun(&cmd, &gd) == FAILURE)               // close streams and free mem
+        goto finish;
+
+    run_status = SUCCESS;
+
+finish:
+#ifdef CBALLS_MPI_ENABLED
+    if (cballs_mpi_finalize(&cmd) == FAILURE) {
+        if (cmd.error_message[0] != '\0')
+            fprintf(stderr, "\nError finalizing MPI: %s\n",
+                    cmd.error_message);
+        run_status = FAILURE;
+    }
+#endif
+    return run_status;
 }
 

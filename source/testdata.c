@@ -14,6 +14,7 @@
 //  that can be found in addons/addons_include folder
 //
 
+
 #include "globaldefs.h"
 local int testdata_sc_random(struct  cmdline_data* cmd, struct  global_data* gd);
 local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd);
@@ -44,42 +45,44 @@ local int model_string_to_int(struct  cmdline_data* cmd, struct  global_data* gd
 int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int model_int;
+    int status = SUCCESS;
 
-    model_string_to_int(cmd, gd, cmd->testmodel, &model_int);
+    if (model_string_to_int(cmd, gd, cmd->testmodel, &model_int) == FAILURE)
+        return FAILURE;
     switch (model_int){
         case SIMPLECUBIC:
             verb_print(cmd->verbose, "\nUsing simple cubic test model\n");
-            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
-            testdata_sc(cmd, gd);
+            verb_print(cmd->verbose, " with nbody = %" INTEGER_FMT, cmd->nbody);
+            status = testdata_sc(cmd, gd);
             break;
         case SIMPLECUBICRANDOM:
             verb_print(cmd->verbose, "\nUsing simple cubic random test model");
-            verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
-            testdata_sc_random(cmd, gd);
+            verb_print(cmd->verbose, " with nbody = %" INTEGER_FMT "\n", cmd->nbody);
+            status = testdata_sc_random(cmd, gd);
             break;
 #if defined(THREEDIM)
         case UNITSPHERE:
             verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
-            verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
+            verb_print(cmd->verbose, " with nbody = %" INTEGER_FMT "\n", cmd->nbody);
 #ifdef NR3
-            testdata_unit_sphere_random_nr3(cmd, gd);
+            status = testdata_unit_sphere_random_nr3(cmd, gd);
 #else
-            testdata_unit_sphere_random(cmd, gd);
+            status = testdata_unit_sphere_random(cmd, gd);
 #endif
             break;
 #endif
         case NULLMODEL:
             verb_print(cmd->verbose, 
                        "\nNull test model. Using default test model");
-            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
+            verb_print(cmd->verbose, " with nbody = %" INTEGER_FMT, cmd->nbody);
             if (cmd->usePeriodic==TRUE) {
                 verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
-                testdata_sc_random(cmd, gd);
+                status = testdata_sc_random(cmd, gd);
             } else {
 #ifdef TPCF
 #if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
-                    testdata_unit_sphere_random(cmd, gd);
+                    status = testdata_unit_sphere_random(cmd, gd);
 #else
                     verb_print(cmd->verbose,
                                "\nUsing unit sphere random test model %s\n",
@@ -87,24 +90,25 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 #else
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
-                    testdata_sc_random(cmd, gd);
+                    status = testdata_sc_random(cmd, gd);
 #endif
             }
             break;
         case UNKNOWN:
             verb_print(cmd->verbose,
                        "\nUnknown test model. Using default test model");
-            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
+            verb_print(cmd->verbose, " with nbody = %" INTEGER_FMT, cmd->nbody);
             verb_print(cmd->verbose, "\nDefault test model type %s", cmd->testmodel);
             if (cmd->usePeriodic==TRUE) {
                 verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
-                testdata_sc_random(cmd, gd);
+                status = testdata_sc_random(cmd, gd);
             } else {
 #ifdef TPCF
 #if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model");
-                    verb_print(cmd->verbose, " with nbody = %ld\n", cmd->nbody);
-                    testdata_unit_sphere_random(cmd, gd);
+                    verb_print(cmd->verbose,
+                               " with nbody = %" INTEGER_FMT "\n", cmd->nbody);
+                    status = testdata_unit_sphere_random(cmd, gd);
 #else
                     verb_print(cmd->verbose,
                                "\nUsing unit sphere random test model %s",
@@ -112,21 +116,21 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 #else
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
-                    testdata_sc_random(cmd, gd);
+                    status = testdata_sc_random(cmd, gd);
 #endif
             }
             break;
         default:
             verb_print(cmd->verbose, "\nDefault test model type %s", cmd->testmodel);
-            verb_print(cmd->verbose, " with nbody = %ld", cmd->nbody);
+            verb_print(cmd->verbose, " with nbody = %" INTEGER_FMT, cmd->nbody);
             if (cmd->usePeriodic==TRUE) {
                 verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
-                testdata_sc_random(cmd, gd);
+                status = testdata_sc_random(cmd, gd);
             } else {
 #ifdef TPCF
 #if defined(THREEDIM)
                     verb_print(cmd->verbose, "\nUsing unit sphere random test model\n");
-                    testdata_unit_sphere_random(cmd, gd);
+                    status = testdata_unit_sphere_random(cmd, gd);
 #else
                     verb_print(cmd->verbose,
                                "\nUsing unit sphere random test model %s\n",
@@ -134,12 +138,12 @@ int TestData(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 #else
                     verb_print(cmd->verbose, "\nUsing simple cubic random test model\n");
-                    testdata_sc_random(cmd, gd);
+                    status = testdata_sc_random(cmd, gd);
 #endif
             }
     }
 
-    return SUCCESS;
+    return status;
 }
 
 local int model_string_to_int(struct  cmdline_data* cmd,
@@ -192,12 +196,13 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
 
     gd->model_comment = "Random Cubic Box Model";
 
-    Compute_nbody(cmd,gd);
-    Compute_Box_Units(cmd,gd);
+    if (Compute_nbody(cmd, gd) == FAILURE) return FAILURE;
+    if (Compute_Box_Units(cmd, gd) == FAILURE) return FAILURE;
 
     int ifile=0;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     gd->bytes_tot += cmd->nbody*sizeof(body);
 
     mass = 1.0;
@@ -225,7 +230,8 @@ local int testdata_sc_random(struct  cmdline_data* cmd,
 		tmass += Mass(p);
     }
     
-    verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\nCreated bodies = %" INTEGER_FMT, cmd->nbody);
 
     return SUCCESS;
 }
@@ -241,29 +247,35 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->model_comment = "Simple Cubic Box Model";
 
     int ifile=0;
+    if (Compute_nbody(cmd, gd) == FAILURE) return FAILURE;
+    if (Compute_Box_Units(cmd, gd) == FAILURE) return FAILURE;
+
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     gd->bytes_tot += cmd->nbody*sizeof(body);
 
     mass = 1.0;
     weight = 1.0;
 
-    Compute_nbody(cmd, gd);
-    Compute_Box_Units(cmd, gd);
-
 	os =0.05*gd->Box[0];						    // offset
 	f = 1.0 - 2.0*os/gd->Box[0];				    // scaling delta
-                                                    //  to 1 - 2 os/Lk
-	DO_COORD(k)
-		delta[k]=f*gd->Box[k]/((real) (N[k]-1));
+											    //  to 1 - 2 os/Lk
+		DO_COORD(k)
+			delta[k]=f*gd->Box[k]/((real) (N[k]-1));
 
-	if (NDIM == 3)
-		fprintf(gd->outlog,"\ndelta: %g %g %g\n",
-				delta[0],delta[1],delta[2]);
-	else if (NDIM == 2)
-		fprintf(gd->outlog,"\ndelta: %g %g\n",
-				delta[0],delta[1]);
-	else error("\n\nWrong NDIM!\n\n");
+		if (NDIM == 3)
+			verb_log_print(cmd->verbose_log, gd->outlog,
+				"\ndelta: %g %g %g\n",
+					delta[0],delta[1],delta[2]);
+		else if (NDIM == 2)
+			verb_log_print(cmd->verbose_log, gd->outlog,
+				"\ndelta: %g %g\n",
+					delta[0],delta[1]);
+    else {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Wrong NDIM");
+        return FAILURE;
+    }
 
 	p = bodytable[ifile];
 	if (NDIM == 3)
@@ -287,9 +299,13 @@ local int testdata_sc(struct  cmdline_data* cmd, struct  global_data* gd)
 				++p;
 			}
 		}
-	else error("\n\nWrong NDIM!\n\n");
+    else {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Wrong NDIM");
+        return FAILURE;
+    }
 
-    verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\nCreated bodies = %" INTEGER_FMT, cmd->nbody);
 
     tmass=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
@@ -335,7 +351,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
                cmd->sizeHistN, cmd->rangeN, cmd->rminHist);
 
     int ifile=0;
-    int nbody = cmd->nbody;
+    INTEGER nbody = cmd->nbody;
 
     mass = 1.0;
     weight = 1.0;
@@ -426,6 +442,7 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     gd->bytes_tot += cmd->nbody*sizeof(body);
 
     real kavg = 0;
@@ -481,7 +498,8 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
             cmd->nbody, kavg/((real)cmd->nbody) );
 
 
-    verb_log_print(cmd->verbose_log, gd->outlog, "\nCreated bodies = %d",cmd->nbody);
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\nCreated bodies = %" INTEGER_FMT, cmd->nbody);
 
     return SUCCESS;
 }
@@ -489,16 +507,30 @@ local int testdata_unit_sphere_random(struct  cmdline_data* cmd,
 
 local int Compute_nbody(struct  cmdline_data* cmd, struct  global_data* gd)
 {
-    fprintf(gd->outlog,"\n\nInitial nbody=%ld",cmd->nbody);
+    string routineName = "Compute_nbody";
+
+    verb_log_print(cmd->verbose_log, gd->outlog,
+                   "\n\nInitial nbody=%" INTEGER_FMT, cmd->nbody);
     if (NDIM == 3) {
         N[0] = (int) rpow(cmd->nbody,1./3.);        // nbody = N^3
+        if (N[0] < 2)
+            cBALLS_FAIL(cmd,
+                        "%s: cubic test models require at least two lattice points per dimension\n",
+                        routineName);
         N[1] = N[0]; N[2] = N[0];
         cmd->nbody = N[0]*N[1]*N[2];
     } else if (NDIM == 2) {
         N[0] = (int) rsqrt(cmd->nbody);             // nbody = N^2
+        if (N[0] < 2)
+            cBALLS_FAIL(cmd,
+                        "%s: cubic test models require at least two lattice points per dimension\n",
+                        routineName);
         N[1] = N[0];
         cmd->nbody = N[0]*N[1];
-    } else error("\n\nWrong NDIM!\n\n");
+    } else {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Wrong NDIM");
+        return FAILURE;
+    }
 
     return SUCCESS;
 }
@@ -512,7 +544,10 @@ local int Compute_Box_Units(struct  cmdline_data* cmd, struct  global_data* gd)
     } else if (NDIM == 2) {                         // Size of box side x
         gd->Box[0] = cmd->lengthBox;
         gd->Box[1] = gd->Box[0];
-    } else error("\n\nWrong NDIM!\n\n");
+    } else {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Wrong NDIM");
+        return FAILURE;
+    }
 
     return SUCCESS;
 }

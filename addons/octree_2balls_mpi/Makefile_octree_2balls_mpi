@@ -1,0 +1,25 @@
+# ----- Deterministic MPI+OpenMP LogMultipole scan over the native octree -----
+
+ifeq ($(OCTREE2BALLSMPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DOCTREE2BALLSMPI -DCBALLS_MPI_ENABLED
+
+OCTREE2BALLSMPI = $(MDIR)/addons/octree_2balls_mpi/
+OCTREE2BALLSOMPSOURCE = $(MDIR)/addons/octree_2balls_omp/
+vpath %.c $(OCTREE2BALLSMPI):$(OCTREE2BALLSOMPSOURCE)
+INCLUDES += -I$(OCTREE2BALLSMPI) \
+            -I$(OCTREE2BALLSOMPSOURCE) \
+            -I$(MDIR)/addons/balltree_2balls_omp \
+            -I$(MDIR)/addons/balltree_omp
+HEADERFILES += $(wildcard $(OCTREE2BALLSMPI)/*.h)
+EXTERNAL += fcfc_octree_2balls_mpi.o search_octree_2balls_mpi.o
+ifneq ($(OCTREE2BALLSOMPON),1)
+EXTERNAL += octree_2balls_tree.o
+endif
+
+search_octree_2balls_mpi.o: \
+	$(OCTREE2BALLSMPI)/search_octree_2balls_mpi.c \
+	$(MDIR)/addons/octree_2balls_omp/octree_2balls_tree.c \
+	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c
+endif

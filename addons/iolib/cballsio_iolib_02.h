@@ -2,15 +2,64 @@
 #ifndef _cballsio_iolib_02_h
 #define _cballsio_iolib_02_h
 
+local bool iolib_preserve_common_catalog_frame(
+        struct cmdline_data *cmd, struct global_data *gd)
+{
+    bool preserve = FALSE;
+
+    (void)cmd;
+    (void)gd;
+
+#ifdef OCTREE3PCF3DOMP
+    preserve = gd->searchMethod_int == 166
+        && (scanopt(cmd->options, "survey-estimator-3d")
+            || scanopt(cmd->options, "encore-survey-estimator")
+            || scanopt(cmd->options, "survey-edge-correction"));
+#endif
+#ifdef BALLTREE2BALLSOMP
+    preserve |= gd->searchMethod_int == BALLTREE2BALLSMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
+#ifdef BALLTREE2BALLSMPI
+    preserve |= gd->searchMethod_int == BALLTREE2BALLSMPIMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
+#ifdef OCTREE2BALLSOMP
+    preserve |= gd->searchMethod_int == OCTREE2BALLSMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
+#ifdef BALLTREE2BALLSOMP3PCF
+    preserve |= gd->searchMethod_int == BALLTREE2BALLSOMP3PCFMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
+#ifdef BALLTREE2BALLSMPI3PCF
+    preserve |= gd->searchMethod_int == BALLTREE2BALLSMPI3PCFMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
+    return preserve;
+}
+
 // infileformat: columns-ascii-pos
 local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
                                string filename, int ifile)
 {
+#define IOLIB_CLOSE_STREAM(s) \
+    do { if ((s) != NULL) { fclose(s); (s) = NULL; } } while (0)
+
+#define IOLIB_FAIL(...) \
+    do { \
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        rc = FAILURE; \
+        goto fail; \
+    } while (0)
+    
     string routine_name = "inputdata_ascii_pos";
-    stream instr;
+    stream instr = NULL;
+    int rc = FAILURE;
+    int body_allocated = FALSE;
     int ndim;
     bodyptr p;
-    char gato[1], firstline[20];
+    char gato[2], firstline[200];
     real mass=1;
     real weight=1;
 
@@ -18,14 +67,15 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
 
     instr = stropen(filename, "r");
 
-    fgets(firstline,200,instr);
+    fgets(firstline, sizeof(firstline), instr);
     fscanf(instr,"%1s",gato);
     in_int_long(instr, &cmd->nbody);
     if (cmd->nbody < 1)
-        error("%s: nbody = %d is absurd\n", routine_name, cmd->nbody);
+        IOLIB_FAIL("%s: nbody = %" INTEGER_FMT " is absurd\n",
+                   routine_name, cmd->nbody);
     in_int(instr, &ndim);
     if (ndim != NDIM)
-        error("%s: ndim = %d; expected %d\n", routine_name, ndim, NDIM);
+        IOLIB_FAIL("%s: ndim = %d; expected %d\n", routine_name, ndim, NDIM);
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -52,19 +102,22 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     gd->Box[1] = Ly;
 #endif
 
-    verb_print(cmd->verbose, "\t%s: nbody and ndim: %d %d...\n",
+    verb_print(cmd->verbose,
+               "\t%s: nbody and ndim: %" INTEGER_FMT " %d...\n",
                routine_name, cmd->nbody, ndim);
     verb_print(cmd->verbose, "\t%s: Lx, Ly, Lz: %g %g %g...\n",
                routine_name, gd->Box[0], gd->Box[1], gd->Box[2]);
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-
+    gd->bodytable_allocated = TRUE;
+    body_allocated = TRUE;
+    
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         in_vector(instr, Pos(p));
     }
 
-    fclose(instr);
-
+    IOLIB_CLOSE_STREAM(instr);
+    
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
@@ -85,7 +138,7 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
     real dist2;
     vector distv;
     bool flag=0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody-1)
+    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody-1) {
         DO_BODY(q, p+1, bodytable[ifile]+cmd->nbody)
             if (p != q) {
             DOTPSUBV(dist2, distv, Pos(p), Pos(q));
@@ -93,12 +146,29 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
                     flag=1;
                 }
             }
-        if (flag)
-            error("%s: at least two bodies have same position\n", routine_name);
+    }
+    if (flag)
+            IOLIB_FAIL("%s: at least two bodies have same position\n", routine_name);
     }
     //E
 
-    return SUCCESS;
+    IOLIB_CLOSE_STREAM(instr);
+    rc = SUCCESS;
+
+    fail:
+        IOLIB_CLOSE_STREAM(instr);
+
+        if (rc == FAILURE && body_allocated) {
+            free(bodytable[ifile]);
+            bodytable[ifile] = NULL;
+            gd->nbodyTable[ifile] = 0;
+        }
+
+    #undef IOLIB_FAIL
+    #undef IOLIB_CLOSE_STREAM
+
+        return rc;
+    
 }
 
 #if NDIM == 3
@@ -106,24 +176,36 @@ local int inputdata_ascii_pos(struct cmdline_data* cmd, struct  global_data* gd,
 local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data* gd,
                                     string filename, int ifile)
 {
-    stream instr;
-    int ndim;
-    bodyptr p;
-    char gato[1], firstline[20];
+    char gato[2], firstline[200];
     real mass=1;
     real weight=1;
 
+    int rc = FAILURE;
+    int body_allocated = FALSE;
+    stream instr = NULL;
+    int ndim;
+    bodyptr p;
+    
     gd->input_comment = "Column form input file (2d-to-3d)";
 
+#define IOLIB_2D_FAIL(...) \
+    do { \
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        rc = FAILURE; \
+        goto fail; \
+    } while (0)
+
     instr = stropen(filename, "r");
-    fgets(firstline,200,instr);
+
+    fgets(firstline, sizeof(firstline), instr);
     fscanf(instr,"%1s",gato);
     in_int_long(instr, &cmd->nbody);
     if (cmd->nbody < 1)
-        error("inputdata: nbody = %d is absurd\n", cmd->nbody);
+        IOLIB_2D_FAIL("inputdata: nbody = %" INTEGER_FMT " is absurd\n",
+                      cmd->nbody);
     in_int(instr, &ndim);
     if (ndim != 2)
-        error("inputdata: ndim = %d; expected 2\n", ndim);
+        IOLIB_2D_FAIL("inputdata: ndim = %d; expected 2\n", ndim);
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -141,13 +223,19 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
 // Added this line to set lbox in z direction. Check if it es necessary
     gd->Box[2] = Ly;
 
-    verb_print(cmd->verbose, "\tInput: nbody and ndim: %d %d...\n",
+    verb_print(cmd->verbose,
+               "\tInput: nbody and ndim: %" INTEGER_FMT " %d...\n",
                cmd->nbody, ndim);
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-
+    gd->bodytable_allocated = TRUE;
+    body_allocated = TRUE;
+    
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        in_real(instr, &Pos(p)[0]);
-        in_real(instr, &Pos(p)[1]);
+        real x, y;
+        in_real(instr, &x);
+        in_real(instr, &y);
+        Pos(p)[0] = (cballs_storage_real)x;
+        Pos(p)[1] = (cballs_storage_real)y;
         in_real(instr, &Kappa(p));
         if (scanopt(cmd->options, "kappa-constant")) {
             if (scanopt(cmd->options, "kappa-constant-one"))
@@ -158,6 +246,7 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
     }
 
     fclose(instr);
+    instr = NULL;
 
 //B Find MIN and MAX
     real theta, phi;
@@ -181,32 +270,9 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
                phi_min, phi_max);
 //E
 
-//    real ra, dec;                                   // phi, theta from pix2ang ::
-                                                    //  column 2, column 1,
-                                                    //  respectively
-/*    if (scanopt(cmd->options, "arfken")) {
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-            ra = Pos(p)[0];
-            dec = Pos(p)[1];
-            Pos(p)[0] = rsin(dec)*rcos(ra);
-            Pos(p)[1] = rsin(dec)*rsin(ra);
-            Pos(p)[2] = rcos(dec);
-        }
-    } else {
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-            ra = Pos(p)[0];
-            dec = Pos(p)[1];
-            Pos(p)[0] = rcos(dec)*rcos(ra);
-            Pos(p)[1] = rcos(dec)*rsin(ra);
-            Pos(p)[2] = rsin(dec);
-        }
-    } */
-
-//    real theta, phi;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         theta = Pos(p)[0];
         phi = Pos(p)[1];
-//        spherical_to_cartesians(cmd, gd, theta, phi, Pos(p));
         coordinate_transformation(cmd, gd, theta, phi, Pos(p));
     }
 
@@ -217,7 +283,20 @@ local int inputdata_ascii_2d_to_3d(struct cmdline_data* cmd, struct  global_data
         Id(p) = p-bodytable[ifile]+1;
     }
 
-    return SUCCESS;
+    rc = SUCCESS;
+
+fail:
+    if (instr != NULL)
+        fclose(instr);
+
+    if (rc == FAILURE && body_allocated) {
+        free(bodytable[ifile]);
+        bodytable[ifile] = NULL;
+        gd->nbodyTable[ifile] = 0;
+    }
+
+#undef IOLIB_2D_FAIL
+    return rc;
 }
 #endif // ! NDIM == 3
 
@@ -231,6 +310,10 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     bodyptr p;
     real mass=1;
     real weight=1;
+    int convergence_weight =
+        scanopt(cmd->options, "pos-and-convergence-weight");
+    const bool preserve_common_survey_frame =
+        iolib_preserve_common_catalog_frame(cmd, gd);
 
     gd->input_comment = "Multi-column position input file";
 
@@ -243,48 +326,72 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
 //
     if ( (scanopt(cmd->options, "pos-and-convergence"))
             && (scanopt(cmd->options, "pos-and-shear")))
-        error("inputdata_ascii_mcolumns: mutually excluyent options: %s",
-              "'pos-and-convergence' and 'pos-and-shear'");
+        cBALLS_FAIL(cmd, "inputdata_ascii_mcolumns: mutually excluyent options: %s",
+                    "'pos-and-convergence' and 'pos-and-shear'");
+    if (convergence_weight && scanopt(cmd->options, "pos-and-shear"))
+        cBALLS_FAIL(cmd, "inputdata_ascii_mcolumns: mutually exclusive options: %s",
+                    "'pos-and-convergence-weight' and 'pos-and-shear'");
+    if (convergence_weight && scanopt(cmd->options, "pos-and-convergence"))
+        cBALLS_FAIL(cmd, "inputdata_ascii_mcolumns: mutually exclusive options: %s",
+                    "'pos-and-convergence-weight' and 'pos-and-convergence'");
+#if NDIM != 3
+    if (convergence_weight)
+        cBALLS_FAIL(cmd,
+                    "inputdata_ascii_mcolumns: pos-and-convergence-weight requires NDIM=3");
+#endif
 
     int vnpoint;
 
 #if NDIM == 3
     if (scanopt(cmd->options, "only-pos")) {
-        InputData_3c(filename,
-                     gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint);
+        if (InputData_3c(cmd, filename,
+                         gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint) == FAILURE)
+            return FAILURE;
     } else {
-        if (scanopt(cmd->options, "pos-and-convergence")) {
-            InputData_4c(filename,
-                         gd->columns[0], gd->columns[1], gd->columns[2],
-                         gd->columns[3],
-                         &vnpoint);
-        } else {
-            if (scanopt(cmd->options, "pos-and-shear")) {
-                InputData_5c(filename,
+        if (convergence_weight) {
+            if (InputData_5c(cmd, filename,
                              gd->columns[0], gd->columns[1], gd->columns[2],
                              gd->columns[3], gd->columns[4],
-                             &vnpoint);
+                             &vnpoint) == FAILURE)
+                return FAILURE;
+        } else if (scanopt(cmd->options, "pos-and-convergence")) {
+            if (InputData_4c(cmd, filename,
+                             gd->columns[0], gd->columns[1], gd->columns[2],
+                             gd->columns[3],
+                             &vnpoint) == FAILURE)
+                return FAILURE;
+        } else {
+            if (scanopt(cmd->options, "pos-and-shear")) {
+                if (InputData_5c(cmd, filename,
+                                 gd->columns[0], gd->columns[1], gd->columns[2],
+                                 gd->columns[3], gd->columns[4],
+                                 &vnpoint) == FAILURE)
+                    return FAILURE;
             } else
-                error("\n\t%s: options need one of: \n\t%s, %s or %s\n",
-                      routineName,
-                      "only-pos", "pos-and-convergence", "pos-and-shear");
+                cBALLS_FAIL(cmd, "\n\t%s: options need one of: \n\t%s, %s, %s or %s\n",
+                            routineName,
+                            "only-pos", "pos-and-convergence",
+                            "pos-and-convergence-weight", "pos-and-shear");
         }
     }
 #else
     if (scanopt(cmd->options, "only-pos")) {
-        InputData_2c(filename, gd->columns[0], gd->columns[1], &vnpoint);
+        if (InputData_2c(cmd, filename, gd->columns[0], gd->columns[1], &vnpoint) == FAILURE)
+            return FAILURE;
     } else {
         if (scanopt(cmd->options, "pos-and-convergence")) {
-            InputData_3c(filename,
-                         gd->columns[0], gd->columns[1],
-                         gd->columns[2],
-                         &vnpoint);
+            if (InputData_3c(cmd, filename,
+                             gd->columns[0], gd->columns[1],
+                             gd->columns[2],
+                             &vnpoint) == FAILURE)
+                return FAILURE;
         } else {
             if (scanopt(cmd->options, "pos-and-shear")) {
-                InputData_4c(filename,
-                             gd->columns[0], gd->columns[1],
-                             gd->columns[2], gd->columns[3],
-                             &vnpoint);
+                if (InputData_4c(cmd, filename,
+                                 gd->columns[0], gd->columns[1],
+                                 gd->columns[2], gd->columns[3],
+                                 &vnpoint) == FAILURE)
+                    return FAILURE;
             }
         }
     }
@@ -295,15 +402,26 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     gd->nbodyTable[ifile] = cmd->nbody;
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
+        Type(p) = BODY;
+        Mass(p) = mass;
+        Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+1;
+#ifdef OCTREE3PCF3DOMP
+        Octree3pcf3dLosId(p) = Id(p);
+#endif
 #if NDIM == 3
         Pos(p)[0] = inout_xval[Id(p)-1];
         Pos(p)[1] = inout_yval[Id(p)-1];
         Pos(p)[2] = inout_zval[Id(p)-1];
         if (scanopt(cmd->options, "pos-and-convergence"))
             Kappa(p) = inout_uval[Id(p)-1];
+        if (convergence_weight) {
+            Kappa(p) = inout_uval[Id(p)-1];
+            Weight(p) = inout_vval[Id(p)-1];
+        }
 
 #ifdef THREEPCFSHEAR
         if (scanopt(cmd->options, "pos-and-shear")) {
@@ -333,7 +451,7 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     free(inout_yval);
     free(inout_zval);
     free(inout_uval);
-    if (scanopt(cmd->options, "pos-and-shear"))
+    if (scanopt(cmd->options, "pos-and-shear") || convergence_weight)
         free(inout_vval);
 #else
     free(inout_xval);
@@ -347,16 +465,32 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
 //B Set (0,0,...) as the center of the box
 // By now it is only working with boxes centered at (0,0,...)
     cellptr root;                                   // Set it up a temporal root
+    int root_status = FAILURE;
     root = (cellptr) allocate(1 * sizeof(body));
 
-    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    CLRV(Pos(root));
+    if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
+                       ifile, root) == FAILURE)
+        goto cleanup_root;
+    if (!preserve_common_survey_frame
+        && centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root)
+           == FAILURE)
+        goto cleanup_root;
+    if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
+                       ifile, root) == FAILURE)
+        goto cleanup_root;
+    if (!preserve_common_survey_frame)
+        CLRV(Pos(root));
 //E
     gd->rSizeTable[ifile] = 1.0;
-    expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    if (expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
+                  ifile, root) == FAILURE)
+        goto cleanup_root;
+    root_status = SUCCESS;
+
+cleanup_root:
     free(root);
+    if (root_status == FAILURE)
+        return FAILURE;
 #if NDIM == 3
     real xmin, ymin, zmin;
     real xmax, ymax, zmax;
@@ -393,7 +527,7 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     gd->Box[1] = ymax-ymin;
 #endif
     verb_print_q(2, cmd->verbose, 
-                 "\tinputdata_ascii_mcolumns: nbody and ndim: %d %d...\n",
+                 "\tinputdata_ascii_mcolumns: nbody and ndim: %" INTEGER_FMT " %d...\n",
                  cmd->nbody, ndim);
     verb_print_q(2, cmd->verbose,
                  "\tinputdata_ascii_mcolumns: Lx, Ly, Lz: %g %g %g...\n",
@@ -403,7 +537,9 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Type(p) = BODY;
         Mass(p) = mass;
-        Weight(p) = weight;
+        if (!convergence_weight)
+            Weight(p) = weight;
+        Mask(p) = MASK_NODE_VALID;
         if (scanopt(cmd->options, "kappa-constant")) {
             if (scanopt(cmd->options, "kappa-constant-one"))
                 Kappa(p) = 1.0;
@@ -412,8 +548,12 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
         }
         kavg += Kappa(p);
     }
+#ifdef OCTREE3PCF3DOMP
+    gd->octree3pcf3d_los_ids[ifile] = TRUE;
+#endif
     verb_print_q(2, cmd->verbose,
-               "inputdata_ascii_mcolumns: average of kappa (%ld particles) = %le\n",
+               "inputdata_ascii_mcolumns: average of kappa (%" INTEGER_FMT
+               " particles) = %le\n",
                cmd->nbody, kavg/((real)cmd->nbody) );
 
     //B If needed locate particles with same position.
@@ -442,7 +582,8 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
         verb_print(cmd->verbose,
         "inputdata_ascii_mcolumns: Total equal pairs: %ld\n",pqequals);
         if (flag)
-        error("inputdata_ascii_mcolumns: at least two bodies have same position\n");
+            cBALLS_FAIL(cmd,
+                        "inputdata_ascii_mcolumns: at least two bodies have same position\n");
     }
     //E
 
@@ -459,27 +600,31 @@ local int inputdata_ascii_ra_dec(struct cmdline_data* cmd, struct  global_data* 
 {
     string routineName = "inputdata_ascii_ra_dec";
     stream instr;
-    int ndim;
+    int ndim = NDIM;
     bodyptr p;
     real mass=1;
     real weight=1;
     real phi, theta;
+    const bool preserve_common_survey_frame =
+        iolib_preserve_common_catalog_frame(cmd, gd);
 
     gd->input_comment = "ra-dec-kappa input file";
 
     int vnpoint;
 
 #if NDIM == 2
-    error("\n%s only works in 3D", routineName);
+    cBALLS_FAIL(cmd, "\n%s only works in 3D", routineName);
 #endif
 
-    InputData_3c(filename,
-                 gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint);
+    if (InputData_3c(cmd, filename,
+                     gd->columns[0], gd->columns[1], gd->columns[2], &vnpoint) == FAILURE)
+        return FAILURE;
 
     cmd->nbody = vnpoint;
     gd->nbodyTable[ifile] = cmd->nbody;
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Id(p) = p-bodytable[ifile]+1;
@@ -500,16 +645,32 @@ local int inputdata_ascii_ra_dec(struct cmdline_data* cmd, struct  global_data* 
 //B Set (0,0,...) as the center of the box
 // By now it is only working with boxes centered at (0,0,...)
     cellptr root;                                   // Set it up a temporal root
+    int root_status = FAILURE;
     root = (cellptr) allocate(1 * sizeof(body));
 
-    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-    CLRV(Pos(root));
+    if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
+                       ifile, root) == FAILURE)
+        goto cleanup_root;
+    if (!preserve_common_survey_frame
+        && centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root)
+           == FAILURE)
+        goto cleanup_root;
+    if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
+                       ifile, root) == FAILURE)
+        goto cleanup_root;
+    if (!preserve_common_survey_frame)
+        CLRV(Pos(root));
 //E
     gd->rSizeTable[ifile] = 1.0;
-    expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+    if (expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
+                  ifile, root) == FAILURE)
+        goto cleanup_root;
+    root_status = SUCCESS;
+
+cleanup_root:
     free(root);
+    if (root_status == FAILURE)
+        return FAILURE;
 
     real xmin, ymin, zmin;
     real xmax, ymax, zmax;
@@ -530,7 +691,7 @@ local int inputdata_ascii_ra_dec(struct cmdline_data* cmd, struct  global_data* 
     gd->Box[0] = xmax-xmin;
     gd->Box[1] = ymax-ymin; gd->Box[2] = zmax-zmin;
     verb_print_q(2, cmd->verbose,
-                 "\tinputdata_ascii_mcolumns: nbody and ndim: %d %d...\n",
+                 "\tinputdata_ascii_mcolumns: nbody and ndim: %" INTEGER_FMT " %d...\n",
                  cmd->nbody, ndim);
     verb_print_q(2, cmd->verbose,
                  "\tinputdata_ascii_mcolumns: Lx, Ly, Lz: %g %g %g...\n",
@@ -581,7 +742,7 @@ local int inputdata_ascii_ra_dec(struct cmdline_data* cmd, struct  global_data* 
         "%s: Total equal pairs: %ld\n",
                    routineName, pqequals);
         if (flag)
-        error("inputdata_ascii_mcolumns: at least two bodies have same position\n");
+            cBALLS_FAIL(cmd, "inputdata_ascii_mcolumns: at least two bodies have same position\n");
     }
     //E
 

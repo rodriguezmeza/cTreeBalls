@@ -26,10 +26,15 @@
  *
  *---------------------------------------------------------------------------*/
 
+//=============================================================================
+//        1          2          3          4        ^ 5          6          7
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 #include "chealpix.h"
 
 static const double twothird=2.0/3.0;
@@ -38,6 +43,12 @@ static const double twopi=6.283185307179586476925286766559005768394;
 static const double halfpi=1.570796326794896619231321691639751442099;
 static const double inv_halfpi=0.6366197723675813430755350534900574;
 
+//B cBalls note:
+// defines UTIL_ASSERT() through a helper that exits.
+//  The active FITS reader wrappers look much better now,
+//  but exported functions like ang2pix_ring() still abort on invalid theta.
+//  This is lower priority unless those functions are used
+//  from new addon paths, but it is still an unsafe library surface.
 static void util_fail_ (const char *file, int line, const char *func,
   const char *msg)
   {
@@ -54,6 +65,7 @@ static void util_fail_ (const char *file, int line, const char *func,
   if(!(cond)) util_fail_(__FILE__,__LINE__,UTIL_FUNC_NAME__,msg)
 #define UTIL_FAIL(msg) \
   util_fail_(__FILE__,__LINE__,UTIL_FUNC_NAME__,msg)
+//E
 
 /*! Returns the remainder of the division \a v1/v2.
     The result is non-negative.
@@ -898,32 +910,7 @@ void ring2nest64(int64_t nside, int64_t ipring, int64_t *ipnest)
   *ipnest = xyf2nest64 (nside, ix, iy, face_num);
   }
 
-//#ifdef ENABLE_FITSIO
-
 #include "fitsio.h"
-
-#define RALLOC(type,num) \
-  ((type *)util_malloc_((num)*sizeof(type)))
-#define DEALLOC(ptr) \
-  do { util_free_(ptr); (ptr)=NULL; } while(0)
-
-static void *util_malloc_ (size_t sz)
-  {
-  if (sz==0) return NULL;
-  void *res = malloc(sz);
-  UTIL_ASSERT(res,"malloc() failed");
-  return res;
-  }
-static void util_free_ (void *ptr)
-  { if ((ptr)!=NULL) free(ptr); }
-
-static void printerror (int status)
-  {
-  if (status==0) return;
-
-  fits_report_error(stderr, status);
-  UTIL_FAIL("FITS error");
-  }
 
 static void setCoordSysHP(char coordsys,char *coordsys9)
   {
@@ -938,126 +925,319 @@ static void setCoordSysHP(char coordsys,char *coordsys9)
                     " Celestial system was set.\n", __FILE__, __LINE__);
   }
 
+
+//B added by cBalls
+
+#define CHEALPIX_STATUS_BAD_ARG   (-10001)
+#define CHEALPIX_STATUS_BAD_HDU   (-10002)
+#define CHEALPIX_STATUS_BAD_SHAPE (-10003)
+#define CHEALPIX_STATUS_ALLOC     (-10004)
+#define CHEALPIX_STATUS_BAD_ORDER (-10005)
+
+static const char *chealpix_status_message(int status)
+{
+    switch (status) {
+    case CHEALPIX_STATUS_BAD_ARG:
+        return "bad argument";
+    case CHEALPIX_STATUS_BAD_HDU:
+        return "unexpected FITS HDU";
+    case CHEALPIX_STATUS_BAD_SHAPE:
+        return "invalid HEALPix FITS shape";
+    case CHEALPIX_STATUS_ALLOC:
+        return "allocation failure";
+    case CHEALPIX_STATUS_BAD_ORDER:
+        return "unsupported HEALPix ordering";
+    default:
+        return "unknown HEALPix/FITS error";
+    }
+}
+
+static void chealpix_report_status(const char *where, int status)
+{
+    if (status == 0) return;
+
+    if (status > 0) {
+        fprintf(stderr, "%s: CFITSIO status=%d\n", where, status);
+        fits_report_error(stderr, status);
+    } else {
+        fprintf(stderr, "%s: %s (%d)\n",
+                where, chealpix_status_message(status), status);
+    }
+}
+
+static int chealpix_is_space(char value)
+{
+    return value == ' ' || value == '\t' || value == '\r' || value == '\n';
+}
+
+static int chealpix_ordering_equals(const char *ordering,
+                                    const char *expected)
+{
+    unsigned char actual;
+    unsigned char wanted;
+
+    if (ordering == NULL || expected == NULL)
+        return 0;
+
+    while (chealpix_is_space(*ordering))
+        ordering++;
+
+    while (*ordering != '\0' && *expected != '\0') {
+        actual = (unsigned char)*ordering++;
+        wanted = (unsigned char)*expected++;
+        if (actual >= 'a' && actual <= 'z')
+            actual = (unsigned char)(actual - 'a' + 'A');
+        if (wanted >= 'a' && wanted <= 'z')
+            wanted = (unsigned char)(wanted - 'a' + 'A');
+        if (actual != wanted)
+            return 0;
+    }
+
+    if (*expected != '\0')
+        return 0;
+    while (chealpix_is_space(*ordering))
+        ordering++;
+
+    return *ordering == '\0';
+}
+
+int healpix_map_to_ring_status(float **map_io, long nside,
+                               const char *ordering)
+{
+    float *ring_map;
+    long ipnest;
+    long ipring;
+    long npix;
+
+    if (map_io == NULL || *map_io == NULL || ordering == NULL || nside <= 0)
+        return CHEALPIX_STATUS_BAD_ARG;
+    if (nside > LONG_MAX / nside / 12)
+        return CHEALPIX_STATUS_BAD_SHAPE;
+
+    npix = nside2npix(nside);
+    if (chealpix_ordering_equals(ordering, "RING"))
+        return 0;
+    if (!chealpix_ordering_equals(ordering, "NESTED"))
+        return CHEALPIX_STATUS_BAD_ORDER;
+    if ((nside & (nside - 1)) != 0)
+        return CHEALPIX_STATUS_BAD_SHAPE;
+    if ((size_t)npix > SIZE_MAX / sizeof(*ring_map))
+        return CHEALPIX_STATUS_BAD_SHAPE;
+
+    ring_map = (float *)malloc((size_t)npix * sizeof(*ring_map));
+    if (ring_map == NULL)
+        return CHEALPIX_STATUS_ALLOC;
+
+    for (ipnest = 0; ipnest < npix; ipnest++) {
+        nest2ring(nside, ipnest, &ipring);
+        if (ipring < 0 || ipring >= npix) {
+            free(ring_map);
+            return CHEALPIX_STATUS_BAD_SHAPE;
+        }
+        ring_map[ipring] = (*map_io)[ipnest];
+    }
+
+    free(*map_io);
+    *map_io = ring_map;
+    return 0;
+}
+
+int read_healpix_map_status(const char *infile, long *nside,
+                             char *coordsys, char *ordering,
+                             float **map_out)
+{
+    long naxes = 0, *naxis = NULL, npix = 0;
+    int status = 0, close_status = 0, hdutype = 0, nfound = 0, anynul = 0;
+    float nulval = HEALPIX_NULLVAL, *map = NULL;
+    fitsfile *fptr = NULL;
+
+    if (!infile || !nside || !coordsys || !ordering || !map_out)
+        return CHEALPIX_STATUS_BAD_ARG;
+    *map_out = NULL;
+
+    fits_open_file(&fptr, infile, READONLY, &status);
+    if (status) goto fail;
+    fits_movabs_hdu(fptr, 2, &hdutype, &status);
+    if (status) goto fail;
+    if (hdutype != BINARY_TBL) { status = CHEALPIX_STATUS_BAD_HDU; goto fail; }
+
+    fits_read_key_lng(fptr, "NAXIS", &naxes, NULL, &status);
+    if (status) goto fail;
+    if (naxes < 2) { status = CHEALPIX_STATUS_BAD_SHAPE; goto fail; }
+
+    naxis = (long *)malloc((size_t)naxes * sizeof(long));
+    if (!naxis) { status = CHEALPIX_STATUS_ALLOC; goto fail; }
+
+    fits_read_keys_lng(fptr, "NAXIS", 1, naxes, naxis, &nfound, &status);
+    if (status) goto fail;
+    if (nfound != naxes) { status = CHEALPIX_STATUS_BAD_SHAPE; goto fail; }
+
+    fits_read_key_lng(fptr, "NSIDE", nside, NULL, &status);
+    if (status) goto fail;
+    if (*nside <= 0) { status = CHEALPIX_STATUS_BAD_SHAPE; goto fail; }
+
+    npix = 12 * (*nside) * (*nside);
+    if (naxis[1] == 0 || (npix % naxis[1]) != 0) {
+        status = CHEALPIX_STATUS_BAD_SHAPE;
+        goto fail;
+    }
+
+    status = 0;
+    if (fits_read_key(fptr, TSTRING, "COORDSYS", coordsys, NULL, &status)) {
+        strcpy(coordsys, "C");
+        status = 0;
+    }
+    if (fits_read_key(fptr, TSTRING, "ORDERING", ordering, NULL, &status)) {
+        strcpy(ordering, "RING");
+        status = 0;
+    }
+
+    map = (float *)malloc((size_t)npix * sizeof(float));
+    if (!map) { status = CHEALPIX_STATUS_ALLOC; goto fail; }
+
+    fits_read_col(fptr, TFLOAT, 1, 1, 1, npix, &nulval, map, &anynul, &status);
+    if (status) goto fail;
+
+    fits_close_file(fptr, &close_status);
+    fptr = NULL;
+    if (close_status) { status = close_status; goto fail; }
+
+    free(naxis);
+    *map_out = map;
+    return 0;
+
+fail:
+    if (fptr) {
+        close_status = 0;
+        fits_close_file(fptr, &close_status);
+    }
+    free(naxis);
+    free(map);
+    return status ? status : CHEALPIX_STATUS_BAD_SHAPE;
+}
+
+int get_fits_size_status(const char *filename, long *nside,
+                         char *ordering, long *npix_out)
+{
+    fitsfile *fptr = NULL;
+    int status = 0, close_status = 0, hdutype = 0;
+    long obs_npix = 0;
+
+    if (!filename || !nside || !ordering || !npix_out)
+        return CHEALPIX_STATUS_BAD_ARG;
+    *npix_out = 0;
+
+    fits_open_file(&fptr, filename, READONLY, &status);
+    if (status) goto done;
+    fits_movabs_hdu(fptr, 2, &hdutype, &status);
+    if (status) goto done;
+
+    fits_read_key(fptr, TSTRING, "ORDERING", ordering, NULL, &status);
+    if (status) goto done;
+    fits_read_key(fptr, TLONG, "NSIDE", nside, NULL, &status);
+    if (status) goto done;
+
+    if (fits_read_key(fptr, TLONG, "OBS_NPIX", &obs_npix, NULL, &status)) {
+        obs_npix = 12 * (*nside) * (*nside);
+        status = 0;
+    }
+
+done:
+    if (fptr) {
+        fits_close_file(fptr, &close_status);
+        if (!status && close_status) status = close_status;
+    }
+    if (!status) *npix_out = obs_npix;
+    return status;
+}
+
+int write_healpix_map_status(const float *signal, long nside,
+                             const char *filename, char nest,
+                             const char *coordsys)
+{
+    fitsfile *fptr = NULL;
+    int status = 0, close_status = 0, hdutype = 0;
+    long naxes[] = {0, 0};
+    long npix = 12L * nside * nside;
+    char order[9], coordsys9[9];
+    char *ttype[] = {"SIGNAL"}, *tform[] = {"1E"}, *tunit[] = {" "};
+
+    if (!signal || !filename || !coordsys || strlen(coordsys) < 1 || nside <= 0)
+        return CHEALPIX_STATUS_BAD_ARG;
+
+    fits_create_file(&fptr, filename, &status);
+    if (status) goto done;
+    fits_create_img(fptr, SHORT_IMG, 0, naxes, &status);
+    fits_write_date(fptr, &status);
+    fits_movabs_hdu(fptr, 1, &hdutype, &status);
+    if (status) goto done;
+
+    fits_create_tbl(fptr, BINARY_TBL, npix, 1, ttype, tform, tunit,
+                    "BINTABLE", &status);
+    strcpy(order, nest ? "NESTED  " : "RING    ");
+    setCoordSysHP(coordsys[0], coordsys9);
+
+    fits_write_key(fptr, TSTRING, "PIXTYPE", "HEALPIX",
+                   "HEALPIX Pixelisation", &status);
+    fits_write_key(fptr, TSTRING, "ORDERING", order,
+                   "Pixel ordering scheme, either RING or NESTED", &status);
+    fits_write_key(fptr, TLONG, "NSIDE", &nside,
+                   "Resolution parameter for HEALPIX", &status);
+    fits_write_key(fptr, TSTRING, "COORDSYS", coordsys9,
+                   "Pixelisation coordinate system", &status);
+    fits_write_col(fptr, TFLOAT, 1, 1, 1, npix, (void *)signal, &status);
+
+done:
+    if (fptr) {
+        fits_close_file(fptr, &close_status);
+        if (!status && close_status) status = close_status;
+    }
+    return status;
+}
+
 float *read_healpix_map(const char *infile, long *nside, char *coordsys,
-  char *ordering)
-  {
-  /* Local Declarations */
-  long     naxes, *naxis, npix;
-  int      status=0, hdutype, nfound, anynul;
-  float    nulval, *map;
-  fitsfile *fptr;
+                        char *ordering)
+{
+    float *map = NULL;
+    int status = read_healpix_map_status(infile, nside, coordsys,
+                                         ordering, &map);
 
-  fits_open_file(&fptr, infile, READONLY, &status);
-  fits_movabs_hdu(fptr, 2, &hdutype, &status);
-  printerror(status);
+    if (status != 0) {
+        chealpix_report_status("read_healpix_map", status);
+        return NULL;
+    }
 
-  UTIL_ASSERT(hdutype==BINARY_TBL,"Extension is not binary!");
-
-  /* Read the sizes of the array */
-  fits_read_key_lng(fptr, "NAXIS", &naxes, NULL, &status);
-  printerror(status);
-
-  naxis = RALLOC(long,naxes);
-  fits_read_keys_lng(fptr, "NAXIS", 1, naxes, naxis, &nfound, &status);
-  printerror(status);
-  UTIL_ASSERT(nfound==naxes,"nfound!=naxes");
-
-  fits_read_key_lng(fptr, "NSIDE", nside, NULL, &status);
-  printerror(status);
-
-  npix = 12*(*nside)*(*nside);
-  UTIL_ASSERT((npix%naxis[1])==0,"Problem with npix.");
-
-  if (fits_read_key(fptr, TSTRING, "COORDSYS",coordsys, NULL, &status)) {
-    fprintf(stderr, "WARNING: Could not find %s keyword in in file %s\n",
-            "COORDSYS",infile);
-    status = 0;
-  }
-
-  if (fits_read_key(fptr, TSTRING, "ORDERING", ordering, NULL, &status)) {
-    fprintf(stderr, "WARNING: Could not find %s keyword in in file %s\n",
-            "ORDERING",infile);
-    status = 0;
-  }
-
-  /* Read the array */
-  map = RALLOC(float,npix);
-  nulval = HEALPIX_NULLVAL;
-  fits_read_col(fptr, TFLOAT, 1, 1, 1, npix, &nulval, map, &anynul, &status);
-  printerror(status);
-
-  DEALLOC(naxis);
-
-  fits_close_file(fptr, &status);
-  printerror(status);
-
-  return map;
-  }
+    return map;
+}
 
 long get_fits_size(const char *filename, long *nside, char *ordering)
-  {
-  fitsfile *fptr;       /* pointer to the FITS file, defined in fitsio.h */
-  int status=0, hdutype;
-  long obs_npix;
+{
+    long npix = -1;
+    int status = get_fits_size_status(filename, nside, ordering, &npix);
 
-  fits_open_file(&fptr, filename, READONLY, &status);
-  fits_movabs_hdu(fptr, 2, &hdutype, &status); /* move to 2nd HDU */
+    if (status != 0) {
+        chealpix_report_status("get_fits_size", status);
+        return -1;
+    }
 
-  fits_read_key(fptr, TSTRING, "ORDERING", ordering, NULL, &status);
-  fits_read_key(fptr, TLONG, "NSIDE", nside, NULL, &status);
-  printerror(status);
+    return npix;
+}
 
-  if (fits_read_key(fptr, TLONG, "OBS_NPIX", &obs_npix, NULL, &status)) {
-    obs_npix = 12 * (*nside) * (*nside);
-    status = 0;
-  }
+void write_healpix_map(const float *signal, long nside, const char *filename,
+                       char nest, const char *coordsys)
+{
+    int status = write_healpix_map_status(signal, nside, filename,
+                                          nest, coordsys);
 
-  fits_close_file(fptr, &status);
-  printerror(status);
-  return obs_npix;
-  }
+    if (status != 0)
+        chealpix_report_status("write_healpix_map", status);
+}
 
-void write_healpix_map (const float *signal, long nside, const char *filename,
-  char nest, const char *coordsys)
-  {
-  fitsfile *fptr;       /* pointer to the FITS file, defined in fitsio.h */
-  int status=0, hdutype;
+//B activate later if necessary
+//#undef CHEALPIX_STATUS_BAD_ARG
+//#undef CHEALPIX_STATUS_BAD_HDU
+//#undef CHEALPIX_STATUS_BAD_SHAPE
+//#undef CHEALPIX_STATUS_ALLOC
+//E
 
-  long naxes[] = {0,0};
-
-  char order[9];                 /* HEALPix ordering */
-  char *ttype[] = { "SIGNAL" };
-  char *tform[] = { "1E" };
-  char *tunit[] = { " " };
-  char coordsys9[9];
-
-  /* create new FITS file */
-  fits_create_file(&fptr, filename, &status);
-  fits_create_img(fptr, SHORT_IMG, 0, naxes, &status);
-  fits_write_date(fptr, &status);
-  fits_movabs_hdu(fptr, 1, &hdutype, &status);
-  fits_create_tbl( fptr, BINARY_TBL, 12L*nside*nside, 1, ttype, tform,
-                        tunit, "BINTABLE", &status);
-  fits_write_key(fptr, TSTRING, "PIXTYPE", "HEALPIX", "HEALPIX Pixelisation",
-    &status);
-
-  strcpy(order, nest ? "NESTED  " : "RING    ");
-  fits_write_key(fptr, TSTRING, "ORDERING", order,
-    "Pixel ordering scheme, either RING or NESTED", &status);
-  fits_write_key(fptr, TLONG, "NSIDE", &nside,
-    "Resolution parameter for HEALPIX", &status);
-
-  UTIL_ASSERT(strlen(coordsys)>=1,"bad ccordsys value");
-  setCoordSysHP(coordsys[0],coordsys9);
-  fits_write_key(fptr, TSTRING, "COORDSYS", coordsys9,
-    "Pixelisation coordinate system", &status);
-
-  fits_write_comment(fptr,
-    "G = Galactic, E = ecliptic, C = celestial = equatorial", &status);
-
-  fits_write_col(fptr, TFLOAT, 1, 1, 1, 12*nside*nside, (void *)signal,&status);
-  fits_close_file(fptr, &status);
-  printerror(status);
-  }
-
-//#endif
+//E

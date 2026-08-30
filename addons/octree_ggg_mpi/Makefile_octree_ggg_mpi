@@ -1,0 +1,21 @@
+# ----- Makefile definitions: FCFC-style octree-GGG MPI addon -----
+
+ifeq ($(OCTREEGGGMPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DOCTREEGGGMPI -DCBALLS_MPI_ENABLED \
+        -DGGG_MPI_PIVOT_CLAIM_SIZE=$(GGG_MPI_PIVOT_CLAIM_SIZE)
+ifneq ($(OCTREEGGGOMPON),1)
+OPT2 += -DGGG_OMP_PIVOT_CHUNK_SIZE=$(GGG_OMP_PIVOT_CHUNK_SIZE)
+endif
+
+OCTREEGGGMPI = $(MDIR)/addons/octree_ggg_mpi/
+OCTREEGGGOMPSOURCE = $(MDIR)/addons/octree_ggg_omp/
+vpath %.c $(OCTREEGGGMPI):$(OCTREEGGGOMPSOURCE)
+INCLUDES += -I$(OCTREEGGGMPI) -I$(OCTREEGGGOMPSOURCE)
+HEADERFILES += $(wildcard $(OCTREEGGGMPI)/*.h)
+EXTERNAL += fcfc_octree_ggg_mpi.o
+ifneq ($(OCTREEGGGOMPON),1)
+EXTERNAL += search_octree_ggg_omp.o
+endif
+endif

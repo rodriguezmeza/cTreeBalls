@@ -19,14 +19,14 @@ typedef struct {
     vector maxb;                                    // max pos of bounding box
     vector width;                                   // width of bounding box
     vector center;                                  // center of bounding box
-    real radius;                                    // radius of bounding box
+    cballs_storage_real radius;                     // conservative radius
 } bound;
 
 //  Structure representing a node of a ball-tree
 typedef struct {
     bound bnd;                                      // min, max bnd of ball-cell
     int dim;                                        // splitting dimension
-    real split;                                     // median coordinate value
+    cballs_storage_real split;                      // median coordinate value
     int first;                                      // index of frst body in node
     int last;                                       // index of last body in node
     real kappa;                                     // scalar field at cmpos
@@ -39,6 +39,13 @@ typedef struct {
     real etayz;                                     // deformation factor yz
 #endif
 } ballnode;
+
+#ifdef SINGLEP
+typedef struct {
+    vector pos;
+    real kappa;
+} kd_leaf_point;
+#endif
 
 // Macros for indicies into kd tree
 #define KDROOT		1
@@ -62,14 +69,17 @@ typedef struct {
     int nnode;
     int nsplit;
     ballnode *ntab;
+#ifdef SINGLEP
+    kd_leaf_point *packed_points;
+#endif
 } ballcontext, *ballxptr;
 
 ballxptr init_kdtree(struct cmdline_data* cmd,
                    struct  global_data* gd,
                    bodyptr, INTEGER);
-void build_kdtree(struct cmdline_data* cmd,
-                  struct  global_data* gd,
-                  ballxptr, int);
+int build_kdtree(struct cmdline_data* cmd,
+                 struct  global_data* gd,
+                 ballxptr, int);
 void finish_kdtree(ballxptr);
 
 #endif  /* ! _kdtree_h */

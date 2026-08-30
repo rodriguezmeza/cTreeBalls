@@ -32,11 +32,34 @@ int StartRun(struct cmdline_data* cmd, struct  global_data* gd,
 int StartRun_Common(struct cmdline_data*, struct  global_data*);
 int PrintParameterFile(struct cmdline_data *, struct  global_data*, char *);
 
-//B If uncommented there will be a warning in the setup.py process
-//#ifdef OPENMPCODE
 int SetNumberThreads(struct cmdline_data *cmd);
-//#endif
-//E
+
+int cballs_start_run_common_guarded(struct cmdline_data *cmd,
+                                    struct global_data *gd);
+int cballs_print_parameter_file_guarded(struct cmdline_data *cmd,
+                                        struct global_data *gd,
+                                        char *filename);
+int cballs_set_number_threads_guarded(struct cmdline_data *cmd);
+int cballs_main_loop_guarded(struct cmdline_data *cmd,
+                             struct global_data *gd);
+int cballs_end_run_guarded(struct cmdline_data *cmd,
+                           struct global_data *gd);
+int cballs_end_run_free_memory_guarded(struct cmdline_data *cmd,
+                                       struct global_data *gd);
+int cballs_compiled_ndim(void);
+int cballs_max_memory_catalogs(void);
+int cballs_search_method_id(const char *method);
+int cballs_load_memory_catalog(struct cmdline_data *cmd,
+                               struct global_data *gd,
+                               int ifile,
+                               const double *positions,
+                               size_t nbody,
+                               int ndim,
+                               const double *kappa,
+                               const double *weights,
+                               const unsigned char *mask,
+                               const double *gamma1,
+                               const double *gamma2);
 
 int StartOutput(struct cmdline_data *, struct  global_data*);
 int EndRun(struct cmdline_data* cmd, struct  global_data* gd);
@@ -68,8 +91,8 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
                                 struct  global_data* gd);
 
 //B I/O directories:
-global void setFilesDirs_log(struct cmdline_data*, struct  global_data* gd);
-global void setFilesDirs(struct cmdline_data*, struct  global_data* gd);
+global int setFilesDirs_log(struct cmdline_data*, struct  global_data* gd);
+global int setFilesDirs(struct cmdline_data*, struct  global_data* gd);
 //E
 
 //B routine to compute edge corrections using two saved histZetaM histograms
@@ -85,8 +108,6 @@ int EvalHist(struct cmdline_data* cmd, struct  global_data* gd);
 
 //B 3PCF section
 // Search methods:
-//global int searchcalc_direct_omp(bodyptr, int, INTEGER, INTEGER);
-
 
 //B Tree:
 global int MakeTree(struct cmdline_data* cmd, struct  global_data* gd,
@@ -113,21 +134,24 @@ global int doBoxWrapping(struct cmdline_data* cmd, struct  global_data* gd);
 global bool reject_cell(struct cmdline_data* cmd, struct  global_data* gd,
                         nodeptr, nodeptr, real);
 global bool reject_cell_balls(struct cmdline_data* cmd, struct  global_data* gd,
-                              nodeptr, nodeptr, real *, vector);
+                              nodeptr, nodeptr, real *, compute_vector);
 global bool reject_bodycell(struct cmdline_data* cmd, struct  global_data* gd,
                             nodeptr, nodeptr);
 global bool reject_cellcell(struct cmdline_data* cmd, struct  global_data* gd,
                             nodeptr, nodeptr);
 
 global bool reject_balls(struct cmdline_data* cmd, struct  global_data* gd,
-                         nodeptr p, nodeptr q, real *drpq, vector dr);
+                         nodeptr p, nodeptr q, real *drpq, compute_vector dr);
 
-#ifdef SINGLEP
 global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
-                        bodyptr, nodeptr, float *, float *);
-#else
-global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
-                        bodyptr, nodeptr, real *, vector);
+                        bodyptr, nodeptr, real *, compute_vector);
+
+#ifdef SMOOTHPIVOT
+global int prepare_smooth_pivots(struct cmdline_data* cmd,
+                                 struct global_data* gd,
+                                 bodyptr *btable, INTEGER *nbody,
+                                 INTEGER ipmin, INTEGER *ipmax,
+                                 int cat1, int cat2);
 #endif
 
 global int search_init_sincos_omp(struct cmdline_data* cmd,
@@ -168,6 +192,19 @@ global int statHistogram(struct cmdline_data* cmd, struct  global_data* gd);
 #endif
 //E
 
+// Application Binary Interface (ABI) definitions
+size_t sizeof_cmdline_data(void);
+size_t sizeof_global_data(void);
+
+
+global int cballs_system_checked(struct cmdline_data *cmd,
+                                 string routineName,
+                                 string command);
+global int cballs_stream_close_checked(struct cmdline_data *cmd,
+                                       string routineName,
+                                       stream *stream_ptr,
+                                       string filename);
+global real cballs_normalize_or_zero(real numerator, real denominator);
 #ifdef __cplusplus
 }
 #endif

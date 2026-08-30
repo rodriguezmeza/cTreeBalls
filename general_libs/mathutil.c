@@ -114,11 +114,8 @@ void Rotation3D(real vec[], real alpha, real beta, real gamma)
 }
 */
 // Small rotations: Angles in radians
-#ifdef SINGLEP
-void dRotation3D(float vec[], real alpha, real beta, real gamma, float *vecp)
-#else
-void dRotation3D(real vec[], real alpha, real beta, real gamma, real *vecp)
-#endif
+void dRotation3D(const cballs_storage_real vec[], real alpha, real beta,
+                 real gamma, compute_vector vecp)
 {
     real a11, a12, a13;
     real a21, a22, a23;
@@ -307,10 +304,7 @@ real angle_dxdy(real DX, real DY)
 
 bool cross_product(real DX, real DY)
 {
-    bool answer;
-
-
-    return(answer);
+    return DX * DY < 0.0;
 }
 
 
@@ -672,7 +666,7 @@ void moment(double data[], int n, double *ave, double *adev, double *sdev,
 void gaussj(double **a, int n, double **b, int m)
 {
     int *indxc,*indxr,*ipiv;
-    int i,icol,irow,j,k,l,ll;
+    int i,icol=1,irow=1,j,k,l,ll;
     double big,dum,pivinv,temp;
 
     indxc=ivector(1,n);
@@ -748,7 +742,7 @@ void lubksb(double **a, int n, int *indx, double b[])
 
 void ludcmp(double **a, int n, int *indx, double *d)
 {
-    int i,imax,j,k;
+    int i,imax=1,j,k;
     double big,dum,sum,temp;
     double *vv;
 
@@ -762,6 +756,7 @@ void ludcmp(double **a, int n, int *indx, double *d)
         vv[i]=1.0/big;
     }
     for (j=1;j<=n;j++) {
+        imax=j;
         for (i=1;i<j;i++) {
             sum=a[i][j];
             for (k=1;k<i;k++) sum -= a[i][k]*a[k][j];

@@ -19,7 +19,9 @@
 
     DO_BODY(p,bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile])
         Update(p) = TRUE;
-    MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+    if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile)
+        == FAILURE)
+        return FAILURE;
 
     verb_print_debug(1, "\nAqui voy (0): %d\n", ifile);
 
@@ -30,15 +32,26 @@
 
     nbodylocal = gd->nnodescanlevTableB4[ifile];
 
-    if (scanopt(cmd->options, "read-mask")) {
-        ifile=0;
+//B
+if (cballs_opt_read_mask(cmd)) {
+    ifile = 0;
+    if (bodytable[ifile] != NULL) {
         free(bodytable[ifile]);
-    } else {
-        for (ifile=0; ifile<gd->ninfiles; ifile++)
-            free(bodytable[ifile]);
+        bodytable[ifile] = NULL;
     }
+    gd->nbodyTable[ifile] = 0;
+} else {
+    for (ifile = 0; ifile < gd->ninfiles && ifile < MAXITEMS; ifile++) {
+        if (bodytable[ifile] != NULL) {
+            free(bodytable[ifile]);
+            bodytable[ifile] = NULL;
+        }
+        gd->nbodyTable[ifile] = 0;
+    }
+}
+//E
 
-//    gd->nbodyTable[ifile] = gd->nnodescanlevTableB4[ifile];
+
     ifile=0;
     gd->nbodyTable[ifile] = nbodylocal;
     gd->nnodescanlevTableB4[ifile] = nbodylocal;
@@ -50,6 +63,7 @@
     verb_print_debug(1, "\nAqui voy (1): %d\n", ifile);
 
     bodytable[ifile] = (bodyptr) allocate(gd->nbodyTable[ifile] * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     verb_print_debug(1, "\nAqui voy (2)\n");
 
     gd->bytes_tot += gd->nbodyTable[ifile] * sizeof(body);
@@ -72,16 +86,30 @@
         Mask(p) = Mask(q);
     }
 
-    if (scanopt(cmd->options, "read-mask")) {
-        ifile=0;
+//B
+if (cballs_opt_read_mask(cmd)) {
+    ifile = 0;
+    if (nodetablescanlevB4[ifile] != NULL) {
         free(nodetablescanlevB4[ifile]);
-    } else {
-        for (ifile=0; ifile<gd->ninfiles; ifile++)
-            free(nodetablescanlevB4[ifile]);
+        nodetablescanlevB4[ifile] = NULL;
     }
+    gd->nnodescanlevTableB4[ifile] = 0;
+} else {
+    for (ifile = 0; ifile < gd->ninfiles && ifile < MAXITEMS; ifile++) {
+        if (nodetablescanlevB4[ifile] != NULL) {
+            free(nodetablescanlevB4[ifile]);
+            nodetablescanlevB4[ifile] = NULL;
+        }
+        gd->nnodescanlevTableB4[ifile] = 0;
+    }
+}
+//E
+
 
     if (!scanopt(cmd->searchMethod, "kdtree-omp")
-        && !scanopt(cmd->searchMethod, "kdtree-box-omp") ) {
+        && !scanopt(cmd->searchMethod, "kdtree-box-omp")
+        && !scanopt(cmd->searchMethod, "balltree-omp")
+        && !scanopt(cmd->searchMethod, "balltree-mpi") ) {
         freeTree(cmd, gd);
     }
 

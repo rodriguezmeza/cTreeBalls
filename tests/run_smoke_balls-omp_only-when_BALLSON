@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+#CBALLS=${CBALLS:-../cballs_sincos}
+CBALLS=${CBALLS:-../cballs}
+OUT=${OUT:-Output_smoke_balls_omp}
+
+cd "$(dirname "$0")"
+
+rm -rf "$OUT"
+
+"$CBALLS" \
+  search=balls-omp \
+  rootDir="$OUT" \
+  options=compute-HistN,out-m-HistZeta \
+  testmodel=unit-sphere-random \
+  nbody=2000 \
+  rangeN=0.0633205 \
+  rminHist=0.00213811 \
+  sizeHistN=12 \
+  mChebyshev=3 \
+  sizeHistPhi=16 \
+  useLogHist=true \
+  usePeriodic=false \
+  stepState=1000 \
+  numberThreads=2 \
+  verbose=1 \
+  verbose_log=1
+
+python ./scripts/check_smoke_balls_omp.py "$OUT"

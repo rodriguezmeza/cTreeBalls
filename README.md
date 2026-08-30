@@ -13,6 +13,7 @@ Major contributors:
 - [Gustavo Niz](https://github.com/gnizq64)
 - [Sadi Ramirez](https://github.com/sadirs)
 - Axel Romero Tisnado
+- Sofia Samario
 
 
 ## Table of Contents
@@ -30,32 +31,6 @@ Major contributors:
 **TreeBalls** (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
 
 Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/).
-
-Try the standalone Python-wrapper notebook in Google Colab:
-[Open cTreeBalls in Colab](https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb).
-
-## Install the Python interface
-
-The PyPI distribution is named `cTreeBalls`; the Python extension is imported
-as `cyballs`. The installation compiles the native extension, including
-the bundled GSL and CFITSIO sources, and therefore requires a C compiler,
-`make`, `ar`, and Python development headers. On Debian or Ubuntu:
-
-```bash
-sudo apt-get update
-sudo apt-get install build-essential python3-dev zlib1g-dev
-python3 -m pip install cTreeBalls
-```
-
-Verify the installation with:
-
-```bash
-python3 -c "from cyballs import cballs; print(cballs)"
-```
-
-The pip package installs the `cyballs` extension. Clone the repository and use
-`make all` when you also need the `cballs` executable, static library, test
-catalogs, or development files.
 
 ## Compiling and getting started
 

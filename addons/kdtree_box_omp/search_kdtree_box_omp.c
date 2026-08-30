@@ -15,6 +15,8 @@
 #include "kdtree.h"
 
 //B Some macros and definitions
+#define KD_COORD_DELTA(a, b) ((real)(a) - (real)(b))
+
 //INTERSECT: macro to determine if node intersects search ball
 #if NDIM == 3
 #define Intersect_bp(node, r2ball, pos, lbox, lbox_h, done, Continue) \
@@ -22,14 +24,15 @@
     real _dl, _dh, _dl2, _dh2;                              \
     _dl2 = 0; _dh2 = 0;                                     \
     if (pos[0] < node.bnd.minb[0]) {                        \
-        _dl = node.bnd.minb[0] - pos[0];                    \
-        _dh = node.bnd.maxb[0] - pos[0];                    \
+        _dl = KD_COORD_DELTA(node.bnd.minb[0], pos[0]);     \
+        _dh = KD_COORD_DELTA(node.bnd.maxb[0], pos[0]);     \
     } else if (pos[0] > node.bnd.maxb[0]) {                 \
-        _dl = pos[0] - node.bnd.maxb[0];                    \
-        _dh = pos[0] - node.bnd.minb[0];                    \
+        _dl = KD_COORD_DELTA(pos[0], node.bnd.maxb[0]);     \
+        _dh = KD_COORD_DELTA(pos[0], node.bnd.minb[0]);     \
     } else {                                                \
         _dl = 0.0;                                          \
-        _dh = MAX(node.bnd.maxb[0]-pos[0],pos[0]-node.bnd.minb[0]); \
+        _dh = MAX(KD_COORD_DELTA(node.bnd.maxb[0], pos[0]), \
+                  KD_COORD_DELTA(pos[0], node.bnd.minb[0])); \
     }                                                       \
     if(_dl > lbox_h) {                                      \
         _dl = lbox - _dh;                                   \
@@ -39,14 +42,15 @@
     _dh2 += _dh*_dh;                                        \
                                                             \
     if (pos[1] < node.bnd.minb[1]) {                        \
-        _dl = node.bnd.minb[1] - pos[1];                    \
-        _dh = node.bnd.maxb[1] - pos[1];                    \
+        _dl = KD_COORD_DELTA(node.bnd.minb[1], pos[1]);     \
+        _dh = KD_COORD_DELTA(node.bnd.maxb[1], pos[1]);     \
     } else if (pos[1] > node.bnd.maxb[1]) {                 \
-        _dl = pos[1] - node.bnd.maxb[1];                    \
-        _dh = pos[1] - node.bnd.minb[1];                    \
+        _dl = KD_COORD_DELTA(pos[1], node.bnd.maxb[1]);     \
+        _dh = KD_COORD_DELTA(pos[1], node.bnd.minb[1]);     \
     } else {                                                \
         _dl = 0.0;                                          \
-        _dh = MAX(node.bnd.maxb[1]-pos[1],pos[1]-node.bnd.minb[1]); \
+        _dh = MAX(KD_COORD_DELTA(node.bnd.maxb[1], pos[1]), \
+                  KD_COORD_DELTA(pos[1], node.bnd.minb[1])); \
     }                                                       \
     if(_dl > lbox_h) {                                      \
         _dl = lbox - _dh;                                   \
@@ -56,14 +60,15 @@
     _dh2 += _dh*_dh;                                        \
                                                             \
     if (pos[2] < node.bnd.minb[2]) {                        \
-        _dl = node.bnd.minb[2] - pos[2];                    \
-        _dh = node.bnd.maxb[2] - pos[2];                    \
+        _dl = KD_COORD_DELTA(node.bnd.minb[2], pos[2]);     \
+        _dh = KD_COORD_DELTA(node.bnd.maxb[2], pos[2]);     \
     } else if (pos[2] > node.bnd.maxb[2]) {                 \
-        _dl = pos[2] - node.bnd.maxb[2];                    \
-        _dh = pos[2] - node.bnd.minb[2];                    \
+        _dl = KD_COORD_DELTA(pos[2], node.bnd.maxb[2]);     \
+        _dh = KD_COORD_DELTA(pos[2], node.bnd.minb[2]);     \
     } else {                                                \
         _dl = 0.0;                                          \
-        _dh = MAX(node.bnd.maxb[2]-pos[2],pos[2]-node.bnd.minb[2]); \
+        _dh = MAX(KD_COORD_DELTA(node.bnd.maxb[2], pos[2]), \
+                  KD_COORD_DELTA(pos[2], node.bnd.minb[2])); \
     }                                                       \
     if(_dl > lbox_h) {                                      \
         _dl = lbox - _dh;                                   \
@@ -78,8 +83,8 @@
 #define Intersect(node, r2ball, pos, done)                  \
 {                                                           \
     real _dxl, _dxr, _dyl, _dyr, _dzl, _dzr, _dr2;          \
-    _dxl = node.bnd.minb[0] - pos[0];                       \
-    _dxr = pos[0] - node.bnd.maxb[0];                       \
+    _dxl = KD_COORD_DELTA(node.bnd.minb[0], pos[0]);        \
+    _dxr = KD_COORD_DELTA(pos[0], node.bnd.maxb[0]);        \
     if (_dxl > 0.0) {                                       \
         _dr2 = _dxl*_dxl;                                   \
         if (_dr2 > r2ball) goto done;                       \
@@ -88,8 +93,8 @@
         if (_dr2 > r2ball) goto done;                       \
     } else                                                  \
         _dr2 = 0.0;                                         \
-    _dyl = node.bnd.minb[1] - pos[1];                       \
-    _dyr = pos[1] - node.bnd.maxb[1];                       \
+    _dyl = KD_COORD_DELTA(node.bnd.minb[1], pos[1]);        \
+    _dyr = KD_COORD_DELTA(pos[1], node.bnd.maxb[1]);        \
     if (_dyl > 0.0) {                                       \
         _dr2 += _dyl*_dyl;                                  \
         if (_dr2 > r2ball) goto done;                       \
@@ -97,8 +102,8 @@
         _dr2 += _dyr*_dyr;                                  \
         if (_dr2 > r2ball) goto done;                       \
     }                                                       \
-    _dzl = node.bnd.minb[2] - pos[2];                       \
-    _dzr = pos[2] - node.bnd.maxb[2];                       \
+    _dzl = KD_COORD_DELTA(node.bnd.minb[2], pos[2]);        \
+    _dzr = KD_COORD_DELTA(pos[2], node.bnd.maxb[2]);        \
     if (_dzl > 0.0) {                                       \
         _dr2 += _dzl*_dzl;                                  \
         if (_dr2 > r2ball) goto done;                       \
@@ -114,14 +119,15 @@
     real _dl, _dh, _dl2, _dh2;                              \
     _dl2 = 0; _dh2 = 0;                                     \
     if (pos[0] < node.bnd.minb[0]) {                        \
-        _dl = node.bnd.minb[0] - pos[0];                    \
-        _dh = node.bnd.maxb[0] - pos[0];                    \
+        _dl = KD_COORD_DELTA(node.bnd.minb[0], pos[0]);     \
+        _dh = KD_COORD_DELTA(node.bnd.maxb[0], pos[0]);     \
     } else if (pos[0] > node.bnd.maxb[0]) {                 \
-        _dl = pos[0] - node.bnd.maxb[0];                    \
-        _dh = pos[0] - node.bnd.minb[0];                    \
+        _dl = KD_COORD_DELTA(pos[0], node.bnd.maxb[0]);     \
+        _dh = KD_COORD_DELTA(pos[0], node.bnd.minb[0]);     \
     } else {                                                \
         _dl = 0.0;                                          \
-        _dh = MAX(node.bnd.maxb[0]-pos[0],pos[0]-node.bnd.minb[0]); \
+        _dh = MAX(KD_COORD_DELTA(node.bnd.maxb[0], pos[0]), \
+                  KD_COORD_DELTA(pos[0], node.bnd.minb[0])); \
     }                                                       \
     if(_dl > lbox_h) {                                      \
         _dl = lbox - _dh;                                   \
@@ -131,14 +137,15 @@
     _dh2 += _dh*_dh;                                        \
                                                             \
     if (pos[1] < node.bnd.minb[1]) {                        \
-        _dl = node.bnd.minb[1] - pos[1];                    \
-        _dh = node.bnd.maxb[1] - pos[1];                    \
+        _dl = KD_COORD_DELTA(node.bnd.minb[1], pos[1]);     \
+        _dh = KD_COORD_DELTA(node.bnd.maxb[1], pos[1]);     \
     } else if (pos[1] > node.bnd.maxb[1]) {                 \
-        _dl = pos[1] - node.bnd.maxb[1];                    \
-        _dh = pos[1] - node.bnd.minb[1];                    \
+        _dl = KD_COORD_DELTA(pos[1], node.bnd.maxb[1]);     \
+        _dh = KD_COORD_DELTA(pos[1], node.bnd.minb[1]);     \
     } else {                                                \
         _dl = 0.0;                                          \
-        _dh = MAX(node.bnd.maxb[1]-pos[1],pos[1]-node.bnd.minb[1]); \
+        _dh = MAX(KD_COORD_DELTA(node.bnd.maxb[1], pos[1]), \
+                  KD_COORD_DELTA(pos[1], node.bnd.minb[1])); \
     }                                                       \
     if(_dl > lbox_h) {                                      \
         _dl = lbox - _dh;                                   \
@@ -153,8 +160,8 @@
 #define Intersect(node, r2ball, pos, done)                  \
 {                                                           \
     real _dxl, _dxr, _dyl, _dyr, _dr2;                      \
-    _dxl = node.bnd.minb[0] - pos[0];                       \
-    _dxr = pos[0] - node.bnd.maxb[0];                       \
+    _dxl = KD_COORD_DELTA(node.bnd.minb[0], pos[0]);        \
+    _dxr = KD_COORD_DELTA(pos[0], node.bnd.maxb[0]);        \
     if (_dxl > 0.0) {                                       \
         _dr2 = _dxl*_dxl;                                   \
         if (_dr2 > r2ball) goto done;                       \
@@ -163,8 +170,8 @@
         if (_dr2 > r2ball) goto done;                       \
     } else                                                  \
         _dr2 = 0.0;                                         \
-    _dyl = node.bnd.minb[1] - pos[1];                       \
-    _dyr = pos[1] - node.bnd.maxb[1];                       \
+    _dyl = KD_COORD_DELTA(node.bnd.minb[1], pos[1]);        \
+    _dyr = KD_COORD_DELTA(pos[1], node.bnd.maxb[1]);        \
     if (_dyl > 0.0) {                                       \
         _dr2 += _dyl*_dyl;                                  \
         if (_dr2 > r2ball) goto done;                       \
@@ -221,7 +228,8 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
     real cpu_build_kdtree;
 
     cpustart = CPUTIME;
-    print_info(cmd, gd);
+    if (print_info(cmd, gd) == FAILURE)
+        return FAILURE;
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
@@ -231,6 +239,7 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
 
     INTEGER ipfalse;
     ipfalse=0;
+    int allocation_failed = FALSE;
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "\n%s: Box sizes: %g %g %g and Lbox: %g\n",
@@ -247,7 +256,6 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
 //B Building kd-tree
     cpu_build_kdtree = CPUTIME;
     //B version 1.0.1
-//    nbucket = gd->nsmooth[0];
     nbucket = cmd->nsmooth;
     //E
     verb_print(cmd->verbose, "\nkdtree build: nbucket = %d\n",nbucket);
@@ -260,7 +268,7 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
 
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
-    rootnode, cat1, cat2, kd, ipfalse)
+    rootnode, cat1, cat2, kd, ipfalse, allocation_failed)
     {
         bodyptr p;
         int n;
@@ -268,20 +276,28 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
         INTEGER nbccalcthread = 0;
         
         gdhist_sincos_omp hist;
-        search_init_sincos_omp(cmd, gd, &hist);
+        int hist_ready =
+            search_init_sincos_omp(cmd, gd, &hist) == SUCCESS;
+        if (!hist_ready) {
+#pragma omp atomic write
+            allocation_failed = TRUE;
+        }
+
+#pragma omp barrier
 
         ballnode *ntab = kd->ntab;
         bodyptr *bptr = kd->bptr;
         INTEGER cp;
 
         real dr1;
-        vector dr;
+        compute_vector dr;
         real drpq2;
         real lbox = cmd->lengthBox;
         real lbox_h = 0.5*lbox;
 
-#pragma omp for nowait schedule(dynamic)
+#pragma omp for nowait schedule(static,1)
     DO_BODY(p, btab[cat1]+ipmin-1, btab[cat1]+ipmax[cat1]) {
+        if (allocation_failed) continue;
         for (n = 1; n <= cmd->sizeHistN; n++) {
             hist.histXi2pcfthreadsub[n] = 0.0;      // Affects only 2pcf
         }
@@ -307,8 +323,17 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
         computeBodyProperties_sincos(cmd, gd, p, nbody[cat1], &hist);
     } // end do body p // end pragma omp DO_BODY p
 
-#pragma omp critical
-        {
+        /* Publish in thread-ID order so floating-point sums are repeatable. */
+#ifdef OPENMPCODE
+        int thread_id = omp_get_thread_num();
+        int thread_count = omp_get_num_threads();
+#else
+        int thread_id = 0;
+        int thread_count = 1;
+#endif
+        for (int thread_turn = 0; thread_turn < thread_count; thread_turn++) {
+#pragma omp barrier
+        if (thread_id == thread_turn && hist_ready && !allocation_failed) {
             for (n = 1; n <= cmd->sizeHistN; n++) {
                 gd->histNN[n] += hist.histNthread[n];
                 gd->histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
@@ -317,10 +342,20 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
             gd->nbbcalc += nbbcalcthread;
             gd->nbccalc += nbccalcthread;
         }
+        }
+#pragma omp barrier
 
-        search_free_sincos_omp(cmd, gd, &hist);
+        if (hist_ready)
+            search_free_sincos_omp(cmd, gd, &hist);
 
     } // end pragma omp parallel
+
+    if (allocation_failed) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: OpenMP histogram allocation failed", routineName);
+        finish_kdtree(kd);
+        return FAILURE;
+    }
 
     //B Normalization of histograms
     for (n = 1; n <= cmd->sizeHistN; n++) {
@@ -333,7 +368,7 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
     }
     //E
 
-    if (scanopt(cmd->options, "compute-HistN")) {
+    if (cballs_opt_compute_histn(cmd)) {
         search_compute_HistN(cmd, gd, nbody[cat1]);
     }
 
@@ -351,7 +386,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 {
     bodyptr q;
     real dr1;
-    vector dr;
+    compute_vector dr;
     int n;
     real xi;
 
@@ -380,10 +415,13 @@ local int print_info(struct cmdline_data* cmd,
 {
     verb_print(cmd->verbose, "Search: Running ... (kdtree-box-omp) \n");
 
-    if (scanopt(cmd->options, "behavior-ball")) {
+    if (cballs_opt_behavior_ball(cmd)) {
         verb_print(cmd->verbose, "with option behavior-ball... \n");
-        if (!cmd->useLogHist)
-            error("behavior-ball and useLogHist=false are incompatible!");
+        if (!cmd->useLogHist) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "print_info: behavior-ball and useLogHist=false are incompatible");
+            return FAILURE;
+        }
     }
 #ifdef SMOOTHPIVOT
         verb_print(cmd->verbose,
@@ -398,5 +436,3 @@ local int print_info(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
-
-

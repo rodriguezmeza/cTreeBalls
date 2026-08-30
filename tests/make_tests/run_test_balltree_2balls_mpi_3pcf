@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MPIEXEC=${MPIEXEC:-mpiexec}
+MPIEXEC_ARGS=${MPIEXEC_ARGS:-}
+MPI_RANKS=${MPI_RANKS:-2}
+MPI_THREADS=${MPI_THREADS:-2}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-balltree-2balls-mpi-3pcf.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+mpi_command=("$MPIEXEC")
+if [ -n "$MPIEXEC_ARGS" ]; then
+    mpi_extra_args=()
+    read -r -a mpi_extra_args <<<"$MPIEXEC_ARGS"
+    mpi_command+=("${mpi_extra_args[@]}")
+elif "$MPIEXEC" --version 2>&1 | grep -qi 'Open MPI'; then
+    mpi_command+=(--oversubscribe --map-by slot)
+fi
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s \
+    BALLTREE2BALLSMPI3PCFON=1 TPCFON=1 print-cyballs-build-env)
+grep -q -- '-DBALLTREE2BALLSMPI3PCF\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable BALLTREE2BALLSMPI3PCF"
+grep -q -- '-DBALLTREE2BALLSOMP3PCF\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the OpenMP LogMultipole reference is not enabled"
+
+"$PYTHON" - "$TMP_ROOT/auto.txt" "$TMP_ROOT/pivots.txt" \
+              "$TMP_ROOT/legs.txt" "$TMP_ROOT/aggregate.txt" <<'PY'
+import math
+import pathlib
+import sys
+
+auto_path, pivots_path, legs_path, aggregate_path = map(pathlib.Path,
+                                                        sys.argv[1:])
+
+def rows(count, phase, radial_scale):
+    result = []
+    for i in range(count):
+        angle = phase + 0.371 * i
+        radius = radial_scale * (0.6 + 0.01 * (i % 29))
+        x = 0.51 + radius * math.cos(angle) + 0.0007 * (i % 5)
+        y = 0.47 + radius * math.sin(angle) + 0.0009 * (i % 7)
+        z = 0.24 + 0.0041 * (i % 37)
+        field = -0.8 + 0.13 * (i % 17)
+        result.append((x, y, z, field))
+    return result
+
+def write(path, values):
+    path.write_text(
+        "".join(" ".join(f"{value:.17g}" for value in row) + "\n"
+                for row in values),
+        encoding="ascii",
+    )
+
+write(auto_path, rows(96, 0.1, 0.22))
+write(pivots_path, rows(37, 0.3, 0.18))
+write(legs_path, rows(83, 0.7, 0.25))
+write(aggregate_path, rows(384, 0.2, 0.27))
+PY
+
+run_case()
+{
+    local name=$1
+    local method=$2
+    local ranks=$3
+    local threads=$4
+    local profile=$5
+    local catalogs=${6:-auto}
+    local output="$TMP_ROOT/$name"
+    local input
+    local infmt
+    local icatalogs
+    local options="pos-and-convergence,KKKCorrelation,only-3pcf,out-m-HistZeta"
+    local theta=1
+    local nsmooth=4
+    local -a command
+
+    case "$profile" in
+        exact)
+            options+=",no-two-balls,no-normalize-HistZeta"
+            ;;
+        normalized)
+            options+=",no-two-balls"
+            ;;
+        aggregate)
+            options+=",no-normalize-HistZeta"
+            theta=4
+            nsmooth=8
+            ;;
+        *) fail_with_log "unknown test profile: $profile" ;;
+    esac
+
+    if [ "$catalogs" = cross ]; then
+        input="$TMP_ROOT/pivots.txt,$TMP_ROOT/legs.txt"
+        infmt="multi-columns-ascii,multi-columns-ascii"
+        icatalogs="1,2"
+    elif [ "$profile" = aggregate ]; then
+        input="$TMP_ROOT/aggregate.txt"
+        infmt="multi-columns-ascii"
+        icatalogs="1"
+    else
+        input="$TMP_ROOT/auto.txt"
+        infmt="multi-columns-ascii"
+        icatalogs="1"
+    fi
+
+    mkdir -p "$output"
+    command=("$CBALLS"
+        "search=$method"
+        "in=$input"
+        "infmt=$infmt"
+        columns=1,2,3,4
+        "iCatalogs=$icatalogs"
+        "rootDir=$output"
+        "numberThreads=$threads"
+        usePeriodic=false
+        useLogHist=false
+        rangeN=1.4
+        rminHist=0.02
+        sizeHistN=5
+        mChebyshev=3
+        "nsmooth=$nsmooth"
+        "theta=$theta"
+        stepState=1000000
+        verbose=1
+        verbose_log=0
+        "options=$options")
+
+    if [ "$ranks" -gt 1 ]; then
+        "${mpi_command[@]}" -n "$ranks" "${command[@]}" \
+            >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    else
+        "${command[@]}" >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    fi
+    [ -f "$output/rBins.txt" ] \
+        || fail_with_log "$name produced no root-rank output" "$output/run.log"
+}
+
+compare_numeric_outputs()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+import math
+import pathlib
+import sys
+
+reference = pathlib.Path(sys.argv[1])
+candidate = pathlib.Path(sys.argv[2])
+names = sorted(path.name for path in reference.glob("*.txt"))
+if not names or names != sorted(path.name for path in candidate.glob("*.txt")):
+    raise SystemExit("histogram output sets differ")
+
+def values(path):
+    tokens = []
+    for line in path.read_text(encoding="ascii").splitlines():
+        tokens.extend(line.split("#", 1)[0].split())
+    return tokens
+
+for name in names:
+    left = values(reference / name)
+    right = values(candidate / name)
+    if len(left) != len(right):
+        raise SystemExit(f"{name}: value counts differ")
+    for index, (a, b) in enumerate(zip(left, right)):
+        x = float(a)
+        y = float(b)
+        if math.isnan(x) and math.isnan(y):
+            continue
+        if not math.isclose(x, y, rel_tol=2.0e-12, abs_tol=2.0e-13):
+            raise SystemExit(f"{name}:{index}: {x!r} != {y!r}")
+PY
+}
+
+run_case omp-exact balltree-2balls-omp_3pcf 1 1 exact
+run_case mpi-singleton balltree-2balls-mpi_3pcf 1 "$MPI_THREADS" exact
+run_case mpi-hybrid balltree-2balls-mpi_3pcf "$MPI_RANKS" "$MPI_THREADS" exact
+run_case mpi-repeat balltree-2balls-mpi_3pcf "$MPI_RANKS" "$MPI_THREADS" exact
+run_case omp-normalized balltree-2balls-omp_3pcf 1 1 normalized
+run_case mpi-normalized balltree-2balls-mpi_3pcf "$MPI_RANKS" "$MPI_THREADS" normalized
+run_case omp-aggregate balltree-2balls-omp_3pcf 1 1 aggregate
+run_case mpi-aggregate balltree-2balls-mpi_3pcf "$MPI_RANKS" "$MPI_THREADS" aggregate
+run_case omp-cross balltree-2balls-omp_3pcf 1 1 exact cross
+run_case mpi-cross balltree-2balls-mpi_3pcf "$MPI_RANKS" "$MPI_THREADS" exact cross
+
+grep -q "balltree-2balls-mpi_3pcf: $MPI_RANKS ranks" \
+    "$TMP_ROOT/mpi-hybrid/run.log" \
+    || fail_with_log "the requested MPI rank count was not used" \
+                     "$TMP_ROOT/mpi-hybrid/run.log"
+
+for candidate in mpi-singleton mpi-hybrid mpi-repeat; do
+    compare_numeric_outputs "$TMP_ROOT/omp-exact" "$TMP_ROOT/$candidate" \
+        || fail_with_log "$candidate differs from the OpenMP reference" \
+                         "$TMP_ROOT/$candidate/run.log"
+done
+compare_numeric_outputs "$TMP_ROOT/mpi-hybrid" "$TMP_ROOT/mpi-repeat" \
+    || fail_with_log "repeated MPI execution is not deterministic" \
+                     "$TMP_ROOT/mpi-repeat/run.log"
+for output in "$TMP_ROOT/mpi-hybrid"/*.txt; do
+    name=${output##*/}
+    cmp -s "$output" "$TMP_ROOT/mpi-repeat/$name" \
+        || fail_with_log "repeated MPI output $name is not byte deterministic" \
+                         "$TMP_ROOT/mpi-repeat/run.log"
+done
+compare_numeric_outputs "$TMP_ROOT/omp-normalized" "$TMP_ROOT/mpi-normalized" \
+    || fail_with_log "normalized MPI output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-normalized/run.log"
+compare_numeric_outputs "$TMP_ROOT/omp-aggregate" "$TMP_ROOT/mpi-aggregate" \
+    || fail_with_log "aggregate MPI output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-aggregate/run.log"
+compare_numeric_outputs "$TMP_ROOT/omp-cross" "$TMP_ROOT/mpi-cross" \
+    || fail_with_log "cross-catalog MPI output differs from OpenMP" \
+                     "$TMP_ROOT/mpi-cross/run.log"
+
+cell_orientations=$(sed -n \
+    's/.*accepted cell orientations = \([0-9][0-9]*\).*/\1/p' \
+    "$TMP_ROOT/mpi-aggregate/run.log" | tail -1)
+[ "${cell_orientations:-0}" -gt 0 ] \
+    || fail_with_log "the MPI aggregate run accepted no tree cells" \
+                     "$TMP_ROOT/mpi-aggregate/run.log"
+
+direct_output="$TMP_ROOT/mpi-direct-rejected"
+mkdir -p "$direct_output"
+if "${mpi_command[@]}" -n "$MPI_RANKS" "$CBALLS" \
+        search=balltree-2balls-mpi_3pcf \
+        "in=$TMP_ROOT/auto.txt" infmt=multi-columns-ascii \
+        columns=1,2,3,4 iCatalogs=1 "rootDir=$direct_output" \
+        numberThreads="$MPI_THREADS" usePeriodic=false useLogHist=false \
+        rangeN=1.4 rminHist=0.02 sizeHistN=5 mChebyshev=3 nsmooth=4 theta=1 \
+        stepState=1000000 verbose=1 verbose_log=0 \
+        options=pos-and-convergence,KKKCorrelation,only-3pcf,treecorr-direct-triples \
+        >"$direct_output/run.log" 2>&1; then
+    fail_with_log "MPI direct-triple validation was not rejected" \
+                  "$direct_output/run.log"
+fi
+grep -q 'does not distribute treecorr-direct-triples' \
+    "$direct_output/run.log" \
+    || fail_with_log "MPI direct-triple rejection lacked its diagnostic" \
+                     "$direct_output/run.log"
+
+echo "PASS: BALLTREE2BALLSMPI3PCF auto/cross equivalence, aggregation, normalization, and rank determinism"

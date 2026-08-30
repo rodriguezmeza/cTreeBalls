@@ -7,8 +7,10 @@
 #
 ifeq ($(PXDON),1)
 OPT2 += -DPXD
-PXD = ../addons/pxd/
-vpath %.c ./addons/pxd/
+#PXD = ../addons/pxd/
+PXD = $(MDIR)/addons/pxd/
+#vpath %.c ./addons/pxd/
+vpath %.c $(MDIR)/addons/pxd/
 INCLUDES += -I$(PXD)
 HEADERFILES += $(wildcard $(PXD)/*.h)
 EXTERNAL +=

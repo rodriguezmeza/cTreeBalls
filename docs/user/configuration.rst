@@ -63,14 +63,19 @@ Machine Variables
     Python executable used for the extension build.  Override with
     ``PYTHON=python3`` at make time.
 
+``GSLINTERNAL``
+    Default is currently ``1``, not ``0``.
+
 ``OPTFLAG``
-    Optimization flags, currently ``-O3 -ffast-math``.
+    Optimization flags are currently ``-O3 -fno-fast-math``.
 
 ``OMPFLAG``
     OpenMP compiler flag, currently ``-fopenmp``.
 
 ``NAGBODYDIR``
     Base path used when external GSL or CFITSIO libraries are selected.
+
+For the full C/Cython profile coupling, see :doc:`../build_profiles`.
 
 After Changing Settings
 -----------------------

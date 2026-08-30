@@ -83,19 +83,32 @@ struct cmdline_data{
     INTEGER stepState;
     short verbose;
     short verbose_log;
-#ifdef OPENMPCODE
+//#ifdef OPENMPCODE
     int numthreads;
-#endif
+//#endif
     string options;
+    unsigned long long options_cache_flags;
+    bool options_cache_valid;
     //E
 
     string version;
 
 //B socket:
 #ifdef ADDONS
-#include "globaldefs_include_01.h"
+//#include "globaldefs_include_01.h" // change name to cmdline_data_include.h
+#include "cmdline_data_include.h"
 #endif
 //E
+    
+    //B wlcf
+    //B make this correction in setup.py
+    //      so cwlcfpy.pxd.in produce it
+//    #ifndef CLASSLIB
+        ErrorMsg error_message;
+//    #endif
+    //E
+    //E
+
 };
 
 #endif // ! _cmdline_data_h

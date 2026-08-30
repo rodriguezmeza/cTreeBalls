@@ -92,6 +92,7 @@ add-ons remains available under Tutorials and Reference.
    user/inputs
    user/outputs
    user/python
+   shear
    performance
 
 .. toctree::
@@ -109,6 +110,7 @@ add-ons remains available under Tutorials and Reference.
    api
    python
    code_structure
+   build_profiles
    addons
    troubleshooting
    development

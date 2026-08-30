@@ -1,0 +1,25 @@
+# ----- Deterministic MPI+OpenMP FCFC ball-tree LogMultipole 3PCF addon -----
+
+ifeq ($(BALLTREE2BALLSMPI3PCFON),1)
+ifeq ($(TPCFON),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DBALLTREE2BALLSMPI3PCF -DCBALLS_MPI_ENABLED
+
+BALLTREE2BALLSMPI3PCF = $(MDIR)/addons/balltree_2balls_mpi_3pcf/
+vpath %.c $(BALLTREE2BALLSMPI3PCF)
+INCLUDES += -I$(BALLTREE2BALLSMPI3PCF) \
+            -I$(MDIR)/addons/balltree_2balls_omp \
+            -I$(MDIR)/addons/balltree_omp
+HEADERFILES += $(wildcard $(BALLTREE2BALLSMPI3PCF)/*.h)
+EXTERNAL += fcfc_balltree_2balls_mpi_3pcf.o \
+            search_balltree_2balls_mpi_3pcf.o
+
+search_balltree_2balls_mpi_3pcf.o: \
+	$(BALLTREE2BALLSMPI3PCF)/search_balltree_2balls_mpi_3pcf.c \
+	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c
+else
+$(info BALLTREE2BALLSMPI3PCFON=1 requires TPCFON=1, deactivating...)
+BALLTREE2BALLSMPI3PCFON = 0
+endif
+endif

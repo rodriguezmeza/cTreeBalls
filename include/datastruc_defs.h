@@ -16,42 +16,28 @@
 #ifndef _data_struc_defs_h
 #define _data_struc_defs_h
 
+#include "mask_utils.h"
+
 typedef struct _node {
     short type;
     bool update;
     bool update2;
-    short mask;                                     // 1: unmasked body
-                                                    // 0: masked body
+    short mask;                                     // MASK_NODE_* state below
 //B look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
     bool updatepivot;
 #endif
 //E
 
-    REAL mass;                                      // to weight counts...
-#ifdef SINGLEP
-    float kappa;
-#else
-    REAL kappa;                                     // scalar field of interest
-#endif
+    real mass;                                      // to weight counts...
+    real kappa;                                     // scalar field of interest
 
 #ifdef THREEPCFSHEAR
-#ifdef SINGLEP
-    float gamma1;
-    float gamma2;
-#else
-    REAL gamma1;
-    REAL gamma2;
-#endif
+    real gamma1;
+    real gamma2;
 #endif
 
-#ifdef SINGLEP
-    float weight;                                    // to weight fields...
-//    float pos[NDIM];
-#else
-    REAL weight;                                    // to weight fields...
-//    vector pos;
-#endif
+    real weight;                                    // to weight fields...
 
     vector pos;
 
@@ -59,8 +45,8 @@ typedef struct _node {
 
 #ifdef bhistON
     int *bhistNsub;
-    REAL *bhistXi2pcfsub;
-    REAL **histXi;
+    real *bhistXi2pcfsub;
+    real **histXi;
     bool histON;
 #endif
 
@@ -85,11 +71,11 @@ typedef struct _node {
 #endif
 
     INTEGER nb;
-    REAL radius;
+    cballs_storage_real radius;
 
 #ifdef SMOOTHPIVOT
-    REAL kapparmin;                                 // Sum_p-in-rmin kappa_p
-    REAL weightrmin;                                // to weight fields...
+    real kapparmin;                                 // Sum_p-in-rmin kappa_p
+    real weightrmin;                                // to weight fields...
     INTEGER nbrmin;
     INTEGER nbrmin_overlap;
 #endif
@@ -194,7 +180,7 @@ typedef struct {
 // The meaning of the structure and its components can be changed
 typedef struct {
     node cellnode;
-    REAL size;
+    cballs_storage_real size;
     nodeptr more;
     nodeptr subp[NSUB];
 #ifdef IdCellON
@@ -219,39 +205,6 @@ typedef struct {
 #include "datastruc_defs_include_02.h"
 #endif
 //E
-
-#if !defined(global)                                // global def question must
-#  define global extern                             //  be here
-#endif
-
-
-//B I/O Macros
-#define IPName(param,paramtext)                                 \
-  {strcpy(tag[nt],paramtext);                                   \
-  addr[nt]=&(param);                                            \
-  id[nt++]=INT;}
-
-#define LPName(param,paramtext)                                 \
-  {strcpy(tag[nt],paramtext);                                   \
-  addr[nt]=&(param);                                            \
-  id[nt++]=LONG;}
-
-#define RPName(param,paramtext)                                 \
-  {strcpy(tag[nt],paramtext);                                   \
-  addr[nt]=&param;                                              \
-  id[nt++]=DOUBLE;}
-
-#define BPName(param,paramtext)                                 \
-  {strcpy(tag[nt],paramtext);                                   \
-  addr[nt]=&param;                                              \
-  id[nt++]=BOOLEAN;}
-
-#define SPName(param,paramtext,n)                               \
-  {strcpy(tag[nt],paramtext);                                   \
-  param=(string) malloc(n);                                     \
-  addr[nt]=param;                                               \
-  id[nt++]=STRING;}
-//E I/O Macros
 
 //B Tree search
 
@@ -292,96 +245,37 @@ typedef struct {
 
 
 
-//B correction 2025-04-06
-//B Macros useful to compute chebyshev polynomials
-
-// Same as above but to use in search=tree-omp-sincos only
-//B What if mChebyshev is less than 7... correct!
-#define CHEBYSHEVTUOMPSINCOS                                    \
-{REAL xicosmphi,xisinmphi; int m;                               \
-    REAL cosphi2, cosphi3, cosphi4;                             \
-    cosphi2 = cosphi*cosphi; cosphi3 = cosphi2*cosphi;          \
-    cosphi4 = cosphi3*cosphi;                                   \
-    hist->ChebsT[1] = 1.0;                                      \
-    xicosmphi = xi * hist->ChebsT[1];                           \
-    hist->histXithreadcos[1][n] += xicosmphi;                   \
-    hist->ChebsT[2] = cosphi;                                   \
-    xicosmphi = xi * hist->ChebsT[2];                           \
-    hist->histXithreadcos[2][n] += xicosmphi;                   \
-    hist->ChebsT[3] = 2.0*cosphi2 - (1.0);                      \
-    xicosmphi = xi * hist->ChebsT[3];                           \
-    hist->histXithreadcos[3][n] += xicosmphi;                   \
-    hist->ChebsT[4] = -3.0*cosphi + 4.0*cosphi3;                \
-    xicosmphi = xi * hist->ChebsT[4];                           \
-    hist->histXithreadcos[4][n] += xicosmphi;                   \
-    hist->ChebsT[5] = 1.0 - 8.0*cosphi2 + 8.0*cosphi4;          \
-    xicosmphi = xi * hist->ChebsT[5];                           \
-    hist->histXithreadcos[5][n] += xicosmphi;                   \
-    hist->ChebsT[6] = 5.0*cosphi - 20.0*cosphi3 + 16.0*cosphi4*cosphi; \
-    xicosmphi = xi * hist->ChebsT[6];                           \
-    hist->histXithreadcos[6][n] += xicosmphi;                   \
-    hist->ChebsU[1] = 0.0;                                      \
-    xisinmphi = xi * hist->ChebsU[1] * sinphi;                  \
-    hist->histXithreadsin[1][n] += xisinmphi;                   \
-    hist->ChebsU[2] = 1.0;                                      \
-    xisinmphi = xi * hist->ChebsU[2] * sinphi;                  \
-    hist->histXithreadsin[2][n] += xisinmphi;                   \
-    hist->ChebsU[3] = 2.0*cosphi;                               \
-    xisinmphi = xi * hist->ChebsU[3] * sinphi;                  \
-    hist->histXithreadsin[3][n] += xisinmphi;                   \
-    hist->ChebsU[4] = -1.0 + 4.0*cosphi2;                       \
-    xisinmphi = xi * hist->ChebsU[4] * sinphi;                  \
-    hist->histXithreadsin[4][n] += xisinmphi;                   \
-    hist->ChebsU[5] = -4.0*cosphi + 8.0*cosphi3;                \
-    xisinmphi = xi * hist->ChebsU[5] * sinphi;                  \
-    hist->histXithreadsin[5][n] += xisinmphi;                   \
-    hist->ChebsU[6] = 1.0 -12.0*cosphi2 + 16.0*cosphi4;         \
-    xisinmphi = xi * hist->ChebsU[6] * sinphi;                  \
-    hist->histXithreadsin[6][n] += xisinmphi;                   \
-    for (m=7; m<=cmd->mChebyshev+1; m++){                       \
-        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
-        xicosmphi = xi * hist->ChebsT[m];                       \
-        hist->histXithreadcos[m][n] += xicosmphi;               \
-        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
-        xisinmphi = xi * hist->ChebsU[m] * sinphi;              \
-        hist->histXithreadsin[m][n] += xisinmphi;               \
+//B Macro useful to compute chebyshev polynomials
+#define CHEBYSHEVTUOMPSINCOS                                            \
+{REAL xicosmphi, xisinmphi; int m, mmax;                                \
+    mmax = cmd->mChebyshev + 1;                                         \
+    if (mmax >= 1) {                                                    \
+        hist->ChebsT[1] = 1.0;                                          \
+        hist->histXithreadcos[1][n] += xi * hist->ChebsT[1];            \
+        hist->ChebsU[1] = 0.0;                                          \
+        hist->histXithreadsin[1][n] += xi * hist->ChebsU[1] * sinphi;   \
+    }                                                                   \
+    if (mmax >= 2) {                                                    \
+        hist->ChebsT[2] = cosphi;                                       \
+        hist->histXithreadcos[2][n] += xi * hist->ChebsT[2];            \
+        hist->ChebsU[2] = 1.0;                                          \
+        hist->histXithreadsin[2][n] += xi * hist->ChebsU[2] * sinphi;   \
+    }                                                                   \
+    if (mmax >= 3) {                                                    \
+        hist->ChebsT[3] = 2.0*cosphi*cosphi - 1.0;                      \
+        hist->histXithreadcos[3][n] += xi * hist->ChebsT[3];            \
+        hist->ChebsU[3] = 2.0*cosphi;                                   \
+        hist->histXithreadsin[3][n] += xi * hist->ChebsU[3] * sinphi;   \
+    }                                                                   \
+    for (m = 4; m <= mmax; m++) {                                       \
+        hist->ChebsT[m] = 2.0*cosphi*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
+        hist->histXithreadcos[m][n] += xi * hist->ChebsT[m];            \
+        hist->ChebsU[m] = 2.0*cosphi*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
+        hist->histXithreadsin[m][n] += xi * hist->ChebsU[m] * sinphi;   \
     }}
 
-//B Macro for any posible value of mChebyshev
-//  for recursivity needs that at least 3 multipoles be evaluated
-#define CHEBYSHEVTUOMPSINCOSANY                                 \
-{real xicosmphi,xisinmphi; int m;                               \
-    hist->ChebsT[1] = 1.0;                                      \
-    xicosmphi = xi * hist->ChebsT[1];                           \
-    hist->histXithreadcos[1][n] += xicosmphi;                   \
-    hist->ChebsT[2] = cosphi;                                   \
-    xicosmphi = xi * hist->ChebsT[2];                           \
-    hist->histXithreadcos[2][n] += xicosmphi;                   \
-    hist->ChebsT[3] = 2.0*(cosphi)*(cosphi) - (1.0);            \
-    xicosmphi = xi * hist->ChebsT[3];                           \
-    hist->histXithreadcos[3][n] += xicosmphi;                   \
-    hist->ChebsU[1] = 0.0;                                      \
-    xisinmphi = xi * hist->ChebsU[1] * sinphi;                  \
-    hist->histXithreadsin[1][n] += xisinmphi;                   \
-    hist->ChebsU[2] = 1.0;                                      \
-    xisinmphi = xi * hist->ChebsU[2] * sinphi;                  \
-    hist->histXithreadsin[2][n] += xisinmphi;                   \
-    hist->ChebsU[3] = 2.0*cosphi;                               \
-    xisinmphi = xi * hist->ChebsU[3] * sinphi;                  \
-    hist->histXithreadsin[3][n] += xisinmphi;                   \
-    for (m=4; m<=cmd->mChebyshev+1; m++){                       \
-        hist->ChebsT[m] = 2.0*(cosphi)*hist->ChebsT[m-1] - hist->ChebsT[m-2]; \
-        xicosmphi = xi * hist->ChebsT[m];                       \
-        hist->histXithreadcos[m][n] += xicosmphi;               \
-        hist->ChebsU[m] = 2.0*(cosphi)*hist->ChebsU[m-1] - hist->ChebsU[m-2]; \
-        xisinmphi = xi * hist->ChebsU[m] * sinphi;              \
-        hist->histXithreadsin[m][n] += xisinmphi;               \
-    }}
-
+#define CHEBYSHEVTUOMPSINCOSANY CHEBYSHEVTUOMPSINCOS
 //E
-
-//E End chebyshev definitions
-//E correction 2025-04-06
 
 
 #define DO_BODY(p,start,finish)     for (p = start; p < finish; p++)
@@ -397,7 +291,7 @@ typedef struct {
 #define INCOLUMNSBINALL 11
 #define INNULL          1
 //B version 1.0.1
-#define INTAKAHASHI      3                           // Takahasi
+#define INTAKAHASHI      3                           // Takahashi
 //E
 
 //B Output file formats:
@@ -416,16 +310,6 @@ typedef struct {
 
 //Rotation angle in radians. To use in a sphere (3D case)
 #define ROTANGLE                0.01
-
-
-#ifdef CLASSLIB
-#define class_call_cballs(function, error_message_from_function, error_message_output) \
-class_call(function, error_message_from_function, error_message_output)
-#else
-#define class_call_cballs(function, error_message_from_function, error_message_output) \
-function;
-#endif
-
 
 //B socket:
 #ifdef ADDONS

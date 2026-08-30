@@ -16,62 +16,87 @@
 
 //B Some macros and definitions
 //INTERSECT: macro to determine if node intersects search ball
+#ifdef SINGLEP
+#define KD_PRUNE_REAL cballs_storage_real
+#define KD_PRUNE_LIMIT(r2ball)                                         \
+    const cballs_storage_real _radius_limit =                          \
+        cballs_store_search_bound(rsqrt((real)(r2ball)));              \
+    const cballs_storage_real _r2limit =                               \
+        _radius_limit * _radius_limit
+#else
+#define KD_PRUNE_REAL real
+#define KD_PRUNE_LIMIT(r2ball)                                         \
+    const real _r2limit = (real)(r2ball)
+#endif
+
 #if NDIM == 3
 #define Intersect(node, r2ball, pos, done)                  \
 {                                                           \
-    real _dxl, _dxr, _dyl, _dyr, _dzl, _dzr, _dr2;          \
-    _dxl = node.bnd.minb[0] - pos[0];                       \
-    _dxr = pos[0] - node.bnd.maxb[0];                       \
+    KD_PRUNE_REAL _dxl, _dxr, _dyl, _dyr, _dzl, _dzr, _dr2; \
+    KD_PRUNE_LIMIT(r2ball);                                 \
+    _dxl = (KD_PRUNE_REAL)node.bnd.minb[0]                  \
+         - (KD_PRUNE_REAL)pos[0];                           \
+    _dxr = (KD_PRUNE_REAL)pos[0]                            \
+         - (KD_PRUNE_REAL)node.bnd.maxb[0];                 \
     if (_dxl > 0.0) {                                       \
         _dr2 = _dxl*_dxl;                                   \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else if (_dxr > 0.0) {                                \
         _dr2 = _dxr*_dxr;                                   \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else                                                  \
         _dr2 = 0.0;                                         \
-    _dyl = node.bnd.minb[1] - pos[1];                       \
-    _dyr = pos[1] - node.bnd.maxb[1];                       \
+    _dyl = (KD_PRUNE_REAL)node.bnd.minb[1]                  \
+         - (KD_PRUNE_REAL)pos[1];                           \
+    _dyr = (KD_PRUNE_REAL)pos[1]                            \
+         - (KD_PRUNE_REAL)node.bnd.maxb[1];                 \
     if (_dyl > 0.0) {                                       \
         _dr2 += _dyl*_dyl;                                  \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else if (_dyr > 0.0) {                                \
         _dr2 += _dyr*_dyr;                                  \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     }                                                       \
-    _dzl = node.bnd.minb[2] - pos[2];                       \
-    _dzr = pos[2] - node.bnd.maxb[2];                       \
+    _dzl = (KD_PRUNE_REAL)node.bnd.minb[2]                  \
+         - (KD_PRUNE_REAL)pos[2];                           \
+    _dzr = (KD_PRUNE_REAL)pos[2]                            \
+         - (KD_PRUNE_REAL)node.bnd.maxb[2];                 \
     if (_dzl > 0.0) {                                       \
         _dr2 += _dzl*_dzl;                                  \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else if (_dzr > 0.0) {                                \
         _dr2 += _dzr*_dzr;                                  \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     }                                                       \
 }
 
 #else
 #define Intersect(node, r2ball, pos, done)                  \
 {                                                           \
-    real _dxl, _dxr, _dyl, _dyr, _dr2;                      \
-    _dxl = node.bnd.minb[0] - pos[0];                       \
-    _dxr = pos[0] - node.bnd.maxb[0];                       \
+    KD_PRUNE_REAL _dxl, _dxr, _dyl, _dyr, _dr2;             \
+    KD_PRUNE_LIMIT(r2ball);                                 \
+    _dxl = (KD_PRUNE_REAL)node.bnd.minb[0]                  \
+         - (KD_PRUNE_REAL)pos[0];                           \
+    _dxr = (KD_PRUNE_REAL)pos[0]                            \
+         - (KD_PRUNE_REAL)node.bnd.maxb[0];                 \
     if (_dxl > 0.0) {                                       \
         _dr2 = _dxl*_dxl;                                   \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else if (_dxr > 0.0) {                                \
         _dr2 = _dxr*_dxr;                                   \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else                                                  \
         _dr2 = 0.0;                                         \
-    _dyl = node.bnd.minb[1] - pos[1];                       \
-    _dyr = pos[1] - node.bnd.maxb[1];                       \
+    _dyl = (KD_PRUNE_REAL)node.bnd.minb[1]                  \
+         - (KD_PRUNE_REAL)pos[1];                           \
+    _dyr = (KD_PRUNE_REAL)pos[1]                            \
+         - (KD_PRUNE_REAL)node.bnd.maxb[1];                 \
     if (_dyl > 0.0) {                                       \
         _dr2 += _dyl*_dyl;                                  \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     } else if (_dyr > 0.0) {                                \
         _dr2 += _dyr*_dyr;                                  \
-        if (_dr2 > r2ball) goto done;                       \
+        if (_dr2 > _r2limit) goto done;                     \
     }                                                       \
 }
 
@@ -79,7 +104,7 @@
 //E
 
 local void sumnode_sincos(struct  cmdline_data*, struct  global_data*,
-                          bodyptr, ballnode, bodyptr *,
+                          bodyptr, ballnode, ballxptr,
                           INTEGER *, INTEGER *,
                           gdhistptr_sincos_omp);
 local void sumnode_sincos_cell(struct  cmdline_data*,
@@ -87,8 +112,43 @@ local void sumnode_sincos_cell(struct  cmdline_data*,
                                ballnode, bodyptr *,
                                INTEGER *, INTEGER *,
                                gdhistptr_sincos_omp);
+local void walk_kdtree_exact(struct cmdline_data*, struct global_data*,
+                            bodyptr, ballxptr, INTEGER *, INTEGER *,
+                            gdhistptr_sincos_omp);
+local void walk_kdtree_one_ball(struct cmdline_data*, struct global_data*,
+                               bodyptr, ballxptr, INTEGER *, INTEGER *,
+                               gdhistptr_sincos_omp);
 local int print_info(struct cmdline_data* cmd,
                      struct  global_data* gd);
+
+static inline bool kdtree_accept_body(struct cmdline_data *cmd,
+                                      struct global_data *gd,
+                                      bodyptr p,
+#ifdef SINGLEP
+                                      const kd_leaf_point *q,
+#else
+                                      bodyptr q,
+#endif
+                                      real *distance, compute_vector dr)
+{
+    real distance_squared;
+
+#ifdef SINGLEP
+    DOTPSUBV(distance_squared, dr, Pos(p), q->pos);
+#else
+    DOTPSUBV(distance_squared, dr, Pos(p), Pos(q));
+#endif
+    if (cmd->usePeriodic) {
+        VWrapAll(dr);
+        DOTVP(distance_squared, dr, dr);
+    }
+
+    if (distance_squared >= gd->RcutSq)
+        return FALSE;
+
+    *distance = rsqrt(distance_squared);
+    return *distance < gd->Rcut;
+}
 
 /*
  Search routine using kdtree method:
@@ -125,15 +185,20 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     ballxptr kd;
     int nbucket;
     real cpu_build_kdtree;
+    const bool use_one_ball =
+        cballs_opt_behavior_ball(cmd)
+        && !cballs_opt_no_one_ball(cmd);
 
     cpustart = CPUTIME;
-    print_info(cmd, gd);
+    if (print_info(cmd, gd) == FAILURE)
+        return FAILURE;
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
 #endif
 
     search_init_gd_hist_sincos(cmd, gd);
+    int allocation_failed = FALSE;
 
 #ifdef SMOOTHPIVOT
     INTEGER ipfalse;
@@ -154,25 +219,36 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 //B Building kd-tree
     cpu_build_kdtree = CPUTIME;
     //B version 1.0.1
-//    nbucket = gd->nsmooth[0];
     nbucket = cmd->nsmooth;
     //E
     verb_print(cmd->verbose, "\nkdtree build: nbucket = %d\n",nbucket);
     kd = init_kdtree(cmd, gd, btab[cat2], nbody[cat2]);
-    build_kdtree(cmd, gd, kd, nbucket);
+    if (build_kdtree(cmd, gd, kd, nbucket) == FAILURE) {
+        finish_kdtree(kd);
+        return FAILURE;
+    }
     verb_print(cmd->verbose, "kdtree build: CPU time = %lf\n",
                CPUTIME-cpu_build_kdtree);
 //E
     gd->ncellTable[cat1] = kd->nnode;               // Equivalent of octree cells
 
 #ifdef SMOOTHPIVOT
+    if (prepare_smooth_pivots(cmd, gd, btab, nbody,
+                              ipmin, ipmax, cat1, cat2) == FAILURE) {
+        finish_kdtree(kd);
+        return FAILURE;
+    }
+#endif
+
+#ifdef SMOOTHPIVOT
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
-    rootnode, cat1, cat2, kd, ipfalse, icountNbRmin, icountNbRminOverlap)
+    rootnode, cat1, cat2, kd, ipfalse, icountNbRmin, icountNbRminOverlap, \
+    allocation_failed, use_one_ball)
 #else
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
-    rootnode, cat1, cat2, kd)
+    rootnode, cat1, cat2, kd, allocation_failed, use_one_ball)
 #endif
     {
         bodyptr p;
@@ -181,7 +257,14 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         INTEGER nbccalcthread = 0;
         
         gdhist_sincos_omp hist;
-        search_init_sincos_omp(cmd, gd, &hist);
+        int hist_ready =
+            search_init_sincos_omp(cmd, gd, &hist) == SUCCESS;
+        if (!hist_ready) {
+#pragma omp atomic write
+            allocation_failed = TRUE;
+        }
+
+#pragma omp barrier
 
         INTEGER ipfalsethreads;
         ipfalsethreads = 0;
@@ -192,21 +275,15 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         INTEGER icountNbRminOverlapthread;
         icountNbRminOverlapthread=0;
 #endif
-        ballnode *ntab = kd->ntab;
-        bodyptr *bptr = kd->bptr;
-        INTEGER cp;
-
-#pragma omp for nowait schedule(dynamic)
+#pragma omp for nowait schedule(static,1)
     DO_BODY(p, btab[cat1]+ipmin-1, btab[cat1]+ipmax[cat1]) {
+        if (allocation_failed) continue;
 // p and q are in differents node structures... cat1!=cat2...
 #ifdef SMOOTHPIVOT
-        NbRmin(p) = 1;
-        NbRminOverlap(p) = 0;
-        KappaRmin(p) = Kappa(p);
-            if (Update(p) == FALSE) {
-                ipfalsethreads++;
-                continue;
-            }
+        if (Update(p) == FALSE) {
+            ipfalsethreads++;
+            continue;
+        }
 #endif
         for (n = 1; n <= cmd->sizeHistN; n++) {
             hist.histNNSubthread[n] = 0.0;          // Affects only 3pcf
@@ -223,15 +300,11 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #if NDIM == 3
             dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
             DOTPSUBV(hist.drpq2, hist.dr0, Pos(p), hist.q0);
-#ifdef SINGLEP
-            hist.drpq = sqrt(hist.drpq2);
-#else
             hist.drpq = rsqrt(hist.drpq2);
-#endif
             //B Random rotation of dr0:
 #ifdef PTOPIVOTROTATION
             real rtheta;
-            vector dr0rot;
+            compute_vector dr0rot;
             rtheta = xrandom(0.0, TWOPI);
             RotationVecAWRtoVecB(dr0rot, hist.dr0, Pos(p), rtheta);
             SETV(hist.dr0, dr0rot);
@@ -240,47 +313,12 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #endif // ! NDIM
 #endif
 
-        real dr1;
-        vector dr;
-        real drpq2;
-        //B Walking the kdtree
-        cp = KDROOT;
-        do {
-            Intersect(ntab[cp], gd->RcutSq, Pos(p), GetNextCell);
-            if (scanopt(cmd->options, "behavior-ball")) {
-                if (cp < kd->nsplit) {
-                    DOTPSUBV(drpq2, dr, Pos(p), ntab[cp].cmpos);
-                    dr1 = rsqrt(drpq2);
-                    if ( (Radius(p)+ntab[cp].bnd.radius)/(dr1) < gd->deltaR) {
-                        sumnode_sincos_cell(cmd, gd, p, ntab[cp], bptr,
-                                            &nbbcalcthread, &nbccalcthread,
-                                            &hist);
-                        cp = Upper(cp);
-                        continue;
-                    } else {
-//                        cp = Lower(cp);
-                        SetNext(cp);
-                        continue;
-                    }
-                } else {
-                    sumnode_sincos(cmd, gd, p, ntab[cp], bptr,
-                                   &nbbcalcthread, &nbccalcthread, 
-                                   &hist);
-                } // ! cp < nsplit
-            } else { // ! behavior-ball
-                if (cp < kd->nsplit) {
-                    cp = Lower(cp);
-                    continue;
-                } else {
-                    sumnode_sincos(cmd, gd, p, ntab[cp], bptr,
-                                   &nbbcalcthread, &nbccalcthread,
-                                   &hist);
-                } // ! cp < nsplit
-            } // ! behavior-ball
-            GetNextCell:
-            SetNext(cp);
-        } while (cp != KDROOT);
-        //E Walking the kdtree
+        if (use_one_ball)
+            walk_kdtree_one_ball(cmd, gd, p, kd,
+                                 &nbbcalcthread, &nbccalcthread, &hist);
+        else
+            walk_kdtree_exact(cmd, gd, p, kd,
+                              &nbbcalcthread, &nbccalcthread, &hist);
 
 #ifdef SMOOTHPIVOT
         for (n = 1; n <= cmd->sizeHistN; n++) {
@@ -309,8 +347,17 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         }
     } // end do body p // end pragma omp DO_BODY p
 
-#pragma omp critical
-        {
+        /* Publish in thread-ID order so floating-point sums are repeatable. */
+#ifdef OPENMPCODE
+        int thread_id = omp_get_thread_num();
+        int thread_count = omp_get_num_threads();
+#else
+        int thread_id = 0;
+        int thread_count = 1;
+#endif
+        for (int thread_turn = 0; thread_turn < thread_count; thread_turn++) {
+#pragma omp barrier
+        if (thread_id == thread_turn && hist_ready && !allocation_failed) {
             for (n = 1; n <= cmd->sizeHistN; n++) {
                 gd->histNN[n] += hist.histNthread[n];
                 gd->histNNSub[n] += hist.histNNSubthread[n];
@@ -336,16 +383,25 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #endif
             gd->nbbcalc += nbbcalcthread;
             gd->nbccalc += nbccalcthread;
-        }
-
-        search_free_sincos_omp(cmd, gd, &hist);
-
 #ifdef SMOOTHPIVOT
-        ipfalse += ipfalsethreads;
-        icountNbRmin += icountNbRminthread;
-        icountNbRminOverlap += icountNbRminOverlapthread;
+            ipfalse += ipfalsethreads;
+            icountNbRmin += icountNbRminthread;
+            icountNbRminOverlap += icountNbRminOverlapthread;
 #endif
+        }
+        }
+#pragma omp barrier
+
+        if (hist_ready)
+            search_free_sincos_omp(cmd, gd, &hist);
     } // end pragma omp parallel
+
+    if (allocation_failed) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "searchcalc_kdtree_omp: OpenMP histogram allocation failed");
+        finish_kdtree(kd);
+        return FAILURE;
+    }
 
 #ifdef SMOOTHPIVOT
     real xi, den, num;
@@ -376,7 +432,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #endif
 
     //B Normalization of histograms
-        if (!scanopt(cmd->options, "asymmetric")) {
+        if (!cballs_opt_asymmetric(cmd)) {
             for (n = 1; n <= cmd->sizeHistN; n++) {
 #ifdef SMOOTHPIVOT
                 if (cmd->verbose>3)
@@ -416,7 +472,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
             }
         }
 
-    if (scanopt(cmd->options, "compute-HistN")) {
+    if (cballs_opt_compute_histn(cmd)) {
 #ifdef SMOOTHPIVOT
             search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse);
 #else
@@ -453,43 +509,100 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     gd->cpusearch = CPUTIME - cpustart;
     verb_print(cmd->verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);
 
+    finish_kdtree(kd);
     return SUCCESS;
+}
+
+
+local void walk_kdtree_exact(struct cmdline_data *cmd,
+                             struct global_data *gd, bodyptr p,
+                             ballxptr kd, INTEGER *nbbcalcthread,
+                             INTEGER *nbccalcthread,
+                             gdhistptr_sincos_omp hist)
+{
+    ballnode *ntab = kd->ntab;
+    INTEGER cp = KDROOT;
+
+    do {
+        Intersect(ntab[cp], gd->RcutSq, Pos(p), exact_next_cell);
+        if (cp < kd->nsplit) {
+            cp = Lower(cp);
+            continue;
+        }
+
+        sumnode_sincos(cmd, gd, p, ntab[cp], kd,
+                       nbbcalcthread, nbccalcthread, hist);
+
+exact_next_cell:
+        SetNext(cp);
+    } while (cp != KDROOT);
+}
+
+
+local void walk_kdtree_one_ball(struct cmdline_data *cmd,
+                                struct global_data *gd, bodyptr p,
+                                ballxptr kd, INTEGER *nbbcalcthread,
+                                INTEGER *nbccalcthread,
+                                gdhistptr_sincos_omp hist)
+{
+    ballnode *ntab = kd->ntab;
+    bodyptr *bptr = kd->bptr;
+    INTEGER cp = KDROOT;
+
+    do {
+        real dr1;
+        real drpq2;
+        compute_vector dr;
+
+        Intersect(ntab[cp], gd->RcutSq, Pos(p), one_ball_next_cell);
+        if (cp < kd->nsplit) {
+            DOTPSUBV(drpq2, dr, Pos(p), ntab[cp].cmpos);
+            dr1 = rsqrt(drpq2);
+            if ((Radius(p) + ntab[cp].bnd.radius)/dr1 < gd->deltaR) {
+                sumnode_sincos_cell(cmd, gd, p, ntab[cp], bptr,
+                                    nbbcalcthread, nbccalcthread, hist);
+                SetNext(cp);
+                continue;
+            }
+
+            cp = Lower(cp);
+            continue;
+        }
+
+        sumnode_sincos(cmd, gd, p, ntab[cp], kd,
+                       nbbcalcthread, nbccalcthread, hist);
+
+one_ball_next_cell:
+        SetNext(cp);
+    } while (cp != KDROOT);
 }
 
 
 local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd, bodyptr p,
-                          ballnode ntab, bodyptr *bptr,
+                          ballnode ntab, ballxptr kd,
                           INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                           gdhistptr_sincos_omp hist)
 {
-    bodyptr q;
 #ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
+    const kd_leaf_point *q;
 #else
-    real dr1;
-    vector dr;
+    bodyptr q;
 #endif
+    real dr1;
+    compute_vector dr;
     int n;
     real xi;
 
     INTEGER pj;
 
     for (pj = ntab.first; pj <= ntab.last; ++pj) {
-        q = bptr[pj];
-        if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-#ifdef SMOOTHPIVOT
-                if (dr1<=gd->rsmooth[0]) {
-                    if (Update(q)==TRUE) {
-                        Update(q) = FALSE;
-                        NbRmin(p) += 1;
-                        KappaRmin(p) += Kappa(q);
-                    } else {
-                        NbRminOverlap(p) += 1;
-                    }
-                }
+#ifdef SINGLEP
+        q = &kd->packed_points[pj];
+#else
+        q = kd->bptr[pj];
 #endif
+        if (kdtree_accept_body(cmd, gd, p, q, &dr1, dr)) {
             if (cmd->useLogHist) {
                 if(dr1>cmd->rminHist) {
                     if (cmd->rminHist==0)
@@ -506,16 +619,16 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         hist->histNNSubXi2pcfthreadp[n] + 1.;
 #endif
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+#ifdef SINGLEP
+                        xi = q->kappa;
+#else
                         xi = Kappa(q);
+#endif
 #ifdef TPCF
                         REAL cosphi,sinphi;
 #if NDIM == 3
                         REAL s, sy;
-#ifdef SINGLEP
-                        float pr0[NDIM];
-#else
-                        vector pr0;
-#endif
+                        compute_vector pr0;
                         DOTVP(s, dr, hist->dr0);
                         cosphi = s/(dr1*hist->drpq);
                         CROSSVP(pr0,hist->dr0,Pos(p));
@@ -556,12 +669,16 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] + 1.;
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+#ifdef SINGLEP
+                        xi = q->kappa;
+#else
                         xi = Kappa(q);
+#endif
 #ifdef TPCF
                             real cosphi,sinphi;
 #if NDIM == 3
                             real s, sy;
-                            vector pr0;
+                            compute_vector pr0;
                             DOTVP(s, dr, hist->dr0);
                             cosphi = s/(dr1*hist->drpq);
                             CROSSVP(pr0,hist->dr0,Pos(p));
@@ -594,15 +711,9 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                                gdhistptr_sincos_omp hist)
 {
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-    float drpq2;
-#else
     real dr1;
     real drpq2;
-    vector dr;
-#endif
+    compute_vector dr;
     int n;
     real xi;
 
@@ -621,24 +732,16 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 if (n<=cmd->sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] +  npoints;
                     hist->histNNSubXi2pcfthread[n] =
-                    hist->histNNSubXi2pcfthread[n] + 1.0;
-                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
+                    hist->histNNSubXi2pcfthread[n] + npoints;
+                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
                         
-#ifdef KappaAvgON
-                    xi = ntab.kappa;
-#else
-                    xi = ntab.kappa;
-#endif
+                    xi = npoints*ntab.kappa;
 
 #ifdef TPCF
                     REAL cosphi,sinphi;
 #if NDIM == 3
                     REAL s, sy;
-#ifdef SINGLEP
-                    float pr0[NDIM];
-#else
-                    vector pr0;
-#endif
+                    compute_vector pr0;
                     DOTVP(s, dr, hist->dr0);
                     cosphi = s/(dr1*hist->drpq);
                     CROSSVP(pr0,hist->dr0,Pos(p));
@@ -677,14 +780,14 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 if (n<=cmd->sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] +  npoints;
                     hist->histNNSubXi2pcfthread[n] =
-                    hist->histNNSubXi2pcfthread[n] + 1.0;
-                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.0;
-                    xi = ntab.kappa;
+                    hist->histNNSubXi2pcfthread[n] + npoints;
+                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
+                    xi = npoints*ntab.kappa;
 #ifdef TPCF
                     real cosphi, sinphi;
 #if NDIM == 3
                     real s, sy;
-                    vector pr0;
+                    compute_vector pr0;
                     DOTVP(s, dr, hist->dr0);
                     cosphi = s/(dr1*hist->drpq);
                     CROSSVP(pr0,hist->dr0,Pos(p));
@@ -713,12 +816,25 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 local int print_info(struct cmdline_data* cmd,
                                   struct  global_data* gd)
 {
+    const bool behavior_ball = cballs_opt_behavior_ball(cmd);
+    const bool no_one_ball = cballs_opt_no_one_ball(cmd);
+
     verb_print(cmd->verbose, "Search: Running ... (kdtree-omp) \n");
 
-    if (scanopt(cmd->options, "behavior-ball")) {
+    if (behavior_ball) {
         verb_print(cmd->verbose, "with option behavior-ball... \n");
-        if (!cmd->useLogHist)
-            error("behavior-ball and useLogHist=false are incompatible!");
+        if (!no_one_ball && !cmd->useLogHist) {
+//            error("behavior-ball and useLogHist=false are incompatible!");
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "print_info: behavior-ball and useLogHist=false are incompatible");
+            return FAILURE;
+        }
+    }
+    if (no_one_ball) {
+        verb_print(cmd->verbose, "with option no-one-ball... \n");
+        if (behavior_ball)
+            verb_print(cmd->verbose,
+                       "no-one-ball disables behavior-ball cell aggregation... \n");
     }
 #ifdef SMOOTHPIVOT
         verb_print(cmd->verbose,
@@ -733,5 +849,3 @@ local int print_info(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
-
-

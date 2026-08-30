@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-sanitizer.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+run_valid()
+{
+    local method=$1
+    local theta=${2:-1.05}
+    local output_dir="$TMP_ROOT/$method"
+
+    mkdir -p "$output_dir"
+    "$CBALLS" \
+        search="$method" \
+        testmodel=simple-cubic \
+        nbody=27 \
+        rootDir="$output_dir" \
+        numberThreads=2 \
+        useLogHist=false \
+        rangeN=0.2 \
+        rminHist=0 \
+        sizeHistN=8 \
+        mChebyshev=3 \
+        sizeHistPhi=16 \
+        theta="$theta" \
+        stepState=1 \
+        verbose=0 \
+        verbose_log=0 \
+        options=no-out-Hist >"$output_dir/run.log" 2>&1
+}
+
+run_valid octree-sincos-omp 0
+run_valid octree-ggg-omp 0
+run_valid kdtree-omp 0
+run_valid balltree-omp 0
+run_valid kdtree-box-omp 0
+
+invalid_dir="$TMP_ROOT/invalid-domain"
+mkdir -p "$invalid_dir"
+if "$CBALLS" \
+    search=octree-ggg-omp \
+    testmodel=simple-cubic \
+    nbody=8 \
+    rootDir="$invalid_dir" \
+    numberThreads=2 \
+    useLogHist=false \
+    rangeN=0.1 \
+    rminHist=0.1 \
+    verbose=0 \
+    verbose_log=0 >"$invalid_dir/run.log" 2>&1; then
+    echo "ERROR: invalid sanitizer startup unexpectedly succeeded" >&2
+    exit 1
+fi
+
+grep -q 'rminHist must be finite' "$invalid_dir/run.log" \
+    || { cat "$invalid_dir/run.log" >&2; exit 1; }
+
+echo "PASS: focused sanitizer startup and search paths"

@@ -16,6 +16,17 @@
 
 #include "globaldefs.h"
 
+#ifdef CLASSLIB
+#define cBALLS_FAIL(cmd, ...)                                           \
+    do {                                                                \
+        snprintf((cmd)->error_message, _ERRORMSGSIZE_, __VA_ARGS__);    \
+        return FAILURE;                                                 \
+    } while (0)
+#else
+#define cBALLS_FAIL(cmd, ...) error(__VA_ARGS__)
+#endif
+
+
 local int inputdata_ascii(struct cmdline_data*, struct  global_data*,
                           string filename, int);
 local int inputdata_ascii_all(struct cmdline_data*, struct  global_data*,
@@ -78,26 +89,33 @@ int InputData(struct cmdline_data* cmd,
             verb_print_normal_info(cmd->verbose,
                                 cmd->verbose_log, gd->outlog,
                                 "\n\tInput in columns (ascii) format...\n");
-            inputdata_ascii(cmd, gd, filename, ifile); break;
+            class_call_cballs(inputdata_ascii(cmd, gd, filename, ifile), errmsg, errmsg);
+            break;
+
+            
         case INCOLUMNSALL:
             verb_print_normal_info(cmd->verbose,
                             cmd->verbose_log, gd->outlog,
                             "\tInput in columns (ascii) all format...\n");
-            inputdata_ascii_all(cmd, gd, filename, ifile); break;
+            class_call_cballs(inputdata_ascii_all(cmd, gd, filename, ifile), errmsg, errmsg);
+            break;
         case INNULL:
             verb_print_normal_info(cmd->verbose,
                         cmd->verbose_log, gd->outlog,
                         "\n\t(Null) Input in columns (ascii) format...\n");
-            inputdata_ascii(cmd, gd, filename, ifile); break;
+            class_call_cballs(inputdata_ascii(cmd, gd, filename, ifile), errmsg, errmsg);
+            break;
         case INCOLUMNSBIN:
             verb_print_normal_info(cmd->verbose,
                                    cmd->verbose_log, gd->outlog,
                                    "\n\tInput in binary format...\n");
-            inputdata_bin(cmd, gd, filename, ifile); break;
+            class_call_cballs(inputdata_bin(cmd, gd, filename, ifile), errmsg, errmsg);
+            break;
         case INCOLUMNSBINALL:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\tInput in binary-all format...\n");
-            inputdata_bin_all(cmd, gd, filename, ifile); break;
+            class_call_cballs(inputdata_bin_all(cmd, gd, filename, ifile), errmsg, errmsg);
+            break;
         case INTAKAHASHI:
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "\n\tInput in takahashi format...\n");
@@ -121,7 +139,7 @@ int InputData(struct cmdline_data* cmd,
                 "addons/Makefile_addons_settings file...");
                 verb_print(cmd->verbose,
                 "\n\t\t and compile again ($ make clean; make).");
-                error("\n\tgoing out...\n");
+                cBALLS_FAIL(cmd, "\n\tgoing out...\n");
             }
             verb_print(cmd->verbose,
                        "\n\tInput in default columns (ascii) format...\n");
@@ -136,7 +154,7 @@ int InputData(struct cmdline_data* cmd,
 
     // DEBUG WARNING!!
     //B There is a Segmentation fault: 11 if run as:
-    //  cballs in=./scripts/Abraham/kappa_nres12_zs9NS256r000.txt \
+    //  cballs in=./scripts/Abraham/kappa_nres12_zs9NS256r000.txt
     //  options=header-info
     // (and works with 'options=0')
 #ifdef DEBUG
@@ -222,6 +240,11 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
             Gamma2(p) = Gamma2(q);
 #endif
             Weight(p) = Weight(q);
+#ifdef LYAFORESTOMP
+            LyaForestId(p) = LyaForestId(q);
+            LyaDistance(p) = LyaDistance(q);
+            SETV(LyaLOS(p), LyaLOS(q));
+#endif
             Type(p) = BODY;
             Id(p) = p-bodytabtmp+1;
             Mask(p) = Mask(q);
@@ -244,17 +267,24 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
                                   routineName, cmd->nbody-iselect);
 
     if (l!=cmd->nbody || ij!=cmd->nbody)
-        error("\n%s: nbody (%ld) not equal to read bodies (%ld, %ld)\n\n",
-              routineName, cmd->nbody, i, ij);
+        cBALLS_FAIL(cmd,
+                    "\n%s: nbody (%ld) not equal to read bodies (%ld, %ld)\n\n",
+                    routineName, cmd->nbody, i, ij);
 
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,"\n");
-    for (j=0; j<gd->ninfiles; j++) {
-        free(bodytable[j]);
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "\tfreed %g %s (catalog %d with %ld bodies).\n",
-                            gd->nbodyTable[j]*sizeof(body)*INMB,
-                            "MByte for particle storage", j, gd->nbodyTable[j]);
-        gd->bytes_tot -= gd->nbodyTable[j]*sizeof(body);
+    
+    //B
+    for (j = 0; j < gd->ninfiles && j < MAXITEMS; j++) {
+        if (bodytable[j] != NULL) {
+            verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                                "\tfreed %g %s (catalog %d with %ld bodies).\n",
+                                gd->nbodyTable[j]*sizeof(body)*INMB,
+                                "MByte for particle storage", j, gd->nbodyTable[j]);
+            gd->bytes_tot -= gd->nbodyTable[j] * sizeof(body);
+            free(bodytable[j]);
+            bodytable[j] = NULL;
+            gd->nbodyTable[j] = 0;
+        }
     }
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -262,6 +292,10 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
                            l, cmd->nbody-iselect);
     gd->nbodyTable[0] = cmd->nbody-iselect;
     bodytable[0] = (bodyptr) allocate(gd->nbodyTable[0] * sizeof(body));
+    gd->bodytable_allocated = TRUE;
+    //E
+    
+    
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "done allocating.\n");
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -288,6 +322,11 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
             Type(p) = Type(q);
             Mass(p) = Mass(q);
             Weight(p) = Weight(q);
+#ifdef LYAFORESTOMP
+            LyaForestId(p) = LyaForestId(q);
+            LyaDistance(p) = LyaDistance(q);
+            SETV(LyaLOS(p), LyaLOS(q));
+#endif
             Id(p) = p-bodytable[0]+i;
             kavg += Kappa(p);
             Update(p) = Update(q);
@@ -315,8 +354,9 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
                                "(%ld particles) = %le %le\n",
                                gd->nbodyTable[0], kavg, kstd);
     } else {
-        error("%s: no unmasked bodies (nbody=%ld) were given... exiting...\n",
-              routineName, gd->nbodyTable[0]);
+        cBALLS_FAIL(cmd,
+                "%s: no unmasked bodies (nbody=%ld) were given... exiting...\n",
+                routineName, gd->nbodyTable[0]);
     }
 
     free(bodytabtmp);
@@ -341,36 +381,39 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     stream instr;
     int ndim;
     bodyptr p;
-    char gato[1], firstline[20];
+    char gato[2], firstline[200];
     real mass=1;
     real weight=1;
 
     gd->input_comment = "Column form input file";
 
-    instr = stropen(filename, "r");
+    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
 
     if (scanopt(cmd->options, "header-info")){
         InputData_check_file(filename);
-        fgets(firstline,200,instr);
+        fgets(firstline,sizeof(firstline),instr);
         verb_print(cmd->verbose, "\n\tinputdata_ascii: header of %s\n", filename);
         verb_print(cmd->verbose, "\t1st line: %s", firstline);
-        fgets(firstline,200,instr);
+        fgets(firstline,sizeof(firstline),instr);
         verb_print(cmd->verbose, "\t2nd line: %s\n", firstline);
         rewind(instr);
         if (scanopt(cmd->options, "stop")) {
             fclose(instr);
-            exit(1);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
 
-    fgets(firstline,200,instr);
+    fgets(firstline, sizeof(firstline), instr);
     fscanf(instr,"%1s",gato);
     in_int_long(instr, &cmd->nbody);
     if (cmd->nbody < 1)
-        error("inputdata: nbody = %d is absurd\n", cmd->nbody);
+        cBALLS_FAIL(cmd, "inputdata: nbody = %" INTEGER_FMT " is absurd\n",
+                    cmd->nbody);
     in_int(instr, &ndim);
     if (ndim != NDIM)
-        error("inputdata: ndim = %d; expected %d\n", ndim, NDIM);
+        cBALLS_FAIL(cmd, "inputdata: ndim = %d; expected %d\n", ndim, NDIM);
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -398,7 +441,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
 #endif
 
     verb_print(cmd->verbose,
-               "\tinputdata_ascii: nbody and ndim: %d %d...\n",
+               "\tinputdata_ascii: nbody and ndim: %" INTEGER_FMT " %d...\n",
                cmd->nbody, ndim);
     verb_print(cmd->verbose,
                "\tinputdata_ascii: lbox dimensions: ");
@@ -409,6 +452,7 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     verb_print(cmd->verbose,"\n\n");
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     gd->bytes_tot += cmd->nbody*sizeof(body);
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
@@ -449,7 +493,8 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
     verb_print(cmd->verbose,
                "inputdata_ascii: average and std dev of kappa ");
     verb_print(cmd->verbose,
-               "(%ld particles) = %le %le\n", cmd->nbody, kavg, kstd);
+               "(%" INTEGER_FMT " particles) = %le %le\n",
+               cmd->nbody, kavg, kstd);
 
 //B Locate particles with same position
     if (scanopt(cmd->options, "check-eq-pos")) {
@@ -465,7 +510,8 @@ local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
                     flag=1;
                 }
             }
-    if (flag) error("inputdata_ascii: at least two bodies have same position\n");
+    if (flag)
+        cBALLS_FAIL(cmd, "inputdata_ascii: at least two bodies have same position\n");
     }
 //E
 
@@ -479,36 +525,40 @@ local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
     stream instr;
     int ndim;
     bodyptr p;
-    char gato[1], firstline[20];
+    char gato[2], firstline[200];
     real mass=1;
     real weight=1;
 
     gd->input_comment = "Column form input file all";
 
-    instr = stropen(filename, "r");
+    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
 
     if (scanopt(cmd->options, "header-info")){
         InputData_check_file(filename);
-        fgets(firstline,200,instr);
+        fgets(firstline,sizeof(firstline),instr);
         verb_print(cmd->verbose, "\n\t%s: header of %s\n", routineName,filename);
         verb_print(cmd->verbose, "\t1st line: %s", firstline);
-        fgets(firstline,200,instr);
+        fgets(firstline,sizeof(firstline),instr);
         verb_print(cmd->verbose, "\t2nd line: %s\n", firstline);
         rewind(instr);
         if (scanopt(cmd->options, "stop")) {
             fclose(instr);
-            exit(1);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
 
-    fgets(firstline,200,instr);
+    fgets(firstline, sizeof(firstline), instr);
     fscanf(instr,"%1s",gato);
     in_int_long(instr, &cmd->nbody);
     if (cmd->nbody < 1)
-        error("%s: nbody = %d is absurd\n", routineName, cmd->nbody);
+        cBALLS_FAIL(cmd, "%s: nbody = %" INTEGER_FMT " is absurd\n",
+                    routineName, cmd->nbody);
     in_int(instr, &ndim);
     if (ndim != NDIM)
-        error("%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
+        cBALLS_FAIL(cmd,
+                    "%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -536,7 +586,7 @@ local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
 #endif
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\t%s: nbody and ndim: %d %d...\n",
+                        "\t%s: nbody and ndim: %" INTEGER_FMT " %d...\n",
                         routineName, cmd->nbody, ndim);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\t%s: lbox dimensions: ", routineName);
@@ -547,6 +597,7 @@ local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     gd->bytes_tot += cmd->nbody*sizeof(body);
 
     INTEGER iselect = 0;
@@ -594,7 +645,8 @@ local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "\t%s: average and std dev of kappa ", routineName);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "(%ld particles) = %le %le\n", cmd->nbody, kavg, kstd);
+                           "(%" INTEGER_FMT " particles) = %le %le\n",
+                           cmd->nbody, kavg, kstd);
 
 //B Locate particles with same position
     if (scanopt(cmd->options, "check-eq-pos")) {
@@ -610,7 +662,8 @@ local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
                         flag=1;
                 }
         if (flag)
-            error("%s: at least two bodies have same position\n", routineName);
+            cBALLS_FAIL(cmd, "%s: at least two bodies have same position\n",
+                        routineName);
     }
 //E
 
@@ -628,13 +681,13 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
 
     gd->input_comment = "Binary input file";
 
-    instr = stropen(filename, "r");
+    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
 
     if (scanopt(cmd->options, "header-info")){
         verb_print(cmd->verbose, "\n\tinputdata_bin: header of %s\n", 
                    filename);
         in_int_bin_long(instr, &cmd->nbody);
-        verb_print(cmd->verbose, "\t1st line: %d\n", cmd->nbody);
+        verb_print(cmd->verbose, "\t1st line: %" INTEGER_FMT "\n", cmd->nbody);
         in_int_bin(instr, &ndim);
         verb_print(cmd->verbose, "\t2nd line: %d\n", ndim);
 #ifdef SINGLEP
@@ -660,18 +713,21 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
         rewind(instr);
         if (scanopt(cmd->options, "stop")) {
             fclose(instr);
-            exit(1);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
 
     in_int_bin_long(instr, &cmd->nbody);
-    verb_print(cmd->verbose, "\tInput: nbody %d\n", cmd->nbody);
+    verb_print(cmd->verbose, "\tInput: nbody %" INTEGER_FMT "\n", cmd->nbody);
     if (cmd->nbody < 1)
-        error("inputdata: nbody = %d is absurd\n", cmd->nbody);
+        cBALLS_FAIL(cmd, "inputdata: nbody = %" INTEGER_FMT " is absurd\n",
+                    cmd->nbody);
     in_int_bin(instr, &ndim);
     if (ndim != NDIM)
-        error("inputdata: ndim = %d; expected %d\n", ndim, NDIM);
-    verb_print(cmd->verbose, "\tInput: nbody and ndim: %d %d...\n", 
+        cBALLS_FAIL(cmd, "inputdata: ndim = %d; expected %d\n", ndim, NDIM);
+    verb_print(cmd->verbose, "\tInput: nbody and ndim: %" INTEGER_FMT " %d...\n",
                cmd->nbody, ndim);
 
 #ifdef SINGLEP
@@ -697,6 +753,7 @@ local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
         in_vector_bin(instr, Pos(p));
@@ -732,13 +789,13 @@ local int inputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
 
     gd->input_comment = "Binary-all input file";
 
-    instr = stropen(filename, "r");
+    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
 
     if (scanopt(cmd->options, "header-info")){
         verb_print(cmd->verbose, "\n\t%s: header of %s\n",
                    routineName, filename);
         in_int_bin_long(instr, &cmd->nbody);
-        verb_print(cmd->verbose, "\t1st line: %d\n", cmd->nbody);
+        verb_print(cmd->verbose, "\t1st line: %" INTEGER_FMT "\n", cmd->nbody);
         in_int_bin(instr, &ndim);
         verb_print(cmd->verbose, "\t2nd line: %d\n", ndim);
 #ifdef SINGLEP
@@ -764,18 +821,24 @@ local int inputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
         rewind(instr);
         if (scanopt(cmd->options, "stop")) {
             fclose(instr);
-            exit(1);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
 
     in_int_bin_long(instr, &cmd->nbody);
-    verb_print(cmd->verbose, "\t%s: nbody %d\n", routineName, cmd->nbody);
+    verb_print(cmd->verbose, "\t%s: nbody %" INTEGER_FMT "\n",
+               routineName, cmd->nbody);
     if (cmd->nbody < 1)
-        error("%s: nbody = %d is absurd\n", routineName, cmd->nbody);
+        cBALLS_FAIL(cmd, "%s: nbody = %" INTEGER_FMT " is absurd\n",
+                    routineName, cmd->nbody);
     in_int_bin(instr, &ndim);
     if (ndim != NDIM)
-        error("%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
-    verb_print(cmd->verbose, "\t%s: nbody and ndim: %d %d...\n",
+        cBALLS_FAIL(cmd,
+                    "%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
+    verb_print(cmd->verbose,
+               "\t%s: nbody and ndim: %" INTEGER_FMT " %d...\n",
                routineName, cmd->nbody, ndim);
 
 #ifdef SINGLEP
@@ -802,6 +865,7 @@ local int inputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     gd->bytes_tot += cmd->nbody*sizeof(body);
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
@@ -884,7 +948,8 @@ local int inputdata_takahashi(struct cmdline_data* cmd, struct  global_data* gd,
     gd->input_comment = "Takahasi input file";
 
 //E Begin reading Takahashi file
-    fp = stropen(filename, "rb");
+//    fp = stropen(filename, "rb");
+    OPEN_OUTPUT_OR_FAIL(fp, filename, "rb");
 
     if (scanopt(cmd->options, "header-info")){
         verb_print(cmd->verbose, "\n\t%s: header of %s... ",
@@ -892,7 +957,9 @@ local int inputdata_takahashi(struct cmdline_data* cmd, struct  global_data* gd,
         verb_print(cmd->verbose, "not available yet... sorry!\n\n");
         if (scanopt(cmd->options, "stop")) {
             fclose(fp);
-            exit(1);
+            gd->inputHeaderFlag = TRUE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
 
@@ -1148,6 +1215,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
     cmd->nbody = npix;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for all particle (%ld) storage.\n",
                cmd->nbody*sizeof(body)/(1024.0*1024.0),cmd->nbody);
@@ -1223,7 +1291,6 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
         //E
     } // ! end for
 
-    //B correction 2025-05-03 :: look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
     if (scanopt(cmd->options, "patch-with-all")) {
         verb_print(cmd->verbose,
@@ -1231,7 +1298,6 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
             gd->pivotCount);
     }
 #endif
-    //E
     
     real kavg = 0;
     for(i=0;i<npix;i++){
@@ -1398,6 +1464,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
     INTEGER ij=0;
@@ -1565,6 +1632,7 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 
     gd->nbodyTable[ifile] = cmd->nbody;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    gd->bodytable_allocated = TRUE;
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for all particle (%ld) storage.\n",
                cmd->nbody*sizeof(body)/(1024.0*1024.0),cmd->nbody);
@@ -1685,13 +1753,22 @@ int StartOutput(struct cmdline_data *cmd, struct  global_data* gd)
 int OutputData(struct cmdline_data* cmd, struct  global_data* gd,
            bodyptr *btable, INTEGER *nbody, int ifile)
 {
+    int output_status = SUCCESS;
+    int output_owner = TRUE;
+#ifdef CBALLS_MPI_ENABLED
+    output_owner = cballs_mpi_output_enabled(cmd);
+#endif
     double cpustart = CPUTIME;
-    if (! strnull(cmd->outfile)) {
-        outputdata(cmd, gd, btable[ifile], nbody[ifile]);
-    }
-    gd->cputotalinout += CPUTIME - cpustart;
+    if (output_owner && !strnull(cmd->outfile))
+        output_status = outputdata(cmd, gd, btable[ifile], nbody[ifile]);
+    if (output_owner && output_status == SUCCESS)
+        gd->cputotalinout += CPUTIME - cpustart;
 
-    return SUCCESS;
+#ifdef CBALLS_MPI_ENABLED
+    output_status = cballs_mpi_consensus(
+        cmd, output_status, "MPI catalog output");
+#endif
+    return output_status;
 }
 
 local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
@@ -1700,19 +1777,29 @@ local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
     switch(outfilefmt_int) {
         case OUTCOLUMNS:
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
-            outputdata_ascii(cmd, gd, btable, nbody); break;
+            class_call_cballs(outputdata_ascii(cmd, gd, btable, nbody),
+                                  errmsg, errmsg);
+            break;
         case OUTCOLUMNSALL:
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
-            outputdata_ascii_all(cmd, gd, btable, nbody); break;
+            class_call_cballs(outputdata_ascii_all(cmd, gd, btable, nbody),
+                                  errmsg, errmsg);
+            break;
         case OUTCOLUMNSBIN:
             verb_print(cmd->verbose, "\n\tbinary format output\n");
-            outputdata_bin(cmd, gd, btable, nbody); break;
+            class_call_cballs(outputdata_bin(cmd, gd, btable, nbody),
+                                  errmsg, errmsg);
+            break;
         case OUTCOLUMNSBINALL:
             verb_print(cmd->verbose, "\n\tbinary-all format output\n");
-            outputdata_bin_all(cmd, gd, btable, nbody); break;
+            class_call_cballs(outputdata_bin_all(cmd, gd, btable, nbody),
+                                  errmsg, errmsg);
+            break;
         case OUTNULL:
             verb_print(cmd->verbose, "\n\tcolumns-ascii format output\n");
-            outputdata_ascii(cmd, gd, btable, nbody); break;
+            class_call_cballs(outputdata_ascii(cmd, gd, btable, nbody),
+                                  errmsg, errmsg);
+            break;
 
 //B socket:
 #ifdef ADDONS
@@ -1723,7 +1810,9 @@ local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
         default:
             verb_print(cmd->verbose, 
                     "\n\toutput: Unknown output format...\n\tprinting in default format (columns-ascii)...\n");
-                outputdata_ascii(cmd, gd, btable, nbody); break;
+            class_call_cballs(outputdata_ascii(cmd, gd, btable, nbody),
+                                  errmsg, errmsg);
+            break;
     }
 
     return SUCCESS;
@@ -1732,30 +1821,54 @@ local int outputdata(struct cmdline_data* cmd, struct  global_data* gd,
 local int outputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
                              bodyptr bodytab, INTEGER nbody)
 {
+    string routineName = "outputdata_ascii";
     char namebuf[256];
     stream outstr;
     bodyptr p;
 
-    sprintf(namebuf, gd->fpfnameOutputFileName);
-    outstr = stropen(namebuf, "w!");
+    if (format_checked(namebuf, sizeof(namebuf),
+                       "output filename", "%s", gd->fpfnameOutputFileName) != 0)
+        return FAILURE;
+
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+
 #if NDIM == 3
-    fprintf(outstr,"# nbody NDIM Lx Ly Lz\n# %ld %d ",nbody,NDIM);
-    fprintf(outstr,"%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "# nbody NDIM Lx Ly Lz\n# %" INTEGER_FMT " %d ",
+                         nbody, NDIM);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
 #else
-    fprintf(outstr,"# nbody NDIM Lx Ly\n# %ld %d ",nbody,NDIM);
-    fprintf(outstr,"%lf %lf\n",gd->Box[0],gd->Box[1]);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "# nbody NDIM Lx Ly\n# %" INTEGER_FMT " %d ",
+                         nbody, NDIM);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "%lf %lf\n",gd->Box[0],gd->Box[1]);
 #endif
     DO_BODY(p, bodytab, bodytab+nbody) {
-        out_vector_mar(outstr, Pos(p));
-        out_real_mar(outstr, Kappa(p));
-//B BALLS :: DIAGNOSTICS (DEBUG)
+        if (out_vector_mar_checked(outstr, Pos(p), routineName, namebuf,
+                                   cmd->error_message,
+                                   _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+        if (out_real_mar_checked(outstr, Kappa(p), routineName, namebuf,
+                                 cmd->error_message,
+                                 _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
 #ifdef DEBUG
-        out_bool_mar(outstr, HIT(p));
+        if (out_bool_mar_checked(outstr, HIT(p), routineName, namebuf,
+                                 cmd->error_message,
+                                 _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
 #endif
-//E
-        fprintf(outstr,"\n");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     verb_print(cmd->verbose, "\tdata output to file %s\n", namebuf);
 
     return SUCCESS;
@@ -1769,28 +1882,60 @@ local int outputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd
     stream outstr;
     bodyptr p;
 
-    sprintf(namebuf, gd->fpfnameOutputFileName);
-    outstr = stropen(namebuf, "w!");
+    if (format_checked(namebuf, sizeof(namebuf),
+                       "output filename", "%s", gd->fpfnameOutputFileName) != 0)
+        return FAILURE;
+
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+
 #if NDIM == 3
-    fprintf(outstr,"# nbody NDIM Lx Ly Lz\n# %ld %d ",nbody,NDIM);
-    fprintf(outstr,"%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "# nbody NDIM Lx Ly Lz\n# %" INTEGER_FMT " %d ",
+                         nbody, NDIM);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "%lf %lf %lf\n",gd->Box[0],gd->Box[1],gd->Box[2]);
 #else
-    fprintf(outstr,"# nbody NDIM Lx Ly\n# %ld %d ",nbody,NDIM);
-    fprintf(outstr,"%lf %lf\n",gd->Box[0],gd->Box[1]);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "# nbody NDIM Lx Ly\n# %" INTEGER_FMT " %d ",
+                         nbody, NDIM);
+    WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                         "%lf %lf\n",gd->Box[0],gd->Box[1]);
 #endif
     DO_BODY(p, bodytab, bodytab+nbody) {
-        out_vector_mar(outstr, Pos(p));
-        out_real_mar(outstr, Kappa(p));
-        out_real_mar(outstr, Weight(p));
-        out_short_mar(outstr, Mask(p));
-//B BALLS :: DIAGNOSTICS (DEBUG)
+        if (out_vector_mar_checked(outstr, Pos(p), routineName, namebuf,
+                                 cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+
+        if (out_real_mar_checked(outstr, Kappa(p), routineName, namebuf,
+                                 cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+
+            if (out_real_mar_checked(outstr, Weight(p), routineName, namebuf,
+                                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+                if (outstr != NULL) fclose(outstr);
+                return FAILURE;
+            }
+
+        if (out_short_mar_checked(outstr, Mask(p), routineName, namebuf,
+                                 cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+
 #ifdef DEBUG
-        out_bool_mar(outstr, HIT(p));
+        if (out_bool_mar_checked(outstr, HIT(p), routineName, namebuf,
+                                 cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
 #endif
-//E
-        fprintf(outstr,"\n");
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     verb_print(cmd->verbose, "\t%s: data output to file %s\n",
                routineName, namebuf);
 
@@ -1800,24 +1945,62 @@ local int outputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd
 local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
                          bodyptr bodytab, INTEGER nbody)
 {
+    string routineName = "outputdata_bin";
     char namebuf[256];
     stream outstr;
     bodyptr p;
 
-    sprintf(namebuf, gd->fpfnameOutputFileName);
-    outstr = stropen(namebuf, "w!");
-    out_int_bin_long(outstr, nbody);
-    out_int_bin(outstr, NDIM);
-    out_real_bin(outstr, gd->Box[0]);
-    out_real_bin(outstr, gd->Box[1]);
+    //B
+    if (format_checked(namebuf, sizeof(namebuf),
+                       "output filename", "%s", gd->fpfnameOutputFileName) != 0)
+        return FAILURE;
+    //E
+
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+
+    if (out_int_bin_long_checked(outstr, nbody, routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
+    if (out_int_bin_checked(outstr, NDIM, routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
+    if (out_real_bin_checked(outstr, gd->Box[0], routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
+    if (out_real_bin_checked(outstr, gd->Box[1], routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
 #if NDIM == 3
-    out_real_bin(outstr, gd->Box[2]);
+    if (out_real_bin_checked(outstr, gd->Box[2], routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
 #endif
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_vector_bin(outstr, Pos(p));
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_real_bin(outstr, Kappa(p));
-    fclose(outstr);
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_vector_bin_checked(outstr, Pos(p), routineName, namebuf,
+                                   cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
+
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_real_bin_checked(outstr, Kappa(p), routineName, namebuf,
+                                   cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     verb_print(cmd->verbose, "\tdata output to file %s\n", namebuf);
 
     return SUCCESS;
@@ -1826,34 +2009,87 @@ local int outputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
 local int outputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
                          bodyptr bodytab, INTEGER nbody)
 {
+    string routineName = "outputdata_bin_all";
     char namebuf[256];
     stream outstr;
     bodyptr p;
 
-    sprintf(namebuf, gd->fpfnameOutputFileName);
-    outstr = stropen(namebuf, "w!");
-    out_int_bin_long(outstr, nbody);
-    out_int_bin(outstr, NDIM);
-    out_real_bin(outstr, gd->Box[0]);
-    out_real_bin(outstr, gd->Box[1]);
+    if (format_checked(namebuf, sizeof(namebuf),
+                       "output filename", "%s", gd->fpfnameOutputFileName) != 0)
+        return FAILURE;
+
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
+
+    if (out_int_bin_long_checked(outstr, nbody, routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
+    if (out_int_bin_checked(outstr, NDIM, routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
+    if (out_real_bin_checked(outstr, gd->Box[0], routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
+    if (out_real_bin_checked(outstr, gd->Box[1], routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
 #if NDIM == 3
-    out_real_bin(outstr, gd->Box[2]);
+    if (out_real_bin_checked(outstr, gd->Box[2], routineName, namebuf,
+                               cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        if (outstr != NULL) fclose(outstr);
+        return FAILURE;
+    }
 #endif
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_vector_bin(outstr, Pos(p));
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_real_bin(outstr, Kappa(p));
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_real_bin(outstr, Weight(p));
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_short_bin(outstr, Mask(p));
-    //B BALLS :: DIAGNOSTICS (DEBUG)
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_vector_bin_checked(outstr, Pos(p), routineName, namebuf,
+                                   cmd->error_message,
+                                   _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_real_bin_checked(outstr, Kappa(p), routineName, namebuf,
+                                   cmd->error_message,
+                                 _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_real_bin_checked(outstr, Weight(p), routineName, namebuf,
+                                   cmd->error_message,
+                                 _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_short_bin_checked(outstr, Mask(p), routineName, namebuf,
+                                   cmd->error_message,
+                                  _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
 #ifdef DEBUG
-    DO_BODY(p, bodytab, bodytab+nbody)
-        out_bool_mar(outstr, HIT(p));
+    DO_BODY(p, bodytab, bodytab+nbody) {
+        if (out_bool_bin_checked(outstr, HIT(p), routineName, namebuf,
+                                   cmd->error_message,
+                                 _ERRORMSGSIZE_) == FAILURE) {
+            if (outstr != NULL) fclose(outstr);
+            return FAILURE;
+        }
+    }
 #endif
-    //E
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     verb_print(cmd->verbose, "\tdata output to file %s\n", namebuf);
 
     return SUCCESS;
@@ -1897,33 +2133,40 @@ local int outfilefmt_string_to_int(string outfmt_str,int *outfmt_int)
     return SUCCESS;
 }
 
-// I/O directories:
-global void setFilesDirs_log(struct cmdline_data* cmd,
+//B I/O directories:
+global int setFilesDirs_log(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
     string routineName = "setFilesDirs_log";
     char buf[BUFFERSIZE];
 
-    debug_tracking_s("001", routineName);
-
     if (cmd->verbose_log>0) {           // gd->logfilePath is defined
-        debug_tracking_s("002", cmd->rootDir);
-        sprintf(gd->tmpDir,"%s/%s",cmd->rootDir,"tmp");
+        if (format_checked(gd->tmpDir, sizeof(gd->tmpDir),
+                           "tmpDir", "%s/tmp", cmd->rootDir) != 0)
+            return FAILURE;
+
         double cpustart = CPUTIME;
-        debug_tracking_s("003", gd->tmpDir);
-        sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",
-                gd->tmpDir,gd->tmpDir);
-        system(buf);
-        debug_tracking("004");
+
+        if (format_checked(buf, sizeof(buf),
+                           "buf", "if [ ! -d %s ]; then mkdir %s; fi",
+                           gd->tmpDir,gd->tmpDir) != 0)
+            return FAILURE;
+
+        if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
+            return FAILURE;
+
         gd->cputotalinout += CPUTIME - cpustart;
-        sprintf(gd->logfilePath,"%s/cballs%s.log",
-                gd->tmpDir,cmd->suffixOutFiles);
+
+        if (format_checked(gd->logfilePath, sizeof(gd->logfilePath),
+                           "gd->logfilePath", "%s/cballs%s.log",
+                           gd->tmpDir,cmd->suffixOutFiles) != 0)
+            return FAILURE;
     }
-//    debug_tracking("005... final");
-    debug_tracking_s("005... final", routineName);
+    
+    return SUCCESS;
 }
 
-global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
+global int setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "setFilesDirs";
     char buf[BUFFERSIZE];
@@ -1933,92 +2176,172 @@ global void setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     double cpustart = CPUTIME;
 
     int ndefault = 0;
-    int *ipos;
-    char *dp1, *dp2;
     int lenDir = strlen(cmd->rootDir);
     int i;
 
-    debug_tracking_s("001", routineName);
-    debug_tracking_s("002: init", cmd->rootDir);
-
+    //B
+    int *ipos = NULL;
+    char *dp1 = NULL, *dp2 = NULL;
+    int rc = FAILURE;
+    //E
+    
     if (gd->rootDirFlag==TRUE) {
         
         int nslashs = MAXNSLASHS;
-        ipos = (int*) malloc((nslashs)*sizeof(int));
-//        dp1 = (char*) malloc((lenDir)*sizeof(char));
-        dp1 = (char*) malloc((MAXLENGTHOFSTRSCMD)*sizeof(char));
 
+        //B
+        ipos = (int *) malloc(nslashs * sizeof(int));
+        dp1 = (char *) malloc(MAXLENGTHOFSTRSCMD * sizeof(char));
+
+        if (ipos == NULL || dp1 == NULL) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: memory allocation failed\n", routineName);
+            goto fail;
+        }
+        //E
+        
         for (i=0; i< lenDir; i++) {
-            if(cmd->rootDir[i] == '/') {
-                ipos[ndefault] = i+1;
+            //B
+            if (cmd->rootDir[i] == '/') {
+                if (ndefault >= nslashs) {
+                    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                             "%s: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
+                             routineName, nslashs, cmd->rootDir, nslashs);
+                    goto fail;
+                }
+                ipos[ndefault] = i + 1;
                 ndefault++;
             }
+            //E
         }
-        if (ndefault>nslashs)
-            error("%s: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
-                  routineName, nslashs, cmd->rootDir, nslashs);
-        
+
         if (ndefault == 0) {
-            sprintf(outputDir,cmd->rootDir);
-            sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi",
-                    outputDir,outputDir);
+            if (format_checked(outputDir, sizeof(outputDir),
+                               "outputDir", "%s", cmd->rootDir) != 0) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "%s: rootDir path too long: '%s'",
+                         routineName, cmd->rootDir);
+                goto fail;
+            }
+            
+            if (format_checked(buf, sizeof(buf),
+                "buf", "if [ ! -d %s ]; then mkdir %s; fi",
+                               outputDir,outputDir) != 0) {
+                goto fail;
+            }
             if (cmd->verbose >= 3)
                 verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
-            system(buf);
+
+            if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
+                goto fail;
+
         } else {
             for (i=0; i<ndefault; i++) {
-                debug_tracking("003");
-//                strncpy(dp1, cmd->rootDir, ipos[i]-1);
                 snprintf(dp1, ipos[i]+1, "%s", cmd->rootDir);
-                sprintf(buf,"if [ ! -d %s ]; then mkdir -p %s; fi",dp1,dp1);
+                if (format_checked(buf, sizeof(buf),
+                                   "buf", "if [ ! -d %s ]; then mkdir -p %s; fi",
+                                   dp1,dp1) != 0) {
+                    goto fail;
+                }
                 verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
-                system(buf);
-                debug_tracking("004");
+
+                if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
+                    goto fail;
             }
-//            strncpy(dp1, cmd->rootDir, lenDir);
             snprintf(dp1, lenDir+1, "%s", cmd->rootDir);
-            sprintf(buf,"if [ ! -d %s ]; then mkdir -p %s; fi",dp1,dp1);
+            if (format_checked(buf, sizeof(buf),
+                               "buf", "if [ ! -d %s ]; then mkdir -p %s; fi",
+                               dp1,dp1) != 0) {
+                goto fail;
+            }
             verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
-            system(buf);
+
+            if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
+                goto fail;
+
         }
         gd->cputotalinout += CPUTIME - cpustart;
         
-        debug_tracking_s("005", cmd->rootDir);
+        if (format_checked(gd->fpfnameOutputFileName, sizeof(gd->fpfnameOutputFileName),
+            "fpfnameOutputFileName", "%s/%s%s%s",
+            cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES) != 0)
+            goto fail;
+    
+        if (format_checked(gd->fpfnamehistNNFileName, sizeof(gd->fpfnamehistNNFileName),
+            "fpfnamehistNNFileName", "%s/%s%s%s",
+            cmd->rootDir,cmd->histNNFileName,cmd->suffixOutFiles,EXTFILES) != 0)
+            goto fail;
 
-        sprintf(gd->fpfnameOutputFileName,"%s/%s%s%s",
-                cmd->rootDir,cmd->outfile,cmd->suffixOutFiles,EXTFILES);
-        sprintf(gd->fpfnamehistNNFileName,"%s/%s%s%s",
-                cmd->rootDir,cmd->histNNFileName,cmd->suffixOutFiles,EXTFILES);
-        sprintf(gd->fpfnamehistCFFileName,"%s/%s%s%s",
-                cmd->rootDir,"histCF",cmd->suffixOutFiles,EXTFILES);
-        sprintf(gd->fpfnamehistrBinsFileName,"%s/%s%s%s",
-                cmd->rootDir,"rbins",cmd->suffixOutFiles,EXTFILES);
-        sprintf(gd->fpfnamehistXi2pcfFileName,"%s/%s",
-                cmd->rootDir,cmd->histXi2pcfFileName);
-        sprintf(gd->fpfnamehistZetaGFileName,"%s/%s%s%s",
-                cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
-        sprintf(gd->fpfnamehistZetaGmFileName,"%s/%s%s%s",
-                cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles);
-        sprintf(gd->fpfnamehistZetaMFileName,"%s/%s%s%s",
-                cmd->rootDir,cmd->histZetaFileName,"M",cmd->suffixOutFiles);
-        sprintf(gd->fpfnamemhistZetaMFileName,"%s/%s%s%s%s",
-                cmd->rootDir,"m",cmd->histZetaFileName,"M",cmd->suffixOutFiles);
-        sprintf(gd->fpfnameCPUFileName,"%s/cputime%s%s",
-                cmd->rootDir,cmd->suffixOutFiles,EXTFILES);
-        
-        free(ipos);
-        
+        if (format_checked(gd->fpfnamehistCFFileName, sizeof(gd->fpfnamehistCFFileName),
+            "fpfnamehistCFFileName", "%s/%s%s%s",
+            cmd->rootDir,"histCF",cmd->suffixOutFiles,EXTFILES) != 0)
+            goto fail;
 
-        //B socket:
+        if (format_checked(gd->fpfnamehistrBinsFileName, sizeof(gd->fpfnamehistrBinsFileName),
+            "fpfnamehistrBinsFileName", "%s/%s%s%s",
+            cmd->rootDir,"rbins",cmd->suffixOutFiles,EXTFILES) != 0)
+            goto fail;
+
+        if (format_checked(gd->fpfnamehistXi2pcfFileName, sizeof(gd->fpfnamehistXi2pcfFileName),
+            "fpfnamehistXi2pcfFileName", "%s/%s",
+            cmd->rootDir,cmd->histXi2pcfFileName) != 0)
+            goto fail;
+
+        if (format_checked(gd->fpfnamehistZetaGFileName, sizeof(gd->fpfnamehistZetaGFileName),
+            "fpfnamehistZetaGFileName", "%s/%s%s%s",
+            cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles) != 0)
+            goto fail;
+
+        if (format_checked(gd->fpfnamehistZetaGmFileName, sizeof(gd->fpfnamehistZetaGmFileName),
+            "fpfnamehistZetaGmFileName", "%s/%s%s%s",
+            cmd->rootDir,cmd->histZetaFileName,"G",cmd->suffixOutFiles) != 0)
+            goto fail;
+
+        if (format_checked(gd->fpfnamehistZetaMFileName, sizeof(gd->fpfnamehistZetaMFileName),
+            "fpfnamehistZetaMFileName", "%s/%s%s%s",
+            cmd->rootDir,cmd->histZetaFileName,"M",cmd->suffixOutFiles) != 0)
+            goto fail;
+
+        if (format_checked(gd->fpfnamemhistZetaMFileName, sizeof(gd->fpfnamemhistZetaMFileName),
+            "fpfnamemhistZetaMFileName", "%s/%s%s%s%s",
+            cmd->rootDir,"m",cmd->histZetaFileName,"M",cmd->suffixOutFiles) != 0)
+            goto fail;
+
+        if (format_checked(gd->fpfnameCPUFileName, sizeof(gd->fpfnameCPUFileName),
+            "fpfnameCPUFileName", "%s/cputime%s%s",
+            cmd->rootDir,cmd->suffixOutFiles,EXTFILES) != 0)
+            goto fail;
+
+//B socket:
 #ifdef ADDONS
 #include "cballsio_include_09b.h"
 #endif
-        //E
-        free(dp1);
+//E
     } // ! rootDirFlag
-    debug_tracking_s("006: final", cmd->rootDir);
-}
+    
+    rc = SUCCESS;
 
+    fail:
+        free(ipos);
+        free(dp1);
+        return rc;
+
+
+}
+//E
+
+//B
+local int EndRun_CloseLog(struct global_data *gd)
+{
+    if (gd->outlogFlagFree == TRUE && gd->outlog != NULL) {
+        fclose(gd->outlog);
+        gd->outlog = NULL;
+        gd->outlogFlagFree = FALSE;
+    }
+
+    return SUCCESS;
+}
+//E
 
 /*
  EndRun routine:
@@ -2039,11 +2362,6 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "EndRun";
     stream outstr;
-
-    debug_tracking_s("001", routineName);
-
-    if (cmd->verbose_log>0)
-        fclose(gd->outlog);
 
     if (cmd->verbose >= VERBOSENORMALINFO) {
         //B only catalog 0 is considered... modify to include others
@@ -2072,21 +2390,18 @@ int EndRun(struct cmdline_data* cmd, struct  global_data* gd)
         printf("\nFinal CPU time : %lf %s\n",
                cpuTotal, PRNUNITOFTIMEUSED);
         if (scanopt(cmd->options, "measure-cputime")) {
-                outstr = stropen(gd->fpfnameCPUFileName, "a");
-            fprintf(outstr,"%g %g %g\n",
-                    (double) cmd->nbody, cpuTotal, gd->cpusearch);
-                fclose(outstr);
+            OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnameCPUFileName, "a");
+            WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnameCPUFileName,
+                                "%g %g %g\n",
+                                (double) cmd->nbody, cpuTotal, gd->cpusearch);
+            CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnameCPUFileName);
         }
         printf("Final real time: %ld",
                (rcpu_time()-gd->cpurealinit));
         printf(" %s\n\n", PRNUNITOFTIMEUSED);       // Only work this way
     }
 
-    debug_tracking("002");
-
     EndRun_FreeMemory(cmd, gd);
-
-    debug_tracking_s("003... final", routineName);
 
     return SUCCESS;
 }
@@ -2099,26 +2414,15 @@ global int EndRun_FreeMemory(struct cmdline_data* cmd,
 {
     string routineName = "EndRun_FreeMemory";
 
-//    printf("\n Flags: %d, %d, %d, %d, %d, %d\n", gd->tree_allocated,
-//           gd->gd_allocated_2,
-//           gd->bodytable_allocated,
-//           gd->histograms_allocated,
-//           gd->gd_allocated,
-//           gd->cmd_allocated);
-    
-    debug_tracking_s("001", routineName);
-
     if (gd->tree_allocated == TRUE)
         EndRun_FreeMemory_tree(cmd, gd);
 
-    debug_tracking("002");
     if (gd->gd_allocated_2 == TRUE)
         EndRun_FreeMemory_gd_2(cmd, gd);
 
     if (gd->bodytable_allocated == TRUE)
         EndRun_FreeMemory_bodytable(cmd, gd);
 
-    debug_tracking("002");
     if (gd->histograms_allocated == TRUE)
         EndRun_FreeMemory_histograms(cmd, gd);
 
@@ -2127,63 +2431,97 @@ global int EndRun_FreeMemory(struct cmdline_data* cmd,
     if (gd->cmd_allocated == TRUE)
         EndRun_FreeMemory_cmd(cmd, gd);
 
-    debug_tracking_s("003... final", routineName);
+    EndRun_CloseLog(gd);
 
     return SUCCESS;
 }
 
 global int EndRun_FreeMemory_tree(struct cmdline_data* cmd,
-                             struct  global_data* gd)
+                                  struct global_data* gd)
 {
     int ifile;
 
-#ifdef BALLS4SCANLEV
-    if (scanopt(cmd->options, "read-mask")) {
-        ifile=0;
-        free(nodetablescanlevB4[ifile]);
-    } else {
-        for (ifile=0; ifile<gd->ninfiles; ifile++)
+    for (ifile = 0; ifile < MAXITEMS; ifile++) {
+        if (nodetablescanlev[ifile] != NULL) {
+            free(nodetablescanlev[ifile]);
+            nodetablescanlev[ifile] = NULL;
+        }
+        gd->nnodescanlevTable[ifile] = 0;
+
+        if (nodetablescanlev_root[ifile] != NULL) {
+            free(nodetablescanlev_root[ifile]);
+            nodetablescanlev_root[ifile] = NULL;
+        }
+        gd->nnodescanlev_rootTable[ifile] = 0;
+
+    #ifdef CBALLS_NEEDS_BALLS4_SCAN
+        if (nodetablescanlevB4[ifile] != NULL) {
             free(nodetablescanlevB4[ifile]);
+            nodetablescanlevB4[ifile] = NULL;
+        }
+        gd->nnodescanlevTableB4[ifile] = 0;
+    #endif
     }
-#endif
 
     if (!scanopt(cmd->searchMethod, "kdtree-omp")
-        && !scanopt(cmd->searchMethod, "kdtree-box-omp") ) {
+        && !scanopt(cmd->searchMethod, "kdtree-box-omp")
+        && !scanopt(cmd->searchMethod, "balltree-omp")
+        && !scanopt(cmd->searchMethod, "balltree-mpi")
+        && !scanopt(cmd->searchMethod, "balltree-2balls-omp")) {
         freeTree(cmd, gd);
     }
 
     gd->tree_allocated = FALSE;
-
     return SUCCESS;
 }
 
+
 global int EndRun_FreeMemory_bodytable(struct cmdline_data* cmd,
-                             struct  global_data* gd)
+                                       struct global_data* gd)
 {
     int ifile;
 
-    if (scanopt(cmd->options, "read-mask")) {
-        ifile=0;
-        free(bodytable[ifile]);
-    } else {
-        for (ifile=0; ifile<gd->ninfiles; ifile++)
+    for (ifile = 0; ifile < MAXITEMS; ifile++) {
+        if (bodytable[ifile] != NULL) {
             free(bodytable[ifile]);
+            bodytable[ifile] = NULL;
+        }
+        gd->nbodyTable[ifile] = 0;
     }
 
+#if defined(DEBUG) && defined(BODYTABBF_ON)
+    if (bodytabbf != NULL) {
+        free(bodytabbf);
+        bodytabbf = NULL;
+    }
+#endif
+    
     gd->bodytable_allocated = FALSE;
 
     return SUCCESS;
 }
 
+
 global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
-    free_dvector(gd->histN2pcf,1,cmd->sizeHistN);
+    //B added by cBalls
+#define FREE_DVECTOR_NULL(p,nl,nh) \
+    do { if ((p) != NULL) { free_dvector((p),(nl),(nh)); (p) = NULL; } } while (0)
+
+#define FREE_DMATRIX_NULL(p,nrl,nrh,ncl,nch) \
+    do { if ((p) != NULL) { free_dmatrix((p),(nrl),(nrh),(ncl),(nch)); (p) = NULL; } } while (0)
+
+#define FREE_DMATRIX3D_NULL(p,nrl,nrh,ncl,nch,ndl,ndh) \
+    do { if ((p) != NULL) { free_dmatrix3D((p),(nrl),(nrh),(ncl),(nch),(ndl),(ndh)); (p) = NULL; } } while (0)
+    //E
+
+    FREE_DVECTOR_NULL(gd->histN2pcf, 1, cmd->sizeHistN);
     // 2pcf
 #ifdef SMOOTHPIVOT
-    free_dvector(gd->histNNSubN2pcftotal,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histNNSubN2pcftotal,1,cmd->sizeHistN);
 #endif
-    free_dvector(gd->histNNSubN2pcf,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histNNSubN2pcf, 1, cmd->sizeHistN);
     //E
 
 
@@ -2194,71 +2532,94 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
 #endif
 //E
 
+    
 #ifdef TPCF
-        free_dmatrix3D(gd->histZetaGmIm,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
-        free_dmatrix3D(gd->histZetaGmRe,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
+    FREE_DMATRIX3D_NULL(gd->histZetaGmIm,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
+    FREE_DMATRIX3D_NULL(gd->histZetaGmRe,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
         // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-        free_dmatrix3D(gd->histZetaMcossin,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
-        free_dmatrix3D(gd->histZetaMsincos,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
-        free_dmatrix3D(gd->histZetaMsin,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
-        free_dmatrix3D(gd->histZetaMcos,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
+    FREE_DMATRIX3D_NULL(gd->histZetaMcossin,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
+    FREE_DMATRIX3D_NULL(gd->histZetaMsincos,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
+    FREE_DMATRIX3D_NULL(gd->histZetaMsin,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
+    FREE_DMATRIX3D_NULL(gd->histZetaMcos,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
         // (EE) edge_effects
-        free_dmatrix3D(gd->histZetaM_EE,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
-        free_dmatrix3D(gd->histZetaM,
-                       1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,
-                       cmd->sizeHistN);
-        free_dmatrix(gd->histXisin,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-        free_dmatrix(gd->histXicos,1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+    FREE_DMATRIX3D_NULL(gd->histZetaM_EE_Im,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
+    FREE_DMATRIX3D_NULL(gd->histZetaM_EE,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+
+    FREE_DMATRIX3D_NULL(gd->histZetaM,
+                        1, cmd->mChebyshev+1,
+                        1, cmd->sizeHistN,
+                        1, cmd->sizeHistN);
+    
+    FREE_DMATRIX_NULL(gd->histXisin, 1, cmd->mChebyshev+1, 1, cmd->sizeHistN);
+    FREE_DMATRIX_NULL(gd->histXicos, 1, cmd->mChebyshev+1, 1, cmd->sizeHistN);
+
 #endif
 
+
     //B cross
-    free_dvector(gd->histXi2pcf13,1,cmd->sizeHistN);
-    free_dvector(gd->histXi2pcf12,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histXi2pcf13, 1, cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histXi2pcf12, 1, cmd->sizeHistN);
     //E
-    free_dvector(gd->histXi2pcf,1,cmd->sizeHistN);
-     
-    free_dvector(gd->histNNN,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histXi2pcf, 1, cmd->sizeHistN);
+
+    FREE_DVECTOR_NULL(gd->histNNN, 1, cmd->sizeHistN);
     // 2pcf
 #ifdef SMOOTHPIVOT
-    free_dvector(gd->histNNSubXi2pcftotal,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histNNSubXi2pcftotal, 1, cmd->sizeHistN);
 #endif
-    free_dvector(gd->histNNSubXi2pcf,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histNNSubXi2pcf, 1, cmd->sizeHistN);
     //
-    //B only in search_direct_method_simple
-//    free_dvector(gd->histWW,1,cmd->sizeHistN);
-//    free_dvector(gd->histW,1,cmd->sizeHistN);
-    //E
-    free_dvector(gd->histNNSub,1,cmd->sizeHistN);
-    free_dvector(gd->histCF,1,cmd->sizeHistN);
-    free_dvector(gd->histNN,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histNNSub, 1, cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histCF, 1, cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histNN, 1, cmd->sizeHistN);
 
     //B Histogram arrays PXD versions
 #ifdef PXD
-    free_dvector(gd->histZetaMFlatten,1,cmd->sizeHistN*cmd->sizeHistN);
-    free_dvector(gd->rBins,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histZetaMFlatten, 1, cmd->sizeHistN*cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->rBins, 1, cmd->sizeHistN);
     //B offset at 0 in order to work with Cython
-    free_dmatrix(gd->matPXD,0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
+    FREE_DMATRIX_NULL(gd->matPXD, 0, cmd->sizeHistN-1, 0, cmd->sizeHistN-1);
     //E
-//    free_dmatrix(gd->matPXD,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dvector(gd->vecPXD,1,cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->vecPXD, 1, cmd->sizeHistN);
 #endif
     //E Histogram arrays PXD versions
 
     gd->histograms_allocated = FALSE;
+
+#undef FREE_DVECTOR_NULL
+#undef FREE_DMATRIX_NULL
+#undef FREE_DMATRIX3D_NULL
 
     return SUCCESS;
 }
@@ -2269,14 +2630,18 @@ global int EndRun_FreeMemory_gd(struct cmdline_data* cmd,
     string routineName = "EndRun_FreeMemory_gd";
     int ifile;
 
-    debug_tracking_s("001", routineName);
     //B Set gsl uniform random :: If not needed globally
     //      this line have to go to testdata
     #ifdef USEGSL
-        gsl_rng_free (gd->r);           // allocated by random_init
-                                        //  routine in startrun.c
+        if (gd->random_allocated == TRUE && gd->r != NULL) {
+            gsl_rng_free(gd->r);        // allocated by random_init
+            gd->r = NULL;
+        }
+        r_gsl = NULL;
     #endif
     //E
+
+    gd->random_allocated = FALSE;
 
     gd->gd_allocated = FALSE;
 
@@ -2286,13 +2651,13 @@ global int EndRun_FreeMemory_gd(struct cmdline_data* cmd,
 global int EndRun_FreeMemory_gd_2(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
-    if (cmd->useLogHist) {
-        if (cmd->rminHist==0) {
-            free_dvector(gd->deltaRV,1,cmd->sizeHistN);
-        } else {
-            free_dvector(gd->deltaRV,1,cmd->sizeHistN);
-            free_dvector(gd->ddeltaRV,1,cmd->sizeHistN);
-        }
+    if (gd->deltaRV != NULL) {
+        free_dvector(gd->deltaRV, 1, cmd->sizeHistN);
+        gd->deltaRV = NULL;
+    }
+    if (gd->ddeltaRV != NULL) {
+        free_dvector(gd->ddeltaRV, 1, cmd->sizeHistN - 1);
+        gd->ddeltaRV = NULL;
     }
 
     gd->gd_allocated_2 = FALSE;
@@ -2304,48 +2669,127 @@ global int EndRun_FreeMemory_cmd(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
     string routineName = "EndRun_FreeMemory_cmd";
-    //B 2026-01: added to follow up: freeing several cmd strings variables:
-    // first one must be version, check!!
-    debug_tracking_s("001", routineName);
+
 #ifdef SAVERESTORE
-    if (cmd->restorefile!=NULL)
+if (gd->restorefileFlag == TRUE && cmd->restorefile != NULL) {
     free(cmd->restorefile);
-    if (cmd->statefile!=NULL)
-    free(cmd->statefile);           // it uses strdup() function, check!!
+    cmd->restorefile = NULL;
+    gd->restorefileFlag = FALSE;
+}
+
+if (gd->statefileFlag == TRUE && cmd->statefile != NULL) {
+    free(cmd->statefile);
+    cmd->statefile = NULL;
+    gd->statefileFlag = FALSE;
+}
 #endif
+
 #ifdef IOLIB
-    if (gd->columnsFlag==TRUE)
+    if (gd->columnsFlag == TRUE && cmd->columns != NULL) {
         free(cmd->columns);
+        cmd->columns = NULL;
+        gd->columnsFlag = FALSE;
+    }
 #endif
-    debug_tracking("002");
-    if (cmd->options!=NULL)
-    free(cmd->options);
-    debug_tracking("003");
-//    free(cmd->posScript);
-    debug_tracking("004");
-//    free(cmd->preScript);
-//    free(cmd->testmodel);
-//    free(cmd->suffixOutFiles);
-    debug_tracking("005");
-// they all have assigned a string: "histNN", ...
-//    free(cmd->histZetaFileName);
-//    free(cmd->histXi2pcfFileName);
-//    free(cmd->histNNFileName);
-//    free(cmd->outfilefmt);
-//    free(cmd->outfile);
-    if (gd->rootDirFlagFree==TRUE)
+    
+    //B
+    if (gd->outfileFlag == TRUE && cmd->outfile != NULL) {
+        free(cmd->outfile);
+        cmd->outfile = NULL;
+        gd->outfileFlag = FALSE;
+    }
+
+    if (gd->outfilefmtFlag == TRUE && cmd->outfilefmt != NULL) {
+        free(cmd->outfilefmt);
+        cmd->outfilefmt = NULL;
+        gd->outfilefmtFlag = FALSE;
+    }
+
+    if (gd->histNNFileNameFlag == TRUE && cmd->histNNFileName != NULL) {
+        free(cmd->histNNFileName);
+        cmd->histNNFileName = NULL;
+        gd->histNNFileNameFlag = FALSE;
+    }
+
+    if (gd->histXi2pcfFileNameFlag == TRUE && cmd->histXi2pcfFileName != NULL) {
+        free(cmd->histXi2pcfFileName);
+        cmd->histXi2pcfFileName = NULL;
+        gd->histXi2pcfFileNameFlag = FALSE;
+    }
+
+    if (gd->histZetaFileNameFlag == TRUE && cmd->histZetaFileName != NULL) {
+        free(cmd->histZetaFileName);
+        cmd->histZetaFileName = NULL;
+        gd->histZetaFileNameFlag = FALSE;
+    }
+
+    if (gd->suffixOutFilesFlag == TRUE && cmd->suffixOutFiles != NULL) {
+        free(cmd->suffixOutFiles);
+        cmd->suffixOutFiles = NULL;
+        gd->suffixOutFilesFlag = FALSE;
+    }
+
+    if (gd->testmodelFlag == TRUE && cmd->testmodel != NULL) {
+        free(cmd->testmodel);
+        cmd->testmodel = NULL;
+        gd->testmodelFlag = FALSE;
+    }
+
+    if (gd->preScriptFlag == TRUE && cmd->preScript != NULL) {
+        free(cmd->preScript);
+        cmd->preScript = NULL;
+        gd->preScriptFlag = FALSE;
+    }
+    
+    if (gd->posScriptFlag == TRUE && cmd->posScript != NULL) {
+        free(cmd->posScript);
+        cmd->posScript = NULL;
+        gd->posScriptFlag = FALSE;
+    }
+    //E
+    
+    if (gd->optionsFlag == TRUE && cmd->options != NULL) {
+        free(cmd->options);
+        cmd->options = NULL;
+        gd->optionsFlag = FALSE;
+    }
+    
+    if (gd->rootDirFlagFree == TRUE && cmd->rootDir != NULL) {
         free(cmd->rootDir);
-    if (gd->iCatalogsFlag==TRUE)
+        cmd->rootDir = NULL;
+        gd->rootDirFlagFree = FALSE;
+    }
+    
+    if (gd->iCatalogsFlag == TRUE && cmd->iCatalogs != NULL) {
         free(cmd->iCatalogs);
-    if (gd->infilefmtFlag==TRUE)
+        cmd->iCatalogs = NULL;
+        gd->iCatalogsFlag = FALSE;
+    }
+    
+    if (gd->infilefmtFlag == TRUE && cmd->infilefmt != NULL) {
         free(cmd->infilefmt);
-    if (gd->infileFlag==TRUE)
+        cmd->infilefmt = NULL;
+        gd->infilefmtFlag = FALSE;
+    }
+    
+    if (gd->infileFlag == TRUE && cmd->infile != NULL) {
         free(cmd->infile);
-    if (gd->rsmoothFlagFree==TRUE)
+        cmd->infile = NULL;
+        gd->infileFlag = FALSE;
+    }
+    
+    if (gd->rsmoothFlagFree == TRUE && cmd->rsmooth != NULL) {
         free(cmd->rsmooth);
-    if (gd->searchMethodFlag==TRUE)
+        cmd->rsmooth = NULL;
+        gd->rsmoothFlagFree = FALSE;
+    }
+    
+    if (gd->searchMethodFlag == TRUE && cmd->searchMethod != NULL) {
         free(cmd->searchMethod);
-        debug_tracking("006");
+        cmd->searchMethod = NULL;
+        gd->searchMethodFlag = FALSE;
+    }
+    
     // last one must be paramfile, check!!
 
     gd->cmd_allocated = FALSE;

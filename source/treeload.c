@@ -17,6 +17,7 @@
 //
 
 #include "globaldefs.h"
+#include "tree_contracts.h"
 
 local int treeInfo(struct  cmdline_data* cmd, struct  global_data* gd,
                    int, INTEGER);
@@ -24,12 +25,16 @@ local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int);
 local cellptr makecell(struct  cmdline_data* cmd, struct  global_data* gd, int);
 local int loadbody(struct  cmdline_data*, struct  global_data*, bodyptr, int);
 local int subindex(bodyptr, cellptr);
-local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
+local int hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
                         cellptr, real, int, int);
 local int setradius(struct  cmdline_data* cmd, struct  global_data* gd,
-                    cellptr, vector, real, int);
+                    cellptr, compute_vector, real, int);
 local void threadtree(struct  cmdline_data* cmd, struct  global_data* gd, 
                       nodeptr, nodeptr, int);
+local void free_unthreaded_tree(nodeptr, long int *);
+local long int free_tree_file(struct global_data *, int);
+local int statBodies(struct  cmdline_data* cmd, struct  global_data* gd,
+                     bodyptr btab, int nbody);
 
 #define MAXLEVEL  32
 
@@ -62,12 +67,13 @@ local void walkTree_printInfo(struct  cmdline_data* cmd, struct  global_data* gd
 
 local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int);
 
-#ifdef BALLS4SCANLEV
+#ifdef CBALLS_NEEDS_BALLS4_SCAN
 local int scanLevelB4(struct  cmdline_data* cmd,
                       struct  global_data* gd, int ifile);
-local void walktree_scan_lev_balls4(struct  cmdline_data* cmd,
-                                    struct  global_data* gd,
-                                    nodeptr q, int lev, int ifile, int scanLevel);
+local int walktree_scan_lev_balls4(struct cmdline_data* cmd,
+                                  struct global_data* gd,
+                                  nodeptr q, int lev, int ifile,
+                                  int scanLevel);
 local INTEGER inodelevB4;
 local INTEGER ibodyleftoutB4;
 #endif
@@ -79,18 +85,12 @@ local INTEGER ncell;
 #endif
 
 #ifdef PRUNING
-local void pruningCells(struct  cmdline_data* cmd,
+local int pruningCells(struct  cmdline_data* cmd,
                         struct  global_data* gd,
                         int ifile, cellptr p, int lev);
 #endif
 
-#ifdef SMOOTHPIVOT
-local int scanSmoothPivot(struct  cmdline_data* cmd,
-                          struct  global_data* gd, int ifile);
-#endif
-
 local INTEGER isel, inosel;
-
 //B socket:
 #ifdef ADDONS
 #include "treeload_include_00.h"
@@ -122,8 +122,7 @@ global int MakeTree(struct  cmdline_data* cmd,
     double cpustartMiddle;
     bodyptr p;
     int i;
-
-    debug_tracking_s("001", routineName);
+    bool preserve_catalog_frame = FALSE;
 
     cpustart = CPUTIME;
     gd->bytes_tot_cells = 0;
@@ -133,20 +132,46 @@ global int MakeTree(struct  cmdline_data* cmd,
 
 #ifdef DEBUG
 //B To debug cells:
-    sprintf(cellsfilePath,"%s/cells%s.txt",gd->tmpDir,cmd->suffixOutFiles);
-    if(!(outcells=fopen(cellsfilePath, "w")))
-        error("\n%s: error opening file '%s' \n",routineName, cellsfilePath);
+    //B
+    if (format_checked(cellsfilePath, sizeof(cellsfilePath),
+                       "cellsfilePath", "%s/cells%s.txt",gd->tmpDir,cmd->suffixOutFiles) != 0)
+        return FAILURE;
+    //E
+
+    if (!(outcells = fopen(cellsfilePath, "w"))) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: error opening file '%s'", routineName, cellsfilePath);
+        return FAILURE;
+    }
 //E
 #endif
 
-    newtree(cmd, gd, ifile);
+    if (statBodies(cmd, gd, btab, nbody)==FAILURE)
+        return FAILURE;
+    
+    if (newtree(cmd, gd, ifile) == FAILURE) return FAILURE;
     roottable[ifile] = makecell(cmd, gd, ifile);
+    if (roottable[ifile] == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: failed to allocate root cell for catalog %d",
+                 routineName, ifile);
+        return FAILURE;
+    }
+    gd->tree_allocated = TRUE;
 //B Set (0,0,...) as the center of the box
 // By now it is only working with boxes centered at (0,0,...)
     cpustartMiddle = CPUTIME;
-    FindRootCenter(cmd, gd, btab, nbody, ifile, roottable[ifile]);
-    centerBodies(btab, nbody, ifile, roottable[ifile]);
-    FindRootCenter(cmd, gd, btab, nbody, ifile, roottable[ifile]);
+    if (FindRootCenter(cmd, gd, btab, nbody, ifile, roottable[ifile]) == FAILURE) return FAILURE;
+#ifdef OCTREESHEAROMP
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREESHEARMETHOD;
+#endif
+#ifdef OCTREE2BALLSOMP
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD;
+#endif
+    if (!preserve_catalog_frame
+        && centerBodies(btab, nbody, ifile, roottable[ifile]) == FAILURE)
+        return FAILURE;
+    if (FindRootCenter(cmd, gd, btab, nbody, ifile, roottable[ifile]) == FAILURE) return FAILURE;
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "\n%s: centerBodies-FindRootCenter CPU time: %lf %s\n",
                     routineName,
@@ -155,7 +180,7 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     cpustartMiddle = CPUTIME;
     CLRV(Pos(roottable[ifile]));
-    expandbox(cmd, gd, btab, nbody, ifile, roottable[ifile]);
+    if (expandbox(cmd, gd, btab, nbody, ifile, roottable[ifile]) == FAILURE) return FAILURE;
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "\n%s: expandbox CPU time: %lf %s\n",
                     routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
@@ -164,13 +189,12 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     treeInfo(cmd, gd, ifile, nbody);
 
-    debug_tracking("002");
     DO_BODY(p, btab, btab+nbody) {
 #ifdef BODY3ON
         Nbb(p) = 1;                                 // Check consistency with
                                                     //  smoothing... Correction
 #endif
-        loadbody(cmd, gd, p, ifile);                // Set body in a cell
+        if (loadbody(cmd, gd, p, ifile) == FAILURE) return FAILURE;
         Nb(p) = 1;
         Radius(p) = 0.0;
     }
@@ -193,8 +217,8 @@ global int MakeTree(struct  cmdline_data* cmd,
 
     NTOT[0] = 0;                                    // Smooth(ing) section
     cpustartMiddle = CPUTIME;
-    debug_tracking("003");
-    hackcellprop(cmd, gd, roottable[ifile], gd->rSizeTable[ifile], 0, ifile);
+    if(hackcellprop(cmd, gd, roottable[ifile], gd->rSizeTable[ifile], 0, ifile) == FAILURE)
+        return FAILURE;
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: hackcellprop CPU time: %lf %s\n",
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
@@ -216,22 +240,25 @@ global int MakeTree(struct  cmdline_data* cmd,
 #endif
 //E
 
+#ifdef OCTREESMOOTHING
+    tree_is_threaded[ifile] = TRUE;
+#endif
+
 #ifndef OCTREESMOOTHING
     ip = 0;
 
     cpustartMiddle = CPUTIME;
-    debug_tracking("004");
     
 #ifndef MACONLY
     //B celltable
     ncell=0;
-//    gd->ncellt[ifile]=0;
     celltable[ifile] =
         (cellptr *) allocate(gd->ncellTable[ifile] * sizeof(cellptr));
     //E
 #endif
 
     threadtree(cmd, gd, (nodeptr) roottable[ifile], NULL, ifile);
+    tree_is_threaded[ifile] = TRUE;
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: threadtree CPU time: %lf %s\n",
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
@@ -244,7 +271,6 @@ global int MakeTree(struct  cmdline_data* cmd,
 #endif
 
     cpustartMiddle = CPUTIME;
-    debug_tracking("005");
     walktree_selected((nodeptr) roottable[ifile],   // Smooth(ing) section
                       gd->rSizeTable[ifile]);
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -265,19 +291,22 @@ global int MakeTree(struct  cmdline_data* cmd,
                 "tdepth = %d\n\n",gd->tdepthTable[ifile]);
 
     cpustartMiddle = CPUTIME;
-    debug_tracking("006");
-    scanLevel(cmd, gd, ifile);                      // Scan pivot and root trees
+    // Scan pivot and root trees
+    if (scanLevel(cmd, gd, ifile) == FAILURE)
+        return FAILURE;
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: scanLevel CPU time: %lf %s\n",
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
 
-#ifdef BALLS4SCANLEV
-    if (gd->flagBalls4Scanlevel == FALSE) {
+#ifdef CBALLS_NEEDS_BALLS4_SCAN
+    if (cballs_method_needs_balls4_scan(gd->searchMethod_int)) {
         cpustartMiddle = CPUTIME;
-        scanLevelB4(cmd, gd, ifile);                // Scan pivot and root trees
+        if (scanLevelB4(cmd, gd, ifile) == FAILURE)
+            return FAILURE;
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "%s: scanLevelB4 CPU time: %lf %s\n",
-                        routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
+                        routineName, CPUTIME - cpustartMiddle,
+                        PRNUNITOFTIMEUSED);
     }
 #endif
 
@@ -319,8 +348,8 @@ global int MakeTree(struct  cmdline_data* cmd,
     cpustartMiddle = CPUTIME;
     for (i = 0; i < NbMax; i++)
         cellhistNb[i] = cellRadius[i] = 0;
-    debug_tracking("007");
-    pruningCells(cmd, gd, ifile, roottable[ifile], 0);
+    if (pruningCells(cmd, gd, ifile, roottable[ifile], 0) == FAILURE)
+        return FAILURE;
     verb_log_print(cmd->verbose_log,gd->outlog,
                    "\n%s: radius histogram (after pruning):\n", routineName);
     for (i = 0; i < NbMax; i++) {
@@ -340,23 +369,21 @@ global int MakeTree(struct  cmdline_data* cmd,
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
 #endif
 
-#ifdef SMOOTHPIVOT
-    cpustartMiddle = CPUTIME;
-    if (ifile==0) {
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               "%s: start scanSmoothPivot... \n",
-                               routineName);
- //       scanSmoothPivot(cmd, gd, ifile);
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               "%s: scanSmoothPivot CPU time: %lf %s\n",
-                               routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
-    }
-#endif
-
 #ifdef DEBUGTREE
-    sprintf(treeinfofilePath,"%s/treeinfo%s.txt",gd->tmpDir,cmd->suffixOutFiles);
-    if(!(outtreeinfo=fopen(treeinfofilePath, "w")))
-        error("\n%s: error opening file '%s' \n",routineName, treeinfofilePath);
+    //B new
+    if (format_checked(treeinfofilePath, sizeof(treeinfofilePath),
+                       "treeinfofilePath", "%s/treeinfo%s.txt",
+                       gd->tmpDir,cmd->suffixOutFiles) != 0)
+        return FAILURE;
+    //E
+
+    if (!(outtreeinfo = fopen(treeinfofilePath, "w"))) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: error opening file '%s'", routineName, treeinfofilePath);
+        return FAILURE;
+    }
+
+    
     fprintf(outtreeinfo, "lev, Nb, Radius, Kappa:\n");
     walkTree_printInfo(cmd, gd, (nodeptr) roottable[ifile],
                        Size(roottable[ifile]), 0);
@@ -369,8 +396,6 @@ global int MakeTree(struct  cmdline_data* cmd,
                 gd->cputree, PRNUNITOFTIMEUSED);
 
     gd->tree_allocated = TRUE;
-
-    debug_tracking_s("008... final",routineName);
 
     return SUCCESS;
 }
@@ -433,7 +458,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 #ifdef SMOOTHPIVOT
 #define ARCMINTORAD   0.000290888208666
         if (strnull(cmd->rsmooth)) {
-            if (scanopt(cmd->options, "fix-rsmooth")) {
+            if (cballs_opt_fix_rsmooth(cmd)) {
                 //B Leave it as a refereence: green line
 //            gd->rsmooth[0] = 0.00416666665;       // (0.25 arcmin)/60
                 //E
@@ -447,7 +472,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                                gd->rsmooth[0],0.05*cmd->rangeN);
                 }
             } else {
-                if (scanopt(cmd->options, "default-rsmooth")) {
+                if (cballs_opt_default_rsmooth(cmd)) {
                     gd->rsmooth[0] = gd->Rcell[gd->irsmooth-1];
                 } else {
                     gd->rsmooth[0] = gd->Rcell[gd->tdepthTable[ifile]-1];
@@ -503,7 +528,7 @@ global int FindRootCenter(struct  cmdline_data* cmd,
     string routineName = "FindRootCenter";
     real len;
     int k;
-    vector xmin, xmax;
+    compute_vector xmin, xmax;
 
     DO_COORD(k)
         xmin[k] = xmax[k] = Pos(btab)[k];
@@ -547,6 +572,53 @@ global int centerBodies(bodyptr btab, int nbody, int ifile, cellptr root)
     return SUCCESS;
 }
 
+local int statBodies(struct  cmdline_data* cmd, struct  global_data* gd,
+                     bodyptr btab, int nbody)
+{
+    string routinename = "statBodies";
+    bodyptr p;
+    int k;
+    real kavg = 0.;
+    real kstd = 0.;
+
+    DO_BODY(p, btab, btab+nbody) {
+        kavg += Kappa(p);
+    }
+    
+    kavg = kavg /((real)nbody);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "\n\t%s: average of kappa (%ld particles) = %le\n",
+                            routinename, nbody, kavg);
+
+    DO_BODY(p, btab, btab+nbody) {
+            kstd += (Kappa(p) - kavg)*(Kappa(p) - kavg);
+    }
+    // corrected sample standard deviation
+    kstd = rsqrt( kstd / ((real)nbody - 1.0));
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "\t%s: corrected sample standard deviation (%ld particles) = %le\n\n",
+            routinename, nbody, kstd);
+
+    if (cballs_opt_remove_mean(cmd)) {
+        DO_BODY(p, btab, btab+nbody) {
+            Kappa(p) = Kappa(p) - kavg;
+        }
+        
+        kavg = 0.0;
+        DO_BODY(p, btab, btab+nbody) {
+            kavg += Kappa(p);
+        }
+        
+        kavg = kavg /((real)nbody);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+        "\n\t%s: average of kappa without fluctuations (%ld particles) = %le\n",
+        routinename, nbody, kavg);
+
+    }
+
+    return SUCCESS;
+}
+
 #define invlog102 3.321928094887362
 local int treeInfo(struct  cmdline_data* cmd, struct  global_data* gd,
                    int ifile, INTEGER nbody)
@@ -575,121 +647,122 @@ local int newtree(struct  cmdline_data* cmd, struct  global_data* gd, int ifile)
 {
     roottable[ifile] = NULL;
     gd->ncellTable[ifile] = 0;
+    tree_is_threaded[ifile] = FALSE;
 
     return SUCCESS;
+}
+
+local void free_unthreaded_tree(nodeptr p, long int *cellcounter)
+{
+    int i;
+
+    if (p == NULL || Type(p) != CELL)
+        return;
+
+    for (i = 0; i < NSUB; i++)
+        free_unthreaded_tree(Subp(p)[i], cellcounter);
+
+    free(p);
+    ++(*cellcounter);
+}
+
+local long int free_tree_file(struct global_data *gd, int ifile)
+{
+    long int cellcounter = 0;
+
+    if (roottable[ifile] == NULL)
+        goto done;
+
+    if (!tree_is_threaded[ifile]) {
+        free_unthreaded_tree((nodeptr) roottable[ifile], &cellcounter);
+#ifndef MACONLY
+        free(celltable[ifile]);
+        celltable[ifile] = NULL;
+#endif
+        goto done;
+    }
+
+#ifndef MACONLY
+    if (celltable[ifile] != NULL) {
+        for (INTEGER i = gd->ncellTable[ifile] - 1; i >= 0; i--) {
+            free(celltable[ifile][i]);
+            celltable[ifile][i] = NULL;
+            ++cellcounter;
+        }
+        free(celltable[ifile]);
+        celltable[ifile] = NULL;
+    } else {
+        free_unthreaded_tree((nodeptr) roottable[ifile], &cellcounter);
+    }
+#else
+    nodeptr p = (nodeptr) roottable[ifile];
+    nodeptr freecell = NULL;
+
+    while (p != NULL) {
+        if (Type(p) == CELL) {
+            nodeptr more = More(p);
+            Next(p) = freecell;
+            freecell = p;
+            p = more;
+        } else {
+            p = Next(p);
+        }
+    }
+
+    while (freecell != NULL) {
+        nodeptr next = Next(freecell);
+        free(freecell);
+        freecell = next;
+        ++cellcounter;
+    }
+#endif
+
+done:
+    roottable[ifile] = NULL;
+    gd->ncellTable[ifile] = 0;
+    tree_is_threaded[ifile] = FALSE;
+    return cellcounter;
 }
 
 // deallocate memory tree
 global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "freeTree";
-    nodeptr p;
-    nodeptr freecell = NULL;
     int ifile;
     long int cellcounter=0;
 
-    debug_tracking_s("001", routineName);
-
-//    verb_print_debug(1, "%s: allocated cells: %ld %ld %ld\n",
-//                    routineName, gd->ncellTable[ifile], gd->ncellt[ifile], ncell);
-    verb_print_debug(1, "%s: allocated cells: %ld %ld\n",
-                    routineName, gd->ncellTable[ifile], ncell);
-
-    if (scanopt(cmd->options, "read-mask")) {
+    if (cballs_opt_read_mask(cmd)) {
         ifile=0;
-        cellcounter=0;
-#ifndef MACONLY
-        //B celltable
-        for (INTEGER i=gd->ncellTable[ifile]-1; i>=0; i--) {
-            free(celltable[ifile][i]);
-                ++cellcounter;
-        }
-        //E
-#else
-        freecell = NULL;
-        p = (nodeptr) roottable[ifile];
-        while (p != NULL)
-            if (Type(p) == CELL) {
-                Next(p) = freecell;
-                freecell = p;
-                p = More(p);
-            } else
-                p = Next(p);
-
-        p = freecell;
-        while (p != NULL) {
-            if (Type(p) == CELL) {
-                free(p);
-                ++cellcounter;
-                p = Next(p);
-            } else
-                p = Next(p);
-        }
+#ifdef MACONLY
+        INTEGER allocated_cells = gd->ncellTable[ifile];
+#endif
+        cellcounter = free_tree_file(gd, ifile);
+#ifdef MACONLY
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "%s: allocated cells vs freed cells: %ld %ld\n",
-                               routineName, gd->ncellTable[ifile], cellcounter);
-#endif // ! MACONLY
+                               routineName, (long int) allocated_cells,
+                               cellcounter);
+#endif
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
-            cellcounter=0;
-#ifndef MACONLY
-            debug_tracking_s("002", "MACONLY");
-            //B celltable
-            for (INTEGER i=gd->ncellTable[ifile]-1; i>=0; i--) {
-//                debug_tracking_i("002", i);
-                free(celltable[ifile][i]);
-                ++cellcounter;
-            }
-            //E
-            debug_tracking_s("003", "MACONLY");
-#else
-            debug_tracking_s("002", "NO-MACONLY");
-            freecell = NULL;
-            p = (nodeptr) roottable[ifile];
-            while (p != NULL)
-                if (Type(p) == CELL) {
-                    Next(p) = freecell;
-                    freecell = p;
-                    p = More(p);
-                } else                              // p can be BODY type
-                    p = Next(p);
-
-            p = freecell;
-            while (p != NULL) {
-//                for (INTEGER i=0; i<gd->ncellTable[ifile]; i++) {
-                if (Type(p) == CELL) {
-                    if (cellcounter<gd->ncellTable[ifile]-1) {
-//                    if (cellcounter<387601-2) {
-                        free(p);
-                        ++cellcounter;
-                        p = Next(p);
-                    } else {
-                        ++cellcounter;
-                        break;
-                    }
-                } else {
-                    p = Next(p);
-                }
-//            }
-            }
+#ifdef MACONLY
+            INTEGER allocated_cells = gd->ncellTable[ifile];
+#endif
+            cellcounter = free_tree_file(gd, ifile);
+#ifdef MACONLY
             verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: allocated cells vs freed cells: %ld %ld\n",
-                                   routineName, gd->ncellTable[ifile], cellcounter);
-//            verb_print_debug(1, "%s: allocated cells vs freed cells: %ld %ld\n",
-//                            routineName, gd->ncellTable[ifile], cellcounter);
-            debug_tracking_s("003", "NO-MACONLY");
-#endif // ! MACONLY
+                                   routineName, (long int) allocated_cells,
+                                   cellcounter);
+#endif
         }
     }
 
     for (ifile=0; ifile<gd->ninfiles; ifile++) {
         roottable[ifile] = NULL;
         gd->ncellTable[ifile] = 0;
+        tree_is_threaded[ifile] = FALSE;
     }
-
-    // also free celltable[ifile] arrays
-
-    debug_tracking_s("004... final", routineName);
 
     return SUCCESS;
 }
@@ -704,7 +777,8 @@ local cellptr makecell(struct  cmdline_data* cmd,
     Type(c) = CELL;
     Nb(c) = 0;                                      // To smooth cells
     Update(c) = FALSE;
-    if (scanopt(cmd->options, "read-mask"))
+    Selected(c) = FALSE;
+    if (cballs_opt_read_mask(cmd))
         Mask(c) = FALSE;                            // check that FALSE is ok
     for (i = 0; i < NSUB; i++)
         Subp(c)[i] = NULL;
@@ -732,9 +806,6 @@ global int expandbox(struct  cmdline_data* cmd,
     while (gd->rSizeTable[ifile] < 2 * dmax)
         gd->rSizeTable[ifile] = 2 * gd->rSizeTable[ifile];
 
-//    if (cmd->verbose>=VERBOSENORMALINFO)
-//        verb_print(cmd->verbose, "treeload expandbox: rSize = %lf\n",
-//                   gd->rSizeTable[ifile]);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                           "%s: rSize = %lf\n",
                            routineName, gd->rSizeTable[ifile]);
@@ -776,9 +847,9 @@ startagain:
                     verb_log_print(cmd->verbose_log,gd->outlog,
                                    "Pos[k]: %le %le\n",
                                Pos(p)[k],Pos(Subp(q)[qind])[k]);
-                if (scanopt(cmd->options, "no-check-two-bodies-eq-pos")) {
+                if (cballs_opt_no_check_equal_positions(cmd)) {
                     DO_COORD(k) {
-        //                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
+//                        Pos(p)[k] += EPSILON*grandom(0.0, 0.01*qsize);
                         Pos(p)[k] += EPSILONLOADBODY*grandom(0.0, 1.0);
                     }
                     DO_COORD(k) {
@@ -788,14 +859,15 @@ startagain:
                         EPSILONLOADBODY*grandom(0.0, 1.0));
 //                           EPSILON*grandom(0.0, 0.01*qsize));
                     }
-//                    }
                     Update(p) = FALSE;
                     gd->sameposcount++;
                     sameposcount++;
                     goto startagain;
                 } else {
-                    error("loadbody: two bodies have same position...\n\t%s",
-                          "consider the option: 'no-check-two-bodies-eq-pos'");
+                    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                             "loadbody: two bodies have same position; consider option "
+                             "'no-check-two-bodies-eq-pos'");
+                    return FAILURE;
                 }
             }
             c = makecell(cmd, gd, ifile);
@@ -830,63 +902,65 @@ local int subindex(bodyptr p, cellptr q)
     return (ind);
 }
 
-local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
+local int hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
                        cellptr p, real psize, int lev, int ifile)
 {
     string routineName = "hackcellprop";
-    vector cmpos, tmpv;
+    compute_vector cmpos;
     int i, k;
     nodeptr q;
+    short cell_mask = MASK_NODE_EMPTY;
+    bool read_mask = cballs_opt_read_mask(cmd);
+    static INTEGER mixed_cells;
+    static INTEGER contaminated_children;
+
+    if (lev == 0) {
+        mixed_cells = 0;
+        contaminated_children = 0;
+    }
 
     gd->tdepthTable[ifile] = MAX(gd->tdepthTable[ifile], lev);
+    if (lev < 0 || lev >= MAXLEVEL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: tree level out of range: lev=%d MAXLEVEL=%d\n",
+                 routineName, lev, MAXLEVEL);
+        return FAILURE;
+    }
     cellhist[lev]++;
     Level(p) = lev;                                 // To set scanLevel
     Mass(p) = 0.0;
     Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
+    Selected(p) = FALSE;
+    Update(p) = FALSE;
     CLRV(cmpos);
 
     for (i = 0; i < NSUB; i++) {
         if ((q = Subp(p)[i]) != NULL) {
             subnhist[lev]++;
             if (Type(q) == CELL) {
-                hackcellprop(cmd, gd, (cellptr) q, psize/2, lev+1, ifile);
+                if (hackcellprop(cmd, gd, (cellptr) q, psize/2, lev+1, ifile)
+                    == FAILURE)
+                    return FAILURE;
             }
-            Selected(p) |= Selected(q);             // bodies belonging to a cell
-            Update(p) |= Update(q);
-            if (scanopt(cmd->options, "read-mask"))
-                Mask(p) |= Mask(q);
-
-            Mass(p) += Mass(q);
-            Weight(p) += Weight(q);                 // sum of all weight of q
-#ifndef NOWKAvg
-            // ... this definition will give tests OK
-            Kappa(p) += Weight(q)*Kappa(q);     // Kappa(q) average at cell q
-#else
-            Kappa(p) += Kappa(q);     // Kappa(q) average at cell q
-#endif
-            if ( Type(q) == CELL) {
-                if (scanopt(cmd->options, "read-mask"))
-                    Mask(p) |= Mask(q);
-                Nb(p) += Nb(q);
-            } else {
-                if (Type(q) == BODY) {
-                    Nb(p) += 1;
-                } else if (Type(q) == BODY3) {      // To set smoothing body
-                    Nb(p) += 1;
-                }
-            }
-            MULVS(tmpv, Pos(q), Mass(q));
-            ADDV(cmpos, cmpos, tmpv);
+            if (cballs_cell_accumulate_child((nodeptr)p, q, read_mask,
+                                             &cell_mask, cmpos)
+                && cmd->verbose_log >= 3)
+                contaminated_children++;
         } // ! q no NULL
     } // ! loop i: 0 -> NSUB-1
+    if (read_mask) {
+        Mask(p) = cell_mask;
+        if (Mask(p) == MASK_NODE_MIXED)
+            mixed_cells++;
+    }
 //B Smooth(ing) section
     if (Nb(p)==cmd->nsmooth) {                      // Correct to <=
         NTOT[0]=NTOT[0]+1;
     }
 //E
-    if (scanopt(cmd->options, "center-of-mass")) {
+    if (cballs_opt_center_of_mass(cmd)) {
         if (Mass(p) > 0.0) {
             DIVVS(cmpos, cmpos, Mass(p));
         } else {
@@ -905,11 +979,13 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
 // See line above and uncomment DIVVS(cmpos, cmpos, Mass(p)); line (not working!)
 	DO_COORD(k)
         if (cmpos[k] < Pos(p)[k] - psize/2 || Pos(p)[k] + psize/2 <= cmpos[k]) {
-            if (psize/2 > 2.710505e-20 + EPSILONHACKCELL)
-            error("%s: tree structure error: %d %le %le %le %le\n",
-                  routineName, k, cmpos[k],
-                  Pos(p)[k] - psize/2, Pos(p)[k] + psize/2, psize/2);
-            else {
+            if (psize/2 > 2.710505e-20 + EPSILONHACKCELL) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "%s: tree structure error: %d %le %le %le %le\n",
+                               routineName, k, cmpos[k],
+                               Pos(p)[k] - psize/2, Pos(p)[k] + psize/2, psize/2);
+                return FAILURE;
+            } else {
                 if (cmd->verbose_log>=3)
                 verb_log_print(cmd->verbose_log,gd->outlog,
                         "%s: tree structure warning! psize/2 to small: %le \n",
@@ -918,22 +994,32 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
         }
 #undef EPSILON
 
-    setradius(cmd, gd, p, cmpos, psize, ifile);
+#ifdef SINGLEP
+    DO_COORD(k)
+        cmpos[k] = (real)(cballs_storage_real)cmpos[k];
+#endif
+    if (setradius(cmd, gd, p, cmpos, psize, ifile) == FAILURE)
+        return FAILURE;
 
     SETV(Pos(p), cmpos);
     if (Nb(p)>0) {
-        Kappa(p) /= Nb(p);
-#ifdef NOWKAvg
-        Weight(p) /= Nb(p);                         // Weight: added
-//#else
-        // ... this definition will give tests OK
-#endif
-        //E
+        cballs_cell_finalize_averages((nodeptr)p);
     } else {
 #if defined(DEBUGTREE)
-        error("%s: Nb = 0: %ld\n", routineName, Nb(p));
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: Nb = 0: %ld\n", routineName, Nb(p));
+        return FAILURE;
 #endif
     }
+
+    if (lev == 0 && cballs_opt_read_mask(cmd)
+        && cmd->verbose_log >= 3)
+        verb_log_print(cmd->verbose_log, gd->outlog,
+                       "%s: mixed cells=%ld, masked children with "
+                       "nonzero aggregates=%ld\n",
+                       routineName, mixed_cells, contaminated_children);
+
+    return SUCCESS;
 }
 
 // Parameter theta controls size of the cell.
@@ -941,33 +1027,59 @@ local void hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
 //  0 always open cells (complexity N^2);
 //  1 is the default value.
 local int setradius(struct  cmdline_data* cmd, struct  global_data* gd,
-                    cellptr p, vector cmpos, real psize, int ifile)
+                    cellptr p, compute_vector cmpos, real psize, int ifile)
 {
-    real bmax2, d;
+    string routineName = "setradius";
+    real bmax2, d, radius;
     int k;
 
     if (cmd->theta == 0.0)
-        Radius(p) = 2 * gd->rSizeTable[ifile];
+        radius = 2 * gd->rSizeTable[ifile];
     else if (gd->sw94) {
         bmax2 = 0.0;
 		DO_COORD(k) {
             d = cmpos[k] - Pos(p)[k] + psize/2; 
             bmax2 += rsqr(MAX(d, psize - d));   
         }
-        Radius(p) = rsqrt(bmax2) / cmd->theta;
+        radius = rsqrt(bmax2) / cmd->theta;
     } else if (gd->bh86)
-        Radius(p) = psize / cmd->theta;
+        radius = psize / cmd->theta;
     else {
-        Radius(p) = (psize/cmd->theta) * rsqrt((real)(NDIM))/2.0;
+        radius = (psize/cmd->theta) * rsqrt((real)(NDIM))/2.0;
 //        DISTV(d, cmpos(p), Pos(p));                 // find offset from center
 //        Radius(p) = psize / cmd->theta + d;         // use size plus offset
     }
 
-    Size(p) = psize;
+    Radius(p) = cballs_store_search_bound(radius);
+    Size(p) = cballs_store_upper_bound(psize);
 
     int n;
-    n = (int) (Radius(p) / deltaRadius);
-    (cellRadius[n])++;
+
+    //B
+    if (deltaRadius <= 0.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid deltaRadius=%g\n", routineName, deltaRadius);
+        return FAILURE;
+    }
+
+    if (!isfinite((double)Radius(p)) || Radius(p) < 0.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid cell radius=%g\n", routineName, Radius(p));
+        return FAILURE;
+    }
+    if (cmd->theta == 0.0
+        || Radius(p) >= (real)(NbMax - 1) * deltaRadius)
+        n = NbMax - 1;                              // radius overflow bin
+    else
+        n = (int)(Radius(p) / deltaRadius);
+    if (n < 0 || n >= NbMax) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: cellRadius index out of range: n=%d NbMax=%d Radius=%g deltaRadius=%g\n",
+                 routineName, n, NbMax, Radius(p), deltaRadius);
+        return FAILURE;
+    }
+    cellRadius[n]++;
+    //E
 
     return SUCCESS;
 }
@@ -982,14 +1094,10 @@ local void threadtree(struct  cmdline_data* cmd,
 
     Next(p) = n;
     if (Type(p) == CELL) {
-//        verb_print_debug(1, "threadtree: %ld %ld %ld\n",
-//                        gd->ncellTable[ifile], gd->ncellt[ifile], ncell);
 #ifndef MACONLY
         //B celltable
         celltable[ifile][ncell] = (cellptr)p;
         ncell++;
-//        celltable[ifile][gd->ncellt[ifile]] = (cellptr)p;
-//        gd->ncellt[ifile] = gd->ncellt[ifile]+1;
         //E
 #endif
         if (Nb(p)<NbMax)
@@ -1049,20 +1157,31 @@ local void walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd,
 //E
 
 
-#ifdef BALLS4SCANLEV
-// need to free allocated here memory
+#ifdef CBALLS_NEEDS_BALLS4_SCAN
 local int scanLevelB4(struct  cmdline_data* cmd,
                       struct  global_data* gd, int ifile)
 {
     string routine_name = "scanLevelB4";
+    INTEGER covered_bodies = 0;
+    bool read_mask = cballs_opt_read_mask(cmd);
+    INTEGER expected_bodies = read_mask ? Nb(roottable[ifile])
+                                        : gd->nbodyTable[ifile];
 
     gd->nnodescanlevTableB4[ifile] =
         gd->ncellTable[ifile]+gd->nbodyTable[ifile];
     nodetablescanlevB4[ifile] =
         (nodeptr *) allocate(gd->nnodescanlevTableB4[ifile] * sizeof(nodeptr));
+    if (nodetablescanlevB4[ifile] == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: unable to allocate the B4 pivot table for catalog %d\n",
+                 routine_name, ifile);
+        gd->nnodescanlevTableB4[ifile] = 0;
+        return FAILURE;
+    }
     gd->bytes_tot += gd->nnodescanlevTableB4[ifile]*sizeof(nodeptr);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                "\n%s: Allocated %g MByte for (%d) scan nodetab storage.\n",
+                "\n%s: Allocated %g MByte for (%" INTEGER_FMT
+                ") scan nodetab storage.\n",
                 routine_name, INMB*gd->nnodescanlevTableB4[ifile]*sizeof(nodeptr),
                 gd->nnodescanlevTableB4[ifile]);
 
@@ -1070,15 +1189,18 @@ local int scanLevelB4(struct  cmdline_data* cmd,
     ibodyleftoutB4 = 0;
 
 //B scan tree up to the smallest cells
-    walktree_scan_lev_balls4(cmd, gd,
-                             (nodeptr)roottable[ifile], 0,
-                             ifile, gd->tdepthTable[ifile]);
+    if (walktree_scan_lev_balls4(cmd, gd,
+                                (nodeptr)roottable[ifile], 0,
+                                ifile, gd->tdepthTable[ifile]) == FAILURE)
+        return FAILURE;
 //E
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\n%s: Found %d nodes to scan at upper most level %d.\n",
+                        "\n%s: Found %" INTEGER_FMT
+                        " nodes to scan at upper most level %d.\n",
                         routine_name, inodelevB4, gd->tdepthTable[ifile]);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\t%ld particles were included to scan at that level.\n",
+                        "\t%" INTEGER_FMT
+                        " particles were included to scan at that level.\n",
                         ibodyleftoutB4);
 
     gd->nnodescanlevTableB4[ifile] = inodelevB4;
@@ -1089,6 +1211,15 @@ local int scanLevelB4(struct  cmdline_data* cmd,
     INTEGER numCells=0, numBodies=0;
     for (INTEGER i = 0; i < gd->nnodescanlevTableB4[ifile]; i++) {
         p = nodetablescanlevB4[ifile][i];
+        if (p == NULL || Nb(p) <= 0
+            || (read_mask && Mask(p) != MASK_NODE_VALID)) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: invalid B4 pivot at index %" INTEGER_FMT
+                     " for catalog %d\n",
+                     routine_name, i, ifile);
+            return FAILURE;
+        }
+        covered_bodies += Nb(p);
         if (Type(p)==CELL) {
             if (Radius(p)>rmax) rmax=Radius(p);
             if (Radius(p)<rmin) rmin=Radius(p);
@@ -1101,41 +1232,59 @@ local int scanLevelB4(struct  cmdline_data* cmd,
                            "%s: cell radius min and max: %lg %lg\n",
                            routine_name, rmin, rmax);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                "%s: number of cell and of bodies and total nodes: %ld %ld %ld\n",
+                "%s: number of cell and of bodies and total nodes: %"
+                INTEGER_FMT " %" INTEGER_FMT " %" INTEGER_FMT "\n",
                 routine_name, numCells, numBodies, numCells+numBodies);
+
+    if (covered_bodies != expected_bodies) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: B4 pivots cover %" INTEGER_FMT
+                 " bodies, expected %" INTEGER_FMT " in catalog %d\n",
+                 routine_name, covered_bodies, expected_bodies, ifile);
+        return FAILURE;
+    }
 
     return SUCCESS;
 }
 
-local void walktree_scan_lev_balls4(struct  cmdline_data* cmd,
-                                    struct  global_data* gd,
-                                    nodeptr q, int lev, int ifile, int scanLevel)
+local int walktree_scan_lev_balls4(struct cmdline_data* cmd,
+                                  struct global_data* gd,
+                                  nodeptr q, int lev, int ifile,
+                                  int scanLevel)
 {
-    nodeptr p,g,h,l;
+    nodeptr child;
+    INTEGER capacity = gd->ncellTable[ifile] + gd->nbodyTable[ifile];
+    bool read_mask = cballs_opt_read_mask(cmd);
 
-    if ( lev+1 <= scanLevel ) {
-        if (Type(q)==CELL) {
-            for (l = More(q); l != Next(q); l = Next(l)) {
-                if (Radius(l) < gd->deltaRmin*THETA) {
-                    nodetablescanlevB4[ifile][inodelevB4] = l;
-                    inodelevB4++;
-                    ibodyleftoutB4++;
-                } else {
-                    if (Type(l)==CELL)
-                        walktree_scan_lev_balls4(cmd, gd,
-                                                 l, lev+1, ifile, scanLevel);
-                    else
-                        ibodyleftoutB4++;
-                }
-            }
-        } else {
-            nodetablescanlevB4[ifile][inodelevB4] = q;
-            inodelevB4++;
-            ibodyleftoutB4++;
+    if (q == NULL)
+        return SUCCESS;
+
+    if (read_mask && Mask(q) == MASK_NODE_MASKED)
+        return SUCCESS;
+
+    if ((Type(q) != CELL || Radius(q) < gd->deltaRmin*THETA
+         || lev >= scanLevel)
+        && (!read_mask || Mask(q) == MASK_NODE_VALID)) {
+        if (inodelevB4 >= capacity) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "scanLevelB4: pivot table overflow for catalog %d\n",
+                     ifile);
+            return FAILURE;
         }
+        nodetablescanlevB4[ifile][inodelevB4++] = q;
+        if (Type(q) != CELL)
+            ibodyleftoutB4++;
+        return SUCCESS;
     }
+
+    for (child = More(q); child != Next(q); child = Next(child))
+        if (walktree_scan_lev_balls4(cmd, gd, child, lev+1, ifile,
+                                    scanLevel) == FAILURE)
+            return FAILURE;
+
+    return SUCCESS;
 }
-#endif // ! BALLS4SCANLEV
+#endif // ! CBALLS_NEEDS_BALLS4_SCAN
 
 
 #ifdef PRUNING
@@ -1146,7 +1295,7 @@ local void normal_walktree(struct  cmdline_data* cmd,
 {
     nodeptr l;
     real drpq, drpq2;
-    vector dr;
+    compute_vector dr;
     real d;
     int k;
     bool flag=TRUE;                                 // inside cell
@@ -1160,24 +1309,33 @@ local void normal_walktree(struct  cmdline_data* cmd,
             if (d > psize/2) flag=FALSE;
         }
         if (flag==TRUE) {
+            if (cballs_opt_read_mask(cmd)
+                && Mask(q) == MASK_NODE_MASKED)
+                return;
             Nb(p) += 1;
+            Weight(p) += Weight(q);
+#ifndef NOWKAvg
             Kappa(p) += Weight(q)*Kappa(q);
+#else
+            Kappa(p) += Kappa(q);
+#endif
             DOTPSUBV(drpq2, dr, Pos(q), Pos(p));
             if (cmd->usePeriodic) {
                 VWrapAll(dr);
                 DOTVP(drpq2, dr, dr);
             }
             drpq = rsqrt(drpq2);
-            if (Radius(p) < drpq)
-                Radius(p) = drpq;
+            if ((real)Radius(p) < drpq)
+                Radius(p) = cballs_store_search_bound(drpq);
         }
     }
 }
 
-local void pruningCells(struct  cmdline_data* cmd,
+local int pruningCells(struct  cmdline_data* cmd,
                         struct  global_data* gd,
                         int ifile, cellptr p, int lev)
 {
+    string routineName = "pruningCells";
     int i;
     nodeptr q;
     real qsize;
@@ -1190,6 +1348,7 @@ local void pruningCells(struct  cmdline_data* cmd,
         CLRV(cmpos);
 */
 
+    Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
     Radius(p) = 0.0;
@@ -1199,30 +1358,72 @@ local void pruningCells(struct  cmdline_data* cmd,
     normal_walktree(cmd, gd, p, psize, q, qsize, 0);
 
     if (cmd->theta == 0.0)
-        Radius(p) = 2.0*psize;                      // always open cell
+        Radius(p) = cballs_store_search_bound(2.0*psize);
     else
-        Radius(p) /= cmd->theta;
+        Radius(p) = cballs_store_search_bound((real)Radius(p)/cmd->theta);
 
     int n;
-    n = (int) (Radius(p) / deltaRadius);
-    (cellRadius[n])++;
+    
+    //B
+    if (deltaRadius <= 0.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid deltaRadius=%g\n", routineName, deltaRadius);
+        return FAILURE;
+    }
+
+    if (!isfinite((double)Radius(p)) || Radius(p) < 0.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid cell radius=%g\n", routineName, Radius(p));
+        return FAILURE;
+    }
+    if (cmd->theta == 0.0
+        || Radius(p) >= (real)(NbMax - 1) * deltaRadius)
+        n = NbMax - 1;                              // radius overflow bin
+    else
+        n = (int)(Radius(p) / deltaRadius);
+    if (n < 0 || n >= NbMax) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: cellRadius index out of range: n=%d NbMax=%d Radius=%g deltaRadius=%g\n",
+                 routineName, n, NbMax, Radius(p), deltaRadius);
+        return FAILURE;
+    }
+    cellRadius[n]++;
+    //E
+
+
+    
     if (Nb(p)<NbMax)
         cellhistNb[Nb(p)]++;
 
     if (Nb(p)>0) {
+#ifndef NOWKAvg
+        if (Weight(p) > 0.0) {
+            Kappa(p) /= Weight(p);
+        } else {
+            Kappa(p) = 0.0;
+        }
+#else
         Kappa(p) /= Nb(p);
+        Weight(p) /= Nb(p);
+#endif
     } else {
 #if defined(DEBUGTREE)
-        error("Nb = 0: %ld\n", Nb(p));
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "Nb = 0: %ld\n", Nb(p));
+        return FAILURE;
 #endif
     }
 
     for (i = 0; i < NSUB; i++) {                    // loop over existing subnodes
         if ((q = Subp(p)[i]) != NULL) {             // access each one in turn
-            if (Type(q) == CELL)                    // if also a cell, prune it
-                pruningCells(cmd, gd, ifile, (cellptr) q, lev+1);
+            if (Type(q) == CELL) {                  // if also a cell, prune it
+                if (pruningCells(cmd, gd, ifile, (cellptr) q, lev+1) == FAILURE)
+                    return FAILURE;
+            }
         }
     }
+
+    return SUCCESS;
 }
 
 #endif
@@ -1243,126 +1444,3 @@ local void walkTree_printInfo(struct  cmdline_data* cmd, struct  global_data* gd
 }
 #endif
 
-#ifdef SMOOTHPIVOT
-local void walktree_scan_smooth_pivot(struct  cmdline_data* cmd,
-                                        struct  global_data* gd,
-                                        nodeptr q, real qsize,  bodyptr p)
-{
-    nodeptr l;
-#ifdef SINGLEP
-    float dr1;
-    float dr[NDIM];
-#else
-    real dr1;
-    vector dr;
-#endif
-
-    if (Type(q) == CELL) {                          // is a cell, zoom in
-        if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize))
-        for (l = More(q); l != Next(q); l = Next(l))
-            walktree_scan_smooth_pivot(cmd, gd, l, qsize/2, p);
-    } else {                                        // found body, process it
-        if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-            if (dr1<=gd->rsmooth[0]) {
-                if (Update(q)==TRUE) {
-                    Update(q) = FALSE;
-                    NbRmin(p) += 1;
-                    KappaRmin(p) += Kappa(q);
-                } else {
-                    NbRminOverlap(p) += 1;
-                }
-            }
-        }
-    }
-}
-
-local int scanSmoothPivot(struct  cmdline_data* cmd,
-                      struct  global_data* gd, int ifile)
-{
-    string routineName = "scanSmoothPivot";
-    bodyptr p;
-
-    INTEGER ipfalse;
-    ipfalse=0;
-    INTEGER icountNbRmin;
-    icountNbRmin=0;
-    INTEGER icountNbRminOverlap;
-    icountNbRminOverlap=0;
-
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nScan running...\n - Completed pivot node:\n");
-
-#pragma omp parallel default(none)                                          \
-    shared(cmd,gd,ifile, bodytable,roottable,                       \
-           ipfalse, icountNbRmin, icountNbRminOverlap)
-{
-    nodeptr q;
-    real qsize;
-    INTEGER ip;
-        //B scan tree to find pivot's neighbors
-        q = (nodeptr) roottable[ifile];
-        qsize = gd->rSizeTable[ifile];
-#pragma omp for nowait schedule(dynamic)
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
-            NbRmin(p) = 1;
-            NbRminOverlap(p) = 0;
-            KappaRmin(p) = Kappa(p);
-            if (Update(p) == FALSE) {
-                ipfalse++;
-                continue;
-            }
-            walktree_scan_smooth_pivot(cmd, gd, q, qsize, p);
-            icountNbRmin += NbRmin(p);
-            icountNbRminOverlap += NbRminOverlap(p);
-            //#ifdef DEBUG
-//            fprintf(0,"%ld \t%ld \t%ld \t\t%g\n",
-//                    Id(p), NbRmin(p), NbRminOverlap(p),
-//                    KappaRmin(p)/NbRmin(p));
-            //#endif
-            ip = p - bodytable[ifile] + 1;
-            if (ip%gd->stepState == 0)
-            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, ".");
-            if (ip%cmd->stepState == 0)
-            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                "%d ", ip);
-        } // end do body p
-verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\n", ip);
-        //E
-}
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: p falses found = %ld\n",
-                           routineName, ipfalse);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: count NbRmin found = %ld\n",
-                           routineName, icountNbRmin);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: count overlap found = %ld\n",
-                           routineName, icountNbRminOverlap);
-    //B final statistics
-    bodyptr pp;
-    INTEGER ifalsecount;
-    ifalsecount = 0;
-    INTEGER itruecount;
-    itruecount = 0;
-    DO_BODY(pp, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
-        if (Update(pp) == FALSE) {
-            ifalsecount++;
-        } else {
-            itruecount++;
-        }
-    }
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: p falses found = %ld\n",
-                           routineName, ifalsecount);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: p true found = %ld\n",
-                           routineName, itruecount);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "%s: total = %ld\n",
-                           routineName, itruecount+ifalsecount);
-    //E
-
-    return SUCCESS;
-}
-#endif // ! SMOOTHPIVOT

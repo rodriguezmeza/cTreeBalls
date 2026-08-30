@@ -5,10 +5,91 @@
 
 # user not need to make any changes in this file
 
+#
+#B -----------Setting OPT2 (Makefile_addons_setting)-------------
+#
+ifeq ($(SMOOTHPIVOTON),1)
+OPT2 += -DSMOOTHPIVOT
+# Compute and add pivot neighbours. Only active if SMOOTHPIVOT is ON
+#ADDPIVOTNEIGHBOURSON = 0
+endif
+
+ifeq ($(TWOPCFON),1)
+OPT2 += -DTWOPCF
+endif
+
+ifeq ($(TPCFON),1)
+OPT2 += -DTHREEPCFCONVERGENCE
+# old setting, compilation backward compatibiliby
+OPT2 += -DTPCF
+endif
+
+ifeq ($(TPCFSHEARON),1)
+OPT2 += -DTHREEPCFSHEAR
+endif
+
+ifeq ($(PRUNEON),1)
+OPT2 += -DPRUNING
+endif
+
+DEFINEFLAGS += -DTHETA=$(THETA)
+OPT2 += $(DEFINEFLAGS)
+
+ifeq ($(ALLOW_BALLS_WITH_SMOOTHING),1)
+OPT2 += -DALLOW_BALLS_WITH_SMOOTHING
+endif
+
+#B----------------------
+ifeq ($(ORIGINALCBON),1)
+DEFINEFLAGS += -DORIGINALCB
+else
+#ifeq ($(SMOOTHPIVOTON),1)
+## defined above, independently
+##DEFINEFLAGS += -DSMOOTHPIVOT
+#endif
+ifeq ($(BALLS4SCANLEVON),1)
+DEFINEFLAGS += -DBALLS4SCANLEV
+endif
+endif
+#E----------------------
+
+#
+ifeq ($(NORMALHISTSCALEON),1)
+DEFINEFLAGS += -DNORMALHISTSCALE
+endif
+#
+
+#B several definitions from/to cute-box Makefile
+ifeq ($(LOGBINON),1)
+DEFINEFLAGS += -D_LOGBIN_
+endif
+# neighbor-boxes-omp run faster with this option
+DEFINEFLAGS += -DLOGBINCBON
+ifeq ($(_DEBUGON_),1)
+DEFINEFLAGS += -D_DEBUG_
+endif
+#E
+
+#
+#E -----------Setting OPT2 (Makefile_addons_setting)-------------
+#
+
+
+ifeq ($(BALLSON),1)
+ifeq ($(OCTREESMOOTHINGON),1)
+ifeq ($(ALLOW_BALLS_WITH_SMOOTHING),0)
+$(error BALLSON=1 with OCTREESMOOTHINGON=1 requires ALLOW_BALLS_WITH_SMOOTHING=1)
+endif
+endif
+endif
+
 #B Set of settings
 #
 # The AddOns are switched on/off here:
+ifndef CTREEBALLS_ADDONS_SETTINGS_INCLUDED
+CTREEBALLS_ADDONS_SETTINGS_INCLUDED := 1
 include $(MACHINES_DIR)/addons/Makefile_addons_settings
+endif
 #
 
 #B Here insert AddOns´ Makefile modules
@@ -20,10 +101,77 @@ include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
 endif
 #
 
+# BALLTREEOMP / TreeCorr-style addons shared ball-tree builder
+# FCFC-style PCA ball tree for the pivot and dual-node searches
+ifneq ($(filter 1,$(BALLTREEOMPON) $(BALLTREEMPION) $(BALLTREE2BALLSOMPON) $(BALLTREE2BALLSMPION) $(BALLTREE2BALLSOMP3PCFON) $(BALLTREE2BALLSMPI3PCFON)),)
+include $(MACHINES_DIR)/addons/balltree_omp/Makefile_balltree_omp
+endif
+#
+
+# BALLTREE2BALLSOMP
+# TreeCorr-style dual-ball 2PCF and triple-node 3PCF scans
+ifeq ($(BALLTREE2BALLSOMPON),1)
+include $(MACHINES_DIR)/addons/balltree_2balls_omp/Makefile_balltree_2balls_omp
+endif
+#
+
+# BALLTREE2BALLSMPI
+# Deterministic distributed dual-node 2PCF and triple-node 3PCF scan.
+ifeq ($(BALLTREE2BALLSMPION),1)
+include $(MACHINES_DIR)/addons/balltree_2balls_mpi/Makefile_balltree_2balls_mpi
+endif
+#
+
+# OCTREE2BALLSOMP
+# TreeCorr-style dual/triple-node scan over the native octree
+ifeq ($(OCTREE2BALLSOMPON),1)
+include $(MACHINES_DIR)/addons/octree_2balls_omp/Makefile_octree_2balls_omp
+endif
+#
+
+# OCTREE2BALLSMPI
+# Deterministic distributed scan over the native octree.
+ifeq ($(OCTREE2BALLSMPION),1)
+include $(MACHINES_DIR)/addons/octree_2balls_mpi/Makefile_octree_2balls_mpi
+endif
+#
+
+# BALLTREE2BALLSOMP3PCF
+# TreeCorr-style triple-node task-frontier 3PCF scan
+ifeq ($(BALLTREE2BALLSOMP3PCFON),1)
+include $(MACHINES_DIR)/addons/balltree_2balls_omp_3pcf/Makefile_balltree_2balls_omp_3pcf
+endif
+#
+
+# BALLTREE2BALLSMPI3PCF
+# Deterministic distributed FCFC ball-tree LogMultipole 3PCF scan.
+ifeq ($(BALLTREE2BALLSMPI3PCFON),1)
+include $(MACHINES_DIR)/addons/balltree_2balls_mpi_3pcf/Makefile_balltree_2balls_mpi_3pcf
+endif
+#
+
+# LYAFORESTOMP
+# Weighted Lyman-alpha forest 2PCF and anisotropic 3PCF.
+ifeq ($(LYAFORESTOMPON),1)
+include $(MACHINES_DIR)/addons/lya_forest_omp/Makefile_lya_forest_omp
+endif
+#
+
+# OCTREESHEAROMP
+# Flat-sky weak-lensing shear 2PCF and natural 3PCF multipoles.
+ifeq ($(OCTREESHEAROMPON),1)
+include $(MACHINES_DIR)/addons/octree_shear_omp/Makefile_octree_shear_omp
+endif
+#
+
 # OCTREEGGGOMP
 # For computing 3pcf using octree-ggg-omp
 ifeq ($(OCTREEGGGOMPON),1)
 include $(MACHINES_DIR)/addons/octree_ggg_omp/Makefile_octree_ggg_omp
+endif
+
+ifeq ($(OCTREEGGGMPION),1)
+include $(MACHINES_DIR)/addons/octree_ggg_mpi/Makefile_octree_ggg_mpi
 endif
 #
 
@@ -108,7 +256,8 @@ endif
 ADDONS_ON = 1
 #
 ifeq ($(ADDONS_ON),1)
-ADDONSDIR = ../addons
+#ADDONSDIR = ../addons
+ADDONSDIR = $(MDIR)/addons
 HEADERFILES = $(wildcard $(ADDONSDIR)/*.h)
 ADDONS = addons
 vpath %.c $(ADDONS)
@@ -151,9 +300,9 @@ ifeq ($(NOLIMBERON),1)
 OPT2 += -DNOLIMBER
 endif
 
-# WKAvg switch...
-ifeq ($(WKAvgON),1)
-OPT2 += -DWKAvg
+# NOWKAvg switch...
+ifeq ($(NOWKAvgON),1)
+OPT2 += -DNOWKAvg
 endif
 #
 
@@ -214,6 +363,13 @@ endif
 #   modules or that are in
 #   development phase
 # Normally they will be switched OFF
+
+# OCTREE3PCF3DOMP
+# 3D scalar 3PCF multipoles with spherical harmonics and OpenMP.
+ifeq ($(OCTREE3PCF3DOMPON),1)
+include $(MACHINES_DIR)/addons/octree_3pcf_3d_omp/Makefile_octree_3pcf_3d_omp
+endif
+#
 
 # DIRECTMETHOD
 # For computing 3pcf using direct method
@@ -298,6 +454,14 @@ endif
 ifeq ($(BALLSON),1)
 include ./addons/balls_omp/Makefile_settings_balls_omp
 include $(MACHINES_DIR)/addons/balls_omp/Makefile_balls_omp
+endif
+#
+
+# BALLSOMP0357
+# For computing 3pcf using balls_0357 method
+ifeq ($(BALLS0357ON),1)
+include ./addons/balls_omp_0357/Makefile_settings_balls_omp_0357
+include $(MACHINES_DIR)/addons/balls_omp_0357/Makefile_balls_omp_0357
 endif
 #
 

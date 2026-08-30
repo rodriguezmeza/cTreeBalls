@@ -1,0 +1,515 @@
+# Set of declarations from C to python
+# Only define quantities you will use,
+# for input, output or intermediate manipulations
+# by the python wrapper. The rest is internal in cBalls
+
+#B
+from libc.stdio cimport FILE
+from libc.time cimport clock_t
+from libc.stddef cimport size_t
+#E
+
+
+cdef extern from "cballs.h":
+
+    cdef char[10] _VERSION_
+    ctypedef char FileArg[{{FILEARG_SIZE}}]
+    ctypedef char ErrorMsg[{{ERRORMSG_SIZE}}]
+    ctypedef {{INTEGER_CTYPE}} INTEGER
+
+    size_t sizeof_cmdline_data()
+    size_t sizeof_global_data()
+
+    cdef struct cballs_runtime_state:
+        pass
+
+    cballs_runtime_state *cballs_runtime_create()
+    int cballs_runtime_activate(cballs_runtime_state *)
+    const void *cballs_runtime_bodytable_at(const cballs_runtime_state *, int)
+    void cballs_runtime_destroy(cballs_runtime_state *)
+
+    cdef struct cmdline_data:
+        char * paramfile
+
+        #B Parameters related to the searching method
+        char * searchMethod
+        int mChebyshev
+        int nsmooth
+        #E
+        char * rsmooth                                 # use to smooth pivot
+        double theta
+        unsigned char usePeriodic
+        #E
+
+        #B Parameters about the I/O file(s)
+        # Input catalog parameters
+        char * infile
+        char * infilefmt
+        #E
+        char * iCatalogs
+        # Output parameters
+        char * rootDir
+        char * outfile
+        char * outfilefmt
+        # Parameters to set a region in the sky, for example for Takahasi data set
+        double thetaL
+        double thetaR
+        double phiL
+        double phiR
+        #E
+
+        #B Parameters to control histograms and their output files
+        unsigned char useLogHist
+        int logHistBinsPD
+        #
+        int sizeHistN
+        double rangeN
+        double rminHist
+        int sizeHistPhi
+        #
+        char * histNNFileName
+        char * histXi2pcfFileName
+        char * histZetaFileName
+        char * suffixOutFiles                  # deprecated... in favor or no .txt
+        #E
+
+        #B Set of parameters needed to construct a test model
+        int seed
+        char * testmodel
+        long nbody
+        double lengthBox
+        #E
+
+        #B Miscellaneous parameters
+        char * preScript
+        char * posScript
+        #long stepState
+        short verbose
+        short verbose_log
+        int numthreads
+        char * options
+        unsigned long long options_cache_flags
+        short options_cache_valid
+        #E
+    
+        ErrorMsg error_message
+
+{{CMDLINE_CLASSLIB_FIELDS}}
+
+
+    cdef struct global_data:
+        #B PXD functions
+        # need to be public, not use "#ifdef PXD" directive
+        double *rBins
+        double *vecPXD
+        double **matPXD
+        double *histZetaMFlatten
+        double ***histZetaM_EE
+        double ***histZetaM_EE_Im
+        #B cross
+        double ***histZetaM_EE2
+        double ***histZetaM_EE3
+        #E
+        #E PXD functions
+
+        double cpuinit
+        long cpurealinit                                # get time of the day
+
+        char * headline0
+        char * headline1 
+        char * headline2 
+        char * headline3 
+
+        FILE *outlog
+
+        char mode[2]
+
+        #B Tree
+        long ncell
+        int tdepth
+        long actmax 
+        long sameposcount 
+        # BALLS
+        long ncccalc 
+        FILE *outnodelev
+        FILE *outbodylev
+        long nsmoothcount 
+        #
+        long nbccalc
+        long nbbcalc
+        #B cross
+        long nbccalc2
+        long nbbcalc2
+        long nbccalc3
+        long nbbcalc3
+        #E
+        double rSize                              # Maximum r of the box,needed?
+
+#B
+        double rSizeTable[{{MAXITEMS}}]
+        long int ncellTable[{{MAXITEMS}}]
+        long ncellt[{{MAXITEMS}}]
+        long nbodyTable[{{MAXITEMS}}]
+        int tdepthTable[{{MAXITEMS}}]
+        long nnodescanlevTable[{{MAXITEMS}}]
+        long nnodescanlev_rootTable[{{MAXITEMS}}]
+        long nnodescanlevTableB4[{{MAXITEMS}}]
+#E
+
+        double cputree
+
+        # Tree:
+        double Rcut                                      # Cutoff radius
+        double RcutSq
+        double cpusearch
+        #
+
+        int infilefmt_int
+
+        double Box[{{NDIM}}]
+
+        # -----------------------------------
+        #B Histogram arrays PXD versions
+        double * histNNPXD
+        #E Histogram arrays PXD versions
+
+        #B Histogram arrays
+        double * histNN
+        double * histCF
+        double * histNNSub
+        #B cross
+        double * histNN2
+        double * histCF2
+        double * histNN3
+        double * histCF3
+        #E
+        # 2pcf
+
+#B
+        double * histNNSubXi2pcf
+        {{GLOBAL_SMOOTHPIVOT_HIST_FIELDS}}
+        double *histXi2pcf
+#E
+
+        #B cross
+        double *histXi2pcf12
+        double *histXi2pcf13
+        #E
+        #B TPCF
+        double ***histZetaMcos
+        double ***histZetaMsin
+        double ***histZetaMsincos
+        # Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        double ***histZetaMcossin
+        #B cross
+        double ***histZetaMcos2
+        double ***histZetaMsin2
+        double ***histZetaMsincos2
+        # Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        double ***histZetaMcossin2
+        double ***histZetaMcos3
+        double ***histZetaMsin3
+        double ***histZetaMsincos3
+        # Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
+        double ***histZetaMcossin3
+        #E
+        #E
+        double ***histZetaM
+        #
+        double *histNNN
+        double ***histNNNSub
+        double *histXi2pcf_omp
+        double ***histXi3pcf
+        #
+        double **histXicos
+        double **histXisin
+
+        double *histShearXiPlusRe
+        double *histShearXiPlusIm
+        double *histShearXiMinusRe
+        double *histShearXiMinusIm
+        double *histShearXiWeight
+        double *histShearGammaNumeratorRe
+        double *histShearGammaNumeratorIm
+        double *histShearGammaMultipoleRe
+        double *histShearGammaMultipoleIm
+        double *histShearDenominatorRe
+        double *histShearDenominatorIm
+        double *histShearGammaRe
+        double *histShearGammaIm
+        int shearMultipoleMax
+        int shearAngularBins
+
+        #B To save total 3pcf
+        #B look for where these two arrays are allocated...
+        double **histZetaGcos
+        double **histZetaGsin
+        #E
+        double ***histZetaGmRe
+        double ***histZetaGmIm
+        #E
+
+#E Histograms arrays
+# -----------------------------------
+
+        int searchMethod_int
+
+        double deltaR 
+        double deltaRmin
+        double deltaRmax
+        double *deltaRV
+        double *ddeltaRV
+
+        double deltaPhi
+
+        #B File pointers:
+        #B
+        char logfilePath[{{MAXLENGTHOFFILES}}]
+        char tmpDir[{{MAXLENGTHOFFILES}}]
+        char fpfnameOutputFileName[{{MAXLENGTHOFFILES}}]
+        
+        char fpfnamehistNNFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnamehistCFFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnamehistrBinsFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnamehistXi2pcfFileName[{{MAXLENGTHOFFILES}}]
+        #B TPCF
+        char fpfnamehistZetaGFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnamehistZetaGmFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnamehistZetaMFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnamemhistZetaMFileName[{{MAXLENGTHOFFILES}}]
+        char fpfnameCPUFileName[{{MAXLENGTHOFFILES}}]
+        #E
+
+        #E
+
+        #E
+        char * model_comment
+        char * input_comment
+        char * output_comment
+
+        #B save-restore
+        int stopflag
+        long ip
+        #E
+        double cputotalinout
+        double cputotal
+
+        long bytes_tot 
+        long bytes_tot_cells 
+
+        #B To see the bodies belonging to a cell:
+        long nbodySel
+        #E
+        unsigned char bh86
+        unsigned char sw94
+
+        double i_deltaR
+
+        # 2pcf
+        #B
+
+        double * histNNSubN2pcf
+        {{GLOBAL_SMOOTHPIVOT_N2PCF_FIELDS}}
+        double * histN2pcf
+        char fpfnamehistN2pcfFileName[{{MAXLENGTHOFFILES}}]
+        #E
+
+        #
+
+        char fnameData_kd[{{MAXLENGTHOFINDIVIDUALFILES}}]
+        char fnameOut_kd[{{MAXLENGTHOFINDIVIDUALFILES}}]
+        int input_format_kd
+        int use_tree_kd
+        int max_tree_order_kd
+        int max_tree_nparts_kd
+        int use_pm_kd
+        long n_objects_kd
+        float l_box_kd
+        float l_box_half_kd
+
+        int ninfiles
+
+#B
+        char infilenames[{{MAXITEMS}}][{{MAXLENGTHOFFILES}}]
+        char infilefmtname[{{MAXITEMS}}][{{MAXLENGTHOFFMTFILES}}]
+        int iCatalogs[{{MAXITEMS}}]
+        int nsmooth[{{MAXITEMS}}]
+#E
+
+
+        #B to control memory allocation/deallocation
+        #B
+        unsigned char startrun_cputime
+        #E
+        unsigned char cmd_allocated
+        unsigned char random_allocated
+        unsigned char gd_allocated
+        unsigned char gd_allocated_2
+        unsigned char histograms_allocated
+        unsigned char tree_allocated
+        unsigned char bodytable_allocated
+        #E
+
+        long nnode
+        long rnnode
+
+        #B
+        double Rcell[{{MAXLEVEL}}]                  # used only in treeload's
+        {{GLOBAL_BALLS4SCANLEV_FIELDS}}             #  scanLevel routine
+        #E
+
+        double rsmooth[{{MAXITEMS}}]
+
+        unsigned char rsmoothFlag
+
+        int irsmooth
+
+        unsigned char inputHeaderFlag                # control reading header-info
+
+        unsigned char computeTPCF                    # switch ON/OFF I/O for TPCF
+        #B to control memory allocation/deallocation
+        unsigned char flagPrint
+        unsigned char rootDirFlag
+        unsigned char searchMethodFlag
+        unsigned char infilefmtFlag
+        unsigned char infileFlag
+        unsigned char outfilefmtFlag
+        unsigned char outfileFlag
+        unsigned char rsmoothFlagFree
+        
+        unsigned char outlogFlagFree
+        
+        unsigned char rootDirFlagFree
+        unsigned char iCatalogsFlag
+        unsigned char histNNFileNameFlag
+        unsigned char histXi2pcfFileNameFlag
+        unsigned char histZetaFileNameFlag
+        unsigned char suffixOutFilesFlag
+        unsigned char testmodelFlag
+        unsigned char preScriptFlag
+        unsigned char posScriptFlag
+        unsigned char optionsFlag
+        #B
+        unsigned char statefileFlag
+        unsigned char restorefileFlag
+        #E
+        #E
+
+        #E
+
+        #B
+        {{GLOBAL_PIVOTCOUNT_FIELDS}}
+        long pivotNumber
+        #E
+
+        long stepState
+
+        short coordTag
+
+#
+#E ================================================
+
+{{GLOBAL_CLASSLIB_FIELDS}}
+
+
+
+    cdef struct file_content:
+        char * filename
+        int size
+        FileArg * name
+        FileArg * value
+        short * read
+
+    cdef int FAILURE
+    cdef int FALSE
+    cdef int TRUE
+
+#B
+    int input_default_params(cmdline_data *)
+#E
+
+    int input_read_from_file(void*, void*, void*, char*)
+    int input_read_from_file_guarded(void*, void*, void*, char*)
+    int StartRun_Common(void*, void*) 
+    int cballs_start_run_common_guarded(void*, void*)
+    int PrintParameterFile(void*, void*, char*)
+    int cballs_print_parameter_file_guarded(void*, void*, char*)
+
+    int StartOutput(void*)
+    int SetNumberThreads(void*)
+    int cballs_set_number_threads_guarded(void*)
+
+    int MainLoop(void*, void*) 
+    int cballs_main_loop_guarded(void*, void*)
+    int EndRun(void*, void*) 
+    int cballs_end_run_guarded(void*, void*)
+    int EndRun_FreeMemory(void*, void*) 
+    int cballs_end_run_free_memory_guarded(void*, void*)
+    int cballs_compiled_ndim()
+    int cballs_max_memory_catalogs()
+    int cballs_search_method_id(const char*)
+    int cballs_load_memory_catalog(
+        void*, void*, int, const double*, size_t, int,
+        const double*, const double*, const unsigned char*,
+        const double*, const double*)
+    int freeTree(void*, void*) 
+
+    void cballs_test_fail_allocation_after(long)
+    void cballs_test_reset_allocation_failure()
+
+#B flags
+    int get_tree_allocated(void*, short*)
+    int get_allocated_2(void*, short*)
+    int get_bodytable_allocated(void*, short*)
+    int get_histograms_allocated(void*, short*)
+    int get_gd_allocated(void*, short*)
+    int get_cmd_allocated(void*, short*)
+#E
+
+#B parameters
+    int get_cmdline(void*, void*)
+    int get_nthreads(void*, int*)
+
+    #B from codex
+    int get_scanLevel(void*, int*)
+    int get_scanLevelRoot(void*, int*)
+    int get_scanLevelMin(void*, int*)
+    #
+
+    int get_nmultipoles(void*, int*)
+    int get_theta(void*, double*)
+    int get_rsmooth(void*, double*)
+    int get_cputime(void*, double*)
+    int getcputime(void*)
+    int get_sizeHistN(void*, int*)
+    int get_version(void*, char*)
+    int get_rootDir(void*, char*)
+#E parameters
+
+#B global parameters
+    int get_nbody(void*, void*, INTEGER*)
+    int get_computeTPCF(void*, void*, short*)
+#E global parameters
+
+#B free memory
+    int EndRun_FreeMemory_cmd(void*, void*)
+    int EndRun_FreeMemory_gd(void*, void*)
+    int EndRun_FreeMemory_gd_2(void*, void*)
+    int EndRun_FreeMemory_histograms(void*, void*)
+    int EndRun_FreeMemory_tree(void*, void*)
+    int EndRun_FreeMemory_bodytable(void*, void*)
+#E
+
+#B histograms
+    int get_rBins(void*, void*)
+    int get_HistNN(void*, void*)
+    int get_HistCF(void*, void*)
+    int get_HistXi2pcf(void*, void*)
+#B cross
+    int get_HistXi2pcf12(void*, void*)
+    int get_HistXi2pcf13(void*, void*)
+#E
+    int get_HistZetaMsincos(void*, void*, int, int, char*)
+    int get_HistZetaM_EE(void*, void*, int, char*)
+    int get_HistZetaM_EE_Im(void*, void*, int, char*)
+#E histograms

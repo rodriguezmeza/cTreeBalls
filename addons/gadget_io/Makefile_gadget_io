@@ -7,8 +7,10 @@
 #
 ifeq ($(GADGETIOON),1)
 OPT2 += -DGADGETIO
-GADGETIO = ../addons/gadget_io/
-vpath %.c ./addons/gadget_io/
+#GADGETIO = ../addons/gadget_io/
+GADGETIO = $(MDIR)/addons/gadget_io/
+#vpath %.c ./addons/gadget_io/
+vpath %.c $(MDIR)/addons/gadget_io/
 #CCFLAG += -DGADGETIO
 #LDFLAGS += -DGADGETIO
 INCLUDES += -I$(GADGETIO)

@@ -10,10 +10,12 @@ ifeq ($(CFITSIOLIBON),1)
 FITSIOLIBS =        -lpthread -lz
 #
 OPT2 += -DCFITSIOLIB
-CFITSIOLIB = ../addons/cfitsiolib/
-vpath %.c ./addons/cfitsiolib/cfitsio
-INCLUDES += -I$(CFITSIOLIB)/cfitsio
-HEADERFILES += $(wildcard $(CFITSIOLIB)/cfitsio/*.h)
+#CFITSIOLIB = ../addons/cfitsiolib/
+CFITSIOLIB = $(MDIR)/addons/cfitsiolib
+CFITSIO_SOURCE_DIR ?= $(CFITSIOLIB)/cfitsio_ver_4.6.3
+vpath %.c $(CFITSIO_SOURCE_DIR)
+INCLUDES += -I$(CFITSIO_SOURCE_DIR)
+HEADERFILES += $(wildcard $(CFITSIO_SOURCE_DIR)/*.h)
 EXTERNAL += buffers.o cfileio.o checksum.o drvrfile.o drvrmem.o \
         drvrnet.o drvrsmem.o editcol.o edithdu.o eval_l.o \
         eval_y.o eval_f.o fitscore.o getcol.o getcolb.o getcold.o getcole.o \

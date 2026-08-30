@@ -7,8 +7,10 @@
 #
 ifeq ($(IOLIBON),1)
 OPT2 += -DIOLIB
-IOLIB = ../addons/iolib/
-vpath %.c ./addons/iolib/
+#IOLIB = ../addons/iolib/
+IOLIB = $(MDIR)/addons/iolib/
+#vpath %.c ./addons/iolib/
+vpath %.c $(MDIR)/addons/iolib/
 INCLUDES += -I$(IOLIB)
 HEADERFILES += $(wildcard $(IOLIB)/*.h)
 EXTERNAL +=

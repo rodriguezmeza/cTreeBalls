@@ -9,10 +9,11 @@
     case 59:
         verb_print(cmd->verbose,
                    "\n\tevalHist: with kdtree-omp method\n\n");
-        searchcalc_kdtree_omp(cmd, gd,
-                              bodytable, gd->nbodyTable,
-                              1, gd->nbodyTable,
-                              gd->iCatalogs[0], gd->iCatalogs[1]);
+if (searchcalc_kdtree_omp(cmd, gd,
+                          bodytable, gd->nbodyTable,
+                          1, gd->nbodyTable,
+                          gd->iCatalogs[0], gd->iCatalogs[1]) == FAILURE)
+    return FAILURE;
         break;
 
 #endif	// ! _cballs_kdtree_omp_h

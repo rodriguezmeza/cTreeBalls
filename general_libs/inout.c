@@ -7,6 +7,7 @@
 	Use:
 	Major revisions:
 ==============================================================================*/
+//        1          2          3          4        ^ 5          6          7
 
 // STATIC problem: gcc version 11
 #include "globaldefs.h"
@@ -15,6 +16,8 @@
 #include "vectmath.h"
 #include "inout.h"
 #include <string.h>
+#include <errno.h>
+
 
 // ------------[	inout normal definitions	 	]------------
 
@@ -45,7 +48,7 @@ void in_bool(stream str, bool *iptr)
 {
     char tmp[10];
 
-    if (fscanf(str, "%s", &tmp) != 1) {
+    if (fscanf(str, "%9s", tmp) != 1) {
         error("in_bool: input conversion error\n");
     }
 //    *iptr = tmp;
@@ -65,8 +68,7 @@ void in_bool(stream str, bool *iptr)
 }
 //E
 
-#ifdef SINGLEP
-void in_real(stream str, float *rptr)
+void in_real(stream str, real *rptr)
 {
     double tmp;
 
@@ -74,24 +76,11 @@ void in_real(stream str, float *rptr)
         error("in_real: input conversion error\n");
     *rptr = tmp;
 }
+
 void in_real_double(stream str, double *rptr)
 {
-    double tmp;
-
-    if (fscanf(str, "%lf", &tmp) != 1)
-        error("in_real: input conversion error\n");
-    *rptr = tmp;
+    in_real(str, rptr);
 }
-#else
-void in_real(stream str, REAL *rptr)
-{
-    double tmp;
-
-    if (fscanf(str, "%lf", &tmp) != 1)
-        error("in_real: input conversion error\n");
-    *rptr = tmp;
-}
-#endif
 
 #if defined(THREEDIM)
 void in_vector(stream str, vector vec)
@@ -131,7 +120,6 @@ void in_vector(stream str, vector vec)
 
 #define IFMT  " %d"
 #define IFMTL  " %ld"
-//#define RFMT  " %14.7E"
 #define RFMT  " %18.10E"
 #define RFMTLG  " %lg"
 
@@ -176,7 +164,6 @@ void out_vector(stream str, vector vec)
 }
 
 
-
 // ------------[	inout mar definitions	 		]------------
 
 void out_bool_mar(stream str, bool bval)
@@ -207,7 +194,6 @@ void out_vector_mar(stream str, vector vec)
 {
 #if defined(THREEDIM)
     if (fprintf(str, RFMT RFMT RFMT , vec[0], vec[1], vec[2]) < 0)
-//    if (fprintf(str, RFMTLG RFMTLG RFMTLG , vec[0], vec[1], vec[2]) < 0)
         error("out_vector_mar: fprintf failed\n");
 #endif
 #if defined(TWODIM)
@@ -241,30 +227,26 @@ void in_short_bin(stream str, short *iptr)
         error("in_short_bin: fread failed\n");
 }
 
-#ifdef SINGLEP
-void in_real_bin(stream str, float *rptr)
-{
-    if (fread((void *) rptr, sizeof(float), 1, str) != 1)
-        error("in_real_bin: fread failed\n");
-}
-
-void in_real_bin_double(stream str, double *rptr)
-{
-    if (fread((void *) rptr, sizeof(double), 1, str) != 1)
-        error("in_real_bin_double: fread failed\n");
-}
-#else
 void in_real_bin(stream str, real *rptr)
 {
     if (fread((void *) rptr, sizeof(real), 1, str) != 1)
         error("in_real_bin: fread failed\n");
 }
-#endif
+
+void in_real_bin_double(stream str, double *rptr)
+{
+    in_real_bin(str, rptr);
+}
 
 void in_vector_bin(stream str, vector vec)
 {
-    if (fread((void *) vec, sizeof(real), NDIM, str) != NDIM)
+    real disk_vector[NDIM];
+    int k;
+
+    if (fread((void *) disk_vector, sizeof(real), NDIM, str) != NDIM)
         error("in_vector_bin: fread failed\n");
+    DO_COORD(k)
+        vec[k] = (cballs_storage_real)disk_vector[k];
 }
 
 void out_int_bin(stream str, int ival)
@@ -293,7 +275,12 @@ void out_real_bin(stream str, real rval)
 
 void out_vector_bin(stream str, vector vec)
 {
-    if (fwrite((void *) vec, sizeof(real), NDIM, str) != NDIM)
+    real disk_vector[NDIM];
+    int k;
+
+    DO_COORD(k)
+        disk_vector[k] = (real)vec[k];
+    if (fwrite((void *) disk_vector, sizeof(real), NDIM, str) != NDIM)
         error("out_vector_bin: fwrite failed\n");
 }
 
@@ -340,8 +327,6 @@ void in_vector_ndim(stream str, double *vec, int ndim)
 	real tmp;
 
     for (i=0; i<ndim; i++) {
-//        if (fscanf(str, "%lf", &tmp) != 1)
-//        if (fscanf(str, "%le", &tmp) != 1)
         if (fscanf(str, "%lg", &tmp) != 1)
             error("in_vector_ndim: fscanf failed %d\n",i);
 		vec[i] = tmp;
@@ -377,6 +362,251 @@ size_t gdgt_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream)
 }
 
 
+//B added by cBalls
+int out_vector_checked(stream str, vector vec, string routineName,
+                       string filename, char *errmsg, size_t errmsg_size)
+{
+    int rc;
+
+#if defined(THREEDIM)
+    rc = fprintf(str, RFMT RFMT RFMT "\n", vec[0], vec[1], vec[2]);
+#elif defined(TWODIM)
+    rc = fprintf(str, RFMT RFMT "\n", vec[0], vec[1]);
+#elif defined(ONEDIM)
+    rc = fprintf(str, RFMT "\n", vec[0]);
+#else
+    rc = -1;
+    errno = EINVAL;
+#endif
+
+    if (rc < 0) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing vector to '%s': %s",
+                 routineName, filename,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int out_real_mar_checked(stream str, real rval, string routineName,
+                  string filename, char *errmsg, size_t errmsg_size)
+{
+    int rc;
+
+    rc = fprintf(str, RFMT , rval);
+
+    if (rc < 0) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing real to '%s': %s",
+                 routineName, filename,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int out_real_checked(stream str, real rval, string routineName,
+                     string filename, char *errmsg, size_t errmsg_size)
+{
+    int rc;
+
+    rc = fprintf(str, RFMT "\n", rval);
+
+    if (rc < 0) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing real to '%s': %s",
+                 routineName, filename,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int out_short_mar_checked(stream str, short ival, string routineName,
+                  string filename, char *errmsg, size_t errmsg_size)
+{
+    int rc;
+
+    rc = fprintf(str, " %1d", ival);
+
+    if (rc < 0) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing short to '%s': %s",
+                 routineName, filename,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int out_bool_mar_checked(stream str, bool bval, string routineName,
+                         string filename, char *errmsg, size_t errmsg_size)
+{
+    int rc;
+
+    rc = fprintf(str," %s", bval ? "T" : "F" );
+
+    if (rc < 0) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing bool to '%s': %s",
+                 routineName, filename,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+
+    return SUCCESS;
+
+}
+
+int out_int_bin_checked(stream str, int ival, string routineName,
+                         string filename, char *errmsg, size_t errmsg_size)
+{
+    size_t nwritten = fwrite((void *) &ival, sizeof(int), 1, str);
+
+    if (nwritten != 1) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing int to '%s': wrote %zu of %d values: %s",
+                 routineName, filename, nwritten, 1,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+    
+    return SUCCESS;
+}
+
+int out_short_bin_checked(stream str, short ival, string routineName,
+                        string filename, char *errmsg, size_t errmsg_size)
+{
+    size_t nwritten = fwrite((void *) &ival, sizeof(short), 1, str);
+
+    if (nwritten != 1) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing short to '%s': wrote %zu of %d values: %s",
+                 routineName, filename, nwritten, 1,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+    
+    return SUCCESS;
+}
+
+int out_bool_bin_checked(stream str, bool ival, string routineName,
+                        string filename, char *errmsg, size_t errmsg_size)
+{
+    size_t nwritten = fwrite((void *) &ival, sizeof(bool), 1, str);
+
+    if (nwritten != 1) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing bool to '%s': wrote %zu of %d values: %s",
+                 routineName, filename, nwritten, 1,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+    
+    return SUCCESS;
+}
+
+
+int out_int_bin_long_checked(stream str, INTEGER ival, string routineName,
+                      string filename, char *errmsg, size_t errmsg_size)
+{
+    size_t nwritten = fwrite((void *) &ival, sizeof(INTEGER), 1, str);
+
+    if (nwritten != 1) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing INTEGER to '%s': wrote %zu of %d values: %s",
+                 routineName, filename, nwritten, 1,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+    
+    return SUCCESS;
+}
+
+int out_real_bin_checked(stream str, real rval, string routineName,
+                          string filename, char *errmsg, size_t errmsg_size)
+{
+    size_t nwritten = fwrite((void *) &rval, sizeof(real), 1, str);
+
+    if (nwritten != 1) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing real to '%s': wrote %zu of %d values: %s",
+                 routineName, filename, nwritten, 1,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+    
+    return SUCCESS;
+}
+
+int out_vector_mar_checked(stream str, vector vec, string routineName,
+                           string filename, char *errmsg, size_t errmsg_size)
+{
+    int rc;
+
+#if defined(THREEDIM)
+    rc = fprintf(str, RFMT RFMT RFMT, vec[0], vec[1], vec[2]);
+#elif defined(TWODIM)
+    rc = fprintf(str, RFMT RFMT, vec[0], vec[1]);
+#elif defined(ONEDIM)
+    rc = fprintf(str, RFMT, vec[0]);
+#else
+    rc = -1;
+    errno = EINVAL;
+#endif
+
+    if (rc < 0) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing vector to '%s': %s",
+                 routineName, filename,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+int out_vector_bin_checked(stream str, vector vec, string routineName,
+                            string filename, char *errmsg, size_t errmsg_size)
+{
+    real disk_vector[NDIM];
+    int k;
+    size_t nwritten;
+
+    DO_COORD(k)
+        disk_vector[k] = (real)vec[k];
+    nwritten = fwrite((void *) disk_vector, sizeof(real), NDIM, str);
+
+    if (nwritten != NDIM) {
+        int saved_errno = errno;
+        snprintf(errmsg, errmsg_size,
+                 "%s: error writing vector to '%s': wrote %zu of %d values: %s",
+                 routineName, filename, nwritten, NDIM,
+                 strerror(saved_errno ? saved_errno : EIO));
+        return FAILURE;
+    }
+    
+    return SUCCESS;
+}
+//E added by cBalls
+
+
 // IN/OUT ROUTINES TO HANDLE STRINGS ...
 
 void ReadInString(stream instr, char *path)
@@ -409,7 +639,8 @@ void ReadInLineString(stream instr, char *text)
 
 
 // InputData's (como el que está en nplot2d)
-//B PARA IMPLEMENTAR LECTURA GENERAL DE ARCHIVOS DE DATOS CON FORMATO DE COLUMNAS
+//B PARA IMPLEMENTAR LECTURA GENERAL DE ARCHIVOS DE DATOS
+//  CON FORMATO DE COLUMNAS
 
 #define IN 1
 #define OUT 0
@@ -426,9 +657,6 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
     
     instr = stropen(filename, "r");
     
-//    fprintf(stdout,
-//            "\nReading columns %d and %d from file %s... ",col1,col2,filename);
-    
     state = OUT;
     nl = nw = nc = 0;
     while ((c = getc(instr)) != EOF) {
@@ -442,8 +670,6 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
             ++nw;
         }
     }
-//    printf("\n\nGeneral statistics : ");
-//    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
     
     rewind(instr);
     
@@ -492,8 +718,6 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
                 salto=NO;
             }
     }
-//    printf("\nValid numbers statistics : ");
-//    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
     
     rewind(instr);
     
@@ -518,8 +742,6 @@ void inout_InputData(string filename, int col1, int col2, int *npts)
     }
     
     fclose(instr);
-    
-//    fprintf(stdout,"\n... done.\n");
 }
 
 void InputData_check_file(string filename)
@@ -527,7 +749,6 @@ void InputData_check_file(string filename)
     stream instr;
     int ncol, nrow;
     int c, nl, nw, nc, state, salto, nwxc, i;
-//    ip;
     short int *lineQ;
     
     instr = stropen(filename, "r");
@@ -600,19 +821,28 @@ void InputData_check_file(string filename)
     fclose(instr);
 }
 
-void InputData_2c(string filename, int col1, int col2, int *npts)
+int InputData_2c(struct cmdline_data* cmd, string filename,
+                 int col1, int col2, int *npts)
 {
-    stream instr;
     int ncol, nrow;
-    real *row;
     int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-    short int *lineQ;
     
+    //B
+    int rc = FAILURE;
+    stream instr = NULL;
+    real *row = NULL;
+    short int *lineQ = NULL;
+
+#define INOUT_FAIL(...) \
+    do { \
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        rc = FAILURE; \
+        goto fail; \
+    } while (0)
+
     instr = stropen(filename, "r");
-    
-//    fprintf(stdout,
-//    "\nReading columns %d and %d from file %s... ",col1,col2,filename);
-    
+    //E
+
     state = OUT;
     nl = nw = nc = 0;
     while ((c = getc(instr)) != EOF) {
@@ -626,8 +856,6 @@ void InputData_2c(string filename, int col1, int col2, int *npts)
             ++nw;
         }
     }
-//    printf("\n\nGeneral statistics : ");
-//    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
     
     rewind(instr);
     
@@ -655,8 +883,8 @@ void InputData_2c(string filename, int col1, int col2, int *npts)
                 salto=SI;
                 if (ncol != nwxc && nrow>1) {
                     printf("\nvalores diferentes : ");
-                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                          nrow, ncol, nwxc);
+                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                               nrow, ncol, nwxc);
                 }
                 ncol = nwxc;
                 lineQ[i]=TRUE;
@@ -676,14 +904,12 @@ void InputData_2c(string filename, int col1, int col2, int *npts)
                 salto=NO;
             }
     }
-//    printf("\nValid numbers statistics : ");
-//    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
     
     rewind(instr);
     
     npoint=nrow;
-    row = (realptr) allocate(ncol*sizeof(real));
-    
+    row = (realptr) allocate(ncol * sizeof(real));
+
     *npts = npoint;
     inout_xval = (real *) allocate(npoint * sizeof(real));
     inout_yval = (real *) allocate(npoint * sizeof(real));
@@ -700,27 +926,48 @@ void InputData_2c(string filename, int col1, int col2, int *npts)
                 if (c=='\n') break;
         }
     }
+
+    fprintf(stdout, "\n... done.\n");
+    rc = SUCCESS;
+    goto fail;
     
-    fclose(instr);
-    
-//    fprintf(stdout,"\n... done.\n");
+fail:
+    if (instr != NULL)
+        fclose(instr);
+
+    if (row != NULL)
+        free(row);
+
+    if (lineQ != NULL)
+        free(lineQ);
+
+#undef INOUT_FAIL
+    return rc;
 }
 
-void InputData_3c(string filename,
+int InputData_3c(struct cmdline_data* cmd, string filename,
                   int col1, int col2, int col3,
     int *npts)
 {
-    stream instr;
     int ncol, nrow;
-    real *row;
     int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-    short int *lineQ;
+
+    //B
+    int rc = FAILURE;
+    stream instr = NULL;
+    real *row = NULL;
+    short int *lineQ = NULL;
+
+#define INOUT_FAIL(...) \
+    do { \
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        rc = FAILURE; \
+        goto fail; \
+    } while (0)
 
     instr = stropen(filename, "r");
-
-//    fprintf(stdout,
-//        "\nReading columns %d, %d, and %d from file %s... ",
-//            col1,col2,col3,filename);
+    //E
+    
     verb_print(1, "\nReading columns %d, %d, and %d from file %s... ",
                 col1,col2,col3,filename);
 
@@ -737,8 +984,6 @@ void InputData_3c(string filename,
             ++nw;
         }
     }
-//    printf("\n\nGeneral statistics : ");
-//    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
     verb_print(1, "\nGeneral statistics: %s %d %d %d",
                "number of lines, words, and characters:", nl, nw, nc);
 
@@ -768,8 +1013,8 @@ void InputData_3c(string filename,
                 salto=SI;
                 if (ncol != nwxc && nrow>1) {
                     printf("\nvalores diferentes : ");
-                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                        nrow, ncol, nwxc);
+                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                               nrow, ncol, nwxc);
                 }
                 ncol = nwxc;
                 lineQ[i]=TRUE;
@@ -789,18 +1034,16 @@ void InputData_3c(string filename,
                 salto=NO;
             }
     }
-//    printf("\nValid numbers statistics : ");
-//    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
     verb_print(1, "\nValid numbers statistics:  %s %d %d %d",
                "nrow, ncol, nvalues:", nl, nw, nc);
 
     if (ncol<3)
-        error("\n\nInputData_4c: Error : ncol must be >=4\n");
+        INOUT_FAIL("\n\nInputData_3c: Error: ncol must be >= 3\n");
 
     rewind(instr);
 
     npoint=nrow;
-    row = (realptr) allocate(ncol*sizeof(real));
+    row = (realptr) allocate(ncol * sizeof(real));
 
     *npts = npoint;
     inout_xval = (real *) allocate(npoint * sizeof(real));
@@ -821,21 +1064,46 @@ void InputData_3c(string filename,
         }
     }
 
-    fclose(instr);
+    fprintf(stdout, "\n... done.\n");
+    rc = SUCCESS;
+    goto fail;
+    
+fail:
+    if (instr != NULL)
+        fclose(instr);
 
-    fprintf(stdout,"\t\n... done.\n");
+    if (row != NULL)
+        free(row);
+
+    if (lineQ != NULL)
+        free(lineQ);
+
+#undef INOUT_FAIL
+    return rc;
 }
 
-void InputData_4c(string filename, int col1, int col2, int col3, int col4,
+int InputData_4c(struct cmdline_data* cmd,
+                 string filename, int col1, int col2, int col3, int col4,
     int *npts)
 {
-    stream instr;
     int ncol, nrow;
-    real *row;
     int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-    short int *lineQ;
+
+    //B
+    int rc = FAILURE;
+    stream instr = NULL;
+    real *row = NULL;
+    short int *lineQ = NULL;
+
+#define INOUT_FAIL(...) \
+    do { \
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        rc = FAILURE; \
+        goto fail; \
+    } while (0)
 
     instr = stropen(filename, "r");
+    //E
 
     fprintf(stdout,
         "\nReading columns %d, %d, %d, and %d from file %s... ",
@@ -883,8 +1151,8 @@ void InputData_4c(string filename, int col1, int col2, int col3, int col4,
                 salto=SI;
                 if (ncol != nwxc && nrow>1) {
                     printf("\nvalores diferentes : ");
-                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                        nrow, ncol, nwxc);
+                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                               nrow, ncol, nwxc);
                 }
                 ncol = nwxc;
                 lineQ[i]=TRUE;
@@ -908,18 +1176,18 @@ void InputData_4c(string filename, int col1, int col2, int col3, int col4,
     printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
 
     if (ncol<4)
-        error("\n\nInputData_4c: Error : ncol must be >=4\n");
+        INOUT_FAIL("\n\nInputData_4c: Error: ncol must be >= 4\n");
 
     rewind(instr);
 
     npoint=nrow;
-    row = (realptr) allocate(ncol*sizeof(real));
+    row = (realptr) allocate(ncol * sizeof(real));
 
     *npts = npoint;
     inout_xval = (real *) allocate(npoint * sizeof(real));
     inout_yval = (real *) allocate(npoint * sizeof(real));
     inout_zval = (real *) allocate(npoint * sizeof(real));
-    inout_wval = (real *) allocate(npoint * sizeof(real));
+    inout_uval = (real *) allocate(npoint * sizeof(real));
 
     ip = 0;
     for (i=0; i<nl; i++) {
@@ -928,7 +1196,7 @@ void InputData_4c(string filename, int col1, int col2, int col3, int col4,
             inout_xval[ip] = row[col1-1];
             inout_yval[ip] = row[col2-1];
             inout_zval[ip] = row[col3-1];
-            inout_wval[ip] = row[col4-1];
+            inout_uval[ip] = row[col4-1];
             ++ip;
         } else {
             while ((c = getc(instr)) != EOF)        // Reading dummy line ...
@@ -936,24 +1204,49 @@ void InputData_4c(string filename, int col1, int col2, int col3, int col4,
         }
     }
 
-    fclose(instr);
+    fprintf(stdout, "\n... done.\n");
+    rc = SUCCESS;
+    goto fail;
 
-    fprintf(stdout,"\n... done.\n");
+fail:
+    if (instr != NULL)
+        fclose(instr);
+
+    if (row != NULL)
+        free(row);
+
+    if (lineQ != NULL)
+        free(lineQ);
+
+#undef INOUT_FAIL
+    return rc;
 }
 
 
-void InputData_5c(string filename, int col1, int col2, int col3,
+int InputData_5c(struct cmdline_data* cmd,
+                 string filename, int col1, int col2, int col3,
                   int col4, int col5,
                   int *npts)
 {
-    stream instr;
     int ncol, nrow;
-    real *row;
     int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-    short int *lineQ;
+
+    //B
+    int rc = FAILURE;
+    stream instr = NULL;
+    real *row = NULL;
+    short int *lineQ = NULL;
+
+#define INOUT_FAIL(...) \
+    do { \
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        rc = FAILURE; \
+        goto fail; \
+    } while (0)
 
     instr = stropen(filename, "r");
-
+    //E
+    
     fprintf(stdout,
         "\nReading columns %d, %d, %d, and %d from file %s... ",
         col1,col2,col3,col4,filename);
@@ -1000,8 +1293,8 @@ void InputData_5c(string filename, int col1, int col2, int col3,
                 salto=SI;
                 if (ncol != nwxc && nrow>1) {
                     printf("\nvalores diferentes : ");
-                    error("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                        nrow, ncol, nwxc);
+                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
+                               nrow, ncol, nwxc);
                 }
                 ncol = nwxc;
                 lineQ[i]=TRUE;
@@ -1024,13 +1317,13 @@ void InputData_5c(string filename, int col1, int col2, int col3,
     printf("\nValid numbers statistics : ");
     printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
 
-    if (ncol<4)
-        error("\n\nInputData_4c: Error : ncol must be >=4\n");
+    if (ncol<5)
+        INOUT_FAIL("\n\nInputData_5c: Error : ncol must be >=5\n");
 
     rewind(instr);
 
     npoint=nrow;
-    row = (realptr) allocate(ncol*sizeof(real));
+    row = (realptr) allocate(ncol * sizeof(real));
 
     *npts = npoint;
     inout_xval = (real *) allocate(npoint * sizeof(real));
@@ -1055,18 +1348,26 @@ void InputData_5c(string filename, int col1, int col2, int col3,
         }
     }
 
-    fclose(instr);
+    fprintf(stdout, "\n... done.\n");
+    rc = SUCCESS;
+    goto fail;
 
-    fprintf(stdout,"\n... done.\n");
+fail:
+    if (instr != NULL)
+        fclose(instr);
+
+    if (row != NULL)
+        free(row);
+
+    if (lineQ != NULL)
+        free(lineQ);
+
+#undef INOUT_FAIL
+    return rc;
 }
 
 
 //B additions
-
-// Column vector input
-//  offset as NR
-//local int inout_InputDataVector(struct cmdline_data*, struct  global_data*,
-//                                string, real *, int *);
 
 // Column vector input
 //  offset as NR
@@ -1224,7 +1525,8 @@ int inout_InputDataMatrix_info(
         verb_log_print(verbose_log, outlog,
                    "\n\tGeneral statistics : ");
         verb_log_print(verbose_log, outlog,
-                   "number of lines, words, and characters : %d %d %d", nl, nw, nc);
+                "number of lines, words, and characters : %d %d %d",
+                nl, nw, nc);
     }
 
     rewind(instr);
@@ -1435,63 +1737,47 @@ int inout_InputDataMatrix(
 //E PARA IMPLEMENTAR LECTURA GENERAL DE ARCHIVOS DE DATOS CON FORMATO DE COLUMNAS
 
 // Extract input rootDirPath and preFileName
-int extractInputRootDir(char *infilenames,
-                        char *rootDirPath, char *preFileName, int ifile,
+int extractInputRootDir(const char *infilenames,
+                        char *rootDirPath, size_t rootDirPathSize,
+                        char *preFileName, size_t preFileNameSize, int ifile,
                         short verbose, short verbose_log, FILE *outlog
                         )
 {
-char bufsystem[200];
-char *rootDirPath_tmp;
-char *preFileName_tmp;
-int ndefault = 0;
-int *ipos;
-char *dp1, *dp2;
-int lenDir = strlen(infilenames);
-int i;
+    const char *slash;
+    const char *prefix;
+    size_t root_length;
+    size_t prefix_length;
 
-int nslashs = MAXNSLASHS;
-ipos = (int*) malloc((nslashs)*sizeof(int));
+    if (infilenames == NULL || rootDirPath == NULL || preFileName == NULL
+        || rootDirPathSize == 0 || preFileNameSize == 0)
+        return FAILURE;
 
-for (i=0; i< lenDir; i++) {
-    if(infilenames[i] == '/') {
-        ipos[ndefault] = i+1;
-        ndefault++;
+    slash = strrchr(infilenames, '/');
+    if (slash == NULL) {
+        prefix = infilenames;
+        root_length = 1;
+        if (rootDirPathSize < 2)
+            return FAILURE;
+        rootDirPath[0] = '.';
+        rootDirPath[1] = '\0';
+    } else {
+        prefix = slash + 1;
+        root_length = (size_t)(slash - infilenames);
+        if (root_length + 1 > rootDirPathSize)
+            return FAILURE;
+        memcpy(rootDirPath, infilenames, root_length);
+        rootDirPath[root_length] = '\0';
     }
-}
-if (ndefault>nslashs)
-    error(
-    "extractInputRootDir: more '/' than %d in 'infilename=%s'. Use only %d or none\n",
-    nslashs, infilenames, nslashs);
 
-if (ndefault == 0) {
-    sprintf(rootDirPath_tmp,"./");
-} else {
-    for (i=0; i<ndefault; i++) {
-        dp1 = (char*) malloc((ipos[i]-1)*sizeof(char));
-        strncpy(dp1, infilenames, ipos[i]-1);
-        dp2 = (char*) malloc((lenDir-ipos[i])*sizeof(char));
-        strncpy(dp2, infilenames + ipos[i], lenDir-ipos[i]);
-        verb_print_q(2,verbose,
-                "extractInputRootDir: '/' counts %d pos %d and %s %s\n",
-                ndefault, ipos[i], dp1, dp2);
-        free(dp2);
-        free(dp1);
-    }
-    rootDirPath_tmp = (char*) malloc((ipos[i-1]-1)*sizeof(char));
-    strncpy(rootDirPath_tmp, infilenames, ipos[i-1]-1);
-    preFileName_tmp = (char*) malloc((ipos[i-1]-1)*sizeof(char));
-    strncpy(preFileName_tmp, infilenames + ipos[i-1], lenDir-ipos[i-1]);
-    verb_print_q(2,verbose, "extractInputRootDir: preFileName %s\n",
-                preFileName_tmp);
-}
-verb_print_q(2,verbose,
-            "extractInputRootDir: rootDirPath %s\n",
-            rootDirPath_tmp);
+    prefix_length = strlen(prefix);
+    if (prefix_length + 1 > preFileNameSize)
+        return FAILURE;
+    memcpy(preFileName, prefix, prefix_length + 1);
 
-    strcpy(rootDirPath, rootDirPath_tmp);
-    strcpy(preFileName, preFileName_tmp);
-
-return SUCCESS;
+    verb_print_q(2, verbose,
+                 "extractInputRootDir: file %d root '%s', prefix '%s'\n",
+                 ifile, rootDirPath, preFileName);
+    return SUCCESS;
 }
 
 

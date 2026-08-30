@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-2balls-balltree.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- '-DBALLTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable BALLTREE2BALLSOMP"
+if ! grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
+    echo "SKIP: balltree-2balls-omp 2PCF is disabled (TWOPCFON=0)"
+    exit 0
+fi
+grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the KDTREEOMP reference engine is not enabled"
+
+run_case()
+{
+    local name=$1
+    local method=$2
+    local threads=$3
+    local options=$4
+    local use_log=${5:-true}
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search="$method" \
+        testmodel=simple-cubic-random \
+        nbody=4096 \
+        lengthBox=2 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic=false \
+        useLogHist="$use_log" \
+        rangeN=0.8 \
+        rminHist=0.005 \
+        sizeHistN=6 \
+        mChebyshev=2 \
+        nsmooth=8 \
+        theta=1 \
+        seed=123 \
+        stepState=1000000 \
+        verbose=1 \
+        verbose_log=0 \
+        options="$options,only-2pcf" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+compare_files_numeric()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+import math
+import pathlib
+import sys
+
+left = pathlib.Path(sys.argv[1])
+right = pathlib.Path(sys.argv[2])
+for name in ("histNN.txt", "histXi2pcf.txt"):
+    def numbers(path):
+        result = []
+        for line in path.read_text(encoding="ascii").splitlines():
+            result.extend(line.split("#", 1)[0].split())
+        return [float(value) for value in result]
+
+    a = numbers(left / name)
+    b = numbers(right / name)
+    if len(a) != len(b):
+        raise SystemExit(f"{name}: output lengths differ")
+    for index, (x, y) in enumerate(zip(a, b)):
+        if not math.isclose(x, y, rel_tol=3.0e-11, abs_tol=3.0e-12):
+            raise SystemExit(f"{name}:{index}: {x:.17g} != {y:.17g}")
+PY
+}
+
+exact_options=compute-HistN,no-two-balls
+run_case kdtree-reference kdtree-omp 1 compute-HistN,no-one-ball
+run_case exact-one balltree-2balls-omp 1 "$exact_options"
+run_case exact-many balltree-2balls-omp "$MULTI_THREADS" "$exact_options"
+
+compare_files_numeric "$TMP_ROOT/kdtree-reference" "$TMP_ROOT/exact-one" \
+    || fail_with_log "exact dual-ball scan differs from KDTREEOMP" \
+                     "$TMP_ROOT/exact-one/run.log"
+for file in "$TMP_ROOT/exact-one"/*.txt; do
+    name=${file##*/}
+    cmp -s "$file" "$TMP_ROOT/exact-many/$name" \
+        || fail_with_log \
+            "exact dual-ball output differs between thread counts: $name" \
+            "$TMP_ROOT/exact-many/run.log"
+done
+
+run_case aggregate-one balltree-2balls-omp 1 compute-HistN
+run_case aggregate-many balltree-2balls-omp "$MULTI_THREADS" compute-HistN
+compare_files_numeric "$TMP_ROOT/exact-one" "$TMP_ROOT/aggregate-one" \
+    || fail_with_log "two-ball aggregation changed the exact 2PCF" \
+                     "$TMP_ROOT/aggregate-one/run.log"
+for file in "$TMP_ROOT/aggregate-one"/*.txt; do
+    name=${file##*/}
+    cmp -s "$file" "$TMP_ROOT/aggregate-many/$name" \
+        || fail_with_log \
+            "aggregate dual-ball output differs between thread counts: $name" \
+            "$TMP_ROOT/aggregate-many/run.log"
+done
+
+nbccalc=$(sed -n \
+    's/.*balltree-2balls-omp: nbbcalc = [0-9][0-9]*, nbccalc = \([0-9][0-9]*\).*/\1/p' \
+    "$TMP_ROOT/aggregate-many/run.log" | tail -1)
+[ "${nbccalc:-0}" -gt 0 ] \
+    || fail_with_log "the TreeCorr scan did not aggregate a node pair" \
+                     "$TMP_ROOT/aggregate-many/run.log"
+
+# Linear bins exercise TreeCorr's separation-independent split threshold.
+run_case linear-exact balltree-2balls-omp 1 "$exact_options" false
+run_case linear-aggregate balltree-2balls-omp "$MULTI_THREADS" compute-HistN false
+compare_files_numeric "$TMP_ROOT/linear-exact" "$TMP_ROOT/linear-aggregate" \
+    || fail_with_log "linear-bin two-ball aggregation changed the exact 2PCF" \
+                     "$TMP_ROOT/linear-aggregate/run.log"
+
+# An offset, weighted cross-catalog case protects the shared coordinate frame
+# and verifies both pair counting and scalar normalization against brute force.
+"$PYTHON" - "$TMP_ROOT/data.txt" "$TMP_ROOT/reference.txt" <<'PY'
+import pathlib
+import sys
+
+data_path = pathlib.Path(sys.argv[1])
+reference_path = pathlib.Path(sys.argv[2])
+
+data = [
+    (0.03 * i, 0.017 * (i % 4), 0.011 * (i % 3),
+     (-1.0 if i % 3 == 0 else 0.25 * (i + 1)), 0.7 + 0.08 * i)
+    for i in range(16)
+]
+reference = [
+    (0.64 + 0.026 * i, 0.21 + 0.013 * (i % 5), 0.08 + 0.019 * (i % 2),
+     0.35 * (i - 4), 0.9 + 0.05 * (i % 6))
+    for i in range(13)
+]
+
+for path, rows in ((data_path, data), (reference_path, reference)):
+    path.write_text(
+        "".join(" ".join(f"{value:.17g}" for value in row) + "\n"
+                for row in rows),
+        encoding="ascii",
+    )
+PY
+
+run_cross_case()
+{
+    local name=$1
+    local threads=$2
+    local options=$3
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search=balltree-2balls-omp \
+        in="$TMP_ROOT/data.txt,$TMP_ROOT/reference.txt" \
+        infmt=multi-columns-ascii,multi-columns-ascii \
+        columns=1,2,3,4,5 \
+        iCatalogs=1,2 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=1.25 \
+        rminHist=0.01 \
+        sizeHistN=8 \
+        nsmooth=2 \
+        theta=1 \
+        stepState=1000000 \
+        verbose=0 \
+        verbose_log=0 \
+        options="$options,only-2pcf" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+cross_options=pos-and-convergence-weight,weights-norm,compute-HistN,no-two-balls
+run_cross_case cross-exact-one 1 "$cross_options"
+run_cross_case cross-exact-many "$MULTI_THREADS" "$cross_options"
+run_cross_case cross-aggregate-many "$MULTI_THREADS" \
+    pos-and-convergence-weight,weights-norm,compute-HistN
+
+for file in "$TMP_ROOT/cross-exact-one"/*.txt; do
+    name=${file##*/}
+    cmp -s "$file" "$TMP_ROOT/cross-exact-many/$name" \
+        || fail_with_log \
+            "weighted cross output differs between thread counts: $name" \
+            "$TMP_ROOT/cross-exact-many/run.log"
+done
+compare_files_numeric "$TMP_ROOT/cross-exact-one" \
+                      "$TMP_ROOT/cross-aggregate-many" \
+    || fail_with_log "weighted cross aggregation changed the exact 2PCF" \
+                     "$TMP_ROOT/cross-aggregate-many/run.log"
+
+"$PYTHON" - "$TMP_ROOT/data.txt" "$TMP_ROOT/reference.txt" \
+              "$TMP_ROOT/cross-exact-one" <<'PY'
+import math
+import pathlib
+import sys
+
+def catalog(path):
+    return [tuple(map(float, line.split()))
+            for line in pathlib.Path(path).read_text(encoding="ascii").splitlines()
+            if line.strip()]
+
+def output_values(path):
+    return [float(line.split()[1])
+            for line in path.read_text(encoding="ascii").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
+
+left = catalog(sys.argv[1])
+right = catalog(sys.argv[2])
+output = pathlib.Path(sys.argv[3])
+rmin = 0.01
+rmax = 1.25
+nbins = 8
+width = (rmax - rmin) / nbins
+counts = [0.0] * nbins
+denominators = [0.0] * nbins
+numerators = [0.0] * nbins
+
+for x1, y1, z1, field1, weight1 in left:
+    for x2, y2, z2, field2, weight2 in right:
+        distance = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2
+                             + (z1 - z2) ** 2)
+        if not rmin < distance < rmax:
+            continue
+        index = int((distance - rmin) / width)
+        pair_weight = weight1 * weight2
+        counts[index] += 1.0
+        denominators[index] += pair_weight
+        numerators[index] += pair_weight * field1 * field2
+
+expected_xi = [numerator / denominator if denominator else 0.0
+               for numerator, denominator in zip(numerators, denominators)]
+actual_counts = output_values(output / "histNN.txt")
+actual_xi = output_values(output / "histXi2pcf.txt")
+for label, actual, expected in (
+        ("histNN", actual_counts, counts),
+        ("histXi2pcf", actual_xi, expected_xi)):
+    if len(actual) != nbins:
+        raise SystemExit(f"{label}: expected {nbins} bins, got {len(actual)}")
+    for index, (got, want) in enumerate(zip(actual, expected), 1):
+        if not math.isclose(got, want, rel_tol=4.0e-8, abs_tol=4.0e-9):
+            raise SystemExit(
+                f"{label} bin {index}: {got:.17g} != {want:.17g}")
+PY
+
+echo "PASS: balltree-2balls-omp auto/cross 2PCF, aggregation, and determinism"

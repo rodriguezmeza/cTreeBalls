@@ -21,8 +21,26 @@
 //
 
 #include "globaldefs.h"
+#include "cballs_make_info.h"
+//B
+#include <limits.h>
+#include <errno.h>
 
-local void ReadParameterFile(struct  cmdline_data*, struct  global_data*, char *);
+#ifdef CLASSLIB
+#define cBALLS_FAIL(cmd, ...)                                      \
+    do {                                                          \
+        snprintf((cmd)->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
+        return FAILURE;                                           \
+    } while (0)
+#else
+#define cBALLS_FAIL(cmd, ...) error(__VA_ARGS__)
+#endif
+//E
+
+//B
+local int ReadParameterFile(struct  cmdline_data*,
+                             struct  global_data*, char *);
+//E
 local int startrun_parameterfile(struct  cmdline_data*, struct  global_data*);
 local int startrun_cmdline(struct  cmdline_data*, struct  global_data*);
 local void ReadParametersCmdline(struct  cmdline_data*, struct  global_data*);
@@ -42,6 +60,10 @@ local int scanrOption(struct  cmdline_data*, struct  global_data*,
 
 local int print_make_info(struct cmdline_data* cmd,
                      struct  global_data* gd);
+local int print_options(struct cmdline_data* cmd,
+                        struct  global_data* gd);
+local int print_search_methods(struct cmdline_data* cmd,
+                               struct global_data* gd);
 
 #ifndef USEGSL
 local long saveidum;
@@ -80,16 +102,17 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     string routineName = "StartRun (no CLASSLIB)";
     double cpustart = CPUTIME;
 
-    debug_tracking_s("001", routineName);
-
     gd->headline0 = head0; gd->headline1 = head1;
     gd->headline2 = head2; gd->headline3 = head3;
 
     printf("\n%s\n%s: %s\n\t %s\n",
            gd->headline0, gd->headline1, gd->headline2, gd->headline3);
+#ifdef GETPARAM
     printf("Version = %s\n", getversion());
+#endif
 
     //B move all these to Startrun_Common... or make an appropriate change
+    gd->startrun_cputime = TRUE;
     gd->cmd_allocated = FALSE;
     gd->stopflag = 0;
     gd->cputotalinout = 0.;
@@ -98,21 +121,23 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->sameposcount = 0;
     //E
 
-    debug_tracking("002");
-
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
-    if (*(cmd->paramfile)=='-')
-        error("bad parameter %s\n", cmd->paramfile);
-    if (!strnull(cmd->paramfile))
-		startrun_parameterfile(cmd, gd);
-    else
-		startrun_cmdline(cmd, gd);
-#else
-    startrun_parameterfile(cmd, gd);
-#endif
+    if (*(cmd->paramfile) == '-') {
+        cBALLS_FAIL(cmd, "bad parameter %s\n", cmd->paramfile);
+    }
 
-    debug_tracking("003");
+    if (!strnull(cmd->paramfile)) {
+        if (startrun_parameterfile(cmd, gd) == FAILURE)
+            return FAILURE;
+    } else {
+        if (startrun_cmdline(cmd, gd) == FAILURE)
+            return FAILURE;
+    }
+#else
+    if (startrun_parameterfile(cmd, gd) == FAILURE)
+        return FAILURE;
+#endif
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
@@ -120,17 +145,11 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
                 "\n%s: Total allocated %g MByte storage so far.\n",
                         routineName, gd->bytes_tot*INMB);
 
-//B If uncommented there will be a warning in the setup.py process
-//#ifdef OPENMPCODE
     class_call_cballs(SetNumberThreads(cmd), errmsg, errmsg);
-//#endif
-//E
     gd->cputotalinout += CPUTIME - cpustart;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\n%s CPU time: %g %s\n",
                         routineName, CPUTIME - cpustart, PRNUNITOFTIMEUSED);
-
-    debug_tracking_s("004... final", routineName);
 
     return SUCCESS;
 }
@@ -144,18 +163,18 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
 {
     string routineName = "StartRun (CLASSLIB)";
     struct file_content fc;
-
     double cpustart = CPUTIME;
-
-    debug_tracking_s("001", routineName);
 
     gd->headline0 = head0; gd->headline1 = head1;
     gd->headline2 = head2; gd->headline3 = head3;
     printf("\n%s\n%s: %s\n\t %s\n",
            gd->headline0, gd->headline1, gd->headline2, gd->headline3);
+#ifdef GETPARAM
     printf("Version = %s\n", getversion());
+#endif
 
     //B move all these to Startrun_Common... or make an appropriate change
+    gd->startrun_cputime = TRUE;
     gd->cmd_allocated = FALSE;
     gd->stopflag = 0;
     gd->cputotalinout = 0.;
@@ -164,42 +183,57 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
     gd->sameposcount = 0;
     //E
 
-    debug_tracking("002");
-
 #ifdef GETPARAM
     cmd->paramfile = GetParam("paramfile");
-    if (*(cmd->paramfile)=='-')
-        error("bad parameter %s\n", cmd->paramfile);
+    if (*(cmd->paramfile) == '-') {
+        cBALLS_FAIL(cmd, "bad parameter %s\n", cmd->paramfile);
+    }
+
     if (!strnull(cmd->paramfile)) {
+        //B
         class_call_cballs(input_find_file(cmd, gd, cmd->paramfile, &fc, errmsg),
-                          errmsg, errmsg);
-        class_call_cballs(input_read_from_file(cmd, gd, &fc, errmsg),
-                          errmsg, errmsg);
+                          errmsg, cmd->error_message);
+
+        if (input_read_from_file(cmd, gd, &fc, errmsg) == FAILURE) {
+            parser_free(&fc);
+            class_call_cballs(FAILURE, errmsg, cmd->error_message);
+        }
+
         class_call_cballs(parser_free(&fc), errmsg, errmsg);
+        
+        if (StartRun_Common(cmd, gd) == FAILURE)
+            return FAILURE;
+
+        if (PrintParameterFile(cmd, gd, cmd->paramfile) == FAILURE)
+            return FAILURE;
+        //E
+        
     } else {
-        startrun_cmdline(cmd, gd);
+        if (startrun_cmdline(cmd, gd) == FAILURE)
+            return FAILURE;
     }
 
 #else
+    //B
     // this segment must be checked!!! (used when GETPARMON = 0)
-    class_call_cballs(input_find_file(cmd->ParameterFile, &fc, errmsg),
-                      errmsg, errmsg);
-    class_call_cballs(input_read_from_file(cmd, gd, &fc, errmsg), errmsg, errmsg);
+    class_call_cballs(input_find_file(cmd, gd, cmd->paramfile, &fc, errmsg),
+                      errmsg, cmd->error_message);
+
+    if (input_read_from_file(cmd, gd, &fc, errmsg) == FAILURE) {
+        parser_free(&fc);
+        class_call_cballs(FAILURE, errmsg, cmd->error_message);
+    }
+
     class_call_cballs(parser_free(&fc), errmsg, errmsg);
+    
+    if (StartRun_Common(cmd, gd) == FAILURE)
+        return FAILURE;
+
+    if (PrintParameterFile(cmd, gd, cmd->ParameterFile) == FAILURE)
+        return FAILURE;
     //E
 #endif
 
-    if (!strnull(cmd->paramfile))
-        class_call_cballs(StartRun_Common(cmd, gd), errmsg, errmsg);
-
-//    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
-#ifdef GETPARAM
-        if (!strnull(cmd->paramfile))
-            PrintParameterFile(cmd, gd, cmd->paramfile);
-#else
-        PrintParameterFile(cmd, gd, cmd->ParameterFile);
-#endif
-//    }
 
     gd->bytes_tot += sizeof(struct  global_data);
     gd->bytes_tot += sizeof(struct cmdline_data);
@@ -207,17 +241,11 @@ int StartRun(struct  cmdline_data* cmd, struct  global_data* gd,
                "\n%s: Total allocated %g MByte storage so far.\n",
                routineName, gd->bytes_tot*INMB);
 
-    debug_tracking("003");
-
-#ifdef OPENMPCODE
     class_call_cballs(SetNumberThreads(cmd), errmsg, errmsg);
-#endif
 
     gd->cputotalinout += CPUTIME - cpustart;
     verb_print(cmd->verbose, "\n%s CPU time: %g %s\n",
                routineName, CPUTIME - cpustart, PRNUNITOFTIMEUSED);
-
-    debug_tracking_s("004... final", routineName);
 
     return SUCCESS;
 }
@@ -228,8 +256,18 @@ local int startrun_parameterfile(struct  cmdline_data* cmd,
                                  struct  global_data* gd)
 {
 #ifdef GETPARAM
-	ReadParameterFile(cmd, gd, cmd->paramfile);
+    //B
+    if (ReadParameterFile(cmd, gd, cmd->paramfile) == FAILURE) {
+        if (cmd->error_message[0] == '\0') {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "ReadParameterFile: failed parsing parameter file '%s'\n",
+                     cmd->paramfile);
+        }
+        return FAILURE;
+    }
+
     ReadParametersCmdline_short(cmd, gd);
+    //E
 
 //B socket:
 #ifdef ADDONS
@@ -238,17 +276,20 @@ local int startrun_parameterfile(struct  cmdline_data* cmd,
 //E
 
 #else // ! GETPARAM
-    ReadParameterFile(cmd, gd, cmd->ParameterFile);
+    if (ReadParameterFile(cmd, gd, cmd->ParameterFile) == FAILURE)
+        return FAILURE;
 #endif // ! GETPARAM
 
-	StartRun_Common(cmd, gd);
-//    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
+    if (StartRun_Common(cmd, gd) == FAILURE)
+        return FAILURE;
+    
 #ifdef GETPARAM
-        PrintParameterFile(cmd, gd, cmd->paramfile);
+    if (PrintParameterFile(cmd, gd, cmd->paramfile) == FAILURE)
+        return FAILURE;
 #else
-        PrintParameterFile(cmd, gd, cmd->ParameterFile);
+    if (PrintParameterFile(cmd, gd, cmd->ParameterFile) == FAILURE)
+        return FAILURE;
 #endif
-//    }
 
     return SUCCESS;
 }
@@ -261,11 +302,13 @@ local int startrun_parameterfile(struct  cmdline_data* cmd,
 
 local int startrun_cmdline(struct  cmdline_data* cmd, struct  global_data* gd)
 {
-	ReadParametersCmdline(cmd, gd);
-	StartRun_Common(cmd, gd);
-//    if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
-        PrintParameterFile(cmd, gd, parameter_null);
-//    }
+    ReadParametersCmdline(cmd, gd);
+
+    if (StartRun_Common(cmd, gd) == FAILURE)
+        return FAILURE;
+
+    if (PrintParameterFile(cmd, gd, parameter_null) == FAILURE)
+        return FAILURE;
 
     return SUCCESS;
 }
@@ -338,9 +381,7 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
 #endif
     cmd->verbose = GetiParam("verbose");
     cmd->verbose_log = GetiParam("verbose_log");
-#ifdef OPENMPCODE
     cmd->numthreads = GetiParam("numberThreads");
-#endif
     cmd->options = GetParam("options");
     //E
 
@@ -367,7 +408,7 @@ local void ReadParametersCmdline_short(struct  cmdline_data* cmd, struct  global
 #endif // end of GETPARAM
 
 //B Section of parameter reading from a file
-local void ReadParameterFile(struct  cmdline_data* cmd, 
+local int ReadParameterFile(struct  cmdline_data* cmd,
                              struct  global_data* gd, char *fname)
 {
 // Every item in cmdline_defs.h must have an item here::
@@ -380,18 +421,39 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 #define MAXCHARBUF 1024
 
     string routineName = "ReadParameterFile";
-    FILE *fd;
+    FILE *fd = NULL;
 
   int  i,j,nt;
   int  id[MAXTAGS];
   void *addr[MAXTAGS];
+  string *string_slot[MAXTAGS];
   char tag[MAXTAGS][50];
-  int  errorFlag=0;
+
+    size_t str_size[MAXTAGS];
+
+#undef SPName
+#define SPName(param,paramtext,n)                                       \
+  do {                                                                  \
+      SET_TAG_NAME(paramtext);                                          \
+      string_slot[nt] = &(param);                                       \
+      (param) = (string)malloc(n);                                      \
+      addr[nt] = (param);                                               \
+      str_size[nt] = (n);                                               \
+      id[nt] = STRING;                                                   \
+      nt++;                                                              \
+      if ((param) == NULL) {                                            \
+          snprintf(cmd->error_message, _ERRORMSGSIZE_,                  \
+                   "%s: not enough memory for parameter '%s'",         \
+                   routineName, paramtext);                             \
+          goto fail;                                                     \
+      }                                                                 \
+  } while (0)
 
     int input_verbose = 2;
     verb_print(input_verbose, "\nparsing input parameters...\n");
 
-  nt=0;
+    cmd->error_message[0] = '\0';
+    nt=0;
 
     //B Parameters related to the searching method
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
@@ -456,9 +518,7 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 #endif
     IPName(cmd->verbose,"verbose");
     IPName(cmd->verbose_log,"verbose_log");
-#ifdef OPENMPCODE
     IPName(cmd->numthreads,"numberThreads");
-#endif
     SPName(cmd->options,"options",MAXLENGTHOFSTRSCMD);
     //E
 
@@ -468,14 +528,6 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
 #endif
 //E
 
-    size_t slen;
-    char *script1;
-    char *script2;
-    char *script3;
-    char *script4;
-    char buf4[MAXCHARBUF];
-    char buf5[MAXCHARBUF];
-
 //B
 #ifndef _LINE_LENGTH_MAX_
 #define _LINE_LENGTH_MAX_ 1024
@@ -484,188 +536,119 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
         char line[_LINE_LENGTH_MAX_];
         char name[_ARGUMENT_LENGTH_MAX_];
         char value[_ARGUMENT_LENGTH_MAX_];
-        char * phash;
-        char * pequal;
-        char * left;
-        char * right;
+        int has_line;
+        int is_data;
+        unsigned long line_number = 0;
 //E
 
-    if((fd=fopen(fname,"r"))) {
-        while(!feof(fd)) {
-//B
-            fgets(line,MAXCHARBUF,fd);
-
-            pequal=strchr(line,'=');
-            if (pequal == NULL)
-                continue;
-            phash=strchr(line,'#');
-            if ((phash != NULL) && (phash-pequal<2))
-                continue;
-            phash=strchr(line,'%');
-            if ((phash != NULL) && (phash-pequal<2))
-                continue;
-
-            left=line;
-            while (left[0]==' ') {
-              left++;
-            }
-            if(left[0]=='\'' || left[0]=='\"'){
-              left++;
-            }
-            right=pequal-1;
-            while (right[0]==' ') {
-              right--;
-            }
-            if(right[0]=='\'' || right[0]=='\"'){
-              right--;
-            }
-
-            if (right-left < 0) {
-                fprintf(stdout,
-        "Error in file %s: there is no variable name before '=' in line: '%s'\n",
-                    fname, line);
-                errorFlag=1;
-                continue;
-            }
-
-            strncpy(name,left,right-left+1);
-            name[right-left+1]='\0';
-
-            left = pequal+1;
-            while (left[0]==' ') {
-              left++;
-            }
-
-            if (phash == NULL)
-              right = line+strlen(line)-1;
-            else
-              right = phash-1;
-
-            while (right[0]<=' ') {
-              right--;
-            }
-
-            if (right-left < 0)
-                continue;
-
-            strncpy(value,left,right-left+1);
-            value[right-left+1]='\0';
-//E
-
-            for(i=0,j=-1;i<nt;i++)
-                if(strcmp(name,tag[i])==0) {
-                    j=i;
-                    tag[i][0]=0;
-                    break;
-                }
-            if(j>=0) {
-                switch(id[j]) {
-                    case DOUBLE:
-                        *((double*)addr[j])=atof(value);
-                        break;
-                    case STRING:
-                        if (strcmp(name,"preScript") == 0){ // To remove both '"'
-                            int index;
-                            size_t slen;
-                            slen = strlen(value);
-                            //B
-                            script1 = (char*) malloc(1*sizeof(char));
-                            memcpy(script1,value,1);
-                            script2 = strchr(script1, '"');
-                            if (script2 == NULL)
-                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
-                                      value);
-                            free(script1);
-                            //E
-                            //B
-                            script1 = (char*) malloc((slen-1)*sizeof(char));
-                            memcpy(script1,value+1,slen-1);
-                            script2 = strchr(script1, '"');
-                            if (script2 == NULL)
-                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
-                                      value);
-                            free(script1);
-                            //E
-                            cmd->preScript = (char*) malloc((slen-2)*sizeof(char));
-                            script1 = (char*) malloc(slen*sizeof(char));
-                            memcpy(script1,value,slen);
-                            script2 = strchr(script1, '"');
-                            if (script2 == NULL)
-                                error("preScript parameter needs enclosing script with \"\"!! (%s)\n\n",
-                                      script1);
-                            memcpy(cmd->preScript,script2+1,slen-2);
-                            free(script1);
-                        } else {
-                            if (strcmp(name,"posScript")==0){// To remove both '"'
-                                int index;
-                                size_t slen;
-                                slen = strlen(value);
-                                //B
-                                script1 = (char*) malloc(1*sizeof(char));
-                                memcpy(script1,value,1);
-                                script2 = strchr(script1, '"');
-                                if (script2 == NULL)
-                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
-                                          value);
-                                free(script1);
-                                //E
-                                //B
-                                script1 = (char*) malloc((slen-1)*sizeof(char));
-                                memcpy(script1,value+1,slen-1);
-                                script2 = strchr(script1, '"');
-                                if (script2 == NULL)
-                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
-                                          value);
-                                free(script1);
-                                //E
-                                cmd->posScript=(char*) malloc((slen-2)*sizeof(char));
-                                script1 = (char*) malloc(slen*sizeof(char));
-                                memcpy(script1,value,slen);
-                                script2 = strchr(script1, '"');
-                                if (script2 == NULL)
-                                    error("posScript parameter needs enclosing script with \"\"!! (%s)\n\n",
-                                          script1);
-                                memcpy(cmd->posScript,script2+1,slen-2);
-                                free(script1);
-                            } else
-                                strcpy(addr[j],value);
-                        }
-                        break;
-                    case INT:
-                        *((int*)addr[j])=atoi(value);
-                        break;
-                    case LONG:
-                        *((long*)addr[j])=atol(value);
-                        break;
-                    case BOOLEAN:
-                        if (strchr("tTyY1", *value) != NULL) {
-                            *((bool*)addr[j])=TRUE;
-                        } else
-                            if (strchr("fFnN0", *value) != NULL)  {
-                                *((bool*)addr[j])=FALSE;
-                            } else {
-                                error("getbparam: %s=%s not bool\n",name,value);
-                            }
-                        break;
-                }
-            } else {
-                fprintf(stdout, "\n%s: Error in file %s: Tag '%s' %s\n",
-                        routineName, fname, name,
-                        "not allowed or multiple defined...");
-//                        "look at saved parameter file which value was used");
-                errorFlag=1;
-            }
-        } // ! while loop
-        fclose(fd);
-    } else {
-        fprintf(stdout,"Parameter file %s not found.\n", fname);
-        errorFlag=2;
-        exit(0);
+    fd = fopen(fname, "r");
+    if (fd == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: parameter file '%s' not found", routineName, fname);
+        goto fail;
     }
 
-    if (errorFlag==1)
-        error("%s: going out\n", routineName);
+    while (TRUE) {
+        if (read_parameter_line_checked(fd, line, sizeof(line),
+                                        &has_line, &line_number, fname,
+                                        cmd->error_message,
+                                        _ERRORMSGSIZE_) == FAILURE)
+            goto fail;
+        if (has_line == FALSE)
+            break;
 
+        if (parse_parameter_line_checked(line,
+                                         name, sizeof(name),
+                                         value, sizeof(value),
+                                         &is_data, fname, line_number,
+                                         cmd->error_message,
+                                         _ERRORMSGSIZE_) == FAILURE)
+            goto fail;
+        if (is_data == FALSE)
+            continue;
+
+        for (i = 0, j = -1; i < nt; i++) {
+            if (strcmp(name, tag[i]) == 0) {
+                j = i;
+                tag[i][0] = '\0';
+                break;
+            }
+        }
+
+        if (j < 0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s:%lu: parameter '%s' is unknown or duplicated",
+                     fname, line_number, name);
+            goto fail;
+        }
+
+        switch (id[j]) {
+            case DOUBLE:
+                if (parse_double_checked(value, (double *)addr[j],
+                                         cmd->error_message,
+                                         _ERRORMSGSIZE_, name) == FAILURE)
+                    goto fail;
+                break;
+            case STRING:
+                if (strcmp(name, "preScript") == 0
+                    || strcmp(name, "posScript") == 0) {
+                    size_t slen = strlen(value);
+
+                    if (slen < 2 || value[0] != '"'
+                        || value[slen - 1] != '"') {
+                        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                                 "%s:%lu: %s needs enclosing double quotes",
+                                 fname, line_number, name);
+                        goto fail;
+                    }
+                    if (slen - 2 >= str_size[j]) {
+                        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                                 "%s:%lu: %s is too long",
+                                 fname, line_number, name);
+                        goto fail;
+                    }
+
+                    memcpy((char *)addr[j], value + 1, slen - 2);
+                    ((char *)addr[j])[slen - 2] = '\0';
+                } else if (copy_checked((char *)addr[j], str_size[j],
+                                        value, name) != 0) {
+                    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                             "%s:%lu: string parameter '%s' is too long",
+                             fname, line_number, name);
+                    goto fail;
+                }
+                break;
+            case INT:
+                if (parse_int_checked(value, (int *)addr[j],
+                                      cmd->error_message,
+                                      _ERRORMSGSIZE_, name) == FAILURE)
+                    goto fail;
+                break;
+            case LONG:
+                if (parse_long_checked(value, (long *)addr[j],
+                                       cmd->error_message,
+                                       _ERRORMSGSIZE_, name) == FAILURE)
+                    goto fail;
+                break;
+            case BOOLEAN:
+                if (parse_bool_checked(value, (bool *)addr[j],
+                                       cmd->error_message,
+                                       _ERRORMSGSIZE_, name) == FAILURE)
+                    goto fail;
+                break;
+        }
+    }
+
+    if (fclose(fd) != 0) {
+        fd = NULL;
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: could not close parameter file '%s'",
+                 routineName, fname);
+        goto fail;
+    }
+    fd = NULL;
+    
+#ifdef GETPARAM
     for(i=0;i<nt;i++) {
         if(*tag[i]) {
             if (cmd->verbose>2)
@@ -677,7 +660,13 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
                     *((double*)addr[i])=GetdParam(tag[i]);
                     break;
                 case STRING:
-                    strcpy(addr[i],GetParam(tag[i]));
+                    if (copy_checked((char *)addr[i], str_size[i],
+                                     GetParam(tag[i]), tag[i]) != 0) {
+                        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                                 "%s: default string parameter '%s' is too long",
+                                 routineName, tag[i]);
+                        goto fail;
+                    }
                     break;
                 case INT:
                     *((int*)addr[i])=GetiParam(tag[i]);
@@ -689,16 +678,32 @@ local void ReadParameterFile(struct  cmdline_data* cmd,
                     *((bool*)addr[i])=GetbParam(tag[i]);
                     break;
             }
-            errorFlag=1;
         }
     }
+#endif
+
+    return SUCCESS;
+
+fail:
+    if (fd != NULL)
+        fclose(fd);
+    for (i = 0; i < nt; i++) {
+        if (id[i] == STRING && string_slot[i] != NULL
+            && *string_slot[i] != NULL) {
+            free(*string_slot[i]);
+            *string_slot[i] = NULL;
+        }
+    }
+    return FAILURE;
 
 #undef DOUBLE
 #undef STRING
 #undef INT
+#undef LONG
 #undef BOOLEAN
 #undef MAXTAGS
 #undef MAXCHARBUF
+#undef SPName
 }
 //E
 
@@ -706,8 +711,11 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "StartRun_Common";
     int ifile;
-    double cpustart;
     double cpustartMiddle;
+    const int memory_ninfiles = gd->bodytable_allocated ? gd->ninfiles : 0;
+    const bool input_catalogs_in_memory = memory_ninfiles > 0;
+
+    cballs_refresh_option_cache(cmd);
 
 #ifdef THREEPCFCONVERGENCE
     gd->computeTPCF = TRUE;
@@ -721,8 +729,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->gd_allocated = FALSE;
     gd->gd_allocated_2 = FALSE;
     gd->tree_allocated = FALSE;
-    gd->bodytable_allocated = FALSE;
+    gd->bodytable_allocated = input_catalogs_in_memory;
 
+    //B
+#if defined(DEBUG) && defined(BODYTABBF_ON)
+    bodytabbf = NULL;
+#endif
+    //E
+
+    gd->outlog = NULL;
+    gd->outlogFlagFree = FALSE;
+    
     if (strlen(cmd->rootDir)==0 || strnull(cmd->rootDir))
         gd->rootDirFlag = FALSE;
     else
@@ -730,8 +747,34 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
     gd->flagPrint = TRUE;
 
-    if (scanopt(cmd->options, "make-info"))
+#ifdef CBALLS_MPI_ENABLED
+    if (cballs_mpi_prepare(cmd, gd) == FAILURE)
+        return FAILURE;
+#endif
+
+    if (scanopt(cmd->options, "make-info")) {
         print_make_info(cmd, gd);
+        if (!scanopt(cmd->options, "no-stop")) {        // make a better way out
+            gd->stopflag = TRUE;
+            return FAILURE;
+        }
+    }
+
+    if (scanopt(cmd->options, "print-options")) {
+        print_options(cmd, gd);
+        if (!scanopt(cmd->options, "no-stop")) {        // make a better way out
+            gd->stopflag = TRUE;
+            return FAILURE;
+        }
+    }
+
+    if (scanopt(cmd->options, "print-search-methods")) {
+        print_search_methods(cmd, gd);
+        if (!scanopt(cmd->options, "no-stop")) {
+            gd->stopflag = TRUE;
+            return FAILURE;
+        }
+    }
 
 //B socket:
 #ifdef ADDONS
@@ -739,38 +782,50 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
-//B correction 2025-05-03 :: look for edge-effects
 #if defined(NMultipoles) && defined(NONORMHIST)
     if (scanopt(cmd->options, "patch-with-all")) {
         gd->pivotCount = 0;
     }
 #endif
-//E
     gd->pivotNumber = cmd->nbody;
 
     class_call_cballs(StartOutput(cmd, gd), errmsg, errmsg);
 
-    debug_tracking_s("001", routineName);
+    int output_setup_status = SUCCESS;
+#ifdef CBALLS_MPI_ENABLED
+    if (cballs_mpi_output_enabled(cmd)) {
+#endif
+        output_setup_status = setFilesDirs(cmd, gd);
+        if (output_setup_status == SUCCESS)
+            output_setup_status = setFilesDirs_log(cmd, gd);
 
-    setFilesDirs(cmd, gd);
-    debug_tracking("002");
-
-    setFilesDirs_log(cmd, gd);
-    debug_tracking("003");
-
-    strcpy(gd->mode,"w");
-    if (cmd->verbose_log>0) {               // gd->outlog is defined
-        if(!(gd->outlog=fopen(gd->logfilePath, gd->mode)))
-            error("\n%s: error opening file '%s' \n",
-                  routineName, gd->logfilePath);
+        if (output_setup_status == SUCCESS) {
+            strcpy(gd->mode,"w");
+            if (cmd->verbose_log > 0) {
+                gd->outlog = fopen(gd->logfilePath, gd->mode);
+                if (gd->outlog == NULL) {
+                    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                             "\n%s: error opening file '%s' \n",
+                             routineName, gd->logfilePath);
+                    output_setup_status = FAILURE;
+                } else {
+                    gd->outlogFlagFree = TRUE;
+                }
+            }
+        }
+#ifdef CBALLS_MPI_ENABLED
     }
+    output_setup_status = cballs_mpi_consensus(
+        cmd, output_setup_status, "MPI output setup");
+#endif
+    if (output_setup_status == FAILURE) return FAILURE;
 
      class_call_cballs(startrun_getParamsSpecial(cmd, gd), errmsg, errmsg);
-    debug_tracking("004");
+
+     search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
+     class_call_cballs(CheckParameters(cmd, gd), errmsg, errmsg);
 
      class_call_cballs(random_init(cmd, gd, cmd->seed), errmsg, errmsg);
-
-     class_call_cballs(CheckParameters(cmd, gd), errmsg, errmsg);
 
      class_call_cballs(startrun_memoryAllocation(cmd, gd), errmsg, errmsg);
 
@@ -778,82 +833,145 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "\n%s: coordTag: %d\n", routineName, gd->coordTag);
 
-    debug_tracking("005");
-
 //B Pre-processing necessary for reading data files:
     char buf[BUFFERSIZE];
+    int preprocessing_owner = TRUE;
+    int preprocessing_status = SUCCESS;
+#ifdef CBALLS_MPI_ENABLED
+    preprocessing_owner = cballs_mpi_output_enabled(cmd);
+#endif
     if (scanopt(cmd->options, "pre-processing")) {
-        cpustartMiddle = CPUTIME;
-        sprintf(buf,"%s",cmd->preScript);
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               "\n%s: pre-processing: executing %s...\n",
-                               routineName, cmd->preScript);
-        system(buf);
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               " done.\n");
-        gd->cputotalinout += CPUTIME - cpustart;
-        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                               "%s: cpu time expended in this script %g\n\n",
-                               routineName, CPUTIME - cpustartMiddle,
-                               PRNUNITOFTIMEUSED);
+        if (preprocessing_owner) {
+            cpustartMiddle = CPUTIME;
+            if (copy_checked(buf, sizeof(buf), cmd->preScript,
+                             "preScript") != 0) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "%s: preScript command too long", routineName);
+                preprocessing_status = FAILURE;
+            } else {
+                verb_print_normal_info(cmd->verbose, cmd->verbose_log,
+                                       gd->outlog,
+                                       "\n%s: pre-processing: executing %s...\n",
+                                       routineName, cmd->preScript);
+                preprocessing_status =
+                    cballs_system_checked(cmd, routineName, buf);
+                if (preprocessing_status == SUCCESS) {
+                    verb_print_normal_info(cmd->verbose, cmd->verbose_log,
+                                           gd->outlog, " done.\n");
+                    gd->cputotalinout += CPUTIME - cpustartMiddle;
+                    verb_print_normal_info(cmd->verbose, cmd->verbose_log,
+                                           gd->outlog,
+                                           "%s: cpu time expended in this script %g\n\n",
+                                           routineName,
+                                           CPUTIME - cpustartMiddle,
+                                           PRNUNITOFTIMEUSED);
+                }
+            }
+        }
+#ifdef CBALLS_MPI_ENABLED
+        preprocessing_status = cballs_mpi_consensus(
+            cmd, preprocessing_status, "MPI pre-processing");
+#endif
+        if (preprocessing_status == FAILURE) return FAILURE;
         if (scanopt(cmd->options, "stop")) {
             verb_print_normal_info(cmd->verbose,
                                    cmd->verbose_log, gd->outlog,
                                    "\n\tMainLoop: stopping...\n\n");
-            exit(1);
+            gd->stopflag = TRUE;
+            return SUCCESS;
         }
     }
     if (scanopt(cmd->options, "statistics-histograms")) {
-        statHistogram(cmd, gd);
+        preprocessing_status = preprocessing_owner
+            ? statHistogram(cmd, gd) : SUCCESS;
+#ifdef CBALLS_MPI_ENABLED
+        preprocessing_status = cballs_mpi_consensus(
+            cmd, preprocessing_status, "MPI histogram statistics");
+#endif
+        if (preprocessing_status == FAILURE) return FAILURE;
+
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\tpre-processing: stopping...\n\n");
-        exit(1);
+
+//        gd->stopflag = TRUE;
+//        return SUCCESS;
+        if (scanopt(cmd->options, "stop")) {        // make a better way out
+            gd->stopflag = TRUE;
+            return FAILURE;
+        } else {
+            gd->stopflag = TRUE;
+            return FAILURE;
+        }
+
     }
 
     if (scanopt(cmd->options, "edge-corrections-from-files")) {
-        computeEdgeCorrections(cmd, gd);
+        preprocessing_status = preprocessing_owner
+            ? computeEdgeCorrections(cmd, gd) : SUCCESS;
+#ifdef CBALLS_MPI_ENABLED
+        preprocessing_status = cballs_mpi_consensus(
+            cmd, preprocessing_status, "MPI edge-correction preprocessing");
+#endif
+        if (preprocessing_status == FAILURE) return FAILURE;
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\tpre-processing: stopping...\n\n");
-        exit(1);
+        gd->stopflag = TRUE;
+        return SUCCESS;
     }
 //E
-
-    debug_tracking("006");
 
 //B In this section update computation of rSize
 //      and center-of-mass if necessary
 //      so we have a common root size and c-of-m
-    if (scanopt(cmd->options, "read-mask")) {
+    if (input_catalogs_in_memory) {
+        if (gd->ninfiles != memory_ninfiles)
+            cBALLS_FAIL(cmd,
+                        "%s: parsed %d in-memory descriptors for %d loaded catalogs\n",
+                        routineName, gd->ninfiles, memory_ninfiles);
+        for (ifile = 0; ifile < memory_ninfiles; ifile++) {
+            if (bodytable[ifile] == NULL || gd->nbodyTable[ifile] < 3)
+                cBALLS_FAIL(cmd,
+                            "%s: in-memory catalog %d is missing or invalid\n",
+                            routineName, ifile);
+        }
+        gd->model_comment = "Python in-memory catalog";
+        gd->input_comment = "catalog copied from Python memory";
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\n%s: using %d in-memory catalog(s).\n",
+                               routineName, memory_ninfiles);
+    } else if (scanopt(cmd->options, "read-mask")) {
         if (gd->ninfiles < 2)
-            error("\tevalHist:: read-mask ninfiles = %d is absurd\n", gd->ninfiles);
+            cBALLS_FAIL(cmd, "\t%s:: read-mask ninfiles = %d is absurd\n", routineName, gd->ninfiles);
         ifile=0;
         class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
                     &gd->infilefmt_int), errmsg, errmsg);
         class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
                     errmsg, errmsg);
+        if (gd->stopflag)
+            return SUCCESS;
+        
         gd->model_comment = "input data file with mask";
         ifile=1;
         class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
                     &gd->infilefmt_int), errmsg, errmsg);
         class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
                     errmsg, errmsg);
+        if (gd->stopflag)
+            return SUCCESS;
+        
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
-            debug_tracking_s("007",gd->infilenames[ifile]);
-
             if (!strnull(cmd->infile)) {
-                debug_tracking_i("008",ifile);
-                debug_tracking_s("009", gd->infilefmtname[ifile]);
-                debug_tracking("010");
                 class_call_cballs(
                             infilefmt_string_to_int(gd->infilefmtname[ifile],
                             &gd->infilefmt_int), errmsg, errmsg);
-                debug_tracking_i("011",gd->infilefmt_int);
                 class_call_cballs(InputData(cmd, gd,
                                             gd->infilenames[ifile],ifile),
                                             errmsg, errmsg);
+                if (gd->stopflag)
+                    return SUCCESS;
+                
                 gd->model_comment = "input data file";
-                debug_tracking("012");
             } else {
                 verb_print_normal_info(cmd->verbose,
                                        cmd->verbose_log, gd->outlog,
@@ -861,12 +979,26 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                 verb_print_normal_info(cmd->verbose,
                                        cmd->verbose_log, gd->outlog,
                                        "creating a test model...\n");
-                TestData(cmd, gd);
+                class_call_cballs(TestData(cmd, gd), errmsg, errmsg);
                 gd->input_comment = "no data file given";
             }
         }
     }
-    debug_tracking("013");
+
+#ifdef OCTREE3PCF3DOMP
+    /* Readers with a real LOS column publish it through the flag below.  All
+     * other inputs receive unique IDs, so LOS exclusion is deterministic and
+     * cannot inspect an uninitialized addon field. */
+    for (ifile = 0; ifile < gd->ninfiles; ifile++) {
+        if (!gd->octree3pcf3d_los_ids[ifile]) {
+            bodyptr p_los;
+            DO_BODY(p_los, bodytable[ifile],
+                    bodytable[ifile] + gd->nbodyTable[ifile])
+                Octree3pcf3dLosId(p_los) = Id(p_los);
+            gd->octree3pcf3d_los_ids[ifile] = TRUE;
+        }
+    }
+#endif
 
     if (gd->inputHeaderFlag==TRUE) return SUCCESS;
 
@@ -874,6 +1006,9 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     if (scanopt(cmd->options, "all-in-one")) {
         class_call_cballs(InputData_all_in_one(cmd, gd),
                           errmsg, errmsg);
+        if (gd->stopflag)
+            return SUCCESS;
+        
     }
     //E
 //E
@@ -886,52 +1021,115 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                            routineName);
     }
 
-    search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
-
+    bool preserve_common_catalog_frame = FALSE;
+#ifdef OCTREESHEAROMP
+    preserve_common_catalog_frame =
+        gd->searchMethod_int == OCTREESHEARMETHOD;
+    if (preserve_common_catalog_frame
+        && prepare_octree_shear_catalogs(cmd, gd, bodytable,
+                                         gd->nbodyTable) == FAILURE)
+        return FAILURE;
+#endif
+#ifdef OCTREE3PCF3DOMP
+    if (gd->searchMethod_int == 166
+        && (scanopt(cmd->options, "survey-estimator-3d")
+            || scanopt(cmd->options, "encore-survey-estimator")
+            || scanopt(cmd->options, "survey-edge-correction"))) {
+        preserve_common_catalog_frame = TRUE;
+        if (cb3d_prepare_common_frame(cmd, gd, bodytable,
+                                      gd->nbodyTable) == FAILURE)
+            return FAILURE;
+    }
+#endif
+#ifdef BALLTREE2BALLSOMP
+    if (gd->searchMethod_int == BALLTREE2BALLSMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1])
+        preserve_common_catalog_frame = TRUE;
+#endif
+#ifdef BALLTREE2BALLSMPI
+    if (gd->searchMethod_int == BALLTREE2BALLSMPIMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1])
+        preserve_common_catalog_frame = TRUE;
+#endif
+#ifdef OCTREE2BALLSOMP
+    if (gd->searchMethod_int == OCTREE2BALLSMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1])
+        preserve_common_catalog_frame = TRUE;
+#endif
+#ifdef BALLTREE2BALLSOMP3PCF
+    if (gd->searchMethod_int == BALLTREE2BALLSOMP3PCFMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1])
+        preserve_common_catalog_frame = TRUE;
+#endif
+#ifdef BALLTREE2BALLSMPI3PCF
+    if (gd->searchMethod_int == BALLTREE2BALLSMPI3PCFMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1])
+        preserve_common_catalog_frame = TRUE;
+#endif
     if (scanopt(cmd->options, "read-mask")) {
         ifile=0;
-        cellptr root;                            // Set it up a temporal root
-        root = (cellptr) allocate(1 * sizeof(body));
-        FindRootCenter(cmd, gd,
-                       bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-        centerBodies(bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
-        FindRootCenter(cmd, gd,
-                       bodytable[ifile], gd->nbodyTable[ifile], ifile, root);
+        //B
+        cellptr root = NULL;                // Set it up a temporal root
+        int rc = FAILURE;
+
+        root = (cellptr) allocate(sizeof(body));
+        if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
+            goto cleanup_root_read_mask;
+        if (!preserve_common_catalog_frame
+            && centerBodies(bodytable[ifile], gd->nbodyTable[ifile],
+                            ifile, root) == FAILURE)
+            goto cleanup_root_read_mask;
+        if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
+            goto cleanup_root_read_mask;
         gd->rSizeTable[ifile] = 1.0;
-        expandbox(cmd, gd, bodytable[ifile],
-                  gd->nbodyTable[ifile], ifile, root);
+        if (expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
+            goto cleanup_root_read_mask;
+
+        rc = SUCCESS;
+
+        cleanup_root_read_mask:
         free(root);
+        if (rc == FAILURE)
+            return FAILURE;
+        //E
+
         if (cmd->rangeN > gd->rSizeTable[ifile])
         verb_print_warning(cmd->verbose,
         "\n%s: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
                            routineName, cmd->rangeN, gd->rSizeTable[ifile]);
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
-            debug_tracking("014");
             //B
-            cellptr root;                        // Set it up a temporal root
-            root = (cellptr) allocate(1 * sizeof(body));
-            FindRootCenter(cmd, gd,
-                           bodytable[ifile],
-                           gd->nbodyTable[ifile], ifile, root);
-            centerBodies(bodytable[ifile],
-                         gd->nbodyTable[ifile], ifile, root);
-            FindRootCenter(cmd, gd,
-                           bodytable[ifile],
-                           gd->nbodyTable[ifile], ifile, root);
-            //E
+            cellptr root = NULL;                // Set it up a temporal root
+            int rc = FAILURE;
+
+            root = (cellptr) allocate(sizeof(body));
+            if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
+                goto cleanup_root;
+            if (!preserve_common_catalog_frame
+                && centerBodies(bodytable[ifile], gd->nbodyTable[ifile],
+                                ifile, root) == FAILURE)
+                goto cleanup_root;
+            if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
+                goto cleanup_root;
             gd->rSizeTable[ifile] = 1.0;
-            expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile],
-                      ifile, root);
+            if (expandbox(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
+                goto cleanup_root;
+
+            rc = SUCCESS;
+
+            cleanup_root:
             free(root);
+            if (rc == FAILURE)
+                return FAILURE;
+            //E
+            
             if (cmd->rangeN > gd->rSizeTable[ifile])
                 verb_print_warning(cmd->verbose,
     "\n%s: warning! rangeN (%g) is greather than rSize (%g) of the system...\n",
                            routineName, cmd->rangeN, gd->rSizeTable[ifile]);
-            debug_tracking("015");
         }
     }
-    debug_tracking("016");
 
     //B set output comment
     if (! strnull(cmd->outfile)) {
@@ -940,16 +1138,13 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         gd->output_comment = "no output data file was given";
     }
     //E
-    debug_tracking("017");
 
 //B Tree search:
     gd->Rcut = cmd->rangeN;                         // Maximum search radius
-    //B correction 2025-05-03 :: look for edge-effects
     if (scanopt(cmd->options, "Rcut/theta")) {
         if (cmd->theta>0)
             gd->Rcut /= cmd->theta;                 // Maximum search radius
     }
-    //E
     gd->RcutSq = gd->Rcut*gd->Rcut;
 //E
     if (cmd->useLogHist) {
@@ -958,6 +1153,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
             //B rminHist = 0 not allowed when useLogHist is true
             //  therefore this segment does not ocurr...
             gd->deltaRV = dvector(1,cmd->sizeHistN);
+            gd->gd_allocated_2 = TRUE;
             verb_log_print(cmd->verbose_log, gd->outlog, "\ndeltaRV:\n");
             int n;
             for (n=1; n<=cmd->sizeHistN; n++) {
@@ -969,17 +1165,23 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
             }
             //E
         } else {
-            gd->deltaR = rlog10(cmd->rangeN/cmd->rminHist)/cmd->sizeHistN;
+            gd->deltaR = (rlog10(cmd->rangeN) - rlog10(cmd->rminHist))
+                       / cmd->sizeHistN;
+            if (!isfinite(gd->deltaR) || gd->deltaR <= 0.0)
+                cBALLS_FAIL(cmd,
+                            "%s: logarithmic histogram bin width must be finite and positive (deltaR=%g)\n",
+                            routineName, gd->deltaR);
             //B allocated after startrun_memoryAllocation
             //  deallocate before deallocate arrays in startrun_memoryAllocation
             gd->deltaRV = dvector(1,cmd->sizeHistN);
+            gd->gd_allocated_2 = TRUE;
             gd->ddeltaRV = dvector(1,cmd->sizeHistN-1);
             gd->bytes_tot += (cmd->sizeHistN)*sizeof(real);
             gd->bytes_tot += (cmd->sizeHistN-1)*sizeof(real);
             //E
             verb_log_print(cmd->verbose_log, gd->outlog,
                            "deltaRV (deltaR=%lf logscale):\n", gd->deltaR);
-            int n;
+            int n=1;                                // check this value of 1
             rbinlog = rlog10(cmd->rminHist) + ((real)(1))*gd->deltaR;
             rBin=rpow(10.0,rbinlog);
             gd->deltaRV[1] = rBin;
@@ -1011,6 +1213,11 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
          verb_log_print(cmd->verbose_log, gd->outlog,
                         "deltaR=%lf normal scale):\n",gd->deltaR);
     } // ! useLogHist
+
+    if (!isfinite(gd->deltaR) || gd->deltaR <= 0.0)
+        cBALLS_FAIL(cmd,
+                    "%s: histogram bin width must be finite and positive (deltaR=%g)\n",
+                    routineName, gd->deltaR);
 
     real Vol = 1.0;
     int k;
@@ -1082,9 +1289,15 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
 //E
 
-    gd->stepState = (INTEGER)(((real)cmd->stepState)/10.0);
+    gd->stepState = cmd->stepState/10;
+    if (gd->stepState < 1)
+        gd->stepState = 1;
 
     gd->deltaPhi = TWOPI/cmd->sizeHistPhi;
+    if (!isfinite(gd->deltaPhi) || gd->deltaPhi <= 0.0)
+        cBALLS_FAIL(cmd,
+                    "%s: angular bin width must be finite and positive (deltaPhi=%g)\n",
+                    routineName, gd->deltaPhi);
     // Nyquist frecuency = 1/(2 deltaPhi)
     verb_log_print(cmd->verbose_log, gd->outlog,
                    "\nNyquist frequency in phi bins = %g\n",
@@ -1100,8 +1313,6 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->gd_allocated_2 = TRUE;
     gd->bodytable_allocated = TRUE;
 
-    debug_tracking_s("018... final", routineName);
-
     return SUCCESS;
 }
 
@@ -1112,13 +1323,13 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 // If it is necessary: an item in cmdline_defs.h must have an item here::
     string routineName = "CheckParameters";
 
-    debug_tracking_s("001", routineName);
+    cballs_refresh_option_cache(cmd);
 
     //B Parameters related to the searching method
     if (cmd->useLogHist==FALSE &&
         (strcmp(cmd->searchMethod,"balls-omp") == 0))
-        error("%s: can´t have loghist false and balls-omp (%d %s)\n",
-              routineName, cmd->useLogHist, cmd->searchMethod);
+        cBALLS_FAIL(cmd, "%s: can´t have loghist false and balls-omp (%d %s)\n",
+                    routineName, cmd->useLogHist, cmd->searchMethod);
 #ifdef TPCF
 #ifndef USEGSL
         //  for recursivity needs that at least 3 multipoles be evaluated
@@ -1127,108 +1338,114 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
                 || (cmd->mChebyshev + 1)&(cmd->mChebyshev)) {
                 verb_print(cmd->verbose,
                     "\n%s: using option out-HistZetaG...\n", routineName);
-                error("%s: %s (=%d)\n\t\t\t%s\n",
-                      routineName, "absurd value for mChebyshev + 1",
-                      cmd->mChebyshev+1, "must be positive and a power of 2");
+                cBALLS_FAIL(cmd, "%s: %s (=%d)\n\t\t\t%s\n",
+                            routineName, "absurd value for mChebyshev + 1",
+                            cmd->mChebyshev+1, "must be positive and a power of 2");
             }
         } else {
             if (cmd->mChebyshev + 1 < 3)
-            error("%s: %s (=%d)\n\t\t\tmust be positive\n",
-                  "absurd value for mChebyshev + 1",
-                  routineName, cmd->mChebyshev+1);
+                cBALLS_FAIL(cmd, "%s: %s (=%d)\n\t\t\tmust be positive\n",
+                            "absurd value for mChebyshev + 1",
+                            routineName, cmd->mChebyshev+1);
         }
 #else
         //  for recursivity needs that at least 3 multipoles be evaluated
         if (cmd->mChebyshev + 1 < 3)
-            error("CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive\n", cmd->mChebyshev+1);
+            cBALLS_FAIL(cmd, "CheckParameters: absurd value for mChebyshev + 1 (=%d)\n\t\t\tmust be positive\n", cmd->mChebyshev+1);
 #endif
 #endif
     if (cmd->mChebyshev + 1 > cmd->sizeHistPhi)
-        error("CheckParameters: mChebyshev + 1 must be less than sizeHistPhi\n");
+        cBALLS_FAIL(cmd, "CheckParameters: mChebyshev + 1 must be less than sizeHistPhi\n");
     if (cmd->nsmooth < 1)
-        error("%s: absurd value for nsmooth: %d\n",
-              routineName, cmd->nsmooth);
-    debug_tracking("002");
+        cBALLS_FAIL(cmd, "%s: absurd value for nsmooth: %d\n",
+                    routineName, cmd->nsmooth);
 
     if (!strnull(cmd->rsmooth)) {
         if (gd->rsmooth[0] < 0.0 || gd->rsmoothFlag==FALSE)
-            error("CheckParameters: absurd value for rsmooth (%s, %g, %d)\n",
-                  cmd->rsmooth, gd->rsmooth[0], gd->rsmoothFlag);
+            cBALLS_FAIL(cmd, "CheckParameters: absurd value for rsmooth (%s, %g, %d)\n",
+                        cmd->rsmooth, gd->rsmooth[0], gd->rsmoothFlag);
     } else {
         gd->rsmooth[0] = 0.0;
     }
-    if (cmd->theta < 0)
-        error("CheckParameters: absurd value for theta\n");
-    // We can get ride off one parameter if do sizeHistPhi = 2(mChebyshev+1)
+    if (!isfinite(cmd->theta) || cmd->theta < 0.0)
+        cBALLS_FAIL(cmd,
+                    "%s: theta must be finite and non-negative (got %g)\n",
+                    routineName, cmd->theta);
     //E
-
-    debug_tracking("003");
 
     //B Parameters to control the I/O file(s)
     // Input catalog parameters
     // Output parameters
     // Parameters to set a region in the sky, for example for Takahashi data
     if (cmd->thetaL < 0 || cmd->thetaL > PI)
-        error("CheckParameters: absurd value for thetaL (must be in the range 0--pi)\n");
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for thetaL (must be in the range 0--pi)\n");
     if (cmd->thetaR < 0 || cmd->thetaR > PI)
-        error("CheckParameters: absurd value for thetaR (must be in the range 0--pi)\n");
-    if (cmd->phiL < 0 || cmd->phiL > PI)
-        error("CheckParameters: absurd value for phiL (must be in the range 0--2pi)\n");
-    if (cmd->phiR < 0 || cmd->phiR > PI)
-        error("CheckParameters: absurd value for phiR (must be in the range 0--2pi)\n");
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for thetaR (must be in the range 0--pi)\n");
+    if (cmd->phiL < 0 || cmd->phiL > TWOPI)
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for phiL (must be in the range 0--2pi)\n");
+    if (cmd->phiR < 0 || cmd->phiR > TWOPI)
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for phiR (must be in the range 0--2pi)\n");
     if (cmd->thetaL > cmd->thetaR)
-        error("CheckParameters: absurd value for thetaL (must be greater thatn thetaR)\n");
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for thetaL (must not be greater than thetaR)\n");
     if (cmd->phiL > cmd->phiR)
-        error("CheckParameters: absurd value for phiL (must be greater thatn phiR)\n");
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for phiL (must not be greater than phiR)\n");
     //E
 
-    debug_tracking("004");
-
     //B Parameters to control histograms and their output files
-    if (cmd->useLogHist==TRUE && cmd->rminHist == 0)
-        error("CheckParameters: can´t have useLogHist=true and rminHist=0 (%d %g)\n",
-              cmd->useLogHist, cmd->rminHist);
-    //
     if (cmd->sizeHistN < 2)
-        error("CheckParameters: absurd value for sizeHistN\n");
-    if (cmd->rangeN < 0)
-        error("CheckParameters: absurd value for rangeN\n");
-    if (cmd->rminHist < 0 || cmd->rminHist > cmd->rangeN)
-        error("CheckParameters: absurd value for rminHist\n");
+        cBALLS_FAIL(cmd, "%s: sizeHistN must be at least 2 (got %d)\n",
+                    routineName, cmd->sizeHistN);
+    if (scanopt(cmd->options, "out-m-HistZeta") && cmd->sizeHistN < 4)
+        cBALLS_FAIL(cmd,
+                    "%s: out-m-HistZeta requires sizeHistN >= 4 (got %d)\n",
+                    routineName, cmd->sizeHistN);
+
+    if (!isfinite(cmd->rangeN) || cmd->rangeN <= 0.0)
+        cBALLS_FAIL(cmd, "%s: rangeN must be finite and positive (got %g)\n",
+                    routineName, cmd->rangeN);
+    if (!isfinite(cmd->rminHist) || cmd->rminHist < 0.0
+        || cmd->rminHist >= cmd->rangeN)
+        cBALLS_FAIL(cmd,
+                    "%s: rminHist must be finite and satisfy 0 <= rminHist < rangeN (got %g, rangeN=%g)\n",
+                    routineName, cmd->rminHist, cmd->rangeN);
+    if (cmd->useLogHist == TRUE && cmd->rminHist <= 0.0)
+        cBALLS_FAIL(cmd,
+                    "%s: logarithmic histograms require rminHist > 0 (got %g)\n",
+                    routineName, cmd->rminHist);
+    if (cmd->useLogHist == TRUE && cmd->logHistBinsPD <= 0)
+        cBALLS_FAIL(cmd,
+                    "%s: logarithmic histograms require logHistBinsPD > 0 (got %d)\n",
+                    routineName, cmd->logHistBinsPD);
+
     if (cmd->sizeHistPhi < 2 || cmd->sizeHistPhi&(cmd->sizeHistPhi-1))
-    error("CheckParameters: absurd value for sizeHistPhi\n\tmust be a power of 2\n");
+        cBALLS_FAIL(cmd, "CheckParameters: absurd value for sizeHistPhi\n\tmust be a power of 2\n");
     //
     //E
     
     //B Set of parameters needed to construct a test model
     if (cmd->nbody < 3) {
-        error("%s: absurd value for nbody: %d\n", routineName, cmd->nbody);
+        cBALLS_FAIL(cmd, "%s: absurd value for nbody: %" INTEGER_FMT "\n",
+                    routineName, cmd->nbody);
     }
-    if (cmd->lengthBox <= 0)
-        error("%s: absurd value for lengthBox\n", routineName);
-
+    if (!isfinite(cmd->lengthBox) || cmd->lengthBox <= 0.0)
+        cBALLS_FAIL(cmd,
+                    "%s: lengthBox must be finite and positive (got %g)\n",
+                    routineName, cmd->lengthBox);
     //E
-
-    debug_tracking("005");
 
     //B Miscellaneous parameters
     if (cmd->stepState <= 0)
-        error("%s: absurd value for stepState must be an integer > 0\n",
-              routineName);
+        cBALLS_FAIL(cmd, "%s: absurd value for stepState must be an integer > 0\n",
+                    routineName);
     if (cmd->verbose < 0)
-        error("%s: absurd value for verbose must be an integer >= 0\n",
-              routineName);
+        cBALLS_FAIL(cmd, "%s: absurd value for verbose must be an integer >= 0\n",
+                    routineName);
     if (cmd->verbose_log < 0)
-        error("%s: absurd value for verbose_log must be an integer >= 0\n",
-              routineName);
-#ifdef OPENMPCODE
+        cBALLS_FAIL(cmd, "%s: absurd value for verbose_log must be an integer >= 0\n",
+                    routineName);
     if (cmd->numthreads <= 0)
-        error("%s: absurd value for numberThreads must be an integer >= 0\n",
-              routineName);
-#endif
-    //E
-    debug_tracking("006");
-
+        cBALLS_FAIL(cmd, "%s: absurd value for numberThreads must be an integer >= 0\n",
+                    routineName);
     //
     gd->bh86 = scanopt(cmd->options, "bh86");       // Barnes, J. & Hut, P.
                                                     //  1986. Nature 324,
@@ -1237,182 +1454,228 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
                                                     //  Warren, M.S. 1994.
                                                     //  J. Comp. Phys. 111,
                                                     //  136
-    debug_tracking("007");
 
     if (gd->bh86 && gd->sw94)
-        error("%s: incompatible options bh86 and sw94\n", routineName);
+        cBALLS_FAIL(cmd, "%s: incompatible options bh86 and sw94\n", routineName);
     //
 
-    debug_tracking("008... follows OCTREESMOOTHING and IOLIB...");
+    //B options section
+    if (scanopt(cmd->options, "and-CF")) {
+        if (!scanopt(cmd->options, "compute-HistN")) {
+            cBALLS_FAIL(cmd, "\n%s: 'and-CF' in options must be %s\n %s\n",
+            routineName, "accompanied by 'compute-HistN'.",
+                        "Useful only for periodic box catalogs.");
+        }
+    }
+
+    if (scanopt(cmd->options, "edge-corrections")) {
+        if (!scanopt(cmd->options, "no-normalize-HistZeta")) {
+            cBALLS_FAIL(cmd, "\n%s: 'edge-corrections' in options must be %s\n",
+                        routineName, "accompanied by 'no-normalize-HistZeta'.\n");
+        }
+    }
+
+    if (scanopt(cmd->options, "read-mask")) {
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "\n\t%s: warning! 'read-mask' in options must be %s\n\t\t %s\n\n",
+            routineName,
+            "accompanied by properly setting infile, infileformat and iCatalogs parameters'.",
+                            "Must be in fits-healpix format, same Nside the data catalog.");
+    }
+
+    if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+        if (!scanopt(cmd->options, "edge-corrections")) {
+            verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                    "\n\t%s: warning! 'no-normalize-HistZeta' in options %s\n", routineName,
+                                "will give no-normalized 3pcf.");
+
+        }
+    }
+
+    if (scanopt(cmd->options, "patch")) {
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                "\n\t%s: warning! 'patch' in options %s\n\t\t %s\n\n", routineName,
+                               "is active only for takahashi and fits-healpix full-sky catalogs.",
+                               "Use in combination with parameters thetaL, thetaR, phiL and phiR");
+    }
+    //E
 
 //B socket:
 #ifdef ADDONS
 #include "startrun_include_07.h"
 #endif
 //E
-    debug_tracking_s("013... final", routineName);
+
+    if (gd->searchMethod_int < 0) {
+        cBALLS_FAIL(cmd,
+            "%s: searchMethod '%s' is not available in this executable; "
+            "enable the corresponding addon in addons/Makefile_addons_settings "
+            "or choose a compiled search method\n",
+            routineName, cmd->searchMethod);
+    }
+
+#if defined(BALLS) && defined(OCTREESMOOTHING) && defined(TREENODEALLBODIES) \
+    && !defined(ALLOW_BALLS_WITH_SMOOTHING)
+    if (strcmp(cmd->searchMethod, "balls-omp") == 0) {
+        cBALLS_FAIL(cmd,
+            "%s: balls-omp is not validated with OCTREESMOOTHING and "
+            "TREENODEALLBODIES enabled; rebuild without smoothing or set "
+            "ALLOW_BALLS_WITH_SMOOTHING=1 for experimental use\n",
+            routineName);
+    }
+#endif
 
     return SUCCESS;
 }
 //E
 
 
+//B Section of parameter writing to a file
 #define FMTT    "%-35s = %s\n"
 #define FMTTS    "%-35s = \"%s\"\n"
 #define FMTI    "%-35s = %d\n"
 #define FMTIL    "%-35s = %ld\n"
 #define FMTR	"%-35s = %g\n"
 
-//B Section of parameter writing to a file
 int PrintParameterFile(struct  cmdline_data *cmd,
                        struct  global_data* gd, char *fname)
 {
 // Every item in cmdline_defs.h must have an item here::
     string routineName = "PrintParameterFile";
 
-    FILE *fdout;
-    char buf[200];
-    int  errorFlag=0;
-
-    debug_tracking_s("001", routineName);
+    FILE *fdout = NULL;
+    char buf[MAXLENGTHOFSTRSCMD + MAXLENGTHOFFILES + 32];
 
     if (gd->flagPrint==TRUE && gd->rootDirFlag==TRUE) {
         //B Look for "/" if fname is composed: path and filename
         int ndefault = 0;
-        int ipos;
-        char *dp;
-        for (int i; i< strlen(fname); i++) {
+        int ipos = 0;
+        const char *dp = fname;
+        int nwritten;
+        for (size_t i = 0; fname[i] != '\0'; i++) {
             if(fname[i] == '/') {
-                ipos = i+1;
+                ipos = (int)i + 1;
                 ndefault++;
             }
         }
-        
-        if (ndefault == 0) {
-            sprintf(buf,"%s/%s%s",cmd->rootDir,fname,"-usedvalues");
-        } else {
-            dp = (char*) malloc((strlen(fname)-ipos)*sizeof(char));
-            strncpy(dp, fname + ipos, strlen(fname)-ipos);
+
+        if (ndefault != 0) {
+            dp = fname + ipos;
             verb_print_q(3,cmd->verbose,
                          "PrintParameterFile: '/' counts %d pos %d and %s\n",
                          ndefault, ipos, dp);
-            sprintf(buf,"%s/%s%s",cmd->rootDir,dp,"-usedvalues");
         }
+
+        nwritten = snprintf(buf, sizeof(buf), "%s/%s%s",
+                            cmd->rootDir, dp, "-usedvalues");
+        if (nwritten < 0 || (size_t)nwritten >= sizeof(buf))
+            cBALLS_FAIL(cmd, "%s: used-values path too long\n", routineName);
         //E
         
-        if(!(fdout=fopen(buf,"w"))) {
-            fprintf(stdout,"error opening file '%s' \n",buf);
-            errorFlag=1;
-        } else {
+        OPEN_OUTPUT_OR_FAIL(fdout, buf, "w!");
+        
             //B Parameters related to the searching method
-            fprintf(fdout,FMTT,"searchMethod",cmd->searchMethod);
-            fprintf(fdout,FMTI,"mChebyshev",cmd->mChebyshev);
-            fprintf(fdout,FMTI,"nsmooth",cmd->nsmooth);
-            fprintf(fdout,FMTT,"rsmooth",cmd->rsmooth);
-            fprintf(fdout,FMTR,"theta",cmd->theta);
-            fprintf(fdout,FMTT,"usePeriodic",
-                    cmd->usePeriodic ? "true" : "false");
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT, "searchMethod",
+                             cmd->searchMethod);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"mChebyshev",cmd->mChebyshev);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"nsmooth",cmd->nsmooth);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"rsmooth",cmd->rsmooth);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"theta",cmd->theta);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"usePeriodic",
+                             cmd->usePeriodic ? "true" : "false");
             //E
             
             //B Parameters to control the I/O file(s)
             // Input catalog parameters
-            fprintf(fdout,FMTT,"infile",cmd->infile);
-            fprintf(fdout,FMTT,"infileformat",cmd->infilefmt);
-            fprintf(fdout,FMTT,"iCatalogs",cmd->iCatalogs);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"infile",cmd->infile);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"infileformat",cmd->infilefmt);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"iCatalogs",cmd->iCatalogs);
             // Output parameters
-            fprintf(fdout,FMTT,"rootDir",cmd->rootDir);
-            fprintf(fdout,FMTT,"outfile",cmd->outfile);
-            fprintf(fdout,FMTT,"outfileformat",cmd->outfilefmt);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"rootDir",cmd->rootDir);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"outfile",cmd->outfile);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"outfileformat",cmd->outfilefmt);
             // Parameters to set a region in the sky,
             //  for example for Takahashi data set
-            fprintf(fdout,FMTR,"thetaL",cmd->thetaL);
-            fprintf(fdout,FMTR,"thetaR",cmd->thetaR);
-            fprintf(fdout,FMTR,"phiL",cmd->phiL);
-            fprintf(fdout,FMTR,"phiR",cmd->phiR);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"thetaL",cmd->thetaL);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"thetaR",cmd->thetaR);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"phiL",cmd->phiL);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"phiR",cmd->phiR);
             //E
             
             //B Parameters to control histograms and their output files
-            fprintf(fdout,FMTT,"useLogHist",cmd->useLogHist ? "true" : "false");
-            fprintf(fdout,FMTI,"logHistBinsPD",cmd->logHistBinsPD);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"useLogHist",
+                             cmd->useLogHist ? "true" : "false");
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,
+                             "logHistBinsPD",cmd->logHistBinsPD);
             //
-            fprintf(fdout,FMTI,"sizeHistN",cmd->sizeHistN);
-            fprintf(fdout,FMTR,"rangeN",cmd->rangeN);
-            fprintf(fdout,FMTR,"rminHist",cmd->rminHist);
-            fprintf(fdout,FMTI,"sizeHistPhi",cmd->sizeHistPhi);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"sizeHistN",cmd->sizeHistN);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"rangeN",cmd->rangeN);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"rminHist",cmd->rminHist);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"sizeHistPhi",cmd->sizeHistPhi);
             //
-            fprintf(fdout,FMTT,"histNNFileName",cmd->histNNFileName);
-            fprintf(fdout,FMTT,"histXi2pcfFileName",cmd->histXi2pcfFileName);
-            fprintf(fdout,FMTT,"histZetaFileName",cmd->histZetaFileName);
-            fprintf(fdout,FMTT,"suffixOutFiles",cmd->suffixOutFiles);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,
+                             "histNNFileName",cmd->histNNFileName);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,
+                             "histXi2pcfFileName",cmd->histXi2pcfFileName);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,
+                             "histZetaFileName",cmd->histZetaFileName);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,
+                             "suffixOutFiles",cmd->suffixOutFiles);
             //E
             
             //B Set of parameters needed to construct a test model
-            fprintf(fdout,FMTI,"seed",cmd->seed);
-            fprintf(fdout,FMTT,"testmodel",cmd->testmodel);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"seed",cmd->seed);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"testmodel",cmd->testmodel);
 #ifdef LONGINT
-            fprintf(fdout,FMTIL,"nbody",cmd->nbody);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTIL,"nbody",cmd->nbody);
 #else
-            fprintf(fdout,FMTI,"nbody",cmd->nbody);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"nbody",cmd->nbody);
 #endif
-            fprintf(fdout,FMTR,"lengthBox",cmd->lengthBox);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTR,"lengthBox",cmd->lengthBox);
             //E
-            
+
             //B Miscellaneous parameters
-            fprintf(fdout,FMTTS,"preScript",cmd->preScript);
-            fprintf(fdout,FMTTS,"posScript",cmd->posScript);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTTS,"preScript",cmd->preScript);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTTS,"posScript",cmd->posScript);
 #ifdef LONGINT
-            fprintf(fdout,FMTIL,"stepState",cmd->stepState);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTIL,"stepState",cmd->stepState);
 #else
-            fprintf(fdout,FMTI,"stepState",cmd->stepState);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"stepState",cmd->stepState);
 #endif
-            fprintf(fdout,FMTI,"verbose",cmd->verbose);
-            fprintf(fdout,FMTI,"verbose_log",cmd->verbose_log);
-#ifdef OPENMPCODE
-            fprintf(fdout,FMTI,"numberThreads",cmd->numthreads);
-#endif
-            if (cmd->verbose>=VERBOSEDEBUGINFO) {
-                verb_print(cmd->verbose, "\n%s: PrintParamterFile: preScript: %s\n",
-                           routineName, cmd->preScript);
-                verb_print(cmd->verbose, "\n%s: PrintParamterFile: posScript: %s\n",
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"verbose",cmd->verbose);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"verbose_log",cmd->verbose_log);
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI,"numberThreads",cmd->numthreads);
+        if (cmd->verbose>=VERBOSEDEBUGINFO) {
+            verb_print(cmd->verbose, "\n%s: PrintParamterFile: preScript: %s\n",
+                       routineName, cmd->preScript);
+            verb_print(cmd->verbose, "\n%s: PrintParamterFile: posScript: %s\n",
                            routineName, cmd->posScript);
-            }
-            fprintf(fdout,FMTT,"options",cmd->options);
+        }
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTT,"options",cmd->options);
             //E
             
-            //B socket:
+//B socket:
 #ifdef ADDONS
 #include "startrun_include_08.h"
 #endif
-            //E
+//E
             
-            fprintf(fdout,"\n\n");
-        }
-        fclose(fdout);
-        
-        if(errorFlag) {
-            exit(0);
-        }
-        
-        if (ndefault != 0)
-            free(dp);
-        
+        WRITE_OUTPUT_OR_FAIL(fdout, buf, "\n\n");
+        CLOSE_OUTPUT_OR_FAIL(fdout, buf);
     } // ! gd->flagPrint==TRUE && gd->rootDirFlag==TRUE
-
-//    debug_tracking("002... final");
-    debug_tracking_s("002... final", routineName);
-
 
     return SUCCESS;
 }
-//E
 
 #undef FMTT
 #undef FMTTS
 #undef FMTI
 #undef FMTR
+//E
 
 
-local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int seed)
+local int random_init(struct  cmdline_data* cmd,
+                      struct  global_data* gd, int seed)
 {
     string routineName = "random_init";
 
@@ -1423,6 +1686,14 @@ local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int se
     gsl_rng_env_setup();
     T = gsl_rng_default;
     gd->r = gsl_rng_alloc (T);                      // Deallocate at EndRun...
+    if (gd->r == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: memory allocation failed for GSL random generator",
+                 routineName);
+        return FAILURE;
+    }
+    gd->random_allocated = TRUE;
+    gd->gd_allocated = TRUE;
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                           "\n%s: gd->r and seed = %d %d\n",
                           routineName, *(gd->r), seed);
@@ -1432,8 +1703,6 @@ local int random_init(struct  cmdline_data* cmd, struct  global_data* gd, int se
                           routineName, *(gd->r), seed);
     r_gsl = gd->r;
     gd->bytes_tot += (1)*sizeof(gsl_rng_type);
-
-    gd->random_allocated = TRUE;
 
 #else
     idum = (long)seed;
@@ -1458,10 +1727,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     //  First is allocated above gsl structure gd->r
 
     INTEGER bytes_tot_local=0;
+    gd->histograms_allocated = TRUE;
     //B PXD functions
 #ifdef PXD
     gd->vecPXD = dvector(1,cmd->sizeHistN);
-//    gd->matPXD = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
     //B offset at 0 in order to work with Cython
     gd->matPXD = dmatrix(0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
     //E
@@ -1502,8 +1771,10 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
                                   1,cmd->sizeHistN);
         gd->histZetaM_EE = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,
                                   1,cmd->sizeHistN);
+        gd->histZetaM_EE_Im = dmatrix3D(1,cmd->mChebyshev+1,
+                                       1,cmd->sizeHistN,1,cmd->sizeHistN);
         bytes_tot_local +=
-            2.0*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+            3.0*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 
         gd->histZetaMcos =
                 dmatrix3D(1,cmd->mChebyshev+1,1,
@@ -1538,7 +1809,7 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
 #endif
 //E
 
-    //B this were in startrun_include_10.h -> startrun_octree_kkk_omp_10.h above...
+    //B this was in startrun_include_10.h -> startrun_octree_kkk_omp_10.h above...
     // problems with OCTREEKKKOMPON = 0
     // 2pcf
     gd->histNNSubN2pcf = dvector(1,cmd->sizeHistN);
@@ -1553,8 +1824,6 @@ global int startrun_memoryAllocation(struct  cmdline_data *cmd,
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "\n%s: Allocated %g MByte for histograms storage.\n",
                            routineName, bytes_tot_local*INMB);
-
-    gd->histograms_allocated = TRUE;
 
     return SUCCESS;
 }
@@ -1576,16 +1845,33 @@ local void search_method_string_to_int(string method_str,int *method_int)
 //E
 }
 
+global int cballs_search_method_id(const char *method)
+{
+    int method_id = -1;
 
+    if (method == NULL) return -1;
+    search_method_string_to_int((string)method, &method_id);
+    return method_id;
+}
+
+
+//B
 #ifdef OPENMPCODE
 int SetNumberThreads(struct  cmdline_data *cmd)
 {
+    if (cmd == NULL || cmd->numthreads < 1) return FAILURE;
+    
     omp_set_num_threads(cmd->numthreads);
 
     return SUCCESS;
 }
+#else // dummy for no OPENMCODE
+int SetNumberThreads(struct  cmdline_data *cmd)
+{
+    return SUCCESS;
+}
 #endif
-
+//E
 
 //B Special routines to scan command line
 
@@ -1597,9 +1883,6 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
     int nitems, ndummy=1;
     char inputnametmp[MAXLENGTHOFSTRSCMD];
     int i;
-    size_t slen;
-
-    debug_tracking_s("001", routineName);
 
     if (strnull(cmd->infile)) {
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1607,16 +1890,21 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
                         routineName);
         gd->ninfiles=1;                              // To test data...
     } else {
-        strcpy(inputnametmp,cmd->infile);
+        if (copy_checked(inputnametmp, sizeof(inputnametmp),
+                         cmd->infile, "infile") != 0)
+            cBALLS_FAIL(cmd, "%s: infile option too long\n", routineName);
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "\n%s: Splitting string \"%s\" in tokens:\n",
                               routineName, inputnametmp);
         gd->ninfiles=0;
         pch = strtok(inputnametmp," ,");
         while (pch != NULL) {
-            slen = strlen(pch);
-            snprintf(gd->infilenames[gd->ninfiles],
-                     slen+1, "%s", pch);
+            if (gd->ninfiles >= MAXITEMS)
+                cBALLS_FAIL(cmd, "%s: too many input files\n", routineName);
+            if (copy_checked(gd->infilenames[gd->ninfiles],
+                             sizeof(gd->infilenames[gd->ninfiles]),
+                             pch, "infile token") != 0)
+                cBALLS_FAIL(cmd, "%s: infile token too long\n", routineName);
             ++gd->ninfiles;
             verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: %s\n",
@@ -1627,39 +1915,46 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
                               "%s: num. of files in infile %s =%d\n",
                             routineName, cmd->infile, gd->ninfiles);
     }
-    debug_tracking("002");
 
     if (!strnull(cmd->infilefmt)) {
-        strcpy(inputnametmp,cmd->infilefmt);
+        if (copy_checked(inputnametmp, sizeof(inputnametmp),
+                         cmd->infilefmt, "infileformat") != 0)
+            cBALLS_FAIL(cmd, "%s: infileformat option too long\n", routineName);
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "\n%s: Splitting string \"%s\" in tokens:\n",
                             routineName, inputnametmp);
         nitems=0;
         pch = strtok(inputnametmp," ,");
         while (pch != NULL) {
-            slen = strlen(pch);
-            debug_tracking_s("003: pch",pch);
-            snprintf(gd->infilefmtname[nitems],
-                     slen+1, "%s", pch);
+            if (nitems >= MAXITEMS)
+                cBALLS_FAIL(cmd, "%s: too many infileformat items\n", routineName);
+            if (copy_checked(gd->infilefmtname[nitems],
+                             sizeof(gd->infilefmtname[nitems]),
+                             pch, "infileformat token") != 0)
+                cBALLS_FAIL(cmd, "%s: infileformat token too long\n",
+                            routineName);
             ++nitems;
             verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: %s\n",
                                 routineName, gd->infilefmtname[nitems-1]);
             pch = strtok (NULL, " ,");
-            debug_tracking_i("004: not null infilefmt", nitems);
-            debug_tracking_s("...", gd->infilefmtname[nitems-1]);
         }
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "%s: num. of items in infilefmt %s =%d\n",
                             routineName, cmd->infilefmt, nitems);
         if (nitems != gd->ninfiles)
-    error("\nstartrun_Common: nitems must be equal to number of files\n\n");
-        debug_tracking("005: not null infilefmt");
+            cBALLS_FAIL(cmd,
+            "\nstartrun_Common: nitems must be equal to number of files\n\n");
 
     } else {
-        nitems=1;
+        nitems=0;
         pch = "columns-ascii";
-        strcpy(gd->infilefmtname[nitems],pch);
+        if (copy_checked(gd->infilefmtname[nitems],
+                         sizeof(gd->infilefmtname[nitems]),
+                         pch, "default infileformat") != 0)
+            cBALLS_FAIL(cmd, "%s: default infileformat too long\n",
+                        routineName);
+        ++nitems;
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "%s: warning!! found null infilefmt:\n",
                             routineName);
@@ -1670,26 +1965,26 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
                               "%s: num. of items in infilefmt %s =%d\n",
                             routineName, cmd->infilefmt, nitems);
         if (nitems != gd->ninfiles)
-            error("\nstartrun_Common: nitems must be equal to number of files\n\n");
-        debug_tracking("006: null infilefmt");
+            cBALLS_FAIL(cmd,
+            "\nstartrun_Common: nitems must be equal to number of files\n\n");
     }
 
-    debug_tracking("007");
+    class_call_cballs(scanrOption(cmd, gd, cmd->rsmooth, gd->rsmooth,
+                                  &nitems, ndummy, 2, "rsmooth"),
+                      errmsg, errmsg);
 
-    scanrOption(cmd, gd, cmd->rsmooth, gd->rsmooth, &nitems, ndummy,
-                2, "rsmooth");
     gd->rsmoothFlag = TRUE;
     if (nitems!=1 && !strnull(cmd->rsmooth)) {
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                              "%s: option: rsmooth=%s is not valid... going out\n",
-                              routineName, cmd->rsmooth);
+                            "%s: option: rsmooth=%s is not valid... going out\n",
+                            routineName, cmd->rsmooth);
         gd->rsmoothFlag = FALSE;
     }
 
-    debug_tracking("008");
+    class_call_cballs(scaniOption(cmd, gd, cmd->iCatalogs, gd->iCatalogs,
+                                  &nitems, gd->ninfiles, 0, "iCatalogs"),
+                      errmsg, errmsg);
 
-    scaniOption(cmd, gd, cmd->iCatalogs, gd->iCatalogs,
-                &nitems, gd->ninfiles, 0, "iCatalogs");
     if (gd->ninfiles==1) {
         (gd->iCatalogs[0]) = 0;
         if (cmd->verbose_log>=2)
@@ -1711,15 +2006,11 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
         }
     }
 
-    debug_tracking("009");
-
 //B socket:
 #ifdef ADDONS
 #include "startrun_include_12.h"
 #endif
 //E
-//    debug_tracking("010... final");
-    debug_tracking_s("010... final", routineName);
 
     return SUCCESS;
 }
@@ -1730,7 +2021,7 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
 {
     string routineName = "scaniOption";
     char *pch;
-    char *poptionstr[30],  optiontmp[100];
+    char *poptionstr[MAXITEMS], optiontmp[MAXLENGTHOFSTRSCMD];
     int i;
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1742,15 +2033,21 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
                         routineName, message, optionstr);
 
     if (!strnull(optionstr)) {
-        strcpy(optiontmp,optionstr);
+        if (copy_checked(optiontmp, sizeof(optiontmp),
+                         optionstr, message) != 0)
+            cBALLS_FAIL(cmd, "%s: option '%s' too long\n",
+                        routineName, message);
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "%s: Splitting string \"%s\" in tokens:\n",
                             routineName, optiontmp);
         *noption=0;
         pch = strtok(optiontmp," ,");
         while (pch != NULL) {
-            poptionstr[*noption] = (string) malloc(10);
-            strcpy(poptionstr[*noption],pch);
+            if (*noption >= MAXITEMS)
+                cBALLS_FAIL(cmd, "\n%s: noption = %d must be less than "
+                            "the maximum num. of lines\n\n",
+                            routineName, *noption + 1);
+            poptionstr[*noption] = pch;
             ++(*noption);
             verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: %s\n",
@@ -1764,16 +2061,20 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
 
         if (flag == 0)
             if (*noption != nfiles)
-                error("\nscanOption: noption = %d %s",
-                      *noption,
-                      "must be equal to number of infiles\n\n");
+                cBALLS_FAIL(cmd, "\nscanOption: noption = %d %s",
+                            *noption,
+                            "must be equal to number of infiles\n\n");
         if (*noption > MAXITEMS)
-            error("\nscaniOption: noption = %d %s",
-                  *noption,
-                  "must be less than the maximum num. of lines\n\n");
+            cBALLS_FAIL(cmd,
+                        "\nscaniOption: noption = %d %s",
+                              *noption,
+                              "must be less than the maximum num. of lines\n\n");
 
         for (i=0; i<*noption; i++) {
-            option[i]=atoi(poptionstr[i]);
+            if (parse_int_checked(poptionstr[i], &option[i],
+                                  cmd->error_message, _ERRORMSGSIZE_,
+                                  message) == FAILURE)
+                return FAILURE;
             verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                    "%s: option: %d\n",
                                 routineName, option[i]);
@@ -1783,21 +2084,23 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
                             routineName, *noption,nfiles);
         if (flag == 1) {
             if (*noption > nfiles)
-                error("\nscanOption: noption = %d %s",
-                      *noption,
-                      "must be less or equal to number of files\n\n");
+                cBALLS_FAIL(cmd,
+                            "\nscanOption: noption = %d %s",
+                            *noption,
+                            "must be less or equal to number of files\n\n");
             else {
                 for (i=*noption; i<nfiles; i++) {
                     option[i]=option[i-1]+1;
-                    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                                           "%s: option: %d\n",
-                                        routineName, option[i]);
+                    verb_print_debug_info(cmd->verbose, cmd->verbose_log,
+                                          gd->outlog, "%s: option: %d\n",
+                                          routineName, option[i]);
                 }
             }
         }
     } else {
         //B ask a question if optionstr is columns then fix columns to default values..
         if (scanopt(message, "columns")) {
+#if defined(ADDONS) && defined(IOLIB)
             gd->columns[0] = 1;
             gd->columns[1] = 2;
             gd->columns[2] = 3;
@@ -1805,6 +2108,7 @@ local int scaniOption(struct  cmdline_data* cmd, struct  global_data* gd,
             gd->columns[4] = 5;
             gd->columns[5] = 6;
             gd->columns[6] = 7;
+#endif
         } else {
             for (i=0; i<nfiles; i++) {
                 option[i]=1;
@@ -1826,7 +2130,7 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
     string routineName = "scanrOption";
 
     char *pch;
-    char *poptionstr[30],  optiontmp[100];
+    char *poptionstr[MAXITEMS], optiontmp[MAXLENGTHOFSTRSCMD];
     int i;
 
     verb_log_print(cmd->verbose_log, gd->outlog,
@@ -1838,15 +2142,21 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
                         routineName, message);
 
     if (!strnull(optionstr)) {
-        strcpy(optiontmp,optionstr);
+        if (copy_checked(optiontmp, sizeof(optiontmp),
+                         optionstr, message) != 0)
+            cBALLS_FAIL(cmd, "%s: option '%s' too long\n",
+                        routineName, message);
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n%s: Splitting string \"%s\" in tokens:\n",
                             routineName, optiontmp);
         *noption=0;
         pch = strtok(optiontmp," ,");
         while (pch != NULL) {
-            poptionstr[*noption] = (string) malloc(MAXLENGTHOFREAL);
-            strcpy(poptionstr[*noption],pch);
+            if (*noption >= MAXITEMS)
+                cBALLS_FAIL(cmd, "\n%s: noption = %d must be less than "
+                            "the maximum num. of lines\n\n",
+                            routineName, *noption + 1);
+            poptionstr[*noption] = pch;
             ++(*noption);
             verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                   "%s: %s\n",
@@ -1859,14 +2169,18 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
 
         if (flag == 0)
             if (*noption != nfiles)
-            error("\nscanOption: noption = %d must be equal to number of files\n\n",
-                      *noption);
+                cBALLS_FAIL(cmd,
+                            "\nscanOption: noption = %d must be equal to number of files\n\n",
+                                      *noption);
         if (*noption > MAXITEMS)
-    error("\nscanOption: noption = %d must be less than the maximum num. of lines\n\n",
-                  *noption);
+            cBALLS_FAIL(cmd, "\nscanOption: noption = %d must be less than the maximum num. of lines\n\n",
+                        *noption);
 
         for (i=0; i<*noption; i++) {
-            option[i]=atof(poptionstr[i]);
+            if (parse_double_checked(poptionstr[i], &option[i],
+                                     cmd->error_message, _ERRORMSGSIZE_,
+                                     message) == FAILURE)
+                return FAILURE;
             if (cmd->verbose_log>=3)
             verb_log_print(cmd->verbose_log, gd->outlog, "option: %g\n",option[i]);
         }
@@ -1876,8 +2190,9 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
                             routineName, *noption, nfiles);
         if (flag == 1) {
             if (*noption > nfiles)
-    error("\nscanOption: noption = %d must be less or equal to number of files\n\n",
-                  *noption);
+                cBALLS_FAIL(cmd,
+                            "\nscanOption: noption = %d must be less or equal to number of files\n\n",
+                                          *noption);
             else {
                 for (i=*noption; i<nfiles; i++) {
                     option[i]=option[i-1]+1;
@@ -1886,10 +2201,6 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
                                    "option: %g\n",option[i]);
                 }
             }
-        }
-
-        for (i=0; i<*noption; i++) {
-            free(poptionstr[*noption]);
         }
 
     } else {
@@ -1909,176 +2220,799 @@ local int scanrOption(struct  cmdline_data* cmd, struct  global_data* gd,
 local int print_make_info(struct cmdline_data* cmd,
                                   struct  global_data* gd)
 {
-    verb_print(cmd->verbose,
-               "\nprint_make_info:\n");
+    typedef struct {
+        const char *name;
+        const char *value;
+    } make_setting;
+
+#define MAKE_SETTING(name) {#name, CBALLS_MAKE_##name}
+    static const make_setting code_settings[] = {
+        MAKE_SETTING(DEFDIMENSION),
+        MAKE_SETTING(USEGSL),
+        MAKE_SETTING(GSLINTERNAL),
+        MAKE_SETTING(OPENMPMACHINE),
+        MAKE_SETTING(ADDONSON),
+    };
+    static const make_setting machine_settings[] = {
+        MAKE_SETTING(SINGLEPON),
+        MAKE_SETTING(LONGINTON),
+        MAKE_SETTING(MACONLYON),
+        MAKE_SETTING(DEBUGON),
+        MAKE_SETTING(DEBUGCOMPILINGON),
+        MAKE_SETTING(DEBUGTREEON),
+        MAKE_SETTING(DEBUGTRACKINGON),
+        MAKE_SETTING(GENERALLIBS_ON),
+        MAKE_SETTING(GETPARAM_ON),
+    };
+    static const make_setting addon_settings[] = {
+        MAKE_SETTING(OCTREEGGGOMPON),
+        MAKE_SETTING(KDTREEOMPON),
+        MAKE_SETTING(BALLTREEOMPON),
+        MAKE_SETTING(BALLTREE2BALLSOMPON),
+        MAKE_SETTING(BALLTREE2BALLSMPION),
+        MAKE_SETTING(OCTREE2BALLSOMPON),
+        MAKE_SETTING(OCTREE2BALLSMPION),
+        MAKE_SETTING(BALLTREE2BALLSOMP3PCFON),
+        MAKE_SETTING(BALLTREE2BALLSMPI3PCFON),
+        MAKE_SETTING(BALLTREEMPION),
+        MAKE_SETTING(OCTREEGGGMPION),
+        MAKE_SETTING(GGG_OMP_PIVOT_CHUNK_SIZE),
+        MAKE_SETTING(GGG_MPI_PIVOT_CLAIM_SIZE),
+        MAKE_SETTING(LYAFORESTOMPON),
+        MAKE_SETTING(LYA1D_OMP_PIVOT_BLOCK_SIZE),
+        MAKE_SETTING(OCTREESHEAROMPON),
+        MAKE_SETTING(KDTREEBOXOMPON),
+        MAKE_SETTING(NEIGHBORBOXESOMPON),
+        MAKE_SETTING(GADGETIOON),
+        MAKE_SETTING(CLASSLIBON),
+        MAKE_SETTING(PXDON),
+        MAKE_SETTING(IOLIBON),
+        MAKE_SETTING(CFITSIOLIBON),
+        MAKE_SETTING(CFITSIOON),
+        MAKE_SETTING(SMOOTHPIVOTON),
+        MAKE_SETTING(NOWKAvgON),
+        MAKE_SETTING(NMultipolesON),
+        MAKE_SETTING(NONORMHISTON),
+        MAKE_SETTING(POLARAXISON),
+        MAKE_SETTING(NOLIMBERON),
+        MAKE_SETTING(OVERCOUNTINGON),
+        MAKE_SETTING(NOSTANDARNORMHISTON),
+        MAKE_SETTING(CMDLINE_DEFS_UNITSPHERE_ON),
+        MAKE_SETTING(TWOPCFON),
+        MAKE_SETTING(TPCFON),
+        MAKE_SETTING(TPCFSHEARON),
+        MAKE_SETTING(PRUNEON),
+        MAKE_SETTING(BALLS4SCANLEVON),
+        MAKE_SETTING(THETA),
+        MAKE_SETTING(NORMALHISTSCALEON),
+        MAKE_SETTING(_DEBUGON_),
+        MAKE_SETTING(LOGBINON),
+        MAKE_SETTING(ORIGINALCBON),
+        MAKE_SETTING(ADDPIVOTNEIGHBOURSON),
+        MAKE_SETTING(OCTREE3PCF3DOMPON),
+        MAKE_SETTING(OCTREESMOOTHINGON),
+        MAKE_SETTING(OCTREEKKKOMPON),
+        MAKE_SETTING(BALLSON),
+        MAKE_SETTING(BALLS0357ON),
+        MAKE_SETTING(ALLOW_BALLS_WITH_SMOOTHING),
+        MAKE_SETTING(OCTREEKKKBALLS4OMPON),
+        MAKE_SETTING(OCTREEGGGCROSSOMPON),
+        MAKE_SETTING(DIRECTMETHODON),
+        MAKE_SETTING(OCTREEGGGON),
+        MAKE_SETTING(DIRECTMETHODSIMPLEON),
+        MAKE_SETTING(DIRECTMETHODSIMPLELOOPIDON),
+        MAKE_SETTING(COMPLEXLIBON),
+        MAKE_SETTING(OCTREEGGGOMPTRIANGLESON),
+        MAKE_SETTING(OCTREEBOXOMPON),
+        MAKE_SETTING(KDTREECUTEBOXON),
+        MAKE_SETTING(OCTREEKKKBALLS4OMPTRIANGLESON),
+        MAKE_SETTING(COSMOLIBON),
+        MAKE_SETTING(SAVERESTOREON),
+        MAKE_SETTING(TREEOMPSINCOSON),
+        MAKE_SETTING(OCTREESINCOSOMPON),
+    };
+    static const make_setting toolchain_settings[] = {
+        MAKE_SETTING(MDIR),
+        MAKE_SETTING(WRKDIR),
+        MAKE_SETTING(MACHINES_DIR),
+        MAKE_SETTING(CC),
+        MAKE_SETTING(PYTHON),
+        MAKE_SETTING(OPTFLAG),
+        MAKE_SETTING(OMPFLAG),
+        MAKE_SETTING(OPT1),
+        MAKE_SETTING(OPT2),
+        MAKE_SETTING(OPT2LIB),
+        MAKE_SETTING(CCFLAG),
+        MAKE_SETTING(LDFLAG),
+        MAKE_SETTING(INCLUDES),
+        MAKE_SETTING(MLIBS),
+        MAKE_SETTING(FITSIOLIBS),
+        MAKE_SETTING(EXTERNAL),
+        MAKE_SETTING(AR),
+        MAKE_SETTING(SANITIZER),
+        MAKE_SETTING(MACOSX_DEPLOYMENT_TARGET),
+        MAKE_SETTING(PKG_CONFIG),
+        MAKE_SETTING(CFITSIO_PKG),
+        MAKE_SETTING(CFITSIO_INCLUDE),
+        MAKE_SETTING(CFITSIO_LIB),
+        MAKE_SETTING(CFITSIO_INCL),
+        MAKE_SETTING(CFITSIO_LDFLAGS),
+        MAKE_SETTING(CFITSIO_LIBS),
+        MAKE_SETTING(CFITSIO_RPATH),
+        MAKE_SETTING(GSL_CONFIG),
+        MAKE_SETTING(GSL_INCLUDE),
+        MAKE_SETTING(GSL_LIB),
+        MAKE_SETTING(GSL_CFLAGS),
+        MAKE_SETTING(GSL_LDFLAGS),
+        MAKE_SETTING(GSL_LIBS),
+    };
+    const make_setting *groups[] = {
+        code_settings,
+        machine_settings,
+        addon_settings,
+        toolchain_settings,
+    };
+    const size_t group_sizes[] = {
+        sizeof(code_settings) / sizeof(code_settings[0]),
+        sizeof(machine_settings) / sizeof(machine_settings[0]),
+        sizeof(addon_settings) / sizeof(addon_settings[0]),
+        sizeof(toolchain_settings) / sizeof(toolchain_settings[0]),
+    };
+    const char *group_names[] = {
+        "Makefile_settings",
+        "Makefile_machine switches",
+        "addons/Makefile_addons_settings",
+        "Makefile_machine toolchain and resolved paths",
+    };
+    size_t group;
+    size_t i;
+
+#undef MAKE_SETTING
+
+    (void) gd;
+    verb_print_zero(cmd->verbose,
+               "\nprint_make_info:\n\n");
+
+    for (group = 0; group < sizeof(groups) / sizeof(groups[0]); group++) {
+        verb_print_zero(cmd->verbose, "[%s]\n", group_names[group]);
+        for (i = 0; i < group_sizes[group]; i++) {
+            verb_print_zero(cmd->verbose, "  %-38s = %s\n",
+                            groups[group][i].name,
+                            groups[group][i].value);
+        }
+        verb_print_zero(cmd->verbose, "\n");
+    }
+
+    verb_print_zero(cmd->verbose,
+                    "[effective compile-time features (enabled)]\n");
+
+#ifdef ADDONS
+    verb_print_zero(cmd->verbose, "with ADDONS\n");
+#endif
 
 #ifdef TWODIMCODE
-    verb_print(cmd->verbose, "TWODIMCODE\n");
+    verb_print_zero(cmd->verbose, "TWODIMCODE\n");
 #endif
 #ifdef THREEDIMCODE
-    verb_print(cmd->verbose, "THREEDIMCODE\n");
+    verb_print_zero(cmd->verbose, "THREEDIMCODE\n");
 #endif
 
 #ifdef OPENMPCODE
-    verb_print(cmd->verbose, "using OpenMP\n");
+    verb_print_zero(cmd->verbose, "using OpenMP\n");
 #endif
 
-#ifdef SINGLEP
-    verb_print(cmd->verbose, "SINGLEP\n");
+    verb_print_zero(cmd->verbose, "precision profile: %s\n",
+                    CballsStoragePrecision);
+
+#ifdef LONGINT
+    verb_print_zero(cmd->verbose, "LONGINT\n");
 #endif
 
-#ifdef SMOOTHPIVOT
-        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                            "with option smooth-pivot...\n");
+//B engines
+#ifdef BALLS
+    verb_print_zero(cmd->verbose, "with BALLS engine\n");
 #endif
 
-#ifdef BALLS4SCANLEV
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "with BALLS4SCANLEV... \n");
+#ifdef OCTREESMOOTHING
+    verb_print_zero(cmd->verbose, "with OCTREESMOOTHING\n");
 #endif
 
+#ifdef SINCOS
+    verb_print_zero(cmd->verbose, "with SINCOS\n");
+#endif
+
+#ifdef TREENODEALLBODIES
+    verb_print_zero(cmd->verbose, "with TREENODEALLBODIES\n");
+#endif
+
+#ifdef TREENODEBALLS4
+    verb_print_zero(cmd->verbose, "with TREENODEBALLS4 engine\n");
+#endif
+
+#ifdef OCTREEGGGOMP
+    verb_print_zero(cmd->verbose, "with OCTREEGGGOMP engine\n");
+#endif
+
+#ifdef NMultipoles
+    verb_print_zero(cmd->verbose, "with NMultipoles\n");
+#else
+    verb_print_zero(cmd->verbose, "without NMultipoles\n");
+#endif
+#ifdef NONORMHIST
+    verb_print_zero(cmd->verbose, "with NONORMHIST\n");
+#else
+    verb_print_zero(cmd->verbose, "without NONORMHIST\n");
+#endif
+
+#ifdef KDTREEOMP
+    verb_print_zero(cmd->verbose, "with KDTREEOMP engine\n");
+#endif
+
+#ifdef BALLTREEOMP
+    verb_print_zero(cmd->verbose, "with BALLTREEOMP (FCFC-style) engine\n");
+#endif
+
+#ifdef BALLTREE2BALLSOMP
+    verb_print_zero(cmd->verbose,
+                    "with BALLTREE2BALLSOMP (TreeCorr-style dual/triple-node) engine\n");
+#endif
+
+#ifdef BALLTREE2BALLSMPI
+    verb_print_zero(cmd->verbose,
+                    "with BALLTREE2BALLSMPI (distributed dual/triple-node) engine\n");
+#endif
+
+#ifdef OCTREE2BALLSOMP
+    verb_print_zero(cmd->verbose,
+                    "with OCTREE2BALLSOMP (TreeCorr scan over native octree) engine\n");
+#endif
+
+#ifdef OCTREE2BALLSMPI
+    verb_print_zero(cmd->verbose,
+                    "with OCTREE2BALLSMPI (distributed LogMultipole) engine\n");
+#endif
+
+#ifdef BALLTREE2BALLSOMP3PCF
+    verb_print_zero(cmd->verbose,
+                    "with BALLTREE2BALLSOMP3PCF (TreeCorr triple-task) engine\n");
+#endif
+
+#ifdef BALLTREE2BALLSMPI3PCF
+    verb_print_zero(cmd->verbose,
+                    "with BALLTREE2BALLSMPI3PCF (distributed FCFC ball-tree LogMultipole) engine\n");
+#endif
+
+#ifdef BALLTREEMPI
+    verb_print_zero(cmd->verbose,
+                    "with BALLTREEMPI (FCFC-style MPI) engine\n");
+#endif
+#ifdef OCTREEGGGMPI
+    verb_print_zero(cmd->verbose,
+                    "with OCTREEGGGMPI (FCFC-style MPI) engine\n");
+#endif
+
+#ifdef OCTREEKKKOMP
+    verb_print_zero(cmd->verbose, "with OCTREEKKKOMP engine\n");
+#endif
+
+#ifdef DIRECTMETHOD
+        verb_print_zero(cmd->verbose, "with DIRECTMETHOD engine\n");
+#endif
+
+#ifdef DIRECTMETHODSIMPLE
+        verb_print_zero(cmd->verbose, "with DIRECTMETHODSIMPLE engine\n");
+#endif
+//E
+
+//B correlations
 #ifdef TWOPCF
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "with 2pcf convergence computation... \n");
+    verb_print_zero(cmd->verbose,
+                    "with 2pcf convergence computation\n");
 #endif
 
 #ifdef THREEPCFCONVERGENCE
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "with 3pcf convergence computation... \n");
+    verb_print_zero(cmd->verbose,
+                    "with 3pcf convergence computation\n");
 #endif
 
 #ifdef THREEPCFSHEAR
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "with 3pcf shear computation... \n");
+    verb_print_zero(cmd->verbose,
+                    "with 3pcf shear computation \n");
+#endif
+//E
+
+//B speed up
+#ifdef SMOOTHPIVOT
+        verb_print_zero(cmd->verbose,
+                            "with option smooth-pivot\n");
 #endif
 
-#ifdef WKAvg
-    verb_print(cmd->verbose, "WKAvg\n");
+#ifdef BALLS4SCANLEV
+    verb_print_zero(cmd->verbose,
+                        "with BALLS4SCANLEV\n");
+#endif
+//E
+
+//B Cython interface
+#ifdef CLASSLIB
+    verb_print_zero(cmd->verbose, "with CLASSLIB for cyballs module\n");
 #endif
 
-#ifdef LONGINT
-    verb_print(cmd->verbose, "LONGINT\n");
+#ifdef PXD
+    verb_print_zero(cmd->verbose, "with PXD Cython getters\n");
+#endif
+//E
+
+//B I/O modules
+#ifdef IOLIB
+    verb_print_zero(cmd->verbose, "with IOLIB\n");
+#endif
+
+#ifdef CFITSIO
+    verb_print_zero(cmd->verbose, "with CFITSIO\n");
+#endif
+
+#ifdef GADGETIO
+    verb_print_zero(cmd->verbose, "with GADGETIO\n");
+#endif
+//E
+
+#ifdef POLARAXIS
+    verb_print_zero(cmd->verbose, "with POLARAXIS\n");
+#endif
+
+#ifdef NOLIMBER
+    verb_print_zero(cmd->verbose, "with NOLIMBER\n");
+#endif
+
+#ifdef NOWKAvg
+    verb_print_zero(cmd->verbose, "NOWKAvg\n");
 #endif
 
 #ifdef PTOPIVOTROTATION
-    verb_print(cmd->verbose, "PTOPIVOTROTATION\n");
+    verb_print_zero(cmd->verbose, "PTOPIVOTROTATION\n");
 #endif
 
-#ifdef DEBUG
-    verb_print(cmd->verbose, "DEBUG\n");
+#ifdef PIVOTEXTERNAL
+    verb_print_zero(cmd->verbose, "with PIVOTEXTERNAL\n");
 #endif
 
+#ifdef ADDPIVOTNEIGHBOURS
+        verb_print_zero(cmd->verbose, "with ADDPIVOTNEIGHBOURS\n");
+#endif
+
+#ifdef OVERCOUNTING
+        verb_print_zero(cmd->verbose, "with OVERCOUNTING\n");
+#endif
+
+#ifdef SAVERESTORE
+        verb_print_zero(cmd->verbose, "with SAVERESTORE\n");
+#endif
+
+//B libraries
 #ifdef GETPARAM
-    verb_print(cmd->verbose, "GETPARAM\n");
+    verb_print_zero(cmd->verbose, "using GETPARAM\n");
 #endif
 
 #ifdef USEGSL
 #ifdef GSLINTERNAL
-    verb_print(cmd->verbose, "using internal GSL\n");
+    verb_print_zero(cmd->verbose, "using internal GSL\n");
 #else
-    verb_print(cmd->verbose, "using GSL\n");
+    verb_print_zero(cmd->verbose, "using GSL\n");
 #endif
+#endif
+//E
+
+#ifdef DEBUG
+    verb_print_zero(cmd->verbose, "DEBUG\n");
 #endif
 
-#ifdef ADDONS
-    verb_print(cmd->verbose, "with ADDONS\n");
-#endif
+    verb_print_zero(cmd->verbose,
+               "\n");
 
-#ifdef BALLS
-    verb_print(cmd->verbose, "with BALLS\n");
-#endif
-
-#ifdef OCTREESMOOTHING
-    verb_print(cmd->verbose, "with OCTREESMOOTHING\n");
-#endif
-
-#ifdef SINCOS
-    verb_print(cmd->verbose, "with SINCOS\n");
-#endif
-
-#ifdef TREENODEALLBODIES
-    verb_print(cmd->verbose, "with TREENODEALLBODIES\n");
-#endif
-
-#ifdef TREENODEBALLS4
-    verb_print(cmd->verbose, "with TREENODEBALLS4\n");
-#endif
-
-#ifdef PIVOTEXTERNAL
-    verb_print(cmd->verbose, "with PIVOTEXTERNAL\n");
-#endif
-
-#ifdef GADGETIO
-    verb_print(cmd->verbose, "with GADGETIO\n");
-#endif
-
-#ifdef CLASSLIB
-    verb_print(cmd->verbose, "with CLASSLIB\n");
-#endif
-
-#ifdef PXD
-    verb_print(cmd->verbose, "with PXD\n");
-#endif
-
-#ifdef IOLIB
-    verb_print(cmd->verbose, "with IOLIB\n");
-#endif
-
-#ifdef CFITSIO
-    verb_print(cmd->verbose, "with CFITSIO\n");
-#endif
-
-#ifdef KDTREEOMP
-    verb_print(cmd->verbose, "with KDTREEOMP\n");
-#endif
-
-#ifdef OCTREEKKKOMP
-    verb_print(cmd->verbose, "with OCTREEKKKOMP\n");
-#endif
-
-#ifdef OCTREEGGGOMP
-    verb_print(cmd->verbose, "with OCTREEGGGOMP\n");
-#endif
-
-#ifdef NMultipoles
-    verb_print(cmd->verbose, "with NMultipoles\n");
-#else
-    verb_print(cmd->verbose, "without NMultipoles\n");
-#endif
-#ifdef NONORMHIST
-    verb_print(cmd->verbose, "with NONORMHIST\n");
-#else
-    verb_print(cmd->verbose, "without NONORMHIST\n");
-#endif
-
-#ifdef POLARAXIS
-    verb_print(cmd->verbose, "with POLARAXIS\n");
-#endif
-
-#ifdef NOLIMBER
-    verb_print(cmd->verbose, "with NOLIMBER\n");
-#endif
-
-#ifdef ADDPIVOTNEIGHBOURS
-        verb_print(cmd->verbose, "with ADDPIVOTNEIGHBOURS\n");
-#endif
-
-#ifdef OVERCOUNTING
-        verb_print(cmd->verbose, "with OVERCOUNTING\n");
-#endif
-
-#ifdef SAVERESTORE
-        verb_print(cmd->verbose, "with SAVERESTORE\n");
-#endif
-
-#ifdef DIRECTMETHOD
-        verb_print(cmd->verbose, "with DIRECTMETHOD\n");
-#endif
-
-#ifdef DIRECTMETHODSIMPLE
-        verb_print(cmd->verbose, "with DIRECTMETHODSIMPLE\n");
-#endif
 
     return SUCCESS;
 }
 
+local int print_search_methods(struct cmdline_data* cmd,
+                               struct global_data* gd)
+{
+    typedef struct {
+        const char *name;
+        const char *geometry;
+        const char *correlations;
+        const char *usage;
+    } search_method_help;
+
+    static const search_method_help known_methods[] = {
+        {"octree-sincos-omp", "2D/3D scalar; octree; OpenMP",
+         "standard 2PCF and sine/cosine 3PCF multipoles",
+         "Core method. Select KKKCorrelation for convergence 3PCF output."},
+        {"balls-omp", "scalar; octree ball aggregation; OpenMP",
+         "2PCF/3PCF multipoles",
+         "Use no-one-ball for exact body traversal; theta controls cell acceptance."},
+        {"kdtree-omp", "scalar; balanced k-d tree; OpenMP",
+         "2PCF/3PCF multipoles",
+         "Exact traversal is the default. Add behavior-ball for aggregate-node acceptance; no-one-ball disables it; aggregation requires useLogHist=true."},
+        {"balltree-omp", "scalar; FCFC-style PCA ball tree; OpenMP",
+         "2PCF/3PCF multipoles",
+         "nsmooth sets leaf capacity. Exact traversal is the default; behavior-ball enables aggregate-node acceptance, no-one-ball disables it, and aggregation requires useLogHist=true."},
+        {"balltree-2balls-omp", "scalar; FCFC PCA ball tree; TreeCorr dual/triple-node OpenMP scan",
+         "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
+         "TWOPCFON and TPCFON switch 2PCF and 3PCF independently at build time; only-2pcf and only-3pcf select one at runtime when both are built. The direct distinct-triplet 3PCF has cubic worst-case work and is not intended for full-sky NSIDE=1024 catalogs. TreeCorr-style cell aggregation is the default; nsmooth sets leaf capacity, theta scales radial and angular tolerances, weights-norm uses the distinct-triplet weight denominator, no-normalize-HistZeta returns raw sums, and no-two-balls forces exact body pairs and triplets."},
+        {"balltree-2balls-mpi", "scalar; FCFC PCA ball tree; deterministic MPI+OpenMP dual/triple-node scan",
+         "distributed 2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
+         "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. TWOPCFON and TPCFON select the compiled orders; only-2pcf and only-3pcf select one at runtime. numberThreads sets OpenMP threads per rank. Runtime acceptance and normalization options match balltree-2balls-omp. The explicit triple-node 3PCF remains cubic even when distributed."},
+        {"octree-2balls-omp", "scalar; native octree; dual-node 2PCF and LogMultipole 3PCF",
+         "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
+         "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one at runtime. The 2PCF uses TreeCorr-style two-ball acceptance. The 3PCF scans pivot-neighbor pairs, accumulates radial angular moments, removes q==r with second moments, and forms all radial-bin pairs without enumerating triples. theta controls radial and angular slop, no-two-balls selects exact body moments, and treecorr-direct-triples selects the slower cubic validation traversal."},
+        {"octree-2balls-mpi", "scalar; native octree; deterministic MPI+OpenMP frontier",
+         "distributed 2PCF and LogMultipole angular-multipole 3PCF",
+         "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. It accepts the octree-2balls-omp runtime options except treecorr-direct-triples, which remains a serial validation oracle."},
+        {"balltree-2balls-omp_3pcf", "scalar; FCFC PCA ball tree; TreeCorr LogMultipole pair factorization",
+         "angular-multipole 3PCF with auto- and cross-catalog support",
+         "TPCFON=1 is required. Pivot-neighbor tree scans accumulate radial field multipoles and form 3PCF bins from pair products, excluding q==r with node second moments. TreeCorr-style radial-bin slop and angular phase-error criteria control aggregation; completed large-radius moments are inherited while unresolved bins split the pivot. nsmooth sets the default leaf capacity; treecorr-singleton-leaves forces one body per leaf. theta=1 is the production setting, theta approaching zero converges to exact. Multipoles are normalized by distinct-triplet count by default; weights-norm uses the distinct-triplet weight denominator and no-normalize-HistZeta returns raw sums. no-two-balls selects exact body moments, and treecorr-direct-triples selects the slower validation traversal."},
+        {"balltree-2balls-mpi_3pcf", "scalar; FCFC PCA ball tree; deterministic MPI+OpenMP LogMultipole frontier",
+         "distributed angular-multipole 3PCF with auto- and cross-catalog support",
+         "Build with BALLTREE2BALLSMPI3PCFON=1 and TPCFON=1, then run with mpiexec. numberThreads sets OpenMP threads per rank. It accepts the production balltree-2balls-omp_3pcf options except treecorr-direct-triples, which remains an OpenMP validation oracle."},
+        {"balltree-mpi", "scalar; FCFC-style ball tree; MPI+OpenMP",
+         "distributed 2PCF/3PCF multipoles",
+         "Run with mpiexec; numberThreads sets OpenMP threads per MPI rank."},
+        {"octree-kkk-omp", "scalar convergence; octree; OpenMP",
+         "KK, KKK, NN, and configured count estimators",
+         "Select the correlation with KKCorrelation, KKKCorrelation, NNCorrelation, or NNEstimator."},
+        {"octree-ggg-omp", "projected scalar; octree; OpenMP",
+         "2PCF and angular-multipole 3PCF",
+         "Common options include KKKCorrelation, compute-HistN, read-mask, and edge-corrections. Add only-2pcf to skip all angular multipoles and 3PCF storage at runtime."},
+        {"octree-ggg-mpi", "projected scalar; octree; MPI+OpenMP",
+         "distributed octree-ggg-omp estimator",
+         "Run with mpiexec; numberThreads sets OpenMP threads per MPI rank."},
+        {"octree-shear-omp", "flat-sky spin-2 shear; exact octree leaves; OpenMP",
+         "xi+/xi- and four Gamma-x shear 3PCF components",
+         "Use Cartesian tangent-plane catalogs with pos-and-shear; periodic geometry is not supported."},
+        {"octree-sincos-omp-addons", "scalar; addon octree; OpenMP",
+         "sine/cosine 3PCF multipoles",
+         "Addon variant of the core octree-sincos method."},
+        {"tree-omp-sincos", "scalar; legacy tree; OpenMP",
+         "sine/cosine 3PCF multipoles",
+         "Legacy comparison method using the common histogram parameters."},
+        {"octree-ggg-cross-omp", "projected scalar cross-catalog; octree; OpenMP",
+         "cross-catalog angular-multipole 3PCF",
+         "Provide the required distinct catalogs through infile and iCatalogs."},
+        {"direct-sincos", "scalar; direct enumeration",
+         "reference sine/cosine correlations",
+         "Brute-force validation method; intended for small catalogs."},
+        {"kdtree-cute-box", "periodic Cartesian box; k-d tree",
+         "CUTE-compatible box correlations",
+         "Use usePeriodic=true and the cute-box/cute-box-fmt options as needed."},
+        {"direct-simple-sincos", "scalar; direct simple loops",
+         "reference sine/cosine correlations",
+         "Development/reference method for small catalogs."},
+        {"octree-ggg-omp-triangles", "projected scalar; octree; OpenMP",
+         "explicit triangle-oriented 3PCF output",
+         "Triangle-output variant of octree-ggg-omp."},
+        {"octree-kkk-balls4-omp", "scalar convergence; normal octree; OpenMP",
+         "weighted convergence 2PCF and balls4 KKK 3PCF multipoles",
+         "Requires 3D, usePeriodic=false, and useLogHist=true. Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF; compute-HistN,and-CF writes pair-count/CF files. Keep SMOOTHPIVOTON=0; no-one-ball and no-two-balls disable their corresponding approximations."},
+        {"octree-kkk-balls4-omp-triangles", "scalar convergence; octree; OpenMP",
+         "balls4 triangle-oriented KKK 3PCF",
+         "Triangle-output variant of octree-kkk-balls4-omp."},
+        {"kdtree-box-omp", "periodic Cartesian box; k-d tree; OpenMP",
+         "box 2PCF/3PCF",
+         "Use usePeriodic=true; cute-box-fmt writes CUTE-compatible output."},
+        {"octree-box-omp", "periodic Cartesian box; octree; OpenMP",
+         "box 2PCF/3PCF",
+         "Use usePeriodic=true and configure rangeN/rminHist/sizeHistN."},
+        {"neighbor-boxes-omp", "periodic Cartesian box; linked boxes; OpenMP",
+         "local-neighbor box 2PCF/3PCF",
+         "Use usePeriodic=true; add only-pos for catalogs without a convergence field."},
+        {"octree-ggg", "projected scalar; serial octree",
+         "legacy angular-multipole 3PCF",
+         "Serial comparison variant of octree-ggg-omp."},
+        {"direct-simple-sincos-loopId", "scalar; direct loops with IDs",
+         "reference sine/cosine correlations",
+         "Development/reference method that retains loop identifiers."},
+        {"balls-omp-0357", "scalar; legacy balls profile; OpenMP",
+         "legacy 2PCF/3PCF multipoles",
+         "Optional compatibility profile; prefer balls-omp for new runs."},
+        {"octree-3pcf-3d-omp", "3D scalar; exact octree leaves; OpenMP",
+         "spherical-harmonic 2PCF/3PCF multipoles",
+         "Use x,y,z,delta,weight input. compute-2pcf-3d and compute-3pcf-3d select outputs; octree-ggg-3d-omp is an alias."},
+        {"lya-2pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
+         "weighted anisotropic 2PCF",
+         "Requires infileformat=lya-ascii, one catalog, non-periodic geometry, and forest IDs."},
+        {"lya-3pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
+         "weighted five-dimensional 3PCF",
+         "Requires infileformat=lya-ascii, one catalog, non-periodic geometry, and forest IDs."},
+        {"lya-2pcf-3pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
+         "weighted 2PCF and 3PCF in one traversal",
+         "Requires infileformat=lya-ascii, one catalog, non-periodic geometry, and forest IDs."},
+        {"lya-1d-2pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
+         "weighted radial-only 2PCF",
+         "Ignores transverse separation; lya2RpMax and lya2RpBins define |delta radial distance| bins."},
+        {"lya-1d-3pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
+         "weighted radial-only 3PCF",
+         "Ignores transverse separation; lya3RMax and lya3RBins define signed pivot-lag bins."},
+        {"lya-1d-2pcf-3pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
+         "weighted radial-only 2PCF and 3PCF",
+         "Requires lya-ascii forest IDs; all correlated pixels must belong to distinct quasars."},
+        {"lya-1d-tree-2pcf-omp", "radial Lyman-alpha pixels; exact 1D interval tree; OpenMP",
+         "weighted radial-only 2PCF",
+         "Uses exact same-bin node aggregation and subtracts within-quasar pairs; lya2RpMax and lya2RpBins set the domain."}
+    };
+    const size_t method_count =
+        sizeof(known_methods) / sizeof(known_methods[0]);
+    size_t available_count = 0;
+    size_t i;
+    int method_id;
+
+    (void)gd;
+
+    for (i = 0; i < method_count; ++i) {
+        search_method_string_to_int((string)known_methods[i].name, &method_id);
+        if (method_id >= 0) ++available_count;
+    }
+
+    verb_print_zero(cmd->verbose,
+                    "\nSearching methods registered in this executable (%zu):\n",
+                    available_count);
+    verb_print_zero(cmd->verbose,
+                    "Select one with search=<name> or searchMethod=<name>.\n");
+    verb_print_zero(cmd->verbose,
+                    "Common controls: rangeN, rminHist, sizeHistN, useLogHist, "
+                    "theta, numberThreads, and options.\n");
+    verb_print_zero(cmd->verbose,
+                    "Only methods enabled by this executable's build profile are shown.\n");
+
+    for (i = 0; i < method_count; ++i) {
+        search_method_string_to_int((string)known_methods[i].name, &method_id);
+        if (method_id < 0) continue;
+        verb_print_zero(cmd->verbose, "\n- %s (id=%d)\n",
+                        known_methods[i].name, method_id);
+        verb_print_zero(cmd->verbose, "  geometry: %s\n",
+                        known_methods[i].geometry);
+        verb_print_zero(cmd->verbose, "  computes: %s\n",
+                        known_methods[i].correlations);
+        verb_print_zero(cmd->verbose, "  use: %s\n",
+                        known_methods[i].usage);
+    }
+
+    verb_print_zero(cmd->verbose,
+                    "\nUse options=make-info to inspect the build profile and "
+                    "options=print-options for the full option list.\n\n");
+    return SUCCESS;
+}
+
+local int print_options(struct cmdline_data* cmd,
+                        struct global_data* gd)
+{
+    typedef struct {
+        const char *name;
+        const char *scope;
+        const char *description;
+    } option_help;
+
+    static const option_help registered_options[] = {
+        {"all", "test models",
+         "show selected and requested body counts for random unit-sphere data"},
+        {"all-in-one", "input",
+         "merge all input catalogs into one catalog before the search"},
+        {"and-CF", "histograms",
+         "also compute correlation functions; requires compute-HistN"},
+        {"arfken", "coordinates",
+         "use the Arfken spherical-coordinate convention (the default)"},
+        {"asymmetric", "search",
+         "use asymmetric pivot/neighbor traversal for cross-catalog searches"},
+        {"behavior-ball", "tree search",
+         "select the ball-oriented tree acceptance behavior"},
+        {"behavior-tree-omp", "tree search addon",
+         "select the OpenMP tree behavior in KKK/balls searches"},
+        {"bh86", "tree search",
+         "use the Barnes-Hut 1986 cell acceptance criterion"},
+        {"celestial", "coordinates",
+         "interpret angular input as celestial/equatorial coordinates"},
+        {"center-of-mass", "tree search",
+         "place aggregate cells at their center of mass"},
+        {"check-eq-pos", "input",
+         "reject input catalogs containing bodies at identical positions"},
+        {"compute-HistN", "histograms",
+         "compute pair-count histograms used for normalization and 2PCF output"},
+        {"compute-2pcf-3d", "3D scalar addon",
+         "enable the scalar three-dimensional 2PCF"},
+        {"compute-3pcf-3d", "3D scalar addon",
+         "enable the spherical-harmonic three-dimensional 3PCF"},
+        {"cute-box", "box output",
+         "apply the CUTE-compatible periodic-box coordinate convention"},
+        {"cute-box-fmt", "box output addon",
+         "write correlation output in CUTE box format"},
+        {"cute-box-rmin", "box output",
+         "use the CUTE-compatible radial-bin coordinate starting at rminHist"},
+        {"default-rsmooth", "smoothing addon",
+         "derive smoothing radii from the normal default rule"},
+        {"ecliptic", "coordinates",
+         "interpret angular input as ecliptic coordinates"},
+        {"edge-corrections", "multipoles",
+         "apply edge corrections to unnormalized multipole histograms"},
+        {"edge-corrections-from-files", "multipoles",
+         "compute edge corrections from previously generated histogram files"},
+        {"edge-effects", "octree KKK addon",
+         "enable edge-effect count normalization in the KKK search"},
+        {"exclude-los", "3D scalar addon",
+         "alias for exclude-same-los"},
+        {"exclude-pivot-los", "3D scalar addon",
+         "alias for exclude-same-los"},
+        {"exclude-same-los", "3D scalar addon",
+         "exclude pivot-neighbor pairs sharing a line-of-sight identifier"},
+        {"fits-type-file", "CFITSIO",
+         "open FITS input as a generic FITS file instead of a data unit"},
+        {"fix-center", "sky selection",
+         "select a fixed angular center using lengthBox"},
+        {"fix-rsmooth", "smoothing addon",
+         "keep the configured smoothing radius instead of deriving it"},
+        {"full-sky", "sky output",
+         "use full-sky angular normalization when writing correlations"},
+        {"galactic", "coordinates",
+         "interpret angular input as galactic coordinates"},
+        {"GGGCorrelation", "correlation",
+         "select the shear three-point correlation output"},
+        {"header-info", "input",
+         "print input-file header and column information"},
+        {"in-degrees", "I/O addon",
+         "convert angular input columns from degrees to radians"},
+        {"kappa", "CFITSIO output",
+         "write the convergence field in FITS output"},
+        {"kappa-constant", "input/test models",
+         "replace input convergence values with a constant"},
+        {"kappa-constant-one", "input/test models",
+         "use one, rather than two, for kappa-constant"},
+        {"lya-output-empty-bins", "Lyman-alpha addon",
+         "write zero-denominator bins in the five-dimensional 3PCF output"},
+        {"KKCorrelation", "correlation",
+         "select the convergence two-point correlation output"},
+        {"KKKCorrelation", "correlation",
+         "select the convergence three-point correlation output"},
+        {"make-info", "startup",
+         "print the compile-time Makefile configuration"},
+        {"make-tree", "tree search",
+         "build the tree and return without evaluating histograms"},
+        {"mask-inside", "CFITSIO/NumPy input",
+         "retain HEALPix pixels inside, rather than outside, the mask"},
+        {"measure-cputime", "I/O",
+         "measure and report CPU time spent reading data"},
+        {"NNCorrelation", "correlation",
+         "select number-count two-point correlation output"},
+        {"NNEstimator", "correlation",
+         "select the configured number-count correlation estimator"},
+        {"NNLandySzalay1", "octree NN addon",
+         "use the first Landy-Szalay number-count estimator"},
+        {"NNLandySzalay2", "octree NN addon",
+         "use the second Landy-Szalay number-count estimator"},
+        {"NNStandard", "octree NN addon",
+         "use the standard number-count estimator"},
+        {"no-arfken", "coordinates",
+         "use longitude/latitude ordering instead of the Arfken convention"},
+        {"no-check-two-bodies-eq-pos", "tree search",
+         "skip the tree-build check for bodies at identical positions"},
+        {"no-normalize-HistZeta", "multipoles",
+         "leave three-point multipole histograms unnormalized"},
+        {"no-one-ball", "tree search",
+         "disable the one-ball aggregation path"},
+        {"no-out-Hist", "output",
+         "suppress histogram files"},
+        {"no-stop", "startup",
+         "continue after make-info, print-options, or print-search-methods"},
+        {"no-two-ball", "balls addon",
+         "disable the singular two-ball traversal path"},
+        {"no-two-balls", "balls addon",
+         "disable two-ball cell aggregation"},
+        {"only-2pcf", "octree-ggg-omp and two-ball methods",
+         "run only the 2PCF when both correlation orders are built"},
+        {"only-2pcf-3d", "3D scalar addon",
+         "compute only the scalar three-dimensional 2PCF"},
+        {"only-3pcf", "TreeCorr-style two-ball methods",
+         "run only the triple-node 3PCF when both correlation orders are built"},
+        {"only-3pcf-3d", "3D scalar addon",
+         "compute only the scalar three-dimensional 3PCF"},
+        {"only-pos", "I/O addon",
+         "read or write positions without convergence/shear fields"},
+        {"out-HistZetaG", "output",
+         "write the full three-point histogram grid"},
+        {"out-m-HistZeta", "output",
+         "write three-point histograms separated by multipole order"},
+        {"patch", "sky input/test models",
+         "restrict data to the configured angular patch"},
+        {"patch-with-all", "multipoles",
+         "combine patch selection with all-pivot edge-correction counting"},
+        {"pivot-number", "GGG addon",
+         "limit the search to the configured number of pivots"},
+        {"plot-map-gif", "CFITSIO",
+         "write the temporary HEALPix map used by the map-plot workflow"},
+        {"pos-and-convergence", "I/O addon",
+         "read position columns followed by convergence"},
+        {"pos-and-convergence-weight", "I/O addon",
+         "read position columns followed by convergence and weight"},
+        {"pos-and-shear", "I/O addon",
+         "read position columns followed by the two shear components"},
+        {"post-processing", "workflow",
+         "run posScript after the main computation"},
+        {"pre-processing", "workflow",
+         "run preScript before reading data"},
+        {"print-options", "startup",
+         "print this list of recognized options"},
+        {"print-search-methods", "startup",
+         "print searching methods registered in this executable and brief usage"},
+        {"ra-dec-only", "CFITSIO",
+         "ignore radial distance and place RA/DEC input on the unit sphere"},
+        {"ra-reversed", "coordinates",
+         "reverse right ascension as 2*pi minus RA"},
+        {"random-point", "sky selection",
+         "choose a random center for the selected sky region"},
+        {"rbin-arcmin", "GGG output",
+         "write radial-bin coordinates in arcminutes"},
+        {"rbin-degree", "GGG output",
+         "write radial-bin coordinates in degrees"},
+        {"Rcut/theta", "tree search",
+         "set the tree cutoff radius to rangeN/theta"},
+        {"read-mask", "input/search",
+         "read a second catalog as a mask and apply masked search logic"},
+        {"remove-mean", "tree search",
+         "subtract the catalog mean convergence before tree construction"},
+        {"rotation", "sky selection",
+         "rotate a selected sky region to the reference center"},
+        {"same-infiles", "input",
+         "reuse the same input filename for multiple catalog entries"},
+        {"save-ra-dec", "output",
+         "preserve angular RA/DEC coordinates when saving converted data"},
+        {"set-default-param", "smoothing addon",
+         "replace smoothing parameters with addon defaults"},
+        {"set-Nb-noSel", "smoothing addon",
+         "set aggregate body counts without the selection pass"},
+        {"smooth", "smoothing addon",
+         "enable tree smoothing"},
+        {"smooth-min-cell", "smoothing addon",
+         "smooth using the minimum accepted cell scale"},
+        {"smooth-pivot", "OpenMP tree addons",
+         "smooth pivot bodies before evaluating their neighbors"},
+        {"statistics-histograms", "workflow",
+         "compute statistics from a set of histogram realizations"},
+        {"stop", "workflow",
+         "stop after the requested input, conversion, or preprocessing phase"},
+        {"stop-fits", "CFITSIO",
+         "stop after reading and reporting FITS metadata"},
+        {"stop-numpy", "CFITSIO/NumPy input",
+         "stop after reading the NumPy/HEALPix input"},
+        {"sw94", "tree search",
+         "use the Salmon-Warren 1994 cell acceptance criterion"},
+        {"treecorr-direct-triples", "balltree-2balls-omp_3pcf",
+         "use the slower genuine triple-node validation traversal"},
+        {"treecorr-singleton-leaves", "balltree-2balls-omp_3pcf",
+         "force one body per leaf instead of the nsmooth leaf capacity"},
+        {"weights-norm", "correlation addons",
+         "normalize correlations by pair weights instead of pair counts"},
+        {"with-weight", "CFITSIO",
+         "read and use the configured weight column"},
+        {"xr1r2", "correlation output",
+         "write the alternate x-r1-r2 three-point representation"}
+    };
+    size_t i;
+    const size_t option_count =
+        sizeof(registered_options) / sizeof(registered_options[0]);
+
+    (void)gd;
+
+    verb_print_zero(cmd->verbose,
+                    "\nRegistered options (%zu):\n", option_count);
+    verb_print_zero(cmd->verbose,
+                    "Options are comma-separated and case-sensitive.\n");
+
+    for (i = 0; i < option_count; ++i) {
+        verb_print_zero(cmd->verbose, "\n- %s [%s]: %s.\n",
+                        registered_options[i].name,
+                        registered_options[i].scope,
+                        registered_options[i].description);
+    }
+
+    verb_print_zero(cmd->verbose, "\n");
+
+    return SUCCESS;
+}

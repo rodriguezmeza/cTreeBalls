@@ -1,0 +1,18 @@
+# ----- TreeCorr-style triple-node OpenMP 3PCF addon -----
+
+ifeq ($(BALLTREE2BALLSOMP3PCFON),1)
+ifeq ($(TPCFON),1)
+OPT2 += -DBALLTREE2BALLSOMP3PCF
+BALLTREE2BALLSOMP3PCF = $(MDIR)/addons/balltree_2balls_omp_3pcf/
+vpath %.c $(BALLTREE2BALLSOMP3PCF)
+INCLUDES += -I$(BALLTREE2BALLSOMP3PCF)
+HEADERFILES += $(wildcard $(BALLTREE2BALLSOMP3PCF)/*.h)
+EXTERNAL += search_balltree_2balls_omp_3pcf.o
+search_balltree_2balls_omp_3pcf.o: \
+	$(BALLTREE2BALLSOMP3PCF)/search_balltree_2balls_omp_3pcf.c \
+	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c
+else
+$(info BALLTREE2BALLSOMP3PCFON=1 requires TPCFON=1, deactivating...)
+BALLTREE2BALLSOMP3PCFON = 0
+endif
+endif

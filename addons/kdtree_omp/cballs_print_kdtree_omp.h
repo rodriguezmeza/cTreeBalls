@@ -12,17 +12,17 @@
         case 59:
             verb_print(cmd->verbose,
                        "\n\tevalHist: printing kdtree-omp method\n\n");
-            if (scanopt(cmd->options, "compute-HistN")) PrintHistNN(cmd, gd);
-                PrintHistrBins(cmd, gd);
-            PrintHistXi2pcf(cmd, gd);
+            if (cballs_opt_compute_histn(cmd)) PRINT_OR_FAIL(PrintHistNN(cmd, gd));
+                PRINT_OR_FAIL(PrintHistrBins(cmd, gd));
+            PRINT_OR_FAIL(PrintHistXi2pcf(cmd, gd));
 
 #ifdef TPCF
-                PrintHistZetaM_sincos(cmd, gd);
-                if (scanopt(cmd->options, "out-m-HistZeta")) {
-                    PrintHistZetaMm_sincos(cmd, gd);
+            PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd));
+                if (cballs_opt_out_m_histzeta(cmd)) {
+                    PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd));
                 }
-                if (scanopt(cmd->options, "out-HistZetaG")) {
-                    PrintHistZetaMZetaGm_sincos(cmd, gd);
+                if (cballs_opt_out_histzetag(cmd)) {
+                    PRINT_OR_FAIL(PrintHistZetaMZetaGm_sincos(cmd, gd));
                 }
 #endif
             break;

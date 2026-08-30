@@ -4,16 +4,30 @@ dist/
 *.o
 *.a
 *.so
+*.dylib
 cballs
 *.egg-info/
+*.egg
 python/cballys.c
+python/ccyballs.pxd
 python/build/
+
+# Local environments and unpublished development archives
+addons/python_env/
+addons/addons_develop/
+addons/addons_in-queue-to-develop/
+addons/addons_include_backup/
+addons/addons_include_in-process/
+addons/Makefile_backups/
+addons/balltree_exp/
+addons/docs_v1.0.0/
 
 # Documentation builds
 docs/_build/
 
 # Test outputs and caches
 tests/Output/
+Output_all_engines/
 __pycache__/
 *.py[cod]
 .pytest_cache/

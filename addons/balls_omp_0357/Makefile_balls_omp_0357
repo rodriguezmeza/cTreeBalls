@@ -1,0 +1,54 @@
+# ----- MAKE FILE module definitions (balls_omp_0357) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# BALLS ON and LOGHIST ON
+#ifeq ($(LOGHISTON),1)
+ifeq ($(BALLS0357ON),1)
+$(info To use BALLS method need option useLogHist=true)
+$(info =====================================================)
+#OPT2 += $(OPT2ADD)
+OPT2 += -DBALLS0357
+
+#
+#ifeq ($(TREENODEON),1)
+#OPT2 += -DTREENODE
+ifeq ($(TREENODEALLBODIESON),1)
+OPT2 += -DTREENODEALLBODIES
+else
+ifeq ($(TREENODEBALLS4ON),1)
+OPT2 += -DTREENODEBALLS4
+endif
+endif
+#endif
+#
+
+ifeq ($(SINCOSON),1)
+OPT2 += -DSINCOS
+endif
+BALLSOMP0357 = $(MDIR)/addons/balls_omp_0357/
+vpath %.c $(MDIR)/addons/balls_omp_0357/
+#CCFLAG += -DBALLS
+#LDFLAGS += -DBALLS
+INCLUDES += -I$(BALLSOMP0357)
+HEADERFILES += $(wildcard $(BALLSOMP0357)/*.h)
+EXTERNAL += search_balls_omp_0357.o treeload_0357.o cballs_0357.o
+endif
+#
+#else
+#$(info To compile with BALLS need LOGHISTON = 1 in Makefile_settings)
+#endif
+#
+#E
+
+ifeq ($(TREENODEALLBODIESON),0)
+ifeq ($(TREENODEBALLS4ON),0)
+PIVOTEXTERNALON = 1
+ifeq ($(PIVOTEXTERNALON),1)
+OPT2 += -DPIVOTEXTERNAL
+endif
+endif
+endif

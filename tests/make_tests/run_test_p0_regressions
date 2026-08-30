@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+THREADS=${THREADS:-16}
+REPEATS=${REPEATS:-4}
+CATALOG=./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-p0.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=$2
+
+    echo "ERROR: $message" >&2
+    if [ -f "$logfile" ]; then
+        cat "$logfile" >&2
+    fi
+    exit 1
+}
+
+used_nbody()
+{
+    awk -F= '
+        $1 ~ /^nbody[[:space:]]*$/ {
+            gsub(/[[:space:]]/, "", $2)
+            print $2
+            exit
+        }
+    ' "$1"
+}
+
+run_cubic_regressions()
+{
+    local cubic_dir="$TMP_ROOT/simple-cubic"
+    local random_dir="$TMP_ROOT/simple-cubic-random"
+    local usedvalues
+
+    mkdir -p "$cubic_dir" "$random_dir"
+
+    "$CBALLS" \
+        search=octree-sincos-omp \
+        testmodel=simple-cubic \
+        nbody=10 \
+        rootDir="$cubic_dir" \
+        numberThreads=2 \
+        verbose=0 \
+        verbose_log=0 \
+        options=no-out-Hist >"$cubic_dir/run.log" 2>&1 \
+        || fail_with_log "simple-cubic crashed or returned failure" \
+                         "$cubic_dir/run.log"
+
+    usedvalues="$cubic_dir/parameters_null-cballs-usedvalues"
+    [ -f "$usedvalues" ] \
+        || fail_with_log "simple-cubic did not write used values" \
+                         "$cubic_dir/run.log"
+    [ "$(used_nbody "$usedvalues")" = "8" ] \
+        || fail_with_log \
+            "simple-cubic did not publish its initialized 2x2x2 body count" \
+            "$cubic_dir/run.log"
+
+    "$CBALLS" \
+        search=octree-sincos-omp \
+        testmodel=simple-cubic-random \
+        nbody=8 \
+        rootDir="$random_dir" \
+        numberThreads=2 \
+        verbose=0 \
+        verbose_log=0 \
+        options=no-out-Hist >"$random_dir/run.log" 2>&1 \
+        || fail_with_log "simple-cubic-random crashed or returned failure" \
+                         "$random_dir/run.log"
+
+    echo "PASS: cubic model startup and body-count publication"
+}
+
+histogram_list()
+{
+    local directory=$1
+
+    (cd "$directory" &&
+        find . -maxdepth 1 -type f -name 'hist*.txt' -print | LC_ALL=C sort)
+}
+
+compare_histograms()
+{
+    local reference=$1
+    local candidate=$2
+    local reference_list candidate_list filename
+
+    reference_list=$(histogram_list "$reference")
+    candidate_list=$(histogram_list "$candidate")
+    [ -n "$reference_list" ] \
+        || fail_with_log "repeatability run produced no histograms" \
+                         "$reference/run.log"
+    [ "$reference_list" = "$candidate_list" ] \
+        || fail_with_log "repeatability runs produced different file sets" \
+                         "$candidate/run.log"
+
+    while IFS= read -r filename; do
+        cmp -s "$reference/$filename" "$candidate/$filename" \
+            || fail_with_log \
+                "smooth-pivot histogram changed between identical runs: $filename" \
+                "$candidate/run.log"
+    done <<< "$reference_list"
+}
+
+run_repeatability_regression()
+{
+    local reference=""
+    local run output_dir
+
+    [ -f "$CATALOG" ] \
+        || fail_with_log "repeatability catalog is missing: $CATALOG" /dev/null
+
+    for ((run=1; run<=REPEATS; run++)); do
+        output_dir="$TMP_ROOT/repeat-$run"
+        mkdir -p "$output_dir"
+
+        "$CBALLS" \
+            search=octree-ggg-omp \
+            in="$CATALOG" \
+            infmt=binary \
+            rootDir="$output_dir" \
+            numberThreads="$THREADS" \
+            verbose=0 \
+            verbose_log=0 \
+            options=compute-HistN,and-CF,out-m-HistZeta \
+            >"$output_dir/run.log" 2>&1 \
+            || fail_with_log "smooth-pivot repeatability run $run failed" \
+                             "$output_dir/run.log"
+
+        if [ -z "$reference" ]; then
+            reference=$output_dir
+        else
+            compare_histograms "$reference" "$output_dir"
+        fi
+    done
+
+    echo "PASS: $REPEATS smooth-pivot runs with $THREADS threads are byte-identical"
+}
+
+run_cubic_regressions
+run_repeatability_regression

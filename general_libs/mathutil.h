@@ -9,11 +9,8 @@ bool crossVecProdSign(real vec1[], real vec2[], real vec3[]);
 
 void RotationVecAWRtoVecB(real *, real *, real *, real);
 void Rotation3D(real *, real, real, real);
-#ifdef SINGLEP
-void dRotation3D(float *, real, real, real, float *);
-#else
-void dRotation3D(real *, real, real, real, real *);
-#endif
+void dRotation3D(const cballs_storage_real *, real, real, real,
+                 compute_vector);
 void d1Rotation3D(real vec[], real alpha);
 real radian(real);
 real degree(real);

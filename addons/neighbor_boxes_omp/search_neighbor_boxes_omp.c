@@ -50,14 +50,18 @@ typedef struct {
 //B definition of functions
 int _optimal_nside(double lb,double rmax,INTEGER np);
 void _free_boxes(int nside,NeighborBox *boxes);
-NeighborBox *_catalog_to_boxes(struct  cmdline_data* cmd,
-                               struct  global_data* gd,
-                               int n_box_side);
-local void make_CF(struct  cmdline_data* cmd,
-                   struct  global_data* gd,
-                   unsigned long long DD[],int nD,
-                   double corr[],double ercorr[]);
-local void _write_CF(struct  cmdline_data* cmd,
+
+local int _catalog_to_boxes(struct cmdline_data *cmd,
+                            struct global_data *gd,
+                            int n_box_side,
+                            NeighborBox **boxes_out);
+
+local int make_CF(struct cmdline_data *cmd,
+                  struct global_data *gd,
+                  unsigned long long DD[], int nD,
+                  double corr[], double ercorr[]);
+
+local int _write_CF(struct  cmdline_data* cmd,
                      struct  global_data* gd,
                      char *fname,double *corr,double *ercorr,
                      unsigned long long *DD);
@@ -68,15 +72,15 @@ local void pass_run_params(struct  cmdline_data* cmd,
                            struct  global_data* gd);
 local int print_info(struct cmdline_data* cmd,
                      struct  global_data* gd);
-local void _run_monopole_corr_neighbors(struct cmdline_data* cmd,
+local int _run_monopole_corr_neighbors(struct cmdline_data* cmd,
                                         struct global_data* gd,
                                         int cat1, int cat2);
-local void _corr_mono_box_neighbors(struct  cmdline_data* cmd,
-                                    struct  global_data* gd,
-                                    int nside,NeighborBox *boxes,
-                                    INTEGER np, unsigned long long hh[]);
+local int _corr_mono_box_neighbors(struct  cmdline_data* cmd,
+                                   struct  global_data* gd,
+                                   int nside,NeighborBox *boxes,
+                                   INTEGER np, unsigned long long hh[]);
 #ifdef _DEBUG_
-local void write_cat(struct cmdline_data* cmd,
+local int write_cat(struct cmdline_data* cmd,
                      struct global_data* gd, char *fn);
 #endif
 
@@ -126,14 +130,15 @@ global int searchcalc_neighbor_boxes_omp(struct  cmdline_data* cmd,
                            routineName, gd->bytes_tot*INMB);
     pass_run_params(cmd, gd);
 
-    _run_monopole_corr_neighbors(cmd, gd, cat1, cat2);
+    if (_run_monopole_corr_neighbors(cmd, gd, cat1, cat2) == FAILURE)
+    return FAILURE;
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "\nGoing out: CPU time = %lf %s\n",
                         CPUTIME-cpustart, PRNUNITOFTIMEUSED);
 
-  return 0;
+  return SUCCESS;
 }
 
 // pass cBalls parameters to CB
@@ -157,13 +162,14 @@ void pass_run_params(struct  cmdline_data* cmd,
 }
 
 // main routine for monopole using neighbor boxes
-local void _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
+local int _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
                                   struct  global_data* gd, int cat1, int cat2)
 {
     string routineName = "_run_monopole_corr_neighbors";
+    int status = FAILURE;
     INTEGER n_dat;
     int nside;
-    NeighborBox *boxes;
+    NeighborBox *boxes = NULL;
     unsigned long long DD[NB_R_];
     double corr[NB_R_],ercorr[NB_R_];
 
@@ -204,7 +210,7 @@ local void _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: Box: %g %g %g\n",
                            routineName, gd->Box[0], gd->Box[1], gd->Box[2]);
-    if (scanopt(cmd->options, "cute-box-fmt"))
+    if (cballs_opt_cute_box_fmt(cmd))
     for(ii=0;ii<gd->nbodyTable[cat1];ii++) {
         p = bodytable[cat1]+ii;
         DO_COORD(k)
@@ -213,34 +219,49 @@ local void _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
     //E
 
     nside=_optimal_nside(lbox,1./I_R_MAX_,gd->nbodyTable[cat1]);
-    boxes=_catalog_to_boxes(cmd, gd, nside);
+    if (_catalog_to_boxes(cmd, gd, nside, &boxes) == FAILURE)
+        return FAILURE;
+
+#ifdef SMOOTHPIVOT
+    if (prepare_smooth_pivots(cmd, gd, bodytable, gd->nbodyTable,
+                              1, gd->nbodyTable, cat1, cat2) == FAILURE)
+        goto cleanup;
+#endif
 
 #ifdef _DEBUG_
     char OutputFileName[32];
-    sprintf(OutputFileName,"%s/%s%s",
-            cmd->rootDir,"debug_DatCat",EXTFILES);
+    if (format_checked(OutputFileName, sizeof(OutputFileName),
+        "OutputFileName", "%s/%s%s",
+                       cmd->rootDir,"debug_DatCat",EXTFILES) != 0)
+        return FAILURE;
     write_cat(cmd, gd, OutputFileName);
 #endif
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "%s: correlating...\n", routineName);
-    _corr_mono_box_neighbors(cmd, gd, nside, boxes,
-                             gd->nbodyTable[cat1], DD);
+    if (_corr_mono_box_neighbors(cmd, gd, nside, boxes,
+                                 gd->nbodyTable[cat1], DD) == FAILURE)
+        goto cleanup;
     
     // ===============================================
     //B Saving histograms section: case 2pCORRELATION:
     // ===============================================
-    make_CF(cmd, gd, DD, gd->nbodyTable[cat1],corr,ercorr);
-    if (scanopt(cmd->options, "compute-HistN")) {
+    if (make_CF(cmd, gd, DD, gd->nbodyTable[cat1], corr, ercorr) == FAILURE) {
+        _free_boxes(nside, boxes);
+        return FAILURE;
+    }
+    
+    if (cballs_opt_compute_histn(cmd)) {
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\t%s: printing neighbor-boxes-omp method...\n\n",
                                routineName);
-        PrintHistNN(cmd, gd);
-        PrintHistXi2pcf(cmd, gd);
+        PRINT_OR_FAIL(PrintHistNN(cmd, gd));
+        PRINT_OR_FAIL(PrintHistXi2pcf(cmd, gd));
     } else {
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n%s: writing output...\n", routineName);
-        _write_CF(cmd, gd, gd->fpfnamehistCFFileName,corr,ercorr,DD);
+        if (_write_CF(cmd, gd, gd->fpfnamehistCFFileName,corr,ercorr,DD) == FAILURE)
+            goto cleanup;
     }
     gd->flagPrint = FALSE;
     // ===============================================
@@ -249,15 +270,22 @@ local void _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                         "%s: cleaning up...\n", routineName);
-    _free_boxes(nside,boxes);
+    
+    status = SUCCESS;
+
+    cleanup:
+        if (boxes != NULL)
+            _free_boxes(nside,boxes);
+
+    return status;
 }
 
 // correlator for monopole in the periodic-box case
 //  using neighbor boxes
-local void _corr_mono_box_neighbors(struct  cmdline_data* cmd,
-                                    struct  global_data* gd,
-                                    int nside,NeighborBox *boxes,
-                                    INTEGER np, unsigned long long hh[])
+local int _corr_mono_box_neighbors(struct  cmdline_data* cmd,
+                                   struct  global_data* gd,
+                                   int nside,NeighborBox *boxes,
+                                   INTEGER np, unsigned long long hh[])
 {
     string routineName = "_corr_mono_box_neighbors";
     double agrid=lbox/nside;
@@ -277,25 +305,13 @@ local void _corr_mono_box_neighbors(struct  cmdline_data* cmd,
                         "\nRunning...\n - Completed pivot node:\n");
 
 
-  for(i=0;i<NB_R_;i++)
-    hh[i]=0;                                        // clear shared histogram
+    for (i = 0; i < NB_R_; i++) {
+        hh[i] = 0;                                  // clear shared histogram
+    }
     gd->nbbcalc = gd->nbccalc = gd->ncccalc = 0;
 
 #ifdef SMOOTHPIVOT
-    int ifile=0;
     bodyptr p;
-    DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
-        Update(p) = TRUE;
-    MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
-    int k;
-    int cat1=0;
-    if (scanopt(cmd->options, "cute-box-fmt"))
-    for(int ii=0;ii<gd->nbodyTable[cat1];ii++) {
-        p = bodytable[cat1]+ii;
-        DO_COORD(k)
-            Pos(p)[k] += 0.5*gd->Box[k];
-    }
-
     INTEGER ipfalse;
     ipfalse=0;
 
@@ -308,10 +324,12 @@ local void _corr_mono_box_neighbors(struct  cmdline_data* cmd,
     bodyptr p;
     DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
         Update(p) = TRUE;
-    MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile);
+    if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile)
+        == FAILURE)
+        return FAILURE;
     int k;
     int cat1=0;
-    if (scanopt(cmd->options, "cute-box-fmt"))
+    if (cballs_opt_cute_box_fmt(cmd))
     for(int ii=0;ii<gd->nbodyTable[cat1];ii++) {
         p = bodytable[cat1]+ii;
         DO_COORD(k)
@@ -361,7 +379,6 @@ ipfalse)
 #endif
 
 #ifdef SMOOTHPIVOT
-      bodyptr q;
       INTEGER ipfalsethreads;
       ipfalsethreads = 0;
 #endif
@@ -374,7 +391,7 @@ ipfalse)
 
       int cat1=0;
 
-#pragma omp for nowait schedule(dynamic)
+#pragma omp for nowait schedule(static,1)
 #ifndef ORIGINALCB
 #ifndef BALLS4SCANLEV
       for (p = bodytable[cat1]; p < bodytable[cat1] + np; p++) {
@@ -382,7 +399,6 @@ ipfalse)
 #else
       for (INTEGER ii=0; ii< gd->nnodescanlevTableB4[cat1]; ii++) {
           p = nodetablescanlevB4[cat1][ii];
-//          ii = p - nodetablescanlevB4[cat1][ii];
 #endif
 #else
       for(ii=0;ii<np;ii++) {
@@ -463,16 +479,6 @@ ipfalse)
                           r2=xr[0]*xr[0]+xr[1]*xr[1]+xr[2]*xr[2];
                           if(r2>R2_MAX) continue;
                           hist.nbbcalcthread += 1;
-#ifdef SMOOTHPIVOT
-                          q = bodytable[0]+jj;
-                          if (p==q) continue;
-                          if (rsqrt(r2)<=gd->rsmooth[0]) {
-                              if (Update(q)==TRUE) {
-                                  Update(q) = FALSE;
-                              }
-                          }
-#endif
-
 #ifdef LOGBINCBON
 #ifdef _LOGBIN_
                               if(r2>0) {
@@ -521,8 +527,17 @@ ipfalse)
       if (main_thread_id == current_thread_id)
           verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                               "\n");
-#pragma omp critical
-    {
+      /* Publish in thread-ID order so floating-point sums are repeatable. */
+#ifdef OPENMPCODE
+      int thread_id = omp_get_thread_num();
+      int thread_count = omp_get_num_threads();
+#else
+      int thread_id = 0;
+      int thread_count = 1;
+#endif
+      for (int thread_turn = 0; thread_turn < thread_count; thread_turn++) {
+#pragma omp barrier
+      if (thread_id == thread_turn) {
         for(ii=0;ii<NB_R_;ii++) //Check bound
             hh[ii]+=hthread[ii]; //Add private histograms to shared one
 #ifdef SMOOTHPIVOT
@@ -530,7 +545,9 @@ ipfalse)
 #endif
         gd->nbbcalc += hist.nbbcalcthread;
         gd->nbccalc += hist.nbccalcthread;
-    } // end pragma omp critical
+      }
+      }
+#pragma omp barrier
 
     } // end pragma omp parallel
     
@@ -575,6 +592,7 @@ ipfalse)
                            routineName, itruecount+ifalsecount);
 #endif
 
+    return SUCCESS;
 }
 
 #ifndef FRACTION_AR
@@ -594,9 +612,10 @@ int _optimal_nside(double lb,double rmax,INTEGER np)
 #ifdef _DEBUG_
 // writes catalog
 //  only used for debugging
-local void write_cat(struct cmdline_data* cmd,
+local int write_cat(struct cmdline_data* cmd,
                      struct global_data* gd, char *fn)
 {
+    string routineName = "write_cat";
     FILE *fr;
     INTEGER ii;
     fr=fopen(fn,"w");
@@ -604,9 +623,12 @@ local void write_cat(struct cmdline_data* cmd,
     bodyptr p;
     for(ii=0;ii<gd->nbodyTable[0];ii++) {
         p = bodytable[0]+ii;
-        fprintf(fr,"%lf %lf %lf\n",Pos(p)[0],Pos(p)[1],Pos(p)[2]);
+        WRITE_OUTPUT_OR_FAIL(fr, fn,
+                             "%lf %lf %lf\n",Pos(p)[0],Pos(p)[1],Pos(p)[2]);
     }
-  fclose(fr);
+    CLOSE_OUTPUT_OR_FAIL(fr, fn);
+
+    return SUCCESS;
 }
 #endif // ! _DEBUG_
 
@@ -616,84 +638,165 @@ local void write_cat(struct cmdline_data* cmd,
 void _free_boxes(int nside,NeighborBox *boxes)
 {
   int ii;
-
-  for(ii=0;ii<nside*nside*nside;ii++) {
-    if(boxes[ii].np>0)
-      free(boxes[ii].pos);
-  }
-  
-  free(boxes);
+    
+    for (ii = 0; ii < nside*nside*nside; ii++) {
+        if (boxes[ii].pos != NULL) {
+            free(boxes[ii].pos);
+            boxes[ii].pos = NULL;
+        }
+    }
+    free(boxes);
 }
 
+//B
+local int _neighbor_box_index_for_body(struct cmdline_data *cmd,
+                                    const char *routineName,
+                                    bodyptr p,
+                                    INTEGER ibody,
+                                    int nside,
+                                    int *index_out)
+{
+    int ix, iy, iz;
+
+    if (index_out == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                "%s: index_out is NULL", routineName);
+        return FAILURE;
+    }
+
+    if (nside <= 0 || lbox <= 0.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                "%s: invalid box grid nside=%d lbox=%g",
+                routineName, nside, lbox);
+        return FAILURE;
+    }
+
+    if (Pos(p)[0] < 0.0 || Pos(p)[0] >= lbox ||
+        Pos(p)[1] < 0.0 || Pos(p)[1] >= lbox ||
+        Pos(p)[2] < 0.0 || Pos(p)[2] >= lbox) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                "%s: body %ld position outside [0,lbox): %g %g %g lbox=%g",
+                routineName, (long)ibody,
+                Pos(p)[0], Pos(p)[1], Pos(p)[2], lbox);
+        return FAILURE;
+    }
+
+    ix = (int)(Pos(p)[0] / lbox * nside);
+    iy = (int)(Pos(p)[1] / lbox * nside);
+    iz = (int)(Pos(p)[2] / lbox * nside);
+
+    if (ix < 0 || ix >= nside || iy < 0 || iy >= nside || iz < 0 || iz >= nside) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                "%s: body %ld invalid box index %d %d %d for nside=%d",
+                routineName, (long)ibody, ix, iy, iz, nside);
+        return FAILURE;
+    }
+
+    *index_out = ix + nside * (iy + nside * iz);
+    return SUCCESS;
+}
+//E
+
 // creates boxes for nearest-neighbor searching
-NeighborBox *_catalog_to_boxes(struct cmdline_data* cmd,
-                               struct global_data* gd,
-                               int n_box_side)
+local int _catalog_to_boxes(struct cmdline_data *cmd,
+                                  struct global_data *gd,
+                                  int n_box_side,
+                                  NeighborBox **boxes_out)
 {
     string routineName = "_catalog_to_boxes";
     INTEGER ii;
     int nside;
-    NeighborBox *boxes;
+    NeighborBox *boxes = NULL;
+
+    if (boxes_out == NULL)
+        cBALLS_FAIL(cmd, "%s: boxes_out is NULL\n", routineName);
+
+    *boxes_out = NULL;
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                            "%s: Building neighbor boxes \n",
                            routineName, gd->bytes_tot*INMB);
     nside=n_box_side;
+    if (nside <= 0 || lbox <= 0.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid box grid nside=%d lbox=%g",
+                 routineName, nside, lbox);
+        return FAILURE;
+    }
+    
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "%s: there will be %d boxes per side with a size of %lf\n",
                            routineName, nside,lbox/nside);
 
     boxes=(NeighborBox *)malloc(nside*nside*nside*sizeof(NeighborBox));
-    if(boxes==NULL) error("%s: out of memory!!\n", routineName);;
+    if (boxes == NULL)
+        cBALLS_FAIL(cmd, "%s: out of memory!!\n", routineName);
+
+    for (ii = 0; ii < nside*nside*nside; ii++) {
+        boxes[ii].np = 0;
+        boxes[ii].pos = NULL;
+    }
+
     for(ii=0;ii<nside*nside*nside;ii++)
     boxes[ii].np=0;
 
     bodyptr p;
     for(ii=0;ii<gd->nbodyTable[0];ii++) {
-        int ix,iy,iz;
+        int index;
         p = bodytable[0]+ii;
 
-        ix=(int)(Pos(p)[0]/lbox*nside);
-        iy=(int)(Pos(p)[1]/lbox*nside);
-        iz=(int)(Pos(p)[2]/lbox*nside);
+        if (_neighbor_box_index_for_body(cmd, routineName, p, ii, nside, &index) == FAILURE)
+            goto fail;
 
-        (boxes[ix+nside*(iy+nside*iz)].np)++;
+        boxes[index].np++;
     }
 
-    for(ii=0;ii<nside*nside*nside;ii++) {
-        int npar=boxes[ii].np;
-        if(npar>0) {
-            boxes[ii].pos=(double *)malloc(3*npar*sizeof(double));
-            if(boxes[ii].pos==NULL) error("%s: out of memory!!\n", routineName);
-            boxes[ii].np=0;
+    //B
+    for (ii = 0; ii < nside*nside*nside; ii++) {
+        int npar = boxes[ii].np;
+        if (npar > 0) {
+            boxes[ii].pos = (double *)malloc(3*npar*sizeof(double));
+            if (boxes[ii].pos == NULL) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "%s: out of memory!!\n", routineName);
+                goto fail;
+            }
+            boxes[ii].np = 0;
         }
     }
-
+    //E
+    
     for(ii=0;ii<gd->nbodyTable[0];ii++) {
-        int ix,iy,iz,index,offset;
-        p = bodytable[0]+ii;
+        int index, offset;
+        p = bodytable[0] + ii;
 
-        ix=(int)(Pos(p)[0]/lbox*nside);
-        iy=(int)(Pos(p)[1]/lbox*nside);
-        iz=(int)(Pos(p)[2]/lbox*nside);
+        if (_neighbor_box_index_for_body(cmd, routineName,
+                                         p, ii, nside, &index) == FAILURE)
+            goto fail;
 
-        index=ix+nside*(iy+nside*iz);
-        offset=3*boxes[index].np;
-
-        (boxes[index].pos)[offset]=Pos(p)[0];
-        (boxes[index].pos)[offset+1]=Pos(p)[1];
-        (boxes[index].pos)[offset+2]=Pos(p)[2];
-
-        (boxes[index].np)++;
+        offset = 3 * boxes[index].np;
+        boxes[index].pos[offset] = Pos(p)[0];
+        boxes[index].pos[offset + 1] = Pos(p)[1];
+        boxes[index].pos[offset + 2] = Pos(p)[2];
+        boxes[index].np++;
   }
 
-  return boxes;
+
+    *boxes_out = boxes;
+    return SUCCESS;
+
+    fail:
+        if (boxes != NULL)
+            _free_boxes(nside, boxes);
+        *boxes_out = NULL;
+        return FAILURE;
 }
 
 local int search_init_hist_omp(struct  cmdline_data* cmd,
                                      struct  global_data* gd,
                                      gdlptr_hist_omp hist)
 {
+    string routineName = "search_init_hist_omp";
     hist->nbbcalcthread = 0;
     hist->nbccalcthread = 0;
     return SUCCESS;
@@ -707,18 +810,19 @@ local int search_init_hist_omp(struct  cmdline_data* cmd,
 //      total # particles.
 //  Note that, since in this case we have simple periodic boundary conditions,
 //      no random catalogs are needed.
-local void make_CF(struct  cmdline_data* cmd,
-                   struct  global_data* gd,
-                   unsigned long long DD[],int nD,
-                   double corr[],double ercorr[])
+local int make_CF(struct cmdline_data *cmd,
+                        struct global_data *gd,
+                        unsigned long long DD[], int nD,
+                        double corr[], double ercorr[])
 {
+    string routineName = "make_CF";
     double *edd;
     double rho_av=nD/(lbox*lbox*lbox);
     int ii;
 
     edd=(double *)malloc(sizeof(double)*NB_R_);
     if(edd==NULL)
-        error("CUTE: Out of memory!!\n");
+        cBALLS_FAIL(cmd, "%s: Out of memory!!\n", routineName);
 
 #ifdef LOGBINCBON
 #ifndef _LOGBIN_
@@ -766,32 +870,24 @@ local void make_CF(struct  cmdline_data* cmd,
         }
     }
 
-//    for(int n=0;n<NB_R_;n++)
-//    for (n=1; n<=cmd->sizeHistN; n++) {
-//        gd->histNN[n] = DD[n-1];
-//        gd->histCF[n] = corr[n-1];
-//    }
-
   free(edd);
+
+  return SUCCESS;
 }
 
 // writes correlation function
-local void _write_CF(struct  cmdline_data* cmd,
+local int _write_CF(struct  cmdline_data* cmd,
                      struct  global_data* gd,
                      char *fname,double *corr,double *ercorr,
                      unsigned long long *DD)
 {
+    string routineName = "_write_CF";
     FILE *fo;
     int ii;
 
-    fo=fopen(fname,"w");
-    if(fo==NULL) {
-        char oname[64]="output_CUTE.dat";
-        fprintf(stderr,"CUTE: Error opening output file %s",fname);
-        fprintf(stderr,", using ./output_CUTE.dat");
-        fo=fopen(oname,"w");
-        if(fo==NULL) error("CUTE: Couldn't open file %s \n",oname);
-    }
+    if (stropen_checked(fname, "w!", &fo,
+                        cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        return FAILURE;
 
     for(ii=0;ii<NB_R_;ii++) {
         double rr;
@@ -808,20 +904,24 @@ local void _write_CF(struct  cmdline_data* cmd,
             rr=(ii+0.5)/(NB_R_*I_R_MAX_);
         }
 #endif // ! LOGBINCBON
-        fprintf(fo,"%lE %lE %lE %llu \n",
-                rr,corr[ii],ercorr[ii],DD[ii]);
+        WRITE_OUTPUT_OR_FAIL(fo, fname,
+                             "%lE %lE %lE %llu \n",
+                             rr,corr[ii],ercorr[ii],DD[ii]);
     }
 
-    fclose(fo);
+    CLOSE_OUTPUT_OR_FAIL(fo, fname);
+
+    return SUCCESS;
 }
 
 local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistNN";
     real rBin, rbinlog;
     int n;
     stream outstr;
 
-    outstr = stropen(gd->fpfnamehistNNFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                 "Printing : to a file %s ...\n",gd->fpfnamehistNNFileName);
@@ -844,28 +944,30 @@ local int PrintHistNN(struct  cmdline_data* cmd, struct  global_data* gd)
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
 #endif // ! LOGBINCBON
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histNN[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName,
+                             "%16.8e %16.8e\n",rBin,gd->histNN[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistNNFileName);
 
-    if (scanopt(cmd->options, "and-CF"))
-        PrintHistCF(cmd, gd);
+    if (cballs_opt_and_cf(cmd))
+        PRINT_OR_FAIL(PrintHistCF(cmd, gd));
 
     return SUCCESS;
 }
 
 local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistCF";
     real rBin, rbinlog;
     int n;
     stream outstr;
     //B correct cute-box-rmin
     real deltaR;
-    if ((scanopt(cmd->options, "cute-box-rmin")))
+    if ((cballs_opt_cute_box_rmin(cmd)))
         deltaR = cmd->rangeN/cmd->sizeHistN;
     //E
 
-    outstr = stropen(gd->fpfnamehistCFFileName, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName, "w!");
 
     verb_print_q(2, cmd->verbose,
                 "Printing : to a file %s ...\n",gd->fpfnamehistCFFileName);
@@ -880,7 +982,7 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
         //E
 #else // ! _LOGBIN_
         //B correct cute-box-rmin
-        if ((scanopt(cmd->options, "cute-box-rmin"))) {
+        if ((cballs_opt_cute_box_rmin(cmd))) {
             deltaR = cmd->rangeN/cmd->sizeHistN;
             rBin = ((real)n-0.5)*deltaR;
         } else {
@@ -897,7 +999,7 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
             //E
         } else {
             //B correct cute-box-rmin
-            if ((scanopt(cmd->options, "cute-box-rmin"))) {
+            if ((cballs_opt_cute_box_rmin(cmd))) {
                 deltaR = cmd->rangeN/cmd->sizeHistN;
                 rBin = ((real)n-0.5)*deltaR;
             } else {
@@ -907,24 +1009,28 @@ local int PrintHistCF(struct  cmdline_data* cmd, struct  global_data* gd)
         }
 #endif // ! LOGBINCBON
 
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histCF[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName,
+                             "%16.8e %16.8e\n",rBin,gd->histCF[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, gd->fpfnamehistCFFileName);
 
     return SUCCESS;
 }
 
 local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    string routineName = "PrintHistXi2pcf";
     real rBin, rbinlog;
     int n;
     stream outstr;
     char namebuf[256];
 
-    sprintf(namebuf, "%s%s%s", gd->fpfnamehistXi2pcfFileName,
-            cmd->suffixOutFiles, EXTFILES);
+    if (format_checked(namebuf, sizeof(namebuf),
+        "namebuf", "%s%s%s", gd->fpfnamehistXi2pcfFileName,
+                       cmd->suffixOutFiles, EXTFILES) != 0)
+        return FAILURE;
     verb_print_q(2, cmd->verbose, "Printing : to a file %s ...\n",namebuf);
-    outstr = stropen(namebuf, "w!");
+    OPEN_OUTPUT_OR_FAIL(outstr, namebuf, "w!");
 
     for (n=1; n<=cmd->sizeHistN; n++) {
         if (cmd->useLogHist) {
@@ -938,9 +1044,10 @@ local int PrintHistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
         } else {
             rBin = cmd->rminHist + ((real)n-0.5)*gd->deltaR;
         }
-        fprintf(outstr,"%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
+        WRITE_OUTPUT_OR_FAIL(outstr, namebuf,
+                             "%16.8e %16.8e\n",rBin,gd->histXi2pcf[n]);
     }
-    fclose(outstr);
+    CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
 
     return SUCCESS;
 }
@@ -956,13 +1063,13 @@ local int print_info(struct cmdline_data* cmd,
             "%s: warning!! fix lengthBox accordingly to catalog box you give %s\n",
             routineName,
             "otherwise you may get wrong results or even segmentation fault...");
-    if (!scanopt(cmd->options, "only-pos"))
+    if (!cballs_opt_only_pos(cmd))
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "%s: warning!! if catalog doesn´t have convergence field consider using 'only-pos' in options %s\n",
             routineName,
             "otherwise you may get wrong results or even segmentation fault...");
 
-    if (scanopt(cmd->options, "smooth-pivot"))
+    if (cballs_opt_smooth_pivot(cmd))
         verb_print(cmd->verbose,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
     verb_print(cmd->verbose, "computing only 2pcf... \n");
@@ -984,4 +1091,3 @@ local int print_info(struct cmdline_data* cmd,
 
     return SUCCESS;
 }
-

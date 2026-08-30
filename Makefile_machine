@@ -3,15 +3,65 @@
 #
 
 MDIR := $(shell pwd)
-WRKDIR = $(MDIR)/build
+
+# Keep precision profiles in separate object directories.  Command-line
+# overrides such as `make SINGLEPON=1 cballs` take precedence over this default.
+#SINGLEPON ?= 0
+SINGLEPON ?= 0
+
+ifeq ($(ADDONSON),1)
+ifndef CTREEBALLS_ADDONS_SETTINGS_INCLUDED
+CTREEBALLS_ADDONS_SETTINGS_INCLUDED := 1
+include $(MACHINES_DIR)/addons/Makefile_addons_settings
+endif
+endif
+
+
+BUILD_CLASSLIB := noclasslib
+ifeq ($(CLASSLIBON),1)
+BUILD_CLASSLIB := classlib
+endif
+
+BUILD_OPENMP := noopenmp
+ifeq ($(OPENMPMACHINE),1)
+BUILD_OPENMP := openmp
+endif
+
+BUILD_ADDONS := noaddons
+ifeq ($(ADDONSON),1)
+BUILD_ADDONS := addons
+endif
+
+BUILD_MPI := nompi
+ifneq ($(filter 1,$(BALLTREEMPION) $(BALLTREE2BALLSMPION) $(OCTREE2BALLSMPION) $(BALLTREE2BALLSMPI3PCFON) $(OCTREEGGGMPION)),)
+BUILD_MPI := mpi
+endif
+
+BUILD_LYA := nolya
+ifeq ($(LYAFORESTOMPON),1)
+BUILD_LYA := lya
+endif
+
+BUILD_SHEAR := noshear
+ifeq ($(OCTREESHEAROMPON),1)
+BUILD_SHEAR := shear
+endif
+
+BUILD_PRECISION := double
+ifeq ($(SINGLEPON),1)
+BUILD_PRECISION := mixed
+endif
+
+WRKDIR = $(MDIR)/build/$(BUILD_ADDONS)-$(BUILD_CLASSLIB)-$(BUILD_OPENMP)-$(BUILD_MPI)-$(BUILD_LYA)-$(BUILD_SHEAR)-$(BUILD_PRECISION)
 
 .base:
-	if ! [ -e $(WRKDIR) ]; then mkdir $(WRKDIR) ; mkdir $(WRKDIR)/lib; fi;
-	touch build/.base
+	mkdir -p $(WRKDIR)/lib
+	touch $(WRKDIR)/.base
 
-vpath %.c source:general_libs:main
-vpath %.o build
-vpath .base build
+vpath %.c $(MDIR)/source:$(MDIR)/general_libs:$(MDIR)/getparam:$(MDIR)/main
+vpath %.o $(WRKDIR)
+vpath .base $(WRKDIR)
+
 
 #B LINES TO ADAPT TO YOUR PLATFORM
 #
@@ -44,8 +94,8 @@ OPT2LIB =
 #
 # GNU c
 # default is gcc-15,
-# cballys module is working with python 3.13 and gcc-15
-#   check with: 'python -c "import cballys"'
+# cyballs module is working with python 3.13 and gcc-15
+#   check with: 'python -c "import cyballs"'
 CC       = gcc
 # tested in MacBook Pro chip: Apple M3 Max
 #CC       = gcc-12
@@ -61,7 +111,6 @@ CC       = gcc
 # Nothing to do below. Almost... may be some compiler options should be changed
 #
 
-
 #
 # Your python interpreter.
 # In order to use Python 3, you can manually
@@ -76,7 +125,8 @@ PYTHON ?= python
 # your optimization flag
 # clang-12: warning: -O4 is equivalent to -O3 [-Wdeprecated]
 #OPTFLAG = -O4 -ffast-math #-march=native
-OPTFLAG = -O3 -ffast-math #-march=native
+#OPTFLAG = -O3 -ffast-math #-march=native
+OPTFLAG = -O3 -fno-fast-math #-march=native
 #OPTFLAG = -Ofast -ffast-math #-march=native
 #OPTFLAG = -fast
 
@@ -89,11 +139,30 @@ OMPFLAG   = -fopenmp
 CCFLAG = -g -fPIC
 LDFLAG = -g -fPIC
 
+# Optional focused sanitizer profile, for example:
+#   make SANITIZER=address,undefined cballs
+ifneq ($(strip $(SANITIZER)),)
+SANITIZER_FLAGS = -fsanitize=$(SANITIZER) -fno-omit-frame-pointer
+CCFLAG += $(SANITIZER_FLAGS)
+LDFLAG += $(SANITIZER_FLAGS)
+endif
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+PYTHON_MACOSX_DEPLOYMENT_TARGET := $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET') or '11.0')")
+OPENMP_MACOSX_DEPLOYMENT_TARGET := $(shell runtime="$$($(CC) -print-file-name=libgomp.dylib 2>/dev/null)"; if test -f "$$runtime"; then otool -l "$$runtime" 2>/dev/null | awk '/LC_BUILD_VERSION/{found=1; next} found && /minos/{print $$2; exit}'; fi)
+MACOSX_DEPLOYMENT_TARGET ?= $(shell $(PYTHON) -c "import sys; versions=[v for v in sys.argv[1:] if v]; print(max(versions, key=lambda v: tuple(map(int, v.split('.')))))" "$(PYTHON_MACOSX_DEPLOYMENT_TARGET)" "$(OPENMP_MACOSX_DEPLOYMENT_TARGET)")
+export MACOSX_DEPLOYMENT_TARGET
+MACOS_DEPLOYMENT_FLAG = -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET)
+CCFLAG += $(MACOS_DEPLOYMENT_FLAG)
+LDFLAG += $(MACOS_DEPLOYMENT_FLAG)
+endif
+
 # pass current working directory to the code
 CCFLAG += -D__CTREEBALLSDIR__='"$(MDIR)"'
 
 # where to find include files *.h
-INCLUDES = -I../include
+INCLUDES = -I$(MDIR)/include
 HEADERFILES = $(wildcard ./include/*.h)
 
 #INCLUDES += $(OPT1)
@@ -127,21 +196,8 @@ endif
 #
 
 
-#B correction 2025-04-06
-##
-#MANUALCHEBYSHEVON = 1
-##
-## What if mChebyshev is less than 7... correct!
-#ifeq ($(MANUALCHEBYSHEVON),1)
-#MANUALCHEBYSHEV = -DMANUALCHEBYSHEV
-#OPT2 += $(MANUALCHEBYSHEV)
-#endif
-##
-#E correction 2025-04-06
-
-
-# To activate float real set to 1. Else 0
-SINGLEPON = 0
+# Use float storage for search geometry and double computation/accumulation.
+# Set on the command line with `make SINGLEPON=1 ...`.
 #
 ifeq ($(SINGLEPON),1)
 SINGLEP = -DSINGLEP
@@ -156,14 +212,6 @@ ifeq ($(LONGINTON),1)
 LONG = -DLONGINT
 OPT2 += $(LONG)
 endif
-#
-
-#
-#   will be deprecated...
-#PTOPIVOTROTATIONON = 0
-#ifeq ($(PTOPIVOTROTATIONON),1)
-#OPT2 += -DPTOPIVOTROTATION
-#endif
 #
 
 # Flags only for Mac...
@@ -188,7 +236,10 @@ DEBUGTRACKINGON = 0
 #E
 #
 ifeq ($(DEBUGCOMPILINGON),1)
-OPT2 += -Wall
+PROJECT_WARNING_FLAGS = -Wall -Wextra -Wpedantic -Wformat=2 \
+    -Werror=format -Werror=implicit-function-declaration -Werror=return-type \
+    -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable \
+    -Wno-unused-but-set-variable -Wno-format-truncation
 endif
 ifeq ($(DEBUGON),1)
 OPT2 += -DDEBUG
@@ -205,6 +256,8 @@ OPT2 += -DADDONS
 # Machine definitions
 include $(MACHINES_DIR)/addons/Makefile_addons
 #
+else
+OPT2 += -DTPCF
 endif
 
 #E ADDONS
@@ -212,13 +265,14 @@ endif
 #
 #B GENERALLIBS section
 # Use 0 to get rid off all calls to general_libs routines:
+# (always set to 1...)
 GENERALLIBS_ON = 1
 
 ifeq ($(GENERALLIBS_ON),1)
 GENERALLIBS = general_libs
-vpath %.c $(GENERALLIBS)
-INCLUDES += -I../$(GENERALLIBS)
-HEADERFILES += $(wildcard ../general_libs/*.h)
+vpath %.c $(MDIR)/$(GENERALLIBS)
+INCLUDES += -I$(MDIR)/$(GENERALLIBS)
+HEADERFILES += $(wildcard ./general_libs/*.h)
 EXTERNAL += clib.o mathfns.o inout.o mathutil.o numrec.o
 endif
 #
@@ -227,13 +281,15 @@ endif
 #
 #B GETPARAM section
 # Use 0  to get rid off all calls to getparam routines:
+# (always set to 1... 0 is experimental so far)
 GETPARAM_ON = 1
 
 ifeq ($(GETPARAM_ON),1)
 GETPARAM = getparam
-vpath %.c $(GETPARAM)
+vpath %.c $(MDIR)/$(GETPARAM)
 OPT2 += -DGETPARAM
-INCLUDES += -I../getparam
+INCLUDES += -I$(MDIR)/$(GETPARAM)
+HEADERFILES += $(wildcard ../general_libs/*.h)
 EXTERNAL += getparam.o
 endif
 #
@@ -244,78 +300,162 @@ endif
 # BEGIN GSL and CFITSIO DEFINITIONS (if needed)
 #
 
-#
-# Definition to set where GSL are located
-#
-# NagBody dir if needed or adapt it to point
-#     the location of GSL
-NAGBODYDIR = $(HOME)/NagBody_pkg/local
-# In other machines can be:
-#NAGBODYDIR = /opt/local
-#
-
-#
-# Experiment using this lib... apparently is for interfacing with C++
-#   therefore look for something similar for C.
-#    -L/usr/local/lib/ -lboost_python312
-#
-
 # -------------------
-#B GSL section
-ifeq ($(USEGSL),1)
-OPT2 += -DUSEGSL
-#GSLON = 1
-#ifeq ($(GSLON),1)
-ifeq ($(GSLINTERNAL),0)
-# Change these lines to fit your GSL installation
-    GSL_INCL =  -I$(NAGBODYDIR)/gsl/include
-    GSL_LIBS =  -L$(NAGBODYDIR)/gsl/lib -lgsl -lgslcblas
-    CCFLAG += $(GSL_INCL)
-    LDFLAG += $(GSL_LIBS)
-    CCFLAG += -DNOINTERNALGSL
-#    OPT2 += -DNOINTERNALGSL
+#B CFITSIO
+# It can be necessary to export path to pkgconfig
+#export PKG_CONFIG_PATH=/Users/mar/NagBody_pkg/local/cfitsio/lib/pkgconfig:$PKG_CONFIG_PATH
+
+# CFITSIO section
+ifeq ($(CFITSIOON),1)
+
+CFITSIO_INCL =
+CFITSIO_LDFLAGS =
+CFITSIO_LIBS =
+CFITSIO_RPATH =
+
+ifeq ($(CFITSIOLIBON),0)
+
+comma := ,
+
+PKG_CONFIG ?= pkg-config
+CFITSIO_PKG ?= cfitsio
+
+# Manual override still allowed:
+#   CFITSIO_INCLUDE=/path/include CFITSIO_LIB=/path/lib make all
+ifneq ($(CFITSIO_INCLUDE),)
+    CFITSIO_INCL = -I$(CFITSIO_INCLUDE)
+else
+    CFITSIO_INCL = $(shell $(PKG_CONFIG) --cflags $(CFITSIO_PKG) 2>/dev/null)
 endif
+
+ifneq ($(CFITSIO_LIB),)
+    CFITSIO_LDFLAGS = -L$(CFITSIO_LIB)
+    CFITSIO_LIBS = -lcfitsio
+    CFITSIO_RPATH = -Wl,-rpath,$(CFITSIO_LIB)
+else
+    CFITSIO_LDFLAGS = $(shell $(PKG_CONFIG) --libs-only-L $(CFITSIO_PKG) 2>/dev/null)
+    CFITSIO_LIBS = $(shell $(PKG_CONFIG) --libs-only-l $(CFITSIO_PKG) 2>/dev/null)
+    CFITSIO_RPATH = $(patsubst -L%,-Wl$(comma)-rpath$(comma)%,$(CFITSIO_LDFLAGS))
+endif
+
+CCFLAG += $(CFITSIO_INCL)
+LDFLAG += $(CFITSIO_LDFLAGS) $(CFITSIO_RPATH)
+FITSIOLIBS += $(CFITSIO_LIBS)
+
+endif # CFITSIOLIBON=0
+
+endif # CFITSIOON=1
+
+#E new CFITSIO
+# -------------------
+
+# ---------------------------------------------
+#B GSL DEFINITIONS
+##
+## Definition to set where GSL are located
+##
+## Experiment using this lib... apparently is for interfacing with C++
+##   therefore look for something similar for C.
+##    -L/usr/local/lib/ -lboost_python312
+##
+#
+#
+ifeq ($(USEGSL),1)
+
+OPT2 += -DUSEGSL
+ifeq ($(GSLINTERNAL),0)
+
+GSL_CONFIG ?= gsl-config
+
+# Allow user override:
+#   GSL_INCLUDE=/path/include GSL_LIB=/path/lib make all
+ifneq ($(GSL_INCLUDE),)
+    GSL_CFLAGS = -I$(GSL_INCLUDE)
+else
+    GSL_CFLAGS = $(shell $(GSL_CONFIG) --cflags 2>/dev/null)
+endif
+
+ifneq ($(GSL_LIB),)
+    GSL_LDFLAGS = -L$(GSL_LIB)
+    GSL_LIBS = -lgsl -lgslcblas
+else
+    GSL_LDFLAGS =
+    GSL_LIBS = $(shell $(GSL_CONFIG) --libs 2>/dev/null)
+endif
+
+CCFLAG += $(GSL_CFLAGS)
+LDFLAG += $(GSL_LDFLAGS)
+MLIBS += $(GSL_LIBS)
+
+    CCFLAG += -DNOINTERNALGSL
+
+endif # ! GSLINTERNAL
+
 ifeq ($(GSLINTERNAL),1)
 include $(MACHINES_DIR)/addons/Makefile_gsl
-endif
-#endif # ! GSLON
-endif # ! USEGSL
-#E
-# -------------------
+endif # ! GSLINTERNAL
 
-# -------------------
-#B CFITSIO section
-ifeq ($(CFITSIOON),1)
-# set to empty string:
-    CFITSIO_INCL =
-    CFITSIO_LIBS =
-ifeq ($(CFITSIOLIBON),0)
-# Change these two lines to fit your CFITSIO installation
-    CFITSIO_INCL =  -I$(NAGBODYDIR)/cfitsio/include
-    CFITSIO_LIBS =  -L$(NAGBODYDIR)/cfitsio/lib -lcfitsio
-# May not be needed to include: -lm -lnsl -lsocket
-# MLIBS contains already -lm
-#
-# To be able to use CFITSIO with multi-threaded parallel programs
-#   it is needed to ./configure --enable-reentrant
-#
-#ifeq ($(CFITSIOLIBON),0)
-    CCFLAG += $(CFITSIO_INCL)
-    LDFLAG += $(CFITSIO_LIBS)
-else
-    CCFLAG += $(CFITSIO_INCL)
-    LDFLAG += $(CFITSIO_LIBS)
-endif
-endif
-# -------------------
+endif # ! USEGSL
+#endif
+# ---------------------------------------------
+#E GSL DEFINITIONS
 
 #
 # END GSL and CFITSIO DEFINITIONS (if needed)
 #--------------------------------------------
 
+# Capture the final Make settings in the executable.  Keeping this metadata in
+# a generated header preserves strings containing spaces (compiler flags,
+# include paths, and linker flags) without fragile command-line quoting.
+CBALLS_MAKE_INFO_HEADER := $(WRKDIR)/cballs_make_info.h
+CBALLS_MAKE_INFO_GENERATOR := $(MDIR)/scripts/generate_make_info_header.sh
+INCLUDES += -I$(WRKDIR)
+HEADERFILES += $(CBALLS_MAKE_INFO_HEADER)
+
+CBALLS_MAKE_INFO_VARIABLES := \
+	DEFDIMENSION USEGSL GSLINTERNAL OPENMPMACHINE ADDONSON \
+	SINGLEPON LONGINTON MACONLYON DEBUGON DEBUGCOMPILINGON DEBUGTREEON \
+	DEBUGTRACKINGON GENERALLIBS_ON GETPARAM_ON \
+	OCTREEGGGOMPON KDTREEOMPON BALLTREEOMPON BALLTREE2BALLSOMPON \
+	BALLTREE2BALLSMPION \
+	OCTREE2BALLSOMPON OCTREE2BALLSMPION \
+	BALLTREE2BALLSOMP3PCFON BALLTREE2BALLSMPI3PCFON BALLTREEMPION \
+	OCTREEGGGMPION GGG_OMP_PIVOT_CHUNK_SIZE GGG_MPI_PIVOT_CLAIM_SIZE \
+	LYAFORESTOMPON LYA1D_OMP_PIVOT_BLOCK_SIZE \
+	OCTREESHEAROMPON KDTREEBOXOMPON \
+	NEIGHBORBOXESOMPON GADGETIOON CLASSLIBON PXDON IOLIBON \
+	CFITSIOLIBON CFITSIOON SMOOTHPIVOTON NOWKAvgON NMultipolesON \
+	NONORMHISTON POLARAXISON NOLIMBERON OVERCOUNTINGON \
+	NOSTANDARNORMHISTON CMDLINE_DEFS_UNITSPHERE_ON TWOPCFON TPCFON \
+	TPCFSHEARON PRUNEON BALLS4SCANLEVON THETA NORMALHISTSCALEON \
+	_DEBUGON_ LOGBINON ORIGINALCBON ADDPIVOTNEIGHBOURSON \
+	OCTREE3PCF3DOMPON OCTREESMOOTHINGON OCTREEKKKOMPON BALLSON \
+	BALLS0357ON ALLOW_BALLS_WITH_SMOOTHING OCTREEKKKBALLS4OMPON \
+	OCTREEGGGCROSSOMPON DIRECTMETHODON OCTREEGGGON \
+	DIRECTMETHODSIMPLEON DIRECTMETHODSIMPLELOOPIDON COMPLEXLIBON \
+	OCTREEGGGOMPTRIANGLESON OCTREEBOXOMPON KDTREECUTEBOXON \
+	OCTREEKKKBALLS4OMPTRIANGLESON COSMOLIBON SAVERESTOREON \
+	TREEOMPSINCOSON OCTREESINCOSOMPON \
+	MDIR WRKDIR MACHINES_DIR CC PYTHON OPTFLAG OMPFLAG OPT1 OPT2 OPT2LIB CCFLAG \
+	LDFLAG INCLUDES MLIBS FITSIOLIBS EXTERNAL AR SANITIZER \
+	MACOSX_DEPLOYMENT_TARGET PKG_CONFIG CFITSIO_PKG CFITSIO_INCLUDE \
+	CFITSIO_LIB CFITSIO_INCL CFITSIO_LDFLAGS CFITSIO_LIBS CFITSIO_RPATH \
+	GSL_CONFIG GSL_INCLUDE GSL_LIB GSL_CFLAGS GSL_LDFLAGS GSL_LIBS
+
+export $(CBALLS_MAKE_INFO_VARIABLES)
+
+.PHONY: cballs-make-info-force
+cballs-make-info-force:
+
+$(CBALLS_MAKE_INFO_HEADER): cballs-make-info-force $(CBALLS_MAKE_INFO_GENERATOR) | .base
+	@CBALLS_MAKE_INFO_VARIABLES='$(CBALLS_MAKE_INFO_VARIABLES)' \
+		sh $(CBALLS_MAKE_INFO_GENERATOR) $@
 
 CCFLAG += $(OPT2)
 
-%.o: %.c .base $(HEADERFILES)
-	cd $(WRKDIR);$(CC) $(OPTFLAG) $(OMPFLAG) $(CCFLAG) $(INCLUDES) -c ../$< -o $*.o
+VENDORED_SOURCE_PATTERNS = $(if $(strip $(GSL)),$(GSL)/%) \
+    $(if $(strip $(CFITSIO_SOURCE_DIR)),$(CFITSIO_SOURCE_DIR)/%)
+SOURCE_WARNING_FLAGS = $(if $(filter $(VENDORED_SOURCE_PATTERNS),$<),-w,$(PROJECT_WARNING_FLAGS))
 
+%.o: %.c .base $(HEADERFILES) $(MAKEFILE_LIST)
+	cd $(WRKDIR);$(CC) $(OPTFLAG) $(OMPFLAG) $(CCFLAG) $(SOURCE_WARNING_FLAGS) $(INCLUDES) -c $< -o $*.o

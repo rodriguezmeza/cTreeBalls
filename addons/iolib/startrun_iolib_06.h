@@ -4,8 +4,10 @@
 #ifndef _startrun_iolib_06_h
 #define _startrun_iolib_06_h
 
-scaniOption(cmd, gd, cmd->columns, gd->columns,
-            &nitems, ndummy, 2, "columns");
+//scaniOption(cmd, gd, cmd->columns, gd->columns, &nitems, ndummy, 2, "columns");
+class_call_cballs(scaniOption(cmd, gd, cmd->columns, gd->columns,
+                              &nitems, ndummy, 2, "columns"),
+                  errmsg, errmsg);
 
 // pos, kappa, gamma1, gamma2, weight, seven places maximum
 // use in multi-columns-ascii and cfitsio

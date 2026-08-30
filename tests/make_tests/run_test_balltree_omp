@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-balltree.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    local message=$1
+    local logfile=${2:-/dev/null}
+
+    echo "ERROR: $message" >&2
+    [ ! -f "$logfile" ] || cat "$logfile" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- '-DBALLTREEOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable BALLTREEOMP"
+grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the reference KDTREEOMP engine is not enabled"
+
+run_case()
+{
+    local name=$1
+    local method=$2
+    local threads=$3
+    local use_log=$4
+    local options=$5
+    local model=${6:-simple-cubic}
+    local periodic=${7:-false}
+    local leaf_size=${8:-8}
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" \
+        search="$method" \
+        testmodel="$model" \
+        nbody=4096 \
+        lengthBox=2 \
+        rootDir="$output" \
+        numberThreads="$threads" \
+        usePeriodic="$periodic" \
+        useLogHist="$use_log" \
+        rangeN=0.4 \
+        rminHist=0.005 \
+        sizeHistN=4 \
+        mChebyshev=2 \
+        nsmooth="$leaf_size" \
+        seed=123 \
+        stepState=1000000 \
+        verbose=1 \
+        verbose_log=0 \
+        options="$options" >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+compare_numeric_outputs()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+import math
+import pathlib
+import sys
+
+reference = pathlib.Path(sys.argv[1])
+candidate = pathlib.Path(sys.argv[2])
+names = sorted(path.name for path in reference.glob("*.txt"))
+if not names or names != sorted(path.name for path in candidate.glob("*.txt")):
+    raise SystemExit("histogram output sets differ")
+
+for name in names:
+    def values(path):
+        tokens = []
+        for line in path.read_text().splitlines():
+            tokens.extend(line.split("#", 1)[0].split())
+        return tokens
+
+    left = values(reference / name)
+    right = values(candidate / name)
+    if len(left) != len(right):
+        raise SystemExit(f"{name}: value counts differ")
+    for index, (a, b) in enumerate(zip(left, right)):
+        x = float(a)
+        y = float(b)
+        if math.isnan(x) and math.isnan(y):
+            continue
+        if not math.isclose(x, y, rel_tol=2e-12, abs_tol=2e-12):
+            raise SystemExit(f"{name}:{index}: {x!r} != {y!r}")
+PY
+}
+
+exact_options=compute-HistN,out-m-HistZeta,no-one-ball
+run_case kdtree-reference kdtree-omp 1 false "$exact_options"
+run_case balltree-one balltree-omp 1 false "$exact_options"
+run_case balltree-many balltree-omp "$MULTI_THREADS" false "$exact_options"
+
+[ -f "$TMP_ROOT/balltree-one/histXi2pcf.txt" ] \
+    || fail_with_log "balltree-omp did not produce its 2PCF output"
+[ -f "$TMP_ROOT/balltree-one/histZetaM_cos_1.txt" ] \
+    || fail_with_log "balltree-omp did not produce its 3PCF output"
+cmp -s "$TMP_ROOT/kdtree-reference/histNN.txt" \
+       "$TMP_ROOT/balltree-one/histNN.txt" \
+    || fail_with_log "exact ball-tree pair counts differ from KDTREEOMP" \
+                     "$TMP_ROOT/balltree-one/run.log"
+compare_numeric_outputs "$TMP_ROOT/kdtree-reference" "$TMP_ROOT/balltree-one" \
+    || fail_with_log "exact ball-tree histograms differ from KDTREEOMP" \
+                     "$TMP_ROOT/balltree-one/run.log"
+
+# Irregular coordinates exercise PCA partitioning and the sphere-pruning bound.
+run_case kdtree-random kdtree-omp 1 false "$exact_options" simple-cubic-random
+run_case balltree-random balltree-omp 1 false "$exact_options" simple-cubic-random
+cmp -s "$TMP_ROOT/kdtree-random/histNN.txt" \
+       "$TMP_ROOT/balltree-random/histNN.txt" \
+    || fail_with_log "random-catalog ball-tree pair counts differ from KDTREEOMP" \
+                     "$TMP_ROOT/balltree-random/run.log"
+compare_numeric_outputs "$TMP_ROOT/kdtree-random" "$TMP_ROOT/balltree-random" \
+    || fail_with_log "random-catalog ball-tree histograms differ from KDTREEOMP" \
+                     "$TMP_ROOT/balltree-random/run.log"
+
+# A single root leaf is a brute-force reference for periodic sphere pruning.
+run_case periodic-tree balltree-omp 1 false "$exact_options" \
+         simple-cubic-random true 8
+run_case periodic-brute balltree-omp 1 false "$exact_options" \
+         simple-cubic-random true 5000
+cmp -s "$TMP_ROOT/periodic-tree/histNN.txt" \
+       "$TMP_ROOT/periodic-brute/histNN.txt" \
+    || fail_with_log "periodic ball-tree pruning changed pair counts" \
+                     "$TMP_ROOT/periodic-tree/run.log"
+compare_numeric_outputs "$TMP_ROOT/periodic-brute" "$TMP_ROOT/periodic-tree" \
+    || fail_with_log "periodic ball-tree pruning changed histograms" \
+                     "$TMP_ROOT/periodic-tree/run.log"
+
+for file in "$TMP_ROOT/balltree-one"/*.txt; do
+    name=${file##*/}
+    cmp -s "$file" "$TMP_ROOT/balltree-many/$name" \
+        || fail_with_log \
+            "balltree-omp differs between 1 and $MULTI_THREADS threads: $name" \
+            "$TMP_ROOT/balltree-many/run.log"
+done
+
+run_case one-ball balltree-omp "$MULTI_THREADS" true \
+         compute-HistN,out-m-HistZeta,behavior-ball
+nbccalc=$(sed -n \
+    's/.*balltree-omp: nbbcalc = [0-9][0-9]*, nbccalc = \([0-9][0-9]*\).*/\1/p' \
+    "$TMP_ROOT/one-ball/run.log" | tail -1)
+[ "${nbccalc:-0}" -gt 0 ] \
+    || fail_with_log "behavior-ball did not aggregate any ball-tree node" \
+                     "$TMP_ROOT/one-ball/run.log"
+
+echo "PASS: FCFC-style BALLTREEOMP 2PCF/3PCF regression and determinism"

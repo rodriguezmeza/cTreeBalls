@@ -1,0 +1,20 @@
+# ----- MAKE FILE module definitions (octree_kkk_balls4_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# OCTREEKKKBALLS4OMP
+ifeq ($(OCTREEKKKBALLS4OMPON),1)
+OPT2 += -DOCTREEKKKBALLS4OMP
+#OCTREEKKKBALLS4OMP = ../addons/octree_kkk_balls4_omp/
+#vpath %.c ./addons/octree_kkk_balls4_omp/
+OCTREEKKKBALLS4OMP = $(MDIR)/addons/octree_kkk_balls4_omp/
+vpath %.c $(MDIR)/addons/octree_kkk_balls4_omp/
+INCLUDES += -I$(OCTREEKKKBALLS4OMP)
+HEADERFILES += $(wildcard $(OCTREEKKKBALLS4OMP)/*.h)
+EXTERNAL += search_octree_kkk_balls4_omp.o
+endif
+#
+#E

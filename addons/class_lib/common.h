@@ -1,6 +1,8 @@
 //=============================================================================
 //        1          2          3          4        ^ 5          6          7
 
+#include "globaldefs.h"
+
 #include "stdio.h"
 #include "stdlib.h"
 #include "math.h"
@@ -15,7 +17,8 @@
 #ifndef __COMMON__
 #define __COMMON__
 
-// this commented line can not be erased... nmake clean_cTreeBalls get an error of invalid versioning...
+// this commented line can not be erased...
+//  nmake clean_cTreeBalls get an error of invalid versioning...
 // It must match version in cmdline_defs.h
 #define _VERSION_ "v1.0.1"
 
@@ -31,11 +34,24 @@
 #define SUCCESS 0 /**< integer returned after successful call of a function */
 #define FAILURE 1 /**< integer returned after failure in a function */
 
-#define _ERRORMSGSIZE_ 2048 /**< generic error messages are cut beyond this number of characters */
-typedef char ErrorMsg[_ERRORMSGSIZE_]; /**< Generic error messages (there is such a field in each structure) */
-
-#define _FILENAMESIZE_ 256 /**< size of the string read in each line of the file (extra characters not taken into account) */
+#define _ERRORMSGSIZE_ 2048                         // generic error messages
+                                                    //  are cut beyond this
+                                                    //  number of characters
+typedef char ErrorMsg[_ERRORMSGSIZE_];              // Generic error messages
+                                                    //(there is such a field
+                                                    //  in each structure)
+//B wlcf
+/*
+#define _FILENAMESIZE_ 256 //< size of the string read in each line of the file (extra characters not taken into account)
 typedef char FileName[_FILENAMESIZE_];
+*/
+
+#define _FILENAMESIZE_ 256 //< size of the string read in each line of the file (extra characters not taken into account)
+#define _BASEPATHSIZE_ 1000 //< allowed size of the base path
+//typedef char FileName[_FILENAMESIZE_];
+typedef char FileName[_FILENAMESIZE_+_BASEPATHSIZE_];
+//E
+
 
 #define _SUFFIXNAMESIZE_ 4 /**< maximum size of the short string appended to file names to account for initial conditions, etc. */
 
@@ -86,7 +102,10 @@ typedef char FileName[_FILENAMESIZE_];
 
 /* needed because of weird openmp bug on macosx lion... */
 
-void class_protect_sprintf(char* dest, char* tpl,...);
+//B wlcf
+//void class_protect_sprintf(char* dest, char* tpl,...);
+void class_protect_sprintf(char *dest, size_t dest_size, const char *tpl, ...);
+//E
 void class_protect_fprintf(FILE* dest, char* tpl,...);
 void* class_protect_memcpy(void* dest, void* from, size_t sz);
 
@@ -100,11 +119,22 @@ int string_begins_with(char* thestring, char beginchar);
 
 /* general CLASS macros */
 
+//B wlcf
+/*
 #define class_build_error_string(dest,tmpl,...) {                               \
   ErrorMsg FMsg;                                                                \
   class_protect_sprintf(FMsg,tmpl,__VA_ARGS__);                                 \
   class_protect_sprintf(dest,"%s(L:%d) :%s",__func__,__LINE__,FMsg);            \
 }
+*/
+
+#define class_build_error_string(dest,tmpl,...) {                               \
+  ErrorMsg FMsg;                                                                \
+  class_protect_sprintf(FMsg, sizeof(FMsg), tmpl, __VA_ARGS__);                 \
+  class_protect_sprintf(dest, _ERRORMSGSIZE_, "%s(L:%d) :%s",                  \
+                        __func__, __LINE__, FMsg);                              \
+}
+//E
 
 // Error reporting macros
 
@@ -199,34 +229,44 @@ int string_begins_with(char* thestring, char beginchar);
 
 // Testing
 
+//B wlcf
+/*
 #define class_test_message(err_out,extra,args...) {                                 \
   ErrorMsg Optional_arguments;                                                      \
   class_protect_sprintf(Optional_arguments,args);                                   \
   class_build_error_string(err_out,"condition (%s) is true; %s",extra,Optional_arguments); \
 }
+*/
+
+#define class_test_message(err_out,extra,...) {                                 \
+  ErrorMsg Optional_arguments;                                                  \
+  class_protect_sprintf(Optional_arguments, sizeof(Optional_arguments), __VA_ARGS__); \
+  class_build_error_string(err_out,"condition (%s) is true; %s",extra,Optional_arguments); \
+}
+//E
 
 /* macro for testing condition and returning error if condition is true;
    args is a variable list of optional arguments, e.g.: args="x=%d",x
    args cannot be empty, if there is nothing to pass use args="" */
-#define class_test_except(condition, error_message_output,list_of_commands, args...) { \
+#define class_test_except(condition, error_message_output,list_of_commands, ...) { \
   if (condition) {                                                                     \
-    class_test_message(error_message_output,#condition, args);                         \
+    class_test_message(error_message_output,#condition, __VA_ARGS__);                  \
     list_of_commands;                                                                  \
     return FAILURE;                                                                    \
   }                                                                                    \
 }
 
-#define class_test(condition, error_message_output, args...) {                         \
+#define class_test(condition, error_message_output, ...) {                             \
   if (condition) {                                                                     \
-    class_test_message(error_message_output,#condition, args);                         \
+    class_test_message(error_message_output,#condition, __VA_ARGS__);                  \
     return FAILURE;                                                                    \
   }                                                                                    \
 }
 
-#define class_test_parallel(condition, error_message_output, args...) {                \
+#define class_test_parallel(condition, error_message_output, ...) {                    \
   if (abort == FALSE) {                                                                \
     if (condition) {                                                                   \
-      class_test_message(error_message_output,#condition, args);                       \
+      class_test_message(error_message_output,#condition, __VA_ARGS__);                \
       abort=TRUE;                                                                      \
     }                                                                                  \
   }                                                                     \
@@ -235,12 +275,23 @@ int string_begins_with(char* thestring, char beginchar);
 /* macro for returning error message;
    args is a variable list of optional arguments, e.g.: args="x=%d",x
    args cannot be empty, if there is nothing to pass use args="" */
+//B wlcf
+/*
 #define class_stop(error_message_output,args...) {                                      \
   ErrorMsg Optional_arguments;                                                          \
   class_protect_sprintf(Optional_arguments,args);                                       \
   class_build_error_string(error_message_output,"error; %s",Optional_arguments);        \
   return FAILURE;                                                                       \
 }
+*/
+
+#define class_stop(error_message_output,...) {                                  \
+  ErrorMsg Optional_arguments;                                                  \
+  class_protect_sprintf(Optional_arguments, sizeof(Optional_arguments), __VA_ARGS__); \
+  class_build_error_string(error_message_output,"error; %s",Optional_arguments);\
+  return FAILURE;                                                               \
+}
+//E
 
 // IO
 /* macro for opening file and returning error if it failed */

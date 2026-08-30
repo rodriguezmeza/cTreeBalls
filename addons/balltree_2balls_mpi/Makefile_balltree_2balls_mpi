@@ -1,0 +1,19 @@
+# ----- Deterministic MPI+OpenMP FCFC dual/triple-node addon -----
+
+ifeq ($(BALLTREE2BALLSMPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DBALLTREE2BALLSMPI -DCBALLS_MPI_ENABLED
+
+BALLTREE2BALLSMPI = $(MDIR)/addons/balltree_2balls_mpi/
+vpath %.c $(BALLTREE2BALLSMPI)
+INCLUDES += -I$(BALLTREE2BALLSMPI) \
+            -I$(MDIR)/addons/balltree_2balls_omp \
+            -I$(MDIR)/addons/balltree_omp
+HEADERFILES += $(wildcard $(BALLTREE2BALLSMPI)/*.h)
+EXTERNAL += fcfc_balltree_2balls_mpi.o search_balltree_2balls_mpi.o
+
+search_balltree_2balls_mpi.o: \
+	$(BALLTREE2BALLSMPI)/search_balltree_2balls_mpi.c \
+	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c
+endif
