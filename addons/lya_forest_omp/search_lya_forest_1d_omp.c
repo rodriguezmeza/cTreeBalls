@@ -8,6 +8,7 @@
 
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
+#include "lya_forest_parallel.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -455,7 +456,7 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
                                  "radial Ly-alpha upper limits",
                                  cmd->error_message,
                                  sizeof(cmd->error_message)) == FAILURE)
-        goto cleanup;
+        goto setup_done;
     if (compute_2pcf
         && (cballs_calloc_checked((void **)&num2, bins2, sizeof(*num2),
                                   "global radial Ly-alpha 2PCF numerator",
@@ -465,7 +466,7 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
                                      "global radial Ly-alpha 2PCF denominator",
                                      cmd->error_message,
                                      sizeof(cmd->error_message)) == FAILURE))
-        goto cleanup;
+        goto setup_done;
     if (compute_3pcf
         && (cballs_calloc_checked((void **)&num3, bins3, sizeof(*num3),
                                   "global radial Ly-alpha 3PCF numerator",
@@ -475,7 +476,7 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
                                      "global radial Ly-alpha 3PCF denominator",
                                      cmd->error_message,
                                      sizeof(cmd->error_message)) == FAILURE))
-        goto cleanup;
+        goto setup_done;
 
     for (i = 0; i < count; i++) radial_order[i] = table + i;
     qsort(radial_order, count, sizeof(*radial_order), lya1d_radial_order);
@@ -497,7 +498,14 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
         end[i] = right_cursor;
     }
 
+    status = SUCCESS;
+setup_done:
+    status = lya_parallel_consensus(cmd, status, "Ly-alpha radial setup");
+    if (status == FAILURE) goto cleanup;
+
     ThreadCount(cmd, gd, nbody, 0);
+    const INTEGER first_task = (INTEGER)lya_parallel_first(cmd);
+    const INTEGER task_stride = (INTEGER)lya_parallel_stride(cmd);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: exact radial-only Ly-alpha estimator; 2PCF=%d 3PCF=%d "
         "cutoff=%g pivot_block=%d blocks=%" INTEGER_FMT "\n",
@@ -526,7 +534,8 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
 
 #pragma omp barrier
 #pragma omp for schedule(static,1) ordered
-        for (block_index = 0; block_index < block_count; block_index++) {
+        for (block_index = first_task; block_index < block_count;
+             block_index += task_stride) {
             size_t block_first = (size_t)block_index
                                * (size_t)LYA1D_OMP_PIVOT_BLOCK_SIZE;
             size_t block_end = MIN(
@@ -566,19 +575,40 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial Ly-alpha worker failed: %.2000s",
                  worker_error[0] != '\0' ? worker_error : "unknown error");
+
+    }
+
+    status = lya_parallel_consensus(cmd, allocation_failed ? FAILURE : SUCCESS,
+                                    "Ly-alpha radial workers");
+    if (status == FAILURE) goto cleanup;
+    INTEGER counters[3] = {accepted_visits, pair_count, ordered_triplet_count};
+    if (lya_parallel_reduce_reals(cmd, num2, bins2) == FAILURE
+        || lya_parallel_reduce_reals(cmd, den2, bins2) == FAILURE
+        || lya_parallel_reduce_reals(cmd, num3, bins3) == FAILURE
+        || lya_parallel_reduce_reals(cmd, den3, bins3) == FAILURE
+        || lya_parallel_reduce_integers(cmd, counters, 3) == FAILURE) {
+        status = FAILURE;
         goto cleanup;
     }
+    if (!lya_parallel_publish(cmd)) {
+        status = SUCCESS;
+        goto publication;
+    }
+    accepted_visits = counters[0];
+    pair_count = counters[1];
+    ordered_triplet_count = counters[2];
+    status = FAILURE;
 
     gd->nbbcalc += accepted_visits;
     if (!cballs_opt_no_out_hist(cmd)) {
         if (compute_2pcf
             && lya1d_write_2pcf(cmd, gd, num2, den2,
                                 pair_count) == FAILURE)
-            goto cleanup;
+            goto publication;
         if (compute_3pcf
             && lya1d_write_3pcf(cmd, gd, num3, den3,
                                 ordered_triplet_count) == FAILURE)
-            goto cleanup;
+            goto publication;
     }
 
     gd->cpusearch = CPUTIME - cpustart;
@@ -588,13 +618,18 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
         cmd->searchMethod, accepted_visits, pair_count,
         ordered_triplet_count, gd->cpusearch);
     status = SUCCESS;
-    goto cleanup;
+    goto publication;
 
 size_error:
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
              "radial Ly-alpha histogram dimensions overflow size_t");
 
+    goto setup_done;
+
+publication:
+    status = lya_parallel_consensus(cmd, status, "Ly-alpha radial output");
 cleanup:
+    gd->cpusearch = CPUTIME - cpustart;
     free(radial_order);
     free(first);
     free(end);

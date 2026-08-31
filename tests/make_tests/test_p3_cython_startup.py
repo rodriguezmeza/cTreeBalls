@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 
+import numpy as np
+
 from cyballs import CosmoComputationError, cballs
 
 
@@ -139,6 +141,11 @@ def test_repeated_partial_tree_failures_have_bounded_rss():
     if repeats <= warmup:
         raise ValueError("CBALLS_TREE_FAILURE_REPEATS must exceed the warmup count")
 
+    rng = np.random.default_rng(314159)
+    positions = rng.uniform(-0.4, 0.4, size=(512, 3))
+    positions[-1] = positions[0]
+    kappa = np.ones(positions.shape[0], dtype=np.float64)
+
     with tempfile.TemporaryDirectory(prefix="ctreeballs-p3-tree-failures-") as root_dir:
         baseline_rss = None
         peak_rss = 0
@@ -146,20 +153,21 @@ def test_repeated_partial_tree_failures_have_bounded_rss():
         for index in range(repeats):
             balls = cballs()
             parameters = base_parameters(root_dir)
+            parameters.pop("testmodel")
+            parameters.pop("nbody")
             parameters.update(
                 {
-                    "testmodel": "simple-cubic",
-                    "nbody": 32768,
                     "numberThreads": 1,
                     "theta": 0.5,
                 }
             )
             balls.set(parameters)
+            balls.set_catalog(positions, kappa=kappa)
 
             try:
                 balls.Run(level=["MainLoop"])
             except CosmoComputationError as error:
-                if "cellRadius index out of range" not in str(error):
+                if "two bodies have same position" not in str(error):
                     raise AssertionError(
                         f"partial-tree failure {index} failed for the wrong reason: {error}"
                     ) from error

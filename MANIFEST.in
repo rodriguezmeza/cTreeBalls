@@ -14,6 +14,9 @@ recursive-include python *.pyx
 include python/ccyballs.pxd.in
 include python/kappa_corr_all_engines.py
 include python/README_kappa_corr_all_engines.md
+include python/lya_corr_all_engines.py
+include python/README_lya_corr_all_engines.md
+include examples/download_desi_lya_example.sh
 recursive-include examples *.py *.ipynb
 recursive-include docs *.rst *.py Makefile
 prune docs/_build
@@ -64,21 +67,20 @@ recursive-include addons/octree_ggg_mpi *.c *.h *.md Makefile*
 recursive-include addons/kdtree_box_omp *.c *.h Makefile*
 recursive-include addons/neighbor_boxes_omp *.c *.h Makefile*
 recursive-include addons/lya_forest_omp *.c *.h *.py *.md Makefile*
+recursive-include addons/lya_forest_mpi *.c *.h *.md *.ini *.txt Makefile*
 recursive-include addons/octree_shear_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_3pcf_3d_omp *.c *.h *.md Makefile*
+recursive-include addons/octree_3pcf_3d_mpi *.c *.h *.md *.ini *.txt Makefile*
 prune addons/octree_3pcf_3d_omp/backup_before_correction_following_Encore
-recursive-include addons/octree_kkk_balls4_omp *.c *.h *.md Makefile*
+recursive-include addons/octree_balls4_omp *.c *.h *.md Makefile*
+include addons/octree_balls4_omp/Readme.txt
+recursive-include addons/octree_balls4_mpi *.c *.h *.md Makefile*
 recursive-include addons/gadget_io *.c *.h Makefile*
 recursive-include addons/class_lib *.c *.h Makefile*
 recursive-include addons/iolib *.c *.h Makefile*
 recursive-include addons/cfitsio *.c *.h Makefile*
 recursive-include addons/pxd *.c *.h Makefile*
 recursive-include addons/cmdline_defs_settings *.h Makefile*
-# Optional profiles still support intentionally
-recursive-include addons/balls_omp *.c *.h Makefile*
-recursive-include addons/octree_smoothing *.c *.h Makefile*
-recursive-include addons/octree_kkk_omp *.c *.h Makefile*
-recursive-include addons/octree_sincos_omp *.c *.h Makefile*
 
 global-exclude .DS_Store
 global-exclude *.Po *.Plo
@@ -86,5 +88,3 @@ global-exclude *.Po *.Plo
 global-exclude *.o *.a *.so *.dylib
 global-exclude __pycache__/*
 global-exclude *.pyc
-
-recursive-exclude addons/octree_sincos_omp/backup *

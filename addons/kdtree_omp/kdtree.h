@@ -30,6 +30,8 @@ typedef struct {
     int first;                                      // index of frst body in node
     int last;                                       // index of last body in node
     real kappa;                                     // scalar field at cmpos
+    real weighted_kappa_sum;
+    real weighted_kappa_sq_sum;
     real weight;                                    // point weight
     vector cmpos;                                   // center of mass pos
     matrix Ixy;                                     // inertia tensor
@@ -44,6 +46,7 @@ typedef struct {
 typedef struct {
     vector pos;
     real kappa;
+    real weighted_kappa;
 } kd_leaf_point;
 #endif
 

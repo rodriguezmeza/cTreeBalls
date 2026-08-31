@@ -16,7 +16,7 @@
 #include "cballsio_cfitsio_00.h"
 #endif
 
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
 #include "cballsio_lya_forest_omp_00.h"
 #endif
 

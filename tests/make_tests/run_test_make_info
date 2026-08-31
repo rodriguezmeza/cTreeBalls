@@ -42,9 +42,7 @@ settings=$(
 missing=0
 while IFS= read -r name; do
     case "${name}" in
-        BUILD_*)
-            ;;
-        *ON|_DEBUGON_|DEFDIMENSION|USEGSL|GSLINTERNAL|OPENMPMACHINE|THETA|ALLOW_BALLS_WITH_SMOOTHING)
+        BUILD_*|*_PIVOT_*_SIZE|*ON|_DEBUGON_|DEFDIMENSION|USEGSL|GSLINTERNAL|OPENMPMACHINE|THETA|ALLOW_BALLS_WITH_SMOOTHING|DEFINEFLAGS|PROJECT_WARNING_FLAGS|SANITIZER_FLAGS|*_MACOSX_DEPLOYMENT_TARGET)
             if ! grep -Eq "^[[:space:]]+${name}[[:space:]]+=" "${output}"; then
                 printf 'FAIL: make-info does not publish %s\n' "${name}" >&2
                 missing=1

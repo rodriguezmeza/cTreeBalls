@@ -33,7 +33,7 @@ Inspect the converted catalog before launching a long search.
 Configure Angular Bins
 ----------------------
 
-For unit-sphere data, define the radial range in radians:
+For unit-sphere scalar angular data, define the radial range in chord distance:
 
 .. code-block:: text
 
@@ -41,8 +41,10 @@ For unit-sphere data, define the radial range in radians:
    rangeN = 0.0633205
    sizeHistN = 20
 
-These values correspond approximately to 7.35--217.68 arcmin.  Choose bins for
-the science case and verify them in the generated used-values file.
+Convert intended angles with ``r=2*sin(alpha/2)``, where ``alpha`` is in
+radians; these small chord values are approximately 7.35--217.68 arcmin.
+The distinction matters at wide angles. Choose bins for the science case,
+preserve the observer origin, and verify the generated used-values file.
 
 Run and Plot
 ------------
@@ -51,9 +53,10 @@ Run and Plot
 
    ./cballs parameters_map.txt
 
-The scripts under ``tests/python`` provide examples for loading HEALPix data,
-running ``cyballs``, comparing outputs, and plotting 2PCF/3PCF products.  Use
-``python script_name.py --help`` before applying a script to new data.
+The current multi-engine driver is ``python/kappa_corr_all_engines.py``;
+see :doc:`../user/python` and its README for masks, edge corrections, input
+reuse, and angle controls. ``tests/python`` also contains historical plotting
+examples. Use each script's ``--help`` before applying it to new data.
 
 Large Takahashi Data
 --------------------

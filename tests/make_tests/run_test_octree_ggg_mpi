@@ -43,12 +43,16 @@ run_case()
     local ranks=$3
     local threads=$4
     local only_2pcf=${5:-0}
+    local extra_options=${6:-}
     local output="$TMP_ROOT/$name"
     local options="compute-HistN,out-m-HistZeta,no-one-ball"
     local -a command
 
     if [ "$only_2pcf" -eq 1 ]; then
         options+=",only-2pcf"
+    fi
+    if [ -n "$extra_options" ]; then
+        options+=",$extra_options"
     fi
 
     mkdir -p "$output"
@@ -124,6 +128,8 @@ run_case mpi-hybrid octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS"
 run_case mpi-repeat octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS"
 run_case omp-2pcf octree-ggg-omp 1 1 1
 run_case mpi-2pcf octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS" 1
+run_case omp-full-window octree-ggg-omp 1 1 0 ggg-full-window
+run_case mpi-full-window octree-ggg-mpi "$MPI_RANKS" "$MPI_THREADS" 0 ggg-full-window
 
 grep -q "octree-ggg-mpi: $MPI_RANKS ranks" \
     "$TMP_ROOT/mpi-hybrid/run.log" \
@@ -138,5 +144,8 @@ done
 compare_numeric_outputs "$TMP_ROOT/omp-2pcf" "$TMP_ROOT/mpi-2pcf" \
     || fail_with_log "MPI only-2pcf histograms differ from octree-ggg-omp" \
                      "$TMP_ROOT/mpi-2pcf/run.log"
+compare_numeric_outputs "$TMP_ROOT/omp-full-window" "$TMP_ROOT/mpi-full-window" \
+    || fail_with_log "MPI extended-window histograms differ from octree-ggg-omp" \
+                     "$TMP_ROOT/mpi-full-window/run.log"
 
 echo "PASS: FCFC-style OCTREEGGGMPI RMA scheduling and histogram reduction"

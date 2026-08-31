@@ -32,7 +32,7 @@
 #include "global_data_include_class.h"
 #endif
 
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     bool octree3pcf3d_los_ids[MAXITEMS];
 #endif
 

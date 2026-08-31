@@ -1,127 +1,119 @@
 Installation
 ============
 
-The Python interface is distributed on PyPI as ``cTreeBalls`` and imported as
-``cyballs``.  The installation builds a native extension from source using the
-repository's bundled GSL and CFITSIO code.
+The distribution name is ``cTreeBalls``; import it as ``cyballs``.
+These docs describe this source checkout. A published package or GitHub branch
+may not yet contain local changes. A source push does not publish a PyPI release.
 
 Prerequisites
 -------------
 
-The source build requires a C compiler, ``make``, ``ar``, and Python
-development headers.  On Debian or Ubuntu:
+Use an isolated Python virtual or Conda environment. A source build requires
+a C compiler, make, ar, Python development headers, and zlib. OpenMP engines
+require compatible compiler/runtime support. Any enabled MPI addon additionally
+requires an MPI C compiler and runtime, normally ``mpicc`` and ``mpiexec``.
 
-.. code-block:: bash
+For an MPI-enabled source build on Debian/Ubuntu::
 
    sudo apt-get update
-   sudo apt-get install build-essential python3-dev zlib1g-dev
+   sudo apt-get install build-essential python3-dev zlib1g-dev libopenmpi-dev openmpi-bin
 
-Install the Python Interface
-----------------------------
+On macOS, configure a compiler with working OpenMP support and an MPI wrapper
+using a compatible toolchain. Do not mix unrelated MPI or OpenMP installations.
+The deployment target is propagated through native and extension builds.
 
-.. code-block:: bash
+Python Installation
+-------------------
+
+Install a published release::
 
    python3 -m pip install cTreeBalls
 
-Verify the compiled extension:
+Install a source checkout into the active environment::
 
-.. code-block:: bash
+   python3 -m pip install .
 
-   python3 -c "from cyballs import cballs; print(cballs)"
+Install the version on the repository's default branch::
 
-The distribution name and import name intentionally differ: pip installs
-``cTreeBalls``, while Python programs import the compiled extension as
-``cyballs``.  The first installation can take several minutes because the
-bundled native libraries are compiled locally.
+   python3 -m pip install "git+https://github.com/rodriguezmeza/cTreeBalls.git"
 
-Run in Google Colab
--------------------
+Pin a branch or commit explicitly for reproducible VCS installations. Pip builds
+the extension using that source's selected profile; it does not install the
+checkout's standalone ``cballs`` executable or external benchmark environments.
 
-For a browser-based smoke test with plots, use the standalone Colab notebook:
+Verify the interpreter and module location::
 
-`Open the cTreeBalls Colab notebook <https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb>`_
+   python3 -c "import cyballs; print(cyballs.__file__); print(cyballs.cballs().abi_sizes())"
 
-The notebook installs ``cTreeBalls`` from PyPI, imports ``cyballs``, runs a
-compact synthetic-catalog calculation, and plots the returned arrays.  It does
-not require cloning the repository.
-
-Build All Interfaces from a Checkout
+Matching C and Cython Checkout Build
 ------------------------------------
 
-Clone the repository when you also need the command-line executable, static
-library, test catalogs, or an editable development checkout:
-
-.. code-block:: bash
+For the executable, static library, examples, and a local extension::
 
    git clone https://github.com/rodriguezmeza/cTreeBalls.git
    cd cTreeBalls
-   make clean
-   make PYTHON=python3 all
+   python3 -m pip install numpy Cython setuptools wheel
+   make -j4 cballs cyballs-static-lib
+   CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
 
-``make all`` builds ``cballs`` and ``libcballs.a`` and invokes the Python build
-for ``cyballs``.  If your system exposes Python only as ``python3``, retain the
-``PYTHON=python3`` override.
+Select features in the three Make configuration files before both commands.
+The ready flag skips rebuilding the static library and is safe only when that
+library has just been built with exactly the same profile. Restart existing
+Python processes and notebook kernels after replacing a compiled extension.
 
-Machine-Specific Settings
--------------------------
+``make PYTHON=python3 all`` is also supported, but includes the Makefile's
+Python installation steps. Use the explicit workflow above when you want a
+local checkout build without installing into the environment.
 
-Edit ``Makefile_machine`` only when the compiler, optimization flags, OpenMP
-flags, or external-library paths differ from the defaults.  The principal
-variables are ``CC``, ``PYTHON``, ``OPTFLAG``, ``OMPFLAG``, and ``NAGBODYDIR``.
+Overrides and Rebuilds
+----------------------
 
-Build Features
---------------
+Command-line overrides used only for make do not automatically reach a separate
+setup.py invocation. Prefer editing the profile files. To use environment
+overrides consistently in both commands, for example::
 
-User-facing switches in ``Makefile_settings`` include:
+   export MAKEFLAGS=-e
+   export SMOOTHPIVOTON=0
+   make -j4 cballs cyballs-static-lib
+   CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
+   unset MAKEFLAGS SMOOTHPIVOTON
 
-.. list-table::
-   :header-rows: 1
-   :widths: 24 16 60
+Environment precedence applies to all Make variables under ``-e``; use a clean,
+intentional environment. See :doc:`build_profiles` for the ABI requirements.
+Do not manually edit generated PXD declarations or copy an extension between
+different Python minor versions.
 
-   * - Setting
-     - Default
-     - Purpose
-   * - ``DEFDIMENSION``
-     - ``3``
-     - Select two- or three-dimensional coordinates.
-   * - ``USEGSL``
-     - ``1``
-     - Enable GSL-backed functionality.
-   * - ``GSLINTERNAL``
-     - ``1``
-     - Use the bundled GSL sources instead of a system installation.
-   * - ``OPENMPMACHINE``
-     - ``1``
-     - Compile OpenMP search paths and runtime thread control.
-   * - ``ADDONSON``
-     - ``1``
-     - Enable optional search methods, formats, parser support, and Cython hooks.
+Native Dependencies
+-------------------
 
-Changing a switch requires a clean rebuild:
+``GSLINTERNAL=1`` and ``CFITSIOLIBON=1`` select bundled sources.
+``USEGSL=1`` is required by the current wrapper. FITS support additionally
+requires ``CFITSIOON=1``.
 
-.. code-block:: bash
+For external GSL use ``GSLINTERNAL=0`` and ``gsl-config``, or explicit
+``GSL_INCLUDE``/``GSL_LIB``. For external CFITSIO use ``CFITSIOLIBON=0``
+and ``pkg-config cfitsio``. Set ``PKG_CONFIG_PATH`` to the directory containing
+``cfitsio.pc`` for a custom installation. Make derives include, library, and
+runtime-search flags; do not hardcode another user's absolute library path.
 
-   make clean
-   make PYTHON=python3 all
+Verify and Continue
+-------------------
 
-Verify the Checkout Build
--------------------------
+From the checkout root::
 
-From the repository root:
+   ./cballs options=make-info
+   ./cballs options=print-search-methods
 
-.. code-block:: bash
+See :doc:`quickstart` for a small calculation, :doc:`search_methods` for
+field/geometry selection, and :doc:`troubleshooting` for build/runtime errors.
 
-   ./cballs --help
-   ./cballs nbody=4096 sizeHistN=12 mChebyshev=3 \
-      rootDir=Output_check numberThreads=1 verbose=0 verbose_log=0
-   python3 -c "from cyballs import cballs; print(cballs)"
+Documentation Only
+------------------
 
-If the executable runs but the Python import fails, see :doc:`troubleshooting`.
-
-Build the Documentation
------------------------
-
-.. code-block:: bash
+The pinned Sphinx toolchain requires Python 3.11 or newer. Documentation
+builds do not import cyballs or compile C::
 
    python3 -m pip install -r docs/requirements.txt
-   make -C docs html
+   python3 -m sphinx -E -a -n -W --keep-going -b html docs docs/_build/html
+
+Open ``docs/_build/html/index.html``. See ``docs/README.rst`` for other builders.

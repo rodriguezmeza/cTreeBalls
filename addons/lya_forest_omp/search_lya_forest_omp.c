@@ -7,6 +7,7 @@
 
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
+#include "lya_forest_parallel.h"
 
 #include <errno.h>
 #include <float.h>
@@ -209,7 +210,10 @@ local int lya_walktree(struct cmdline_data *cmd, bodyptr p, nodeptr q,
     distance = rsqrt(distance2);
 
     if (Type(q) == CELL) {
-        if (distance >= cutoff + Radius(q)) return SUCCESS;
+        /* Radius is theta-scaled. The cell diagonal bounds both geometric
+         * and center-of-mass centers without changing the exact cutoff. */
+        const REAL enclosing = Size(q) * rsqrt((REAL)NDIM);
+        if (distance >= cutoff + enclosing) return SUCCESS;
         for (child = More(q); child != Next(q); child = Next(child)) {
             if (lya_walktree(cmd, p, child, cutoff, compute_2pcf,
                              compute_3pcf, worker, error_message) == FAILURE)
@@ -503,7 +507,7 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
                                      "global Ly-alpha 2PCF denominator",
                                      cmd->error_message,
                                      sizeof(cmd->error_message)) == FAILURE)
-            goto cleanup;
+            goto setup_done;
         cutoff2 = hypot(cmd->lya2RpMax, cmd->lya2RtMax);
     }
     if (compute_3pcf) {
@@ -515,11 +519,18 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
                                      "global Ly-alpha 3PCF denominator",
                                      cmd->error_message,
                                      sizeof(cmd->error_message)) == FAILURE)
-            goto cleanup;
+            goto setup_done;
     }
     cutoff = MAX(cutoff2, compute_3pcf ? cmd->lya3RMax : 0.0);
 
+    status = SUCCESS;
+setup_done:
+    status = lya_parallel_consensus(cmd, status, "Ly-alpha 3D setup");
+    if (status == FAILURE) goto cleanup;
+
     ThreadCount(cmd, gd, nbody[cat], cat);
+    const INTEGER first_task = (INTEGER)lya_parallel_first(cmd);
+    const INTEGER task_stride = (INTEGER)lya_parallel_stride(cmd);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: exact Ly-alpha estimator; 2PCF=%d 3PCF=%d cutoff=%g\n",
         cmd->searchMethod, compute_2pcf, compute_3pcf, cutoff);
@@ -532,7 +543,7 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
                                            compute_2pcf, compute_3pcf,
                                            local_error) == SUCCESS;
         int worker_failed = !worker_ready;
-        bodyptr p;
+        INTEGER pivot;
         if (!worker_ready) {
 #pragma omp critical(lya_failure)
             {
@@ -544,8 +555,9 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
 
 #pragma omp barrier
 #pragma omp for schedule(static,1) ordered
-        for (p = btable[cat] + ipmin - 1;
-             p < btable[cat] + ipmax[cat]; p++) {
+        for (pivot = ipmin - 1 + first_task; pivot < ipmax[cat];
+             pivot += task_stride) {
+            bodyptr p = btable[cat] + pivot;
             worker.accepted_visits = 0;
             worker.pair_count = 0;
             worker.ordered_triplet_count = 0;
@@ -570,7 +582,7 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
 
 #pragma omp ordered
             {
-                if (worker_ready && !allocation_failed && !worker_failed) {
+                if (worker_ready && !worker_failed) {
                     lya_commit_worker(&worker, num2, den2, num3, den3,
                                       compute_2pcf, compute_3pcf);
                     accepted_visits += worker.accepted_visits;
@@ -587,18 +599,38 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "Ly-alpha worker failed: %s",
                      worker_error[0] != '\0' ? worker_error : "unknown error");
+    }
+
+    status = lya_parallel_consensus(cmd, allocation_failed ? FAILURE : SUCCESS,
+                                    "Ly-alpha 3D workers");
+    if (status == FAILURE) goto cleanup;
+    INTEGER counters[3] = {accepted_visits, pair_count, ordered_triplet_count};
+    if (lya_parallel_reduce_reals(cmd, num2, bins2) == FAILURE
+        || lya_parallel_reduce_reals(cmd, den2, bins2) == FAILURE
+        || lya_parallel_reduce_reals(cmd, num3, bins3) == FAILURE
+        || lya_parallel_reduce_reals(cmd, den3, bins3) == FAILURE
+        || lya_parallel_reduce_integers(cmd, counters, 3) == FAILURE) {
+        status = FAILURE;
         goto cleanup;
     }
+    if (!lya_parallel_publish(cmd)) {
+        status = SUCCESS;
+        goto publication;
+    }
+    accepted_visits = counters[0];
+    pair_count = counters[1];
+    ordered_triplet_count = counters[2];
+    status = FAILURE;
 
     gd->nbbcalc += accepted_visits;
     if (!cballs_opt_no_out_hist(cmd)) {
         if (compute_2pcf
             && lya_write_2pcf(cmd, gd, num2, den2, pair_count) == FAILURE)
-            goto cleanup;
+            goto publication;
         if (compute_3pcf
             && lya_write_3pcf(cmd, gd, num3, den3,
                               ordered_triplet_count) == FAILURE)
-            goto cleanup;
+            goto publication;
     }
 
     gd->cpusearch = CPUTIME - cpustart;
@@ -608,13 +640,18 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
         cmd->searchMethod, accepted_visits, pair_count,
         ordered_triplet_count, gd->cpusearch);
     status = SUCCESS;
-    goto cleanup;
+    goto publication;
 
 size_error:
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
              "Ly-alpha histogram dimensions overflow size_t");
 
+    goto setup_done;
+
+publication:
+    status = lya_parallel_consensus(cmd, status, "Ly-alpha 3D output");
 cleanup:
+    gd->cpusearch = CPUTIME - cpustart;
     free(num2);
     free(den2);
     free(num3);

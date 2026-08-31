@@ -9,6 +9,7 @@
 
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
+#include "lya_forest_parallel.h"
 
 #include <errno.h>
 #include <float.h>
@@ -646,7 +647,7 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
                                  sizeof(*forest_order),
                                  "radial tree forest index", cmd->error_message,
                                  sizeof(cmd->error_message)) == FAILURE)
-        goto cleanup;
+        goto setup_done;
 
     for (i = 0; i < count; i++) {
         bodyptr body = table + i;
@@ -687,9 +688,9 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
                                  (size_t)cmd->lya2RpBins, sizeof(*cross_pairs),
                                  "cross-forest pair counts", cmd->error_message,
                                  sizeof(cmd->error_message)) == FAILURE)
-        goto cleanup;
+        goto setup_done;
 
-    if (active_count == 0) goto postprocess;
+    if (active_count == 0) goto setup_ready;
     qsort(radial_order, active_count, sizeof(*radial_order),
           lya1d_tree_radial_order);
     qsort(forest_order, active_count, sizeof(*forest_order),
@@ -698,19 +699,19 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
     if (lya1d_tree_node_count(active_count, &node_capacity) == FAILURE) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial tree node count overflows size_t");
-        goto cleanup;
+        goto setup_done;
     }
     if (cballs_calloc_checked((void **)&nodes, node_capacity,
                               sizeof(*nodes), "radial interval tree",
                               cmd->error_message,
                               sizeof(cmd->error_message)) == FAILURE)
-        goto cleanup;
+        goto setup_done;
     root = lya1d_tree_build(nodes, &nodes_used, radial_order,
                             0, active_count);
     if (nodes_used != node_capacity) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial tree construction produced an inconsistent node count");
-        goto cleanup;
+        goto setup_done;
     }
 
     if (lya1d_tree_collect_tasks(nodes, root, root, cmd->lya2RpMax,
@@ -718,14 +719,14 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
                                  &tree_task_count) == FAILURE) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial tree task count overflows size_t");
-        goto cleanup;
+        goto setup_done;
     }
     if (tree_task_count > 0
         && cballs_calloc_checked((void **)&tree_tasks, tree_task_count,
                                  sizeof(*tree_tasks), "radial tree tasks",
                                  cmd->error_message,
                                  sizeof(cmd->error_message)) == FAILURE)
-        goto cleanup;
+        goto setup_done;
     i = 0;
     if (lya1d_tree_collect_tasks(nodes, root, root, cmd->lya2RpMax,
                                  cmd->lya2RpBins, tree_tasks,
@@ -733,7 +734,7 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
         || i != tree_task_count) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial tree task construction failed");
-        goto cleanup;
+        goto setup_done;
     }
 
     for (i = 0; i < active_count;) {
@@ -751,7 +752,7 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
                 if (forest_task_count == SIZE_MAX) {
                     snprintf(cmd->error_message, _ERRORMSGSIZE_,
                              "same-forest task count overflows size_t");
-                    goto cleanup;
+                    goto setup_done;
                 }
                 forest_task_count++;
             }
@@ -764,7 +765,7 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
                                  "same-forest correction tasks",
                                  cmd->error_message,
                                  sizeof(cmd->error_message)) == FAILURE)
-        goto cleanup;
+        goto setup_done;
     {
         size_t forest_first;
         size_t task_index = 0;
@@ -793,10 +794,11 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
         if (task_index != forest_task_count) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "same-forest task construction failed");
-            goto cleanup;
+            goto setup_done;
         }
     }
 
+setup_ready:
     tree_block_count = tree_task_count == 0 ? 0
         : 1 + (tree_task_count - 1)
               / (size_t)LYA1D_TREE_REDUCTION_BLOCK_SIZE;
@@ -804,7 +806,15 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
         : 1 + (forest_task_count - 1)
               / (size_t)LYA1D_TREE_REDUCTION_BLOCK_SIZE;
 
+    status = SUCCESS;
+setup_done:
+    status = lya_parallel_consensus(cmd, status, "Ly-alpha interval-tree setup");
+    if (status == FAILURE) goto cleanup;
+    if (active_count == 0) goto postprocess;
+
     ThreadCount(cmd, gd, (INTEGER)active_count, 0);
+    const size_t first_task = lya_parallel_first(cmd);
+    const size_t task_stride = lya_parallel_stride(cmd);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: exact 1D interval tree; pixels=%zu forests=%zu nodes=%zu "
         "tree_tasks=%zu correction_tasks=%zu\n",
@@ -831,7 +841,8 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
 
 #pragma omp barrier
 #pragma omp for schedule(dynamic,1) ordered
-        for (block_index = 0; block_index < tree_block_count; block_index++) {
+        for (block_index = first_task; block_index < tree_block_count;
+             block_index += task_stride) {
             size_t task_first = block_index
                               * (size_t)LYA1D_TREE_REDUCTION_BLOCK_SIZE;
             size_t task_end = MIN(
@@ -878,7 +889,8 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
         }
 
 #pragma omp for schedule(dynamic,1) ordered
-        for (block_index = 0; block_index < forest_block_count; block_index++) {
+        for (block_index = first_task; block_index < forest_block_count;
+             block_index += task_stride) {
             size_t task_first = block_index
                               * (size_t)LYA1D_TREE_REDUCTION_BLOCK_SIZE;
             size_t task_end = MIN(
@@ -915,14 +927,37 @@ global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
         if (worker_ready) lya1d_tree_worker_free(&worker);
     }
 
+postprocess:
     if (allocation_failed || runtime_failed) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial tree worker failed: %.2000s",
                  worker_error[0] != '\0' ? worker_error : "unknown error");
-        goto cleanup;
     }
 
-postprocess:
+    status = lya_parallel_consensus(cmd,
+        allocation_failed || runtime_failed ? FAILURE : SUCCESS,
+        "Ly-alpha interval-tree workers");
+    if (status == FAILURE) goto cleanup;
+    const size_t bins = (size_t)cmd->lya2RpBins;
+    uint64_t counters[2] = {node_visits, bulk_pairs};
+    if (lya_parallel_reduce_long_doubles(cmd, all_num, bins) == FAILURE
+        || lya_parallel_reduce_long_doubles(cmd, all_den, bins) == FAILURE
+        || lya_parallel_reduce_long_doubles(cmd, same_num, bins) == FAILURE
+        || lya_parallel_reduce_long_doubles(cmd, same_den, bins) == FAILURE
+        || lya_parallel_reduce_uint64(cmd, all_pairs, bins) == FAILURE
+        || lya_parallel_reduce_uint64(cmd, same_pairs, bins) == FAILURE
+        || lya_parallel_reduce_uint64(cmd, counters, 2) == FAILURE) {
+        status = FAILURE;
+        goto cleanup;
+    }
+    if (!lya_parallel_publish(cmd)) {
+        status = SUCCESS;
+        goto publication;
+    }
+    node_visits = counters[0];
+    bulk_pairs = counters[1];
+    status = FAILURE;
+
     for (i = 0; i < (size_t)cmd->lya2RpBins; i++) {
         long double all_denominator = all_den[i];
         long double tolerance;
@@ -931,7 +966,7 @@ postprocess:
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "same-forest pair count exceeds all-pair count in bin %zu",
                      i);
-            goto cleanup;
+            goto publication;
         }
         cross_pairs[i] = all_pairs[i] - same_pairs[i];
         all_num[i] -= same_num[i];
@@ -949,14 +984,14 @@ postprocess:
                 snprintf(cmd->error_message, _ERRORMSGSIZE_,
                          "radial tree produced a negative denominator in bin %zu",
                          i);
-                goto cleanup;
+                goto publication;
             }
         }
         if (all_den[i] == 0.0L) all_num[i] = 0.0L;
         if (UINT64_MAX - pair_count < cross_pairs[i]) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "radial tree total pair count overflows uint64_t");
-            goto cleanup;
+            goto publication;
         }
         pair_count += cross_pairs[i];
     }
@@ -970,13 +1005,13 @@ postprocess:
 #endif
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "radial tree pair count exceeds the build INTEGER range");
-        goto cleanup;
+        goto publication;
     }
     gd->nbbcalc += (INTEGER)pair_count;
     if (!cballs_opt_no_out_hist(cmd)
         && lya1d_tree_write_2pcf(cmd, gd, all_num, all_den,
                                 cross_pairs, pair_count) == FAILURE)
-        goto cleanup;
+        goto publication;
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -985,7 +1020,10 @@ postprocess:
         cmd->searchMethod, pair_count, node_visits, bulk_pairs, gd->cpusearch);
     status = SUCCESS;
 
+publication:
+    status = lya_parallel_consensus(cmd, status, "Ly-alpha interval-tree output");
 cleanup:
+    gd->cpusearch = CPUTIME - cpustart;
     free(radial_order);
     free(forest_order);
     free(nodes);

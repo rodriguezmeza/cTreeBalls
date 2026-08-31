@@ -50,3 +50,25 @@ Recommended Output Practice
 * record the commit hash and Makefile settings;
 * verify bin units before plotting or comparing runs;
 * do not interpret the reduced quickstart settings as science-ready values.
+
+Scalar Complex Modes
+--------------------
+
+The four ``histZetaM_cos_N``, ``sin_N``, ``sincos_N`` and ``cossin_N``
+matrices reconstruct ``coscos+sinsin + 1j*(sincos-cossin)``.
+``N=1`` denotes order zero. Compare reconstructed modes, not individual
+basis-dependent component matrices, under sky rotations.
+
+``no-normalize-HistZeta,weights-norm`` selects the shared weighted raw
+distinct-triplet contract. KD-tree, legacy balltree, and BALLS4 remove repeated
+neighbors natively; no Python subtraction is required. See :doc:`../3pcf`.
+
+For complex edge correction, ``histZetaM_EE_N.txt`` contains the real part and
+``histZetaM_EE_Im_N.txt`` the imaginary part. The kappa driver saves
+``zeta_edge_complex_N`` in its NPZ products. Read
+``getHistZetaM_EE_complex(N)`` after a successful compatible run.
+Empty/singular windows yield zero; physical-3D survey validity/conditioning
+columns are separate products. MPI output is owned by rank 0.
+
+Use fresh directories after changing a build or estimator. Older affected
+raw/multipole files cannot be made current simply by renaming their headers.

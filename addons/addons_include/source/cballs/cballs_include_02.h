@@ -117,8 +117,11 @@
 #include "cballs_octree_ggg_omp_triangles.h"
 #endif
 
-#ifdef OCTREEKKKBALLS4OMP
-#include "cballs_octree_kkk_balls4_omp.h"
+#ifdef OCTREEBALLS4OMP
+#include "cballs_octree_balls4_omp.h"
+#endif
+#ifdef OCTREEBALLS4MPI
+#include "cballs_octree_balls4_mpi.h"
 #endif
 
 #ifdef OCTREEKKKBALLS4OMPTRIANGLES
@@ -137,12 +140,15 @@
 #include "cballs_neighbor_boxes_omp.h"
 #endif
 
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
 #include "cballs_octree_3pcf_3d_omp.h"
 #endif
 
 #ifdef LYAFORESTOMP
 #include "cballs_lya_forest_omp.h"
+#endif
+#ifdef LYAFORESTMPI
+#include "cballs_lya_forest_mpi.h"
 #endif
 
 

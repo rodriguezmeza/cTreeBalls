@@ -17,6 +17,11 @@ Otherwise the larger node is split with TreeCorr's `0.585` split rule. The
 3PCF also bounds angular phase error by `theta*pi/(2*mChebyshev+1)`. Use
 `options=no-two-balls` for exact body-pair and body-moment accumulation.
 
+For 3D catalogs the angular error bound is on projected tangent bearings.
+Catalogs retain the observer origin and radial bins are chord distances.
+`no-normalize-HistZeta,weights-norm` selects raw weighted distinct triplets;
+do not subtract repeated neighbors again. See [the scalar contract](../../docs/3pcf.rst).
+
 `TWOPCFON=1` and `TPCFON=1` enable the two correlation orders at build time.
 When both are active, `only-2pcf` and `only-3pcf` select one at runtime.
 `compute-HistN`, `weights-norm`, `no-normalize-HistZeta`, and

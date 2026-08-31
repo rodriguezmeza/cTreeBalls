@@ -108,12 +108,15 @@
 #include "cballs_print_octree_box_omp.h"
 #endif
 
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
 #include "cballs_print_octree_3pcf_3d_omp.h"
 #endif
 
 #ifdef LYAFORESTOMP
 #include "cballs_print_lya_forest_omp.h"
+#endif
+#ifdef LYAFORESTMPI
+#include "cballs_print_lya_forest_mpi.h"
 #endif
 
 

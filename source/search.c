@@ -18,11 +18,11 @@
 
 #include "globaldefs.h"
 
-local void normal_walktree_sincos(struct  cmdline_data* cmd, 
+local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                   bodyptr, nodeptr, real,
                                   INTEGER *, INTEGER *, gdhistptr_sincos_omp);
-local void sumnode_sincos(struct  cmdline_data* cmd, 
+local void sumnode_sincos(struct  cmdline_data* cmd,
                           struct  global_data* gd,
                           bodyptr, cellptr, cellptr,
                           INTEGER *, INTEGER *, gdhistptr_sincos_omp);
@@ -61,11 +61,11 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 {
     double cpustart;
     int nn;
-    
+
     cpustart = CPUTIME;
     verb_print(cmd->verbose,
                "\nEvalHistograms: Running ... (octree-sincos-omp) \n");
-    
+
     if (cballs_opt_behavior_ball(cmd))
         verb_print(cmd->verbose, "with option behavior-ball... \n");
     if (cballs_opt_no_one_ball(cmd))
@@ -146,7 +146,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         INTEGER icountNbRminOverlapthread;
         icountNbRminOverlapthread=0;
 #endif
-        
+
 #pragma omp for nowait schedule(static,1)
         for (p = btable[cat1] + ipmin -1; p < btable[cat1] + ipmax[cat1]; p++) {
             if (allocation_failed) continue;
@@ -167,7 +167,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 #ifdef TPCF
                 CLRM_ext_ext(hist.histXithreadcos, cmd->mChebyshev+1,
                              cmd->sizeHistN);
-                CLRM_ext_ext(hist.histXithreadsin, cmd->mChebyshev+1, 
+                CLRM_ext_ext(hist.histXithreadsin, cmd->mChebyshev+1,
                              cmd->sizeHistN);
 #if NDIM == 3
                 dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
@@ -197,7 +197,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
             INTEGER ip;
             ip = p - btable[cat1] + 1;
             if (ip%cmd->stepState == 0) {
-                verb_log_print(cmd->verbose_log, gd->outlog, 
+                verb_log_print(cmd->verbose_log, gd->outlog,
                                " - Completed pivot: %ld\n", ip);
             }
         } // end do body p // end pragma omp DO_BODY p
@@ -342,7 +342,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         verb_print(cmd->verbose,
                    "tree-omp-sincos: count overlap found = %ld\n",
                    icountNbRminOverlap);
-        
+
         bodyptr pp;
         INTEGER ifalsecount;
         ifalsecount = 0;
@@ -409,26 +409,26 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                             - rlog10(cmd->rangeN))
                                             + cmd->sizeHistN);
                                 else
-                                    n = (int)(rlog10(dr1/cmd->rminHist) 
+                                    n = (int)(rlog10(dr1/cmd->rminHist)
                                               * gd->i_deltaR);
                                 if (n<=cmd->sizeHistN-1 && n>=1) {
                                     if ( gd->deltaRV[n] < dr1 - Radius(q)
                                         && dr1 + Radius(q) < gd->deltaRV[n+1]
                                         && (!cballs_opt_read_mask(cmd)
                                             || mask_node_can_approximate(Mask(q)))) {
-                                        sumnode_sincos_cell(cmd, gd, p, 
+                                        sumnode_sincos_cell(cmd, gd, p,
                                             ((cellptr) q), ( (cellptr) q+1),
                                             nbbcalcthread, nbccalcthread, hist);
                                     } else {
-                                        for (l = More(q); l != Next(q); 
+                                        for (l = More(q); l != Next(q);
                                              l = Next(l))
-                                            normal_walktree_sincos(cmd, gd, 
+                                            normal_walktree_sincos(cmd, gd,
                                                 p,l,qsize/2,
                                             nbbcalcthread, nbccalcthread, hist);
                                     }
                                 } else
                                     for (l = More(q); l != Next(q); l = Next(l))
-                                        normal_walktree_sincos(cmd, gd, 
+                                        normal_walktree_sincos(cmd, gd,
                                             p,l,qsize/2,
                                             nbbcalcthread, nbccalcthread, hist);
                                 //E Segment as original
@@ -442,7 +442,7 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                 && (!cballs_opt_read_mask(cmd)
                                     || mask_node_can_approximate(Mask(q))) ) {
                                 sumnode_sincos_cell(cmd, gd, p, ((cellptr) q),
-                                                    ( (cellptr) q+1), 
+                                                    ( (cellptr) q+1),
                                                     nbbcalcthread, nbccalcthread,
                                                     hist);
                             } else {
@@ -505,37 +505,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
                         xi = Kappa(q);
 #endif
 #ifdef TPCF
-                        REAL cosphi,sinphi;
-#if NDIM == 3
-                        REAL s, sy;
-                        compute_vector pr0;
-                        DOTVP(s, dr, hist->dr0);
-                        cosphi = s/(dr1*hist->drpq);
-                        CROSSVP(pr0,hist->dr0,Pos(p));
-                        DOTVP(sy, dr, pr0);
-#ifdef SINGLEP
-                        if (rabs(cosphi)>1.0)
-                            sinphi = 0.0;
-                        else
-                            sinphi = sqrt(1.0 - cosphi*cosphi);
-#else
-                        sinphi = rsqrt(1.0 - rsqr(cosphi));
-#endif
-                        if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                        cosphi = -dr[0]/dr1;
-                        sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-#ifdef SINGLEP
-                        if (cosphi>1.0) cosphi = 1.0;
-                        if (cosphi<-1.0) cosphi = -1.0;
-#else
-                        if (rabs(cosphi)>1.0)
-                            verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                    cosphi);
-#endif
-                        CHEBYSHEVTUOMPSINCOS;
+                        real cosphi, sinphi;
+                        if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                            CHEBYSHEVTUOMPSINCOS;
+                        }
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
@@ -555,25 +528,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
                         xi = Kappa(q);
 #endif
 #ifdef TPCF
-                            real cosphi,sinphi;
-#if NDIM == 3
-                            real s, sy;
-                            compute_vector pr0;
-                            DOTVP(s, dr, hist->dr0);
-                            cosphi = s/(dr1*hist->drpq);
-                            CROSSVP(pr0,hist->dr0,Pos(p));
-                            DOTVP(sy, dr, pr0);
-                            sinphi = rsqrt(1.0 - rsqr(cosphi));;
-                            if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                            cosphi = -dr[0]/dr1;
-                            sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-                            if (rabs(cosphi)>1.0)
-                                verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                               cosphi);
-                            CHEBYSHEVTUOMPSINCOS;
+                            real cosphi, sinphi;
+                            if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                                CHEBYSHEVTUOMPSINCOS;
+                            }
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
@@ -622,37 +580,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #endif
 
 #ifdef TPCF
-                        REAL cosphi,sinphi;
-#if NDIM == 3
-                        REAL s, sy;
-                        compute_vector pr0;
-                        DOTVP(s, dr, hist->dr0);
-                        cosphi = s/(dr1*hist->drpq);
-                        CROSSVP(pr0,hist->dr0,Pos(p));
-                        DOTVP(sy, dr, pr0);
-#ifdef SINGLEP
-                        if (rabs(cosphi)>1.0)
-                            sinphi = 0.0;
-                        else
-                            sinphi = sqrt(1.0 - cosphi*cosphi);
-#else
-                        sinphi = rsqrt(1.0 - rsqr(cosphi));;
-#endif
-                        if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                        cosphi = -dr[0]/dr1;
-                        sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-#ifdef SINGLEP
-                        if (cosphi>1.0) cosphi = 1.0;
-                        if (cosphi<-1.0) cosphi = -1.0;
-#else
-                        if (rabs(cosphi)>1.0)
-                            verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
-#endif
-                        CHEBYSHEVTUOMPSINCOS;
+                        real cosphi, sinphi;
+                        if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                            CHEBYSHEVTUOMPSINCOS;
+                        }
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbccalcthread += 1;
@@ -674,24 +605,9 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
 #endif
 #ifdef TPCF
                         real cosphi, sinphi;
-#if NDIM == 3
-                        real s, sy, phi;
-                        compute_vector pr0;
-                        DOTVP(s, dr, hist->dr0);
-                        cosphi = s/(dr1*hist->drpq);
-                        CROSSVP(pr0,hist->dr0,Pos(p));
-                        DOTVP(sy, dr, pr0);
-                        sinphi = rsqrt(1.0 - rsqr(cosphi));;
-                        if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                        cosphi = -dr[0]/dr1;
-                        sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-                        if (rabs(cosphi)>1.0)
-                            verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
-                        CHEBYSHEVTUOMPSINCOS;
+                        if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                            CHEBYSHEVTUOMPSINCOS;
+                        }
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbccalcthread += 1;

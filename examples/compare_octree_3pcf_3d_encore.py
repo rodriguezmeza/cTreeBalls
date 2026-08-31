@@ -23,6 +23,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -43,6 +45,11 @@ DEFAULT_ENCORE_SOURCE = Path(
 @dataclass
 class ComparisonConfig:
     output_dir: Path
+    search_method: str = "octree-3pcf-3d-omp"
+    mpi_ranks: int = 2
+    mpiexec: str = "mpiexec"
+    mpi_extra_arg: tuple[str, ...] = ()
+    timeout: float = 3600.0
     encore_source: Path = DEFAULT_ENCORE_SOURCE
     encore_executable: Optional[Path] = None
     cballs_executable: Path = PROJECT_ROOT / "cballs"
@@ -63,6 +70,12 @@ class ComparisonConfig:
         return self.measured_lmax - 1
 
     def validate(self) -> None:
+        if self.search_method not in {"octree-3pcf-3d-omp", "octree-3pcf-3d-mpi"}:
+            raise ValueError("select the OMP or MPI physical-3D engine")
+        if self.search_method.endswith("-mpi") and self.backend != "cli":
+            raise ValueError("MPI examples require backend='cli'")
+        if self.mpi_ranks < 1 or not math.isfinite(self.timeout) or self.timeout <= 0:
+            raise ValueError("mpi-ranks and timeout must be positive")
         self.output_dir = Path(self.output_dir).expanduser().resolve()
         self.encore_source = Path(self.encore_source).expanduser().resolve()
         self.cballs_executable = Path(self.cballs_executable).expanduser().resolve()
@@ -170,26 +183,27 @@ def write_ctree_catalog(
 
 
 def _run_checked(
-    command: Iterable[str], cwd: Path, log_path: Path, env=None
+    command: Iterable[str], cwd: Path, log_path: Path, env=None, timeout=3600.0
 ) -> float:
     start = time.perf_counter()
-    result = subprocess.run(
-        [str(token) for token in command],
-        cwd=cwd,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
-    elapsed = time.perf_counter() - start
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(result.stdout, encoding="utf-8")
-    if result.returncode != 0:
+    with log_path.open("w") as stream:
+        process = subprocess.Popen(
+            [str(token) for token in command], cwd=cwd, env=env, stdout=stream,
+            stderr=subprocess.STDOUT, start_new_session=True,
+        )
+        try:
+            code = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+            raise RuntimeError(f"command exceeded {timeout}s; see {log_path}") from None
+    elapsed = time.perf_counter() - start
+    if code != 0:
         raise RuntimeError(
-            f"command failed with status {result.returncode}: "
+            f"command failed with status {code}: "
             f"{' '.join(str(token) for token in command)}\n"
-            f"See {log_path}\n{result.stdout[-3000:]}"
+            f"See {log_path}\n{log_path.read_text()[-3000:]}"
         )
     return elapsed
 
@@ -283,7 +297,7 @@ def run_ctreeballs_cli(
     write_ctree_catalog(random_file, random_positions, random_weights)
     command = [
         str(config.cballs_executable),
-        "search=octree-3pcf-3d-omp",
+        f"search={config.search_method}",
         f"in={data_file},{random_file}",
         "infmt=multi-columns-ascii,multi-columns-ascii",
         "columns=1,2,3,4,5",
@@ -305,11 +319,15 @@ def run_ctreeballs_cli(
             "survey-keep-top-multipole"
         ),
     ]
+    if config.search_method.endswith("-mpi"):
+        command = [*shlex.split(config.mpiexec), *config.mpi_extra_arg,
+                   "-n", str(config.mpi_ranks), *command]
     return _run_checked(
         command,
         PROJECT_ROOT,
         root / "run.log",
         env=thread_environment(config.threads),
+        timeout=config.timeout,
     )
 
 
@@ -1005,6 +1023,12 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--cballs", type=Path, default=PROJECT_ROOT / "cballs"
     )
     parser.add_argument("--backend", choices=("cython", "cli"), default="cython")
+    parser.add_argument("--search-method", choices=("octree-3pcf-3d-omp", "octree-3pcf-3d-mpi"),
+                        default="octree-3pcf-3d-omp")
+    parser.add_argument("--mpi-ranks", type=int, default=2)
+    parser.add_argument("--mpiexec", default="mpiexec")
+    parser.add_argument("--mpi-extra-arg", action="append", default=[])
+    parser.add_argument("--timeout", type=float, default=3600.0)
     parser.add_argument("--cxx", default="c++")
     parser.add_argument("--n-data", type=int, default=90)
     parser.add_argument("--n-random", type=int, default=300)
@@ -1026,6 +1050,8 @@ def main(argv=None) -> int:
         encore_executable=args.encore_executable,
         cballs_executable=args.cballs,
         backend=args.backend,
+        search_method=args.search_method, mpi_ranks=args.mpi_ranks,
+        mpiexec=args.mpiexec, mpi_extra_arg=args.mpi_extra_arg, timeout=args.timeout,
         cxx=args.cxx,
         n_data=args.n_data,
         n_random=args.n_random,

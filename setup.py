@@ -285,7 +285,11 @@ OCTREE2BALLSMPION = (
     "1" if cppflag_has_macro(make_cppflags, "OCTREE2BALLSMPI") else "0"
 )
 OCTREEGGGMPION = "1" if cppflag_has_macro(make_cppflags, "OCTREEGGGMPI") else "0"
+OCTREEBALLS4MPION = "1" if cppflag_has_macro(make_cppflags, "OCTREEBALLS4MPI") else "0"
 LYAFORESTOMPON = "1" if cppflag_has_macro(make_cppflags, "LYAFORESTOMP") else "0"
+LYAFORESTMPION = "1" if cppflag_has_macro(make_cppflags, "LYAFORESTMPI") else "0"
+OCTREE3PCF3DOMPON = "1" if cppflag_has_macro(make_cppflags, "OCTREE3PCF3DOMP") else "0"
+OCTREE3PCF3DMPION = "1" if cppflag_has_macro(make_cppflags, "OCTREE3PCF3DMPI") else "0"
 OCTREESHEAROMPON = "1" if cppflag_has_macro(make_cppflags, "OCTREESHEAROMP") else "0"
 
 GSLINTERNAL = make_env.get("__CBALLS_GSLINTERNAL__", "1")
@@ -419,7 +423,8 @@ def generate_ccyballs_pxd():
         smoothpivot_n2pcf_fields = "double * histNNSubN2pcftotal"
 
     if (cpp_macro_defined("BALLS4SCANLEV")
-            or cpp_macro_defined("OCTREEKKKBALLS4OMP")):
+            or cpp_macro_defined("OCTREEBALLS4OMP")
+            or cpp_macro_defined("OCTREEBALLS4MPI")):
         balls4scanlev_fields = "unsigned char flagBalls4Scanlevel"
 
     if cpp_macro_defined("NMultipoles") and cpp_macro_defined("NONORMHIST"):
@@ -581,7 +586,11 @@ class build_ext(cython_build_ext):
                 "OCTREE2BALLSMPION": OCTREE2BALLSMPION,
                 "BALLTREEMPION": BALLTREEMPION,
                 "OCTREEGGGMPION": OCTREEGGGMPION,
+                "OCTREEBALLS4MPION": OCTREEBALLS4MPION,
                 "LYAFORESTOMPON": LYAFORESTOMPON,
+                "LYAFORESTMPION": LYAFORESTMPION,
+                "OCTREE3PCF3DOMPON": OCTREE3PCF3DOMPON,
+                "OCTREE3PCF3DMPION": OCTREE3PCF3DMPION,
                 "OCTREESHEAROMPON": OCTREESHEAROMPON,
             }
             make_command = ["make"] + [

@@ -10,11 +10,16 @@ static inline bool cballs_method_needs_balls4_scan(int search_method)
 #ifdef BALLS4SCANLEV
     (void)search_method;
     return true;
-#elif defined(OCTREEKKKBALLS4OMP)
-    return search_method == OCTREEKKKBALLS4OMPMETHOD;
 #else
+    bool needed = false;
+#ifdef OCTREEBALLS4OMP
+    needed |= search_method == OCTREEBALLS4OMPMETHOD;
+#endif
+#ifdef OCTREEBALLS4MPI
+    needed |= search_method == OCTREEBALLS4MPIMETHOD;
+#endif
     (void)search_method;
-    return false;
+    return needed;
 #endif
 }
 

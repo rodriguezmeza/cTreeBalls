@@ -9,6 +9,7 @@ cballs
 *.egg-info/
 *.egg
 python/cballys.c
+python/cyballs.c
 python/ccyballs.pxd
 python/build/
 
@@ -28,6 +29,7 @@ docs/_build/
 # Test outputs and caches
 tests/Output/
 Output_all_engines/
+Output_lya_mpi/
 __pycache__/
 *.py[cod]
 .pytest_cache/

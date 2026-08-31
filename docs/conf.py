@@ -22,7 +22,7 @@ copyright = '2026, Mario A. Rodriguez-Meza and cTreeBalls contributors'
 author = 'Mario A. Rodriguez-Meza and contributors'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0.1'
+release = '1.1.0'
 version = release
 root_doc = 'index'
 

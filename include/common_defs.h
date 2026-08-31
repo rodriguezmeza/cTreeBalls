@@ -15,9 +15,9 @@
 #include <errno.h>
 #include <string.h>
 
-/* octree-kkk-balls4-omp always needs the B4 pivot partition, but enabling the
+/* octree-balls4-omp always needs the B4 pivot partition, but enabling the
  * addon must not change pivot selection in unrelated search methods. */
-#if defined(BALLS4SCANLEV) || defined(OCTREEKKKBALLS4OMP)
+#if defined(BALLS4SCANLEV) || defined(OCTREEBALLS4OMP) || defined(OCTREEBALLS4MPI)
 #define CBALLS_NEEDS_BALLS4_SCAN 1
 #endif
 

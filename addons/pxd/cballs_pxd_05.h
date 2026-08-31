@@ -130,7 +130,7 @@ int get_sizeHistN(struct  cmdline_data* cmd, int *sizeHistN)
 //  see also setup.py
 int get_version(struct  cmdline_data* cmd, char *param)
 {
-    sprintf(param,"%s","1.0.1");
+    sprintf(param,"%s","1.1.0");
     return SUCCESS;
 }
 
@@ -372,6 +372,12 @@ int get_HistZetaM_EE(struct  cmdline_data* cmd,
     string routineName = "get_HistZetaM_EE";
     int n1, n2;
 
+    class_test((cmd->searchMethod != NULL
+                && (strstr(cmd->searchMethod, "2balls") != NULL
+                    || strstr(cmd->searchMethod, "octree-balls4-") != NULL)
+                && !cballs_opt_edge_corrections(cmd)),
+               errmsg, "%s: enable edge-corrections before requesting corrected multipoles",
+               routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
@@ -401,6 +407,12 @@ int get_HistZetaM_EE_Im(struct cmdline_data* cmd,
     string routineName = "get_HistZetaM_EE_Im";
     int n1, n2;
 
+    class_test((cmd->searchMethod != NULL
+                && (strstr(cmd->searchMethod, "2balls") != NULL
+                    || strstr(cmd->searchMethod, "octree-balls4-") != NULL)
+                && !cballs_opt_edge_corrections(cmd)),
+               errmsg, "%s: enable edge-corrections before requesting corrected multipoles",
+               routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);

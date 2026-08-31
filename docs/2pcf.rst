@@ -1,14 +1,32 @@
+Two-point Correlation Functions
+===============================
 
-2-point correlation functions
-=============================
+The selected field and estimator determine the meaning of a pair histogram.
+See :doc:`search_methods` before comparing outputs across addons.
 
-**cBalls** can compute 2-point correlations (2pcf) when counts (N) or a scalar field are involved (like convergence K):
+Scalar and Counts
+-----------------
 
-:NN:  It is the normal 2-point correlation function of number counts (typically
-      galaxy counts).
+``histNN`` counts accepted pairs; it is not by itself a random-catalog-corrected
+galaxy correlation estimator. ``compute-HistN`` requests this product in the
+applicable engines. ``and-CF`` selects additional count-derived output where
+supported.
 
-:KK:  So far we have consider that the scalar field is the convergence in weak lensing :math:`\kappa`. Then this gives the 2-point kappa-kappa correlation function.
+``histXi2pcf`` is the scalar pair-correlation product in the corresponding
+engine. Check whether normalization uses counts or statistical weights
+and whether 2PCF was compiled/enabled. In the angular scalar engines,
+unit-sphere separation bins are Euclidean chords, not exactly radians.
+The corrected angular-bearing policy excludes undefined legs from 3PCF but
+does not remove otherwise valid radial pairs.
 
-N represent simple counting and K represent a real scalar field, like convergence in weak lensing.
+Other Fields
+------------
 
+* :doc:`shear`: complex spin-2 two-point functions with their pair weights.
+* :doc:`lyman_alpha`: anisotropic or radial-only forest products with same-quasar exclusions.
+* :doc:`scalar_3d`: physical-3D scalar and data-minus-random survey estimators.
 
+Where available, ``only-2pcf`` avoids unrelated scalar 3PCF work.
+The physical-3D family instead uses ``only-2pcf-3d``; forest methods encode
+their selected orders in the search name. The two ``balltree-2balls-..._3pcf``
+addons have no 2PCF mode. See :doc:`benchmarks` for comparable timing contracts.

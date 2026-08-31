@@ -445,6 +445,59 @@ global int cballs_load_memory_catalog(struct cmdline_data *cmd,
     return SUCCESS;
 }
 
+global int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
+                                        struct global_data *gd, int ifile,
+                                        const int64_t *forest_ids, size_t nbody)
+{
+#if (defined(LYAFORESTOMP) || defined(LYAFORESTMPI)) && NDIM == 3
+    size_t i;
+    int k;
+    REAL minimum[NDIM], maximum[NDIM];
+    if (cmd == NULL || gd == NULL) return FAILURE;
+    if (ifile < 0 || ifile >= gd->ninfiles || forest_ids == NULL
+        || bodytable[ifile] == NULL || nbody != (size_t)gd->nbodyTable[ifile]) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "invalid in-memory forest catalog");
+        return FAILURE;
+    }
+    for (k = 0; k < NDIM; k++)
+        minimum[k] = maximum[k] = Pos(bodytable[ifile])[k];
+    for (i = 0; i < nbody; i++) {
+        bodyptr p = bodytable[ifile] + i;
+        REAL distance = hypot(hypot(Pos(p)[0], Pos(p)[1]), Pos(p)[2]);
+#ifdef LONGINT
+        const int64_t id_min = LONG_MIN, id_max = LONG_MAX;
+#else
+        const int64_t id_min = INT_MIN, id_max = INT_MAX;
+#endif
+        if (forest_ids[i] < id_min || forest_ids[i] > id_max
+            || !isfinite(distance) || distance <= 0.0
+            || !isfinite(Weight(p)) || Weight(p) < 0.0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "forest pixels require representable INTEGER IDs, "
+                     "positive observer distance and non-negative weights");
+            return FAILURE;
+        }
+        LyaForestId(p) = (INTEGER)forest_ids[i];
+        LyaDistance(p) = distance;
+        for (k = 0; k < NDIM; k++) {
+            LyaLOS(p)[k] = Pos(p)[k] / distance;
+            minimum[k] = MIN(minimum[k], Pos(p)[k]);
+            maximum[k] = MAX(maximum[k], Pos(p)[k]);
+        }
+    }
+    for (k = 0; k < NDIM; k++) gd->Box[k] = maximum[k] - minimum[k];
+    gd->input_comment = "Python in-memory Lyman-alpha forest catalog";
+    return SUCCESS;
+#else
+    (void)gd; (void)ifile; (void)forest_ids; (void)nbody;
+    if (cmd != NULL)
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "forest catalogs require LYAFORESTOMP or LYAFORESTMPI and NDIM=3");
+    return FAILURE;
+#endif
+}
+
 global void cballs_runtime_destroy(cballs_runtime_state *state)
 {
     if (state == NULL)
@@ -716,8 +769,10 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
         xi = Kappa(p);
         xi_2p = Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
             xi_2p = KappaRmin(p);
             xi = NbRmin(p)*xi_2p;
+    }
 #endif
 #else // ! NOSTANDARNORMHIST
         xi = Kappa(p)/nbody;
@@ -727,10 +782,12 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
         xi_2p = Weight(p)*Kappa(p);
 #endif
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
 #ifdef BALLS4SCANLEV
             xi_2p = KappaRmin(p);
 #endif
             xi = NbRmin(p)*xi_2p/nbody;
+    }
 #endif
 #endif // ! NOSTANDARNORMHIST
     } else if (Type(p) == BODY3) {
@@ -740,6 +797,11 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
 #endif
     }
     //E Normalization of histograms
+    const bool raw_multipoles = cballs_raw_legacy_multipoles(cmd);
+    if (raw_multipoles) {
+        xi = Weight(p)*Kappa(p);
+        xi_2p = xi;
+    }
 
 #ifdef TPCF
         for (m=1; m<=cmd->mChebyshev+1; m++)
@@ -751,8 +813,10 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
             }
 #else
             for (n=1; n<=cmd->sizeHistN; n++) {
-                hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
-                hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
+                if (!raw_multipoles) {
+                    hist->histXithreadcos[m][n] /= MAX(hist->histNNSubthread[n],1.0);
+                    hist->histXithreadsin[m][n] /= MAX(hist->histNNSubthread[n],1.0);
+                }
             }
 #endif
             //E
@@ -1291,7 +1355,7 @@ global int prepare_smooth_pivots(struct cmdline_data* cmd,
                  gd->rsmooth[0]);
         return FAILURE;
     }
-    if (gd->rsmooth[0] == 0.0) {
+    if (!cballs_opt_smooth_pivot(cmd) || gd->rsmooth[0] == 0.0) {
         DO_BODY(q, btable[cat2], btable[cat2] + nscan)
             Update(q) = TRUE;
         if (cat1 != cat2)

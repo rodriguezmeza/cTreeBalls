@@ -7,6 +7,7 @@
 from libc.stdio cimport FILE
 from libc.time cimport clock_t
 from libc.stddef cimport size_t
+from libc.stdint cimport int64_t
 #E
 
 
@@ -448,6 +449,7 @@ cdef extern from "cballs.h":
     int cballs_compiled_ndim()
     int cballs_max_memory_catalogs()
     int cballs_search_method_id(const char*)
+    int cballs_set_memory_forest_ids(void*, void*, int, const int64_t*, size_t)
     int cballs_load_memory_catalog(
         void*, void*, int, const double*, size_t, int,
         const double*, const double*, const unsigned char*,

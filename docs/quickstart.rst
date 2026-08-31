@@ -59,9 +59,11 @@ Build From a Source Checkout
 
    git clone https://github.com/rodriguezmeza/cTreeBalls.git
    cd cTreeBalls
-   python3 -m pip install --user numpy Cython
-   make clean
-   make PYTHON=python3 all
+   python3 -m pip install numpy Cython setuptools wheel
+   make -j4 cballs cyballs-static-lib
+   CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
+
+Configure one matching native/wrapper profile first; see :doc:`installation`.
 
 Inspect Runtime Help
 --------------------
@@ -70,6 +72,9 @@ Inspect Runtime Help
 
    ./cballs --help
    ./cballs --clue
+   ./cballs options=make-info
+   ./cballs options=print-options
+   ./cballs options=print-search-methods
 
 ``--help`` lists compiled defaults.  ``--clue`` prints a compact reminder of
 the command-line syntax.
@@ -130,4 +135,6 @@ Next Steps
 * :doc:`user/command-line` describes parameter files and common controls.
 * :doc:`user/outputs` identifies histogram and provenance outputs.
 * :doc:`performance` explains search methods, bins, and OpenMP settings.
+* :doc:`search_methods` separates scalar, shear, forest, and physical-3D estimators.
+* :doc:`user/python` shows catalog reuse without file input.
 * :doc:`tutorials/index` contains longer CLI, Python, 2PCF, and 3PCF workflows.

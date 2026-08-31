@@ -31,7 +31,7 @@
 #include "cmdline_data_iolib.h"
 #endif
 
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
 #include "cmdline_data_lya_forest_omp.h"
 #endif
 

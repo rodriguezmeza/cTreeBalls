@@ -118,20 +118,30 @@
 #include "protodefs_octree_ggg_omp_triangles.h"
 #endif
 
-#ifdef OCTREEKKKBALLS4OMP
-#include "protodefs_octree_kkk_balls4_omp.h"
+#ifdef OCTREEBALLS4OMP
+#include "protodefs_octree_balls4_omp.h"
+#endif
+#ifdef OCTREEBALLS4MPI
+#include "protodefs_octree_balls4_mpi.h"
 #endif
 
 #ifdef OCTREEKKKBALLS4OMPTRIANGLES
 #include "protodefs_octree_kkk_balls4_omp_triangles.h"
 #endif
 
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
 #include "protodefs_octree_3pcf_3d_omp.h"
+#ifdef OCTREE3PCF3DMPI
+#include "cb3d_mpi.h"
+#endif
+#include "cb3d_parallel.h"
 #endif
 
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
 #include "protodefs_lya_forest_omp.h"
+#endif
+#ifdef LYAFORESTMPI
+#include "lya_forest_mpi.h"
 #endif
 
 

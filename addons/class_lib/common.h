@@ -20,7 +20,7 @@
 // this commented line can not be erased...
 //  nmake clean_cTreeBalls get an error of invalid versioning...
 // It must match version in cmdline_defs.h
-#define _VERSION_ "v1.0.1"
+#define _VERSION_ "v1.1.0"
 
 /* @cond INCLUDE_WITH_DOXYGEN */
 

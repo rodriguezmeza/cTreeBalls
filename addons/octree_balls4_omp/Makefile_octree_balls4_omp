@@ -1,0 +1,21 @@
+# ----- MAKE FILE module definitions (octree_balls4_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+# OCTREEBALLS4OMP
+ifeq ($(OCTREEBALLS4OMPON),1)
+OPT2 += -DOCTREEBALLS4OMP
+#OCTREEBALLS4OMP = ../addons/octree_balls4_omp/
+#vpath %.c ./addons/octree_balls4_omp/
+OCTREEBALLS4OMP = $(MDIR)/addons/octree_balls4_omp/
+vpath %.c $(MDIR)/addons/octree_balls4_omp/
+INCLUDES += -I$(OCTREEBALLS4OMP)
+HEADERFILES += $(wildcard $(OCTREEBALLS4OMP)/*.h)
+HEADERFILES += $(MDIR)/addons/balltree_2balls_omp/treecorr_edge_correction.h
+EXTERNAL += search_octree_balls4_omp.o balls4_edge.o
+endif
+#
+#E

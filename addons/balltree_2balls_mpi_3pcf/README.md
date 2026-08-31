@@ -7,6 +7,12 @@ every rank, frontier slot `i` is owned by rank `i % nranks`, and OpenMP scans
 the owned slots. Task-indexed histograms are reduced to rank 0 and published
 in the same fixed order as the OpenMP implementation.
 
+The shared kernel transports inherited moments between pivot tangent bases
+and bounds projected angular error. Preserve observer-centered positions
+and chord bins in 3D. Raw `no-normalize-HistZeta,weights-norm` products
+are weighted distinct-triplet sums, not normalized correlations.
+See [the scalar contract](../../docs/3pcf.rst).
+
 Build and run with:
 
 ```text

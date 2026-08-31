@@ -150,6 +150,7 @@ int build_kdtree(struct cmdline_data* cmd,
     for (j = 0; j < kd->npoint; j++) {
         SETV(kd->packed_points[j].pos, Pos(kd->bptr[j]));
         kd->packed_points[j].kappa = Kappa(kd->bptr[j]);
+        kd->packed_points[j].weighted_kappa = Weight(kd->bptr[j])*Kappa(kd->bptr[j]);
     }
     gd->bytes_tot += kd->npoint * sizeof(*kd->packed_points);
 #endif
@@ -236,6 +237,8 @@ local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
     real KappaAvg = 0.0;
 
     kd->weight = 0.0;
+    kd->weighted_kappa_sum = 0.0;
+    kd->weighted_kappa_sq_sum = 0.0;
     CLRV(cmpos_sum);
 
     for (i = lo; i <= hi; ++i) {
@@ -245,6 +248,9 @@ local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
         KappaAvg += Kappa(bptr[i]);
 #endif
         kd->weight += Mass(bptr[i]);
+        const real field = Weight(bptr[i])*Kappa(bptr[i]);
+        kd->weighted_kappa_sum += field;
+        kd->weighted_kappa_sq_sum += field*field;
         int k;
         DO_COORD(k)
             cmpos_sum[k] += Mass(bptr[i]) * (real)Pos(bptr[i])[k];
@@ -391,6 +397,8 @@ local void combine_nodes(struct cmdline_data* cmd,
     INTEGER n1 = p1->last - p1->first + 1;
     INTEGER n2 = p2->last - p2->first + 1;
     pout->kappa = (n1*p1->kappa + n2*p2->kappa)/((real)(n1+n2));
+    pout->weighted_kappa_sum = p1->weighted_kappa_sum + p2->weighted_kappa_sum;
+    pout->weighted_kappa_sq_sum = p1->weighted_kappa_sq_sum + p2->weighted_kappa_sq_sum;
 
     // radius
     int i;

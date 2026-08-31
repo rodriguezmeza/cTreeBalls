@@ -272,14 +272,6 @@ typedef struct {
     realptr histNNSubthread;
 
 #ifdef THREEPCFCONVERGENCE
-    real **xiOUTVPcos;
-    real **xiOUTVPsin;
-    real **xiOUTVPsincos;
-    real **xiOUTVPcossin;
-    real **histZetaMtmpcos;
-    real **histZetaMtmpsin;
-    real **histZetaMtmpsincos;
-    real **histZetaMtmpcossin;
     real ***histZetaMthreadcos;
     real ***histZetaMthreadsin;
     real ***histZetaMthreadsincos;
@@ -365,14 +357,6 @@ typedef struct {
     realptr histNNSubthread;
 
 #ifdef THREEPCFCONVERGENCE
-    real **xiOUTVPcos;
-    real **xiOUTVPsin;
-    real **xiOUTVPsincos;
-    real **xiOUTVPcossin;
-    real **histZetaMtmpcos;
-    real **histZetaMtmpsin;
-    real **histZetaMtmpsincos;
-    real **histZetaMtmpcossin;
     real ***histZetaMthreadcos;
     real ***histZetaMthreadsin;
     real ***histZetaMthreadsincos;
@@ -527,145 +511,10 @@ local int PrintHistZetaGm_sincos(struct  cmdline_data* cmd,
 local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
                                       struct  global_data* gd,
                                       gdlptr_sincos_omp_ggg);
-//B POLARAXIS
-//      check NDIM and periodic...
-local int polarix_init(struct  cmdline_data* cmd,
-                               struct  global_data* gd,
-                               bodyptr p, gdhistptr_sincos_omp_ggg hist);
+/* Shared tangent-plane phase, including pole and antipode handling. */
+#define POLARAXIS_MAIN \
+    bool angular_valid = cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)
 
-local int polarix_init(struct  cmdline_data* cmd,
-                               struct  global_data* gd,
-                               bodyptr p, gdhistptr_sincos_omp_ggg hist)
-{
-    //B Set reference axis...
-#ifdef POLARAXIS
-    //B check NDIM and periodic...
-    hist->q0[0] = 0.0;
-    hist->q0[1] = 0.0;
-    hist->q0[2] = 1.0;
-    DOTPSUBV(hist->drpq2, hist->dr0, Pos(p), hist->q0);
-    hist->drpq = rsqrt(hist->drpq2);
-    real b = 2.0*rasin(hist->drpq/2.0);
-    hist->cosb = rcos(b);
-    hist->sinb = rsin(b);
-    if (hist->drpq2==0) continue;
-    //E
-#else // ! POLARAXIS
-    //B check NDIM and periodic...
-    dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist->q0);
-    DOTPSUBV(hist->drpq2, hist->dr0, Pos(p), hist->q0);
-    hist->drpq = rsqrt(hist->drpq2);
-    //E
-#endif // ! POLARAXIS
-    //E
-
-    return SUCCESS;
-}
-
-#ifdef POLARAXIS
-#if NDIM == 3
-#ifdef NOLIMBER
-#define POLARAXIS_MAIN                              \
-{                                                   \
-    real a, c, c2;                                  \
-    compute_vector vc;                              \
-    DOTPSUBV(c2, vc, Pos(q), hist->q0);             \
-    a = 2.0*rasin(dr1/2.0);                         \
-    real cosc;                                      \
-    cosc = Pos(q)[2];                               \
-    cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)  \
-              /(a*hist->sinb);                      \
-    if (rabs(cosphi) <= 1.0)                        \
-        sinphi = rsqrt(1.0 - rsqr(cosphi));         \
-    else                                            \
-        sinphi = 0.0;                               \
-    if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))\
-        sinphi *= -1.0;                             \
-}
-#else // ! NOLIMBER
-#define POLARAXIS_MAIN                              \
-{                                                   \
-    real a, c, c2;                                  \
-    compute_vector vc;                              \
-    DOTPSUBV(c2, vc, Pos(q), hist->q0);             \
-    a = dr1;                                        \
-    real cosc;                                      \
-    cosc = Pos(q)[2];                               \
-    cosphi = (cosc - (1.0-0.5*rsqr(a))*hist->cosb)  \
-              /(a*hist->sinb);                      \
-    if (rabs(cosphi) <= 1.0)                        \
-        sinphi = rsqrt(1.0 - rsqr(cosphi));         \
-    else                                            \
-        sinphi = 0.0;                               \
-    if (!crossVecProdSign(Pos(p), hist->q0, Pos(q)))\
-        sinphi *= -1.0;                             \
-}
-#endif // ! NOLIMBER
-#else // ! NDIM == 3
-// work to do in 2D....
-#endif // ! NDIM == 3
-
-#else // ! POLARAXIS
-
-#if NDIM == 3
-#ifdef SINGLEP
-#define POLARAXIS_MAIN                              \
-{                                                   \
-    real s, sy; compute_vector pr0;                 \
-    DOTVP(s, dr, hist->dr0);                        \
-    cosphi = s/(dr1*hist->drpq);                    \
-    CROSSVP(pr0,hist->dr0,Pos(p));                  \
-    DOTVP(sy, dr, pr0);                             \
-    if (rabs(cosphi)>1.0)                           \
-        sinphi = 0.0;                               \
-    else                                            \
-        sinphi = rsqrt(1.0 - rsqr(cosphi));         \
-    if (sy < 0) sinphi *= -1.0;                     \
-    if (cosphi>1.0) cosphi = 1.0;                   \
-    if (cosphi<-1.0) cosphi = -1.0;                 \
-}
-#else // ! SINGLEP
-//B DEFINITION USE BY DEFAULT...
-#define POLARAXIS_MAIN                              \
-{                                                   \
-    real s, sy; vector pr0;                         \
-    DOTVP(s, dr, hist->dr0);                        \
-    cosphi = s/(dr1*hist->drpq);                    \
-    CROSSVP(pr0,hist->dr0,Pos(p));                  \
-    DOTVP(sy, dr, pr0);                             \
-    sinphi = rsqrt(1.0 - rsqr(cosphi));             \
-    if (sy < 0) sinphi *= -1.0;                     \
-    if (rabs(cosphi)>1.0)                           \
-    verb_log_print(cmd->verbose, gd->outlog,        \
-    "sumenode: Warning!... cossphi must be in (-1,1): %g\n", \
-                    cosphi);                        \
-}
-//E
-#endif // ! SINGLEP
-#else // ! NDIM == 3 ... 2 dimensions...
-#ifdef SINGLEP
-#define POLARAXIS_MAIN                              \
-{                                                   \
-    cosphi = -dr[0]/dr1;                            \
-    sinphi = -dr[1]/dr1;                            \
-    if (cosphi>1.0) cosphi = 1.0;                   \
-    if (cosphi<-1.0) cosphi = -1.0;                 \
-}
-#else // ! SINGLEP
-#define POLARAXIS_MAIN                              \
-{                                                   \
-    cosphi = -dr[0]/dr1;                            \
-    sinphi = -dr[1]/dr1;                            \
-    if (rabs(cosphi)>1.0)                           \
-    verb_log_print(cmd->verbose, gd->outlog,        \
-    "sumenode: Warning!... cossphi must be in (-1,1): %g\n", \
-                    cosphi);                        \
-}
-#endif // ! SINGLEP
-#endif // ! NDIM == 3 ... 2 dimensions...
-
-#endif // ! POLARAXIS
-//E POLARAXIS
 
 
 // NMultipoles precedes NONORMHIST?... Not necessarily.
@@ -703,67 +552,95 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
 #endif // ! NMultipoles
 
 #ifdef NMultipoles
-#define GGG_WINDOW_ORDERS(cmd) (2*(cmd)->mChebyshev + 1)
+#define GGG_WINDOW_ORDERS(cmd) \
+    ((cballs_opt_edge_corrections(cmd) || cballs_opt_ggg_full_window(cmd)) \
+        ? 2*(cmd)->mChebyshev + 1 : (cmd)->mChebyshev + 1)
+#endif
+
+#ifdef THREEPCFCONVERGENCE
+/* Keep the product/subtraction/weight order, but avoid eight temporary matrices
+ * and the separate clear, scale, and add passes for every pivot and mode. */
+local inline void ggg_accumulate_outer_products(
+    int bins, real xi, const real *c, const real *s,
+    const real *diag_c, const real *diag_s, const real *diag_sc,
+    real **cc, real **ss, real **sc, real **cs)
+{
+    for (int i = 1; i <= bins; i++) {
+        real *restrict out_cc = cc[i];
+        real *restrict out_ss = ss[i];
+        real *restrict out_sc = sc[i];
+        real *restrict out_cs = cs[i];
+        for (int j = 1; j <= bins; j++) {
+            real cc_value = c[i]*c[j];
+            real ss_value = s[i]*s[j];
+            real sc_value = s[i]*c[j];
+            real cs_value = c[i]*s[j];
+            if (i == j) {
+                cc_value -= diag_c[i];
+                ss_value -= diag_s[i];
+                sc_value -= diag_sc[i];
+                cs_value -= diag_sc[i];
+            }
+            out_cc[j] += cc_value*xi;
+            out_ss[j] += ss_value*xi;
+            out_sc[j] += sc_value*xi;
+            out_cs[j] += cs_value*xi;
+        }
+    }
+}
 #endif
 
 #if defined(NMultipoles) && defined(THREEPCFCONVERGENCE)
-/* N_{ell-n} requires window modes through |ell-n| = 2*mChebyshev. */
-#define GGG_ACCUMULATE_WINDOW_MODES                                      \
-do {                                                                     \
-    int _ggg_index;                                                       \
-    int _ggg_orders = GGG_WINDOW_ORDERS(cmd);                            \
-    real _ggg_cos_mode;                                                   \
-    real _ggg_sin_mode;                                                   \
-    real _ggg_xi_cos;                                                     \
-    real _ggg_xi_sin;                                                     \
-    histN->ChebsT[1] = 1.0;                                              \
-    histN->ChebsU[1] = 0.0;                                              \
-    for (_ggg_index = 1; _ggg_index <= _ggg_orders; _ggg_index++) {     \
-        if (_ggg_index == 2) {                                           \
-            histN->ChebsT[2] = cosphi;                                   \
-            histN->ChebsU[2] = 1.0;                                      \
-        } else if (_ggg_index > 2) {                                     \
-            histN->ChebsT[_ggg_index] =                                  \
-                2.0*cosphi*histN->ChebsT[_ggg_index-1]                   \
-                - histN->ChebsT[_ggg_index-2];                           \
-            histN->ChebsU[_ggg_index] =                                  \
-                2.0*cosphi*histN->ChebsU[_ggg_index-1]                   \
-                - histN->ChebsU[_ggg_index-2];                           \
-        }                                                                \
-        _ggg_cos_mode = histN->ChebsT[_ggg_index];                       \
-        _ggg_sin_mode = histN->ChebsU[_ggg_index]*sinphi;                \
-        _ggg_xi_cos = xiN*_ggg_cos_mode;                                 \
-        _ggg_xi_sin = xiN*_ggg_sin_mode;                                 \
-        histN->histXithreadcos[_ggg_index][n] += _ggg_xi_cos;            \
-        histN->histXithreadsin[_ggg_index][n] += _ggg_xi_sin;            \
-        histN->histXithreaddiagcos[_ggg_index][n] +=                     \
-            _ggg_xi_cos*_ggg_xi_cos;                                     \
-        histN->histXithreaddiagsin[_ggg_index][n] +=                     \
-            _ggg_xi_sin*_ggg_xi_sin;                                     \
-        histN->histXithreaddiagsincos[_ggg_index][n] +=                  \
-            _ggg_xi_sin*_ggg_xi_cos;                                     \
-    }                                                                    \
-} while (0)
+/* One angular recurrence feeds both the signal and window, including the
+ * self-pair terms. Edge coupling needs window modes through 2*mChebyshev. */
+local inline void ggg_accumulate_modes(
+    struct cmdline_data *cmd, gdhistptr_sincos_omp_ggg hist,
+    gdhistptr_sincos_omp_ggg_N histN, int n,
+    real cosphi, real sinphi, real xi, real xiN)
+{
+    const int orders = GGG_WINDOW_ORDERS(cmd);
+    const int signal_orders = cmd->mChebyshev + 1;
+    real t_previous = 1.0, t_before = 0.0;
+    real u_previous = 0.0, u_before = 0.0;
 
-#define GGG_ACCUMULATE_NUMERATOR_DIAGONAL                               \
-do {                                                                     \
-    int _ggg_index;                                                       \
-    for (_ggg_index = 1; _ggg_index <= cmd->mChebyshev + 1;            \
-         _ggg_index++) {                                                 \
-        real _ggg_xi_cos = xi*hist->ChebsT[_ggg_index];                 \
-        real _ggg_xi_sin =                                               \
-            xi*hist->ChebsU[_ggg_index]*sinphi;                          \
-        hist->histXithreaddiagcos[_ggg_index][n] +=                     \
-            _ggg_xi_cos*_ggg_xi_cos;                                     \
-        hist->histXithreaddiagsin[_ggg_index][n] +=                     \
-            _ggg_xi_sin*_ggg_xi_sin;                                     \
-        hist->histXithreaddiagsincos[_ggg_index][n] +=                  \
-            _ggg_xi_sin*_ggg_xi_cos;                                     \
-    }                                                                    \
-} while (0)
-
+    for (int m = 1; m <= orders; m++) {
+        real t, u;
+        if (m == 1) {
+            t = 1.0;
+            u = 0.0;
+        } else if (m == 2) {
+            t = cosphi;
+            u = 1.0;
+        } else {
+            t = 2.0*cosphi*t_previous - t_before;
+            u = 2.0*cosphi*u_previous - u_before;
+        }
+        const real sine = u*sinphi;
+        const real nc = xiN*t;
+        const real ns = xiN*sine;
+        histN->histXithreadcos[m][n] += nc;
+        histN->histXithreadsin[m][n] += ns;
+        histN->histXithreaddiagcos[m][n] += nc*nc;
+        histN->histXithreaddiagsin[m][n] += ns*ns;
+        histN->histXithreaddiagsincos[m][n] += ns*nc;
+        if (m <= signal_orders) {
+            const real kc = xi*t;
+            const real ks = (xi*u)*sinphi;
+            hist->ChebsT[m] = t;
+            hist->ChebsU[m] = u;
+            hist->histXithreadcos[m][n] += kc;
+            hist->histXithreadsin[m][n] += ks;
+            hist->histXithreaddiagcos[m][n] += kc*kc;
+            hist->histXithreaddiagsin[m][n] += ks*ks;
+            hist->histXithreaddiagsincos[m][n] += ks*kc;
+        }
+        t_before = t_previous;
+        t_previous = t;
+        u_before = u_previous;
+        u_previous = u;
+    }
+}
 #endif
-
 /* Radius(q) is an opening radius and is divided by theta in treeload.c.
  * Cell rejection needs the undivided geometric bound or it can drop valid
  * neighbors when theta > 1. */
@@ -1260,6 +1137,9 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     cpustart = CPUTIME;
     gd->cpusearch = 0.0;
     const bool run_threepcf = !cballs_opt_only_2pcf(cmd);
+    const bool profile = cballs_opt_ggg_profile(cmd);
+    const double profile_start = profile ? omp_get_wtime() : 0.0;
+    double profile_work = 0.0, profile_wait = 0.0, profile_merge = 0.0;
 #ifndef TWOPCF
     if (!run_threepcf) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -1611,6 +1491,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
               + ichunk * GGG_OMP_PIVOT_CHUNK_SIZE;
           INTEGER chunk_last = MIN(
               chunk_first + GGG_OMP_PIVOT_CHUNK_SIZE, task_last);
+          const double work_start = profile ? omp_get_wtime() : 0.0;
 
           /* These are chunk accumulators.  Clearing them here gives every
            * run exactly the same floating-point grouping. */
@@ -1751,17 +1632,6 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #endif
           //E
 
-#if defined(THREEPCFCONVERGENCE) || defined(TPCFSHEAR)
-          //B 3pcf convergence & shear
-          if (run_threepcf) {
-#ifndef BALLS4SCANLEV
-          polarix_init(cmd, gd, p, &hist);
-#else
-          polarix_init(cmd, gd, (bodyptr)p, &hist);
-#endif
-          }
-          //E 3pcf convergence & shear
-#endif
 //E segment to be included below...
 
 //================
@@ -1907,7 +1777,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
                                            gd->nnodescanlevTableB4[cat1], &hist);
 #endif // ! BALLS4SCANLEV
-          
+
 //================
 #endif // ! NMultipoles
 //================
@@ -1935,8 +1805,14 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 
           /* OpenMP's ordered region follows logical chunk order, regardless
            * of which worker computed the chunk. */
+          const double wait_start = profile ? omp_get_wtime() : 0.0;
 #pragma omp ordered
           {
+            const double merge_start = profile ? omp_get_wtime() : 0.0;
+            if (profile) {
+                profile_work += wait_start - work_start;
+                profile_wait += merge_start - wait_start;
+            }
 #ifdef TWOPCF
             for (n = 1; n <= cmd->sizeHistN; n++) {
                 gdl.histNN[n] += hist.histNthread[n];
@@ -1987,6 +1863,8 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
             icountNbRmin += icountNbRminthread;
             icountNbRminOverlap += icountNbRminOverlapthread;
 #endif
+            if (profile)
+                profile_merge += omp_get_wtime() - merge_start;
           }
       } // end deterministic chunk loop
         if (!distributed) break;
@@ -2002,6 +1880,18 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     if (hist_ready)
         search_free_sincos_omp_ggg(cmd, gd, &hist);     // free memory
   } // end pragma omp parallel
+
+    if (profile) {
+        int window_orders = 0;
+#ifdef NMultipoles
+        if (run_threepcf) window_orders = GGG_WINDOW_ORDERS(cmd);
+#endif
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "GGG profile: window_orders=%d work=%.6f wait=%.6f "
+            "merge=%.6f wall=%.6f seconds (worker sums except wall)\n",
+            window_orders, profile_work, profile_wait, profile_merge,
+            omp_get_wtime() - profile_start);
+    }
 
 #ifdef OCTREEGGGMPI
     if (distributed) {
@@ -2421,7 +2311,7 @@ global int searchcalc_octree_ggg_mpi(struct cmdline_data *cmd,
 }
 #endif
 
-local void normal_walktree_sincos(struct  cmdline_data* cmd, 
+local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                   struct  global_data* gd,
                                   bodyptr *btable, int cat2,
                                   bodyptr p, nodeptr q, real qsize,
@@ -2445,7 +2335,9 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
 
 #ifndef NORMALHISTSCALE
 //B useLogHist section
-                    if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
+                    if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR
+                        && cballs_angular_cell_ok(cmd, Pos(p), dr,
+                            Radius(p)*cmd->theta, Radius(q)*cmd->theta))
                         sumnode_sincos_cell(cmd, gd, btable, cat2, p,
                                             ((cellptr) q), ((cellptr) q+1), hist);
                     else
@@ -2454,7 +2346,9 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                                                    p,l,qsize/2, hist);
 //E
 #else // ! NORMALHISTSCALE
-                    if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
+                    if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA
+                        && cballs_angular_cell_ok(cmd, Pos(p), dr,
+                            Radius(p)*cmd->theta, Radius(q)*cmd->theta))
                         sumnode_sincos_cell(cmd, gd, btable, cat2, p,
                                             ((cellptr) q), ((cellptr) q+1), hist);
                     else
@@ -2533,14 +2427,14 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #endif
 #ifdef THREEPCFCONVERGENCE
                 if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPSINCOSANY;
+                    if (angular_valid) CHEBYSHEVTUOMPSINCOSANY;
                 } else {
-                    CHEBYSHEVTUOMP;
+                    if (angular_valid) CHEBYSHEVTUOMP;
                 }
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
                 }
 #ifdef TWOPCF
@@ -2581,14 +2475,14 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #endif
 #ifdef THREEPCFCONVERGENCE
                 if (cmd->mChebyshev<7) {
-                    CHEBYSHEVTUOMPSINCOSANY;
+                    if (angular_valid) CHEBYSHEVTUOMPSINCOSANY;
                 } else {
-                    CHEBYSHEVTUOMP;
+                    if (angular_valid) CHEBYSHEVTUOMP;
                 }
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
                 }
 #ifdef TWOPCF
@@ -2627,7 +2521,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
         if (Mask(q) != MASK_NODE_VALID) return;
 
     if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
-        
+
 
 #ifndef NORMALHISTSCALE
 //B useLogHist section
@@ -2671,12 +2565,12 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPSINCOSANY
                 } else {
-                    CHEBYSHEVTUOMP;
+                    if (angular_valid) CHEBYSHEVTUOMP;
                 }
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
                 }
 #ifdef TWOPCF
@@ -2725,12 +2619,12 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 if (cmd->mChebyshev<7) {
                     CHEBYSHEVTUOMPSINCOSANY
                 } else {
-                    CHEBYSHEVTUOMP;
+                    if (angular_valid) CHEBYSHEVTUOMP;
                 }
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
                 }
 #ifdef TWOPCF
@@ -2769,12 +2663,16 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
     xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi = Nb(p)*KappaRmin(p)/NbRmin(p);
+    }
 #endif
 #else
     xi = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi = KappaRmin(p)/NbRmin(p);
+    }
 #endif
 #endif
 
@@ -2783,13 +2681,17 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi_2p = KappaRmin(p);
+    }
 #endif
 #else
     wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi_2p = KappaRmin(p);
+    }
 #endif
 #endif // ! BALLS4SCANLEV
 #endif
@@ -2804,10 +2706,12 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #else // ! BALLS4SCANLEV
     xi = Weight(p)*Kappa(p)/nbody;
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
     //B works if added a line for WeightRmin at the begining of
     //      sumnode_sincos above (first SMOOTHPIVOT segment)
     xi = WeightRmin(p)*KappaRmin(p)/nbody;
     //E
+    }
 #endif
     //E
 #endif // ! BALLS4SCANLEV
@@ -2823,7 +2727,9 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi_2p = (KappaRmin(p));
+    }
 #endif
 #endif
 #endif
@@ -2840,12 +2746,16 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
 #ifdef BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi = Nb(p)*Weight(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+    }
 #endif
 #else // ! BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
     // check this line thoroughly... Weight must be smoothed also...
     xi = (WeightRmin(p)/NbRmin(p))*KappaRmin(p)/NbRmin(p);
+    }
 #endif
 #endif // ! BALLS4SCANLEV
 
@@ -2855,12 +2765,16 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     // check this line thoroughly against treeload.c
     xi_2p = (Weight(p)/Nb(p))*(Kappa(p)/Nb(p));
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi_2p = Nb(p)*Weight(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+    }
 #endif
 #else // ! BALLS4SCANLEV
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi_2p = (WeightRmin(p)/NbRmin(p))*KappaRmin(p)/NbRmin(p);
+    }
 #endif
 #endif // ! BALLS4SCANLEV
 #endif // ! TWOPCF
@@ -2870,12 +2784,16 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
     xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;      // equiv to Nb*(Weight/Nb)*Kappa
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi = KappaRmin(p)/NbRmin(p)/nbody;
+    }
 #endif
 #else // ! BALLS4SCANLEV
     xi = Weight(p)*Kappa(p)/nbody;
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi = (WeightRmin(p)/NbRmin(p))*(KappaRmin(p)/NbRmin(p))/nbody;
+    }
 #endif
 #endif // ! BALLS4SCANLEV
 
@@ -2885,13 +2803,17 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     //B check if Weight and Kappa are averaged or not in treeload.c
     xi_2p = (Weight(p)/Nb(p))*Kappa(p)/Nb(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
         xi_2p = WeightRmin(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+    }
 #endif
 #else // ! BALLS4SCANLEV
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) {
     //B divide by Nb(p)
         xi_2p = WeightRmin(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
+    }
 #endif
 #endif // ! BALLS4SCANLEV
 #endif // ! TWOPCF
@@ -2915,40 +2837,13 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #ifdef THREEPCFCONVERGENCE
     for (m=1; m<=cmd->mChebyshev+1; m++) {
-        OUTVP_ext(hist->xiOUTVPcos,
-            hist->histXithreadcos[m], hist->histXithreadcos[m], cmd->sizeHistN);
-        OUTVP_ext(hist->xiOUTVPsin,
-            hist->histXithreadsin[m], hist->histXithreadsin[m],cmd->sizeHistN);
-        OUTVP_ext(hist->xiOUTVPsincos,
-            hist->histXithreadsin[m], hist->histXithreadcos[m],cmd->sizeHistN);
-        OUTVP_ext(hist->xiOUTVPcossin,
-            hist->histXithreadcos[m], hist->histXithreadsin[m],cmd->sizeHistN);
-        for (n=1; n<=cmd->sizeHistN; n++) {
-            hist->xiOUTVPcos[n][n] -= hist->histXithreaddiagcos[m][n];
-            hist->xiOUTVPsin[n][n] -= hist->histXithreaddiagsin[m][n];
-            hist->xiOUTVPsincos[n][n] -=
-                hist->histXithreaddiagsincos[m][n];
-            hist->xiOUTVPcossin[n][n] -=
-                hist->histXithreaddiagsincos[m][n];
-        }
-        CLRM_ext(hist->histZetaMtmpcos,cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsin,cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsincos,cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpcossin,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcos,hist->xiOUTVPcos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsin,hist->xiOUTVPsin,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsincos,hist->xiOUTVPsincos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcossin,hist->xiOUTVPcossin,xi,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcos[m],
-            hist->histZetaMthreadcos[m],hist->histZetaMtmpcos,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsin[m],
-            hist->histZetaMthreadsin[m],hist->histZetaMtmpsin,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsincos[m],
-            hist->histZetaMthreadsincos[m],
-            hist->histZetaMtmpsincos,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcossin[m],
-            hist->histZetaMthreadcossin[m],
-            hist->histZetaMtmpcossin,cmd->sizeHistN);
+        ggg_accumulate_outer_products(
+            cmd->sizeHistN, xi,
+            hist->histXithreadcos[m], hist->histXithreadsin[m],
+            hist->histXithreaddiagcos[m], hist->histXithreaddiagsin[m],
+            hist->histXithreaddiagsincos[m],
+            hist->histZetaMthreadcos[m], hist->histZetaMthreadsin[m],
+            hist->histZetaMthreadsincos[m], hist->histZetaMthreadcossin[m]);
     }
 #endif
 
@@ -3009,7 +2904,9 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
 
 #ifndef NORMALHISTSCALE
 //B useLogHist section
-                    if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR)
+                    if ( (Radius(p)+Radius(q))/(dr1) < gd->deltaR
+                        && cballs_angular_cell_ok(cmd, Pos(p), dr,
+                            Radius(p)*cmd->theta, Radius(q)*cmd->theta))
                         sumnode_sincos_cell_N(cmd, gd, btable, cat2,
                                               p, ((cellptr) q),
                                               ((cellptr) q+1), hist, histN);
@@ -3020,7 +2917,9 @@ local void normal_walktree_sincos_N(struct  cmdline_data* cmd,
                                                      hist, histN);
 //E
 #else // ! NORMALHISTSCALE
-                    if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA)
+                    if ( (Radius(p)+Radius(q)) < gd->deltaR*THETA
+                        && cballs_angular_cell_ok(cmd, Pos(p), dr,
+                            Radius(p)*cmd->theta, Radius(q)*cmd->theta))
                         sumnode_sincos_cell_N(cmd, gd, btable, cat2,
                                               p, ((cellptr) q),
                                               ((cellptr) q+1), hist, histN);
@@ -3107,13 +3006,12 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                GGG_ACCUMULATE_WINDOW_MODES;
-                CHEBYSHEVTUOMPSINCOSANY;
-                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
+                if (angular_valid) ggg_accumulate_modes(cmd, hist, histN, n,
+                                     cosphi, sinphi, xi, xiN);
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
@@ -3154,13 +3052,12 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                GGG_ACCUMULATE_WINDOW_MODES;
-                CHEBYSHEVTUOMPSINCOSANY;
-                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
+                if (angular_valid) ggg_accumulate_modes(cmd, hist, histN, n,
+                                     cosphi, sinphi, xi, xiN);
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
@@ -3241,13 +3138,12 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                GGG_ACCUMULATE_WINDOW_MODES;
-                CHEBYSHEVTUOMPSINCOSANY;
-                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
+                if (angular_valid) ggg_accumulate_modes(cmd, hist, histN, n,
+                                     cosphi, sinphi, xi, xiN);
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
@@ -3296,13 +3192,12 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
                 POLARAXIS_MAIN;
 #endif
 #ifdef THREEPCFCONVERGENCE
-                GGG_ACCUMULATE_WINDOW_MODES;
-                CHEBYSHEVTUOMPSINCOSANY;
-                GGG_ACCUMULATE_NUMERATOR_DIAGONAL;
+                if (angular_valid) ggg_accumulate_modes(cmd, hist, histN, n,
+                                     cosphi, sinphi, xi, xiN);
 #endif
 
 #ifdef TPCFSHEAR
-                CHEBYSHEVTUOMPGGGANY;
+                if (angular_valid) CHEBYSHEVTUOMPGGGANY;
 #endif
 #ifdef TWOPCF
                 hist->histXi2pcfthreadsub[n] += xi;
@@ -3325,7 +3220,7 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
     int n;
     int m;
     real xi;
-    
+
 //B add smooth-pivot corrections
 #ifdef NONORMHIST
     xi = Weight(p);
@@ -3346,42 +3241,13 @@ local int computeBodyProperties_sincos_ggg_N(struct  cmdline_data* cmd,
 
 #ifdef THREEPCFCONVERGENCE
     for (m=1; m<=GGG_WINDOW_ORDERS(cmd); m++) {
-        OUTVP_ext(hist->xiOUTVPcos,
-            hist->histXithreadcos[m], hist->histXithreadcos[m], cmd->sizeHistN);
-        OUTVP_ext(hist->xiOUTVPsin,
-            hist->histXithreadsin[m], hist->histXithreadsin[m],cmd->sizeHistN);
-        OUTVP_ext(hist->xiOUTVPsincos,
-            hist->histXithreadsin[m], hist->histXithreadcos[m],cmd->sizeHistN);
-        OUTVP_ext(hist->xiOUTVPcossin,
-            hist->histXithreadcos[m], hist->histXithreadsin[m],cmd->sizeHistN);
-        for (n=1; n<=cmd->sizeHistN; n++) {
-            hist->xiOUTVPcos[n][n] -= hist->histXithreaddiagcos[m][n];
-            hist->xiOUTVPsin[n][n] -= hist->histXithreaddiagsin[m][n];
-            hist->xiOUTVPsincos[n][n] -=
-                hist->histXithreaddiagsincos[m][n];
-            hist->xiOUTVPcossin[n][n] -=
-                hist->histXithreaddiagsincos[m][n];
-        }
-        CLRM_ext(hist->histZetaMtmpcos, cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsin, cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpsincos, cmd->sizeHistN);
-        CLRM_ext(hist->histZetaMtmpcossin, cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcos,hist->xiOUTVPcos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsin,hist->xiOUTVPsin,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpsincos,
-                  hist->xiOUTVPsincos,xi,cmd->sizeHistN);
-        MULMS_ext(hist->histZetaMtmpcossin,
-                  hist->xiOUTVPcossin,xi,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcos[m],
-            hist->histZetaMthreadcos[m],hist->histZetaMtmpcos,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsin[m],
-            hist->histZetaMthreadsin[m],hist->histZetaMtmpsin,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadsincos[m],
-            hist->histZetaMthreadsincos[m],
-            hist->histZetaMtmpsincos,cmd->sizeHistN);
-        ADDM_ext(hist->histZetaMthreadcossin[m],
-            hist->histZetaMthreadcossin[m],
-            hist->histZetaMtmpcossin,cmd->sizeHistN);
+        ggg_accumulate_outer_products(
+            cmd->sizeHistN, xi,
+            hist->histXithreadcos[m], hist->histXithreadsin[m],
+            hist->histXithreaddiagcos[m], hist->histXithreaddiagsin[m],
+            hist->histXithreaddiagsincos[m],
+            hist->histZetaMthreadcos[m], hist->histZetaMthreadsin[m],
+            hist->histZetaMthreadsincos[m], hist->histZetaMthreadcossin[m]);
     }
 #endif
 
@@ -3652,16 +3518,6 @@ local int search_init_sincos_omp_ggg_unguarded(struct cmdline_data *cmd,
             dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
             4.0*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    hist->xiOUTVPcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    bytes_tot_local += 4.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    hist->histZetaMtmpcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    bytes_tot_local += 4.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
     }
 #endif
 
@@ -3756,14 +3612,6 @@ local int search_free_sincos_omp_ggg(struct  cmdline_data* cmd,
 
 #ifdef THREEPCFCONVERGENCE
     if (hist->threepcf_enabled) {
-    free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histZetaMtmpsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histZetaMtmpcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadcossin,
                    1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadsincos,
@@ -4024,15 +3872,6 @@ local int search_init_sincos_omp_ggg_N_unguarded(struct cmdline_data *cmd,
             dmatrix3D(1,orders,1,cmd->sizeHistN,1,cmd->sizeHistN);
     bytes_tot_local +=
         4.0*orders*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    hist->xiOUTVPcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->xiOUTVPcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpcos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpsincos = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    hist->histZetaMtmpcossin = dmatrix(1,cmd->sizeHistN,1,cmd->sizeHistN);
-    bytes_tot_local += 8.0*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
 #endif
 
 #ifdef TPCFSHEAR
@@ -4113,14 +3952,6 @@ local int search_free_sincos_omp_ggg_N(struct  cmdline_data* cmd,
 #endif
 
 #ifdef THREEPCFCONVERGENCE
-    free_dmatrix(hist->histZetaMtmpcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histZetaMtmpsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histZetaMtmpsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->histZetaMtmpcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPcossin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPsincos,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPsin,1,cmd->sizeHistN,1,cmd->sizeHistN);
-    free_dmatrix(hist->xiOUTVPcos,1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadcossin,
                    1,GGG_WINDOW_ORDERS(cmd),1,cmd->sizeHistN,1,cmd->sizeHistN);
     free_dmatrix3D(hist->histZetaMthreadsincos,
@@ -4506,7 +4337,7 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
-                                     gd->histZetaMcos[m][n1][n2]);
+                                     gdl->histZetaMcos[m][n1][n2]);
             }
             WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
@@ -4523,7 +4354,7 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
-                                     gd->histZetaMsin[m][n1][n2]);
+                                     gdl->histZetaMsin[m][n1][n2]);
             }
             WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
@@ -4540,7 +4371,7 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
-                                     gd->histZetaMsincos[m][n1][n2]);
+                                     gdl->histZetaMsincos[m][n1][n2]);
             }
             WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
@@ -4557,7 +4388,7 @@ local int PrintHistZetaM_sincos(struct  cmdline_data* cmd,
         for (n1=1; n1<=cmd->sizeHistN; n1++) {
             for (n2=1; n2<=cmd->sizeHistN; n2++) {
                 WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "%16.8e ",
-                                     gd->histZetaMcossin[m][n1][n2]);
+                                     gdl->histZetaMcossin[m][n1][n2]);
             }
             WRITE_OUTPUT_OR_FAIL(outstr, namebuf, "\n");
         }
@@ -4617,7 +4448,7 @@ local int PrintHistZetaMm_sincos(struct  cmdline_data* cmd,
         }
         CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
-        
+
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         if (format_checked(namebuf, sizeof(namebuf),
             "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
@@ -4858,7 +4689,7 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
     gsl_fft_halfcomplex_wavetable *hc = NULL;
     #endif
     //E
-    
+
     histZetaG = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
     histZetaG_Im = dmatrix3D(1,NP,1,cmd->sizeHistN,1,cmd->sizeHistN);
 
@@ -5046,7 +4877,7 @@ local int PrintHistZetaMZetaGm_sincos(struct  cmdline_data* cmd,
         }
         CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
-    
+
     status = SUCCESS;
 
 cleanup:
@@ -5203,7 +5034,7 @@ local int PrintHistZetaMm_sincos_N(struct  cmdline_data* cmd,
         }
         CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
-        
+
     for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
         if (format_checked(namebuf, sizeof(namebuf),
             "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
@@ -5458,7 +5289,7 @@ local int PrintHistZetaMm_sincos_normalized(struct  cmdline_data* cmd,
         }
         CLOSE_OUTPUT_OR_FAIL(outstr, namebuf);
     }
-        
+
     for (m = 1; m <= cmd->mChebyshev+1; m++) {
         if (format_checked(namebuf, sizeof(namebuf),
             "namebuf", "%s%s_%d%s", gd->fpfnamemhistZetaMFileName,
@@ -5642,7 +5473,7 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data* cmd,
         real Zeta4;
         real Zeta5;
         int Nbins;
-        
+
         Nbins = cmd->sizeHistN;
         for (m = 1; m <= cmd->mChebyshev+1; m++) {
             if (format_checked(namebuf, sizeof(namebuf),

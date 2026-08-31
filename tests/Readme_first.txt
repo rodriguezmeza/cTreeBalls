@@ -1,4 +1,23 @@
 
+Current regression entry points
+
+Use tests/make_tests/README.md and docs/development.rst. The maintained
+launchers and associated Python tests are in tests/make_tests.
+With matching C and Cython binaries, run from the repository root:
+
+    make test-make-info test-search-methods
+    python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
+
+Repeat scalar numerical tests with both SMOOTHPIVOTON build settings.
+That switch compiles capability; it does not activate smoothing without
+options=smooth-pivot. Preserve your own build setting after testing.
+
+Historical catalog/plot workflow
+
+The following notes require external catalogs and reference outputs.
+Older multipoles may predate the corrected angular/normalization contract;
+regenerate affected references before interpreting their differences.
+
 1. To test cBalls:
 
 In addons/Makefile_addons_settings do:
@@ -36,11 +55,8 @@ $ more test_cute_box/Readme.txt
 
 to read the readme files in there.
 
-Note: in some machines "make all" does not install cyballs. Try:
+For a local wrapper build, use the source root and matching profile:
 
-$ python3.xx setup.py build_ext --inplace
-$ python3.xx -c "from _cballys import cballys"
-
-Also, remember to set SMOOTHPIVOT variable back to its original value in addons/Makefile_addons_settings:
-
-SMOOTHPIVOTON = 1
+$ make -j4 cballs cyballs-static-lib
+$ CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
+$ python3 -c "from cyballs import cballs; print(cballs)"

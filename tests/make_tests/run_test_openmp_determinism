@@ -148,3 +148,4 @@ profile_has KDTREEBOXOMP && run_pair kdtree-box-omp box
 profile_has NEIGHBORBOXESOMP && run_pair neighbor-boxes-omp box
 profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_openmp_internal_determinism.py
 profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_only_2pcf.py
+profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_fast_path.py

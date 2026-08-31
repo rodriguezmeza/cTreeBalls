@@ -826,7 +826,7 @@ int InputData_2c(struct cmdline_data* cmd, string filename,
 {
     int ncol, nrow;
     int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-    
+
     //B
     int rc = FAILURE;
     stream instr = NULL;
@@ -840,7 +840,9 @@ int InputData_2c(struct cmdline_data* cmd, string filename,
         goto fail; \
     } while (0)
 
-    instr = stropen(filename, "r");
+    if (stropen_checked(filename, "r", &instr, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE)
+        goto fail;
     //E
 
     state = OUT;
@@ -965,7 +967,9 @@ int InputData_3c(struct cmdline_data* cmd, string filename,
         goto fail; \
     } while (0)
 
-    instr = stropen(filename, "r");
+    if (stropen_checked(filename, "r", &instr, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE)
+        goto fail;
     //E
     
     verb_print(1, "\nReading columns %d, %d, and %d from file %s... ",
@@ -1102,7 +1106,9 @@ int InputData_4c(struct cmdline_data* cmd,
         goto fail; \
     } while (0)
 
-    instr = stropen(filename, "r");
+    if (stropen_checked(filename, "r", &instr, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE)
+        goto fail;
     //E
 
     fprintf(stdout,
@@ -1244,7 +1250,9 @@ int InputData_5c(struct cmdline_data* cmd,
         goto fail; \
     } while (0)
 
-    instr = stropen(filename, "r");
+    if (stropen_checked(filename, "r", &instr, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE)
+        goto fail;
     //E
     
     fprintf(stdout,

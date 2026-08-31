@@ -789,9 +789,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
     gd->pivotNumber = cmd->nbody;
 
-    class_call_cballs(StartOutput(cmd, gd), errmsg, errmsg);
-
-    int output_setup_status = SUCCESS;
+    int output_setup_status = StartOutput(cmd, gd);
+#ifdef OCTREE3PCF3DMPI
+    output_setup_status = cb3d_mpi_consensus(
+        cmd, output_setup_status, "3D output initialization");
+#endif
+#ifdef LYAFORESTMPI
+    output_setup_status = lya_forest_mpi_consensus(
+        cmd, output_setup_status, "Ly-alpha output initialization");
+#endif
+    class_call_cballs(output_setup_status, errmsg, errmsg);
+    output_setup_status = SUCCESS;
 #ifdef CBALLS_MPI_ENABLED
     if (cballs_mpi_output_enabled(cmd)) {
 #endif
@@ -820,14 +828,50 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
     if (output_setup_status == FAILURE) return FAILURE;
 
-     class_call_cballs(startrun_getParamsSpecial(cmd, gd), errmsg, errmsg);
+     int catalog_setup_status = startrun_getParamsSpecial(cmd, gd);
+#ifdef OCTREE3PCF3DMPI
+     catalog_setup_status = cb3d_mpi_consensus(
+         cmd, catalog_setup_status, "3D startup options");
+#endif
+#ifdef LYAFORESTMPI
+     catalog_setup_status = lya_forest_mpi_consensus(
+         cmd, catalog_setup_status, "Ly-alpha startup options");
+#endif
+     class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
      search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
-     class_call_cballs(CheckParameters(cmd, gd), errmsg, errmsg);
+     catalog_setup_status = CheckParameters(cmd, gd);
+#ifdef OCTREE3PCF3DMPI
+     catalog_setup_status = cb3d_mpi_consensus(
+         cmd, catalog_setup_status, "3D parameter validation");
+#endif
+#ifdef LYAFORESTMPI
+     catalog_setup_status = lya_forest_mpi_consensus(
+         cmd, catalog_setup_status, "Ly-alpha parameter validation");
+#endif
+     class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
-     class_call_cballs(random_init(cmd, gd, cmd->seed), errmsg, errmsg);
+     catalog_setup_status = random_init(cmd, gd, cmd->seed);
+#ifdef OCTREE3PCF3DMPI
+     catalog_setup_status = cb3d_mpi_consensus(
+         cmd, catalog_setup_status, "3D random initialization");
+#endif
+#ifdef LYAFORESTMPI
+     catalog_setup_status = lya_forest_mpi_consensus(
+         cmd, catalog_setup_status, "Ly-alpha random initialization");
+#endif
+     class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
-     class_call_cballs(startrun_memoryAllocation(cmd, gd), errmsg, errmsg);
+     catalog_setup_status = startrun_memoryAllocation(cmd, gd);
+#ifdef OCTREE3PCF3DMPI
+     catalog_setup_status = cb3d_mpi_consensus(
+         cmd, catalog_setup_status, "3D startup allocation");
+#endif
+#ifdef LYAFORESTMPI
+     catalog_setup_status = lya_forest_mpi_consensus(
+         cmd, catalog_setup_status, "Ly-alpha startup allocation");
+#endif
+     class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
     coordinate_string_to_int(cmd, gd);              // set coordTag
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -940,7 +984,26 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                                "\n%s: using %d in-memory catalog(s).\n",
                                routineName, memory_ninfiles);
     } else if (scanopt(cmd->options, "read-mask")) {
-        if (gd->ninfiles < 2)
+        bool embedded_octree_mask = FALSE;
+#if defined(OCTREE2BALLSOMP) || defined(OCTREE2BALLSMPI) || defined(OCTREEBALLS4OMP) || defined(OCTREEBALLS4MPI)
+        bool octree_two_balls = FALSE;
+#ifdef OCTREE2BALLSOMP
+        octree_two_balls |= gd->searchMethod_int == OCTREE2BALLSMETHOD;
+#endif
+#ifdef OCTREE2BALLSMPI
+        octree_two_balls |= gd->searchMethod_int == OCTREE2BALLSMPIMETHOD;
+#endif
+#ifdef OCTREEBALLS4OMP
+        octree_two_balls |= gd->searchMethod_int == OCTREEBALLS4OMPMETHOD;
+#endif
+#ifdef OCTREEBALLS4MPI
+        octree_two_balls |= gd->searchMethod_int == OCTREEBALLS4MPIMETHOD;
+#endif
+        embedded_octree_mask = octree_two_balls && gd->ninfiles == 1
+            && (strcmp(gd->infilefmtname[0], "columns-ascii-all") == 0
+                || strcmp(gd->infilefmtname[0], "binary-all") == 0);
+#endif
+        if (gd->ninfiles < 2 && !embedded_octree_mask)
             cBALLS_FAIL(cmd, "\t%s:: read-mask ninfiles = %d is absurd\n", routineName, gd->ninfiles);
         ifile=0;
         class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
@@ -951,13 +1014,15 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
             return SUCCESS;
         
         gd->model_comment = "input data file with mask";
-        ifile=1;
-        class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
+        if (!embedded_octree_mask) {
+            ifile=1;
+            class_call_cballs(infilefmt_string_to_int(gd->infilefmtname[ifile],
                     &gd->infilefmt_int), errmsg, errmsg);
-        class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
+            class_call_cballs(InputData(cmd, gd, gd->infilenames[ifile],ifile),
                     errmsg, errmsg);
-        if (gd->stopflag)
-            return SUCCESS;
+            if (gd->stopflag)
+                return SUCCESS;
+        }
         
     } else {
         for (ifile=0; ifile<gd->ninfiles; ifile++) {
@@ -985,7 +1050,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         }
     }
 
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     /* Readers with a real LOS column publish it through the flag below.  All
      * other inputs receive unique IDs, so LOS exclusion is deterministic and
      * cannot inspect an uninitialized addon field. */
@@ -1021,23 +1086,24 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                            routineName);
     }
 
-    bool preserve_common_catalog_frame = FALSE;
+    bool preserve_common_catalog_frame = cballs_observer_frame(cmd);
 #ifdef OCTREESHEAROMP
-    preserve_common_catalog_frame =
+    preserve_common_catalog_frame |=
         gd->searchMethod_int == OCTREESHEARMETHOD;
-    if (preserve_common_catalog_frame
+    if (gd->searchMethod_int == OCTREESHEARMETHOD
         && prepare_octree_shear_catalogs(cmd, gd, bodytable,
                                          gd->nbodyTable) == FAILURE)
         return FAILURE;
 #endif
-#ifdef OCTREE3PCF3DOMP
-    if (gd->searchMethod_int == 166
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
+    if (cb3d_is_method(cmd->searchMethod)
         && (scanopt(cmd->options, "survey-estimator-3d")
             || scanopt(cmd->options, "encore-survey-estimator")
             || scanopt(cmd->options, "survey-edge-correction"))) {
         preserve_common_catalog_frame = TRUE;
-        if (cb3d_prepare_common_frame(cmd, gd, bodytable,
-                                      gd->nbodyTable) == FAILURE)
+        if (cb3d_parallel_consensus(cmd,
+                cb3d_prepare_common_frame(cmd, gd, bodytable, gd->nbodyTable),
+                "3D common catalog frame") == FAILURE)
             return FAILURE;
     }
 #endif
@@ -1072,7 +1138,10 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         cellptr root = NULL;                // Set it up a temporal root
         int rc = FAILURE;
 
-        root = (cellptr) allocate(sizeof(body));
+        if (cballs_calloc_checked((void **)&root, 1, sizeof(body),
+                                  "startup root", cmd->error_message,
+                                  _ERRORMSGSIZE_) == FAILURE)
+            goto cleanup_root_read_mask;
         if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
             goto cleanup_root_read_mask;
         if (!preserve_common_catalog_frame
@@ -1089,6 +1158,9 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
         cleanup_root_read_mask:
         free(root);
+#ifdef OCTREE3PCF3DMPI
+        rc = cb3d_mpi_consensus(cmd, rc, "3D masked root sizing");
+#endif
         if (rc == FAILURE)
             return FAILURE;
         //E
@@ -1103,7 +1175,10 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
             cellptr root = NULL;                // Set it up a temporal root
             int rc = FAILURE;
 
-            root = (cellptr) allocate(sizeof(body));
+            if (cballs_calloc_checked((void **)&root, 1, sizeof(body),
+                                      "startup root", cmd->error_message,
+                                      _ERRORMSGSIZE_) == FAILURE)
+                goto cleanup_root;
             if (FindRootCenter(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile, root) == FAILURE)
                 goto cleanup_root;
             if (!preserve_common_catalog_frame
@@ -1120,6 +1195,9 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
             cleanup_root:
             free(root);
+#ifdef OCTREE3PCF3DMPI
+            rc = cb3d_mpi_consensus(cmd, rc, "3D root sizing");
+#endif
             if (rc == FAILURE)
                 return FAILURE;
             //E
@@ -1325,6 +1403,13 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
 
     cballs_refresh_option_cache(cmd);
 
+#if defined(OCTREEBALLS4OMP) || defined(OCTREEBALLS4MPI)
+    if (cmd->searchMethod && (strcmp(cmd->searchMethod, "octree-balls4-omp") == 0
+        || strcmp(cmd->searchMethod, "octree-balls4-mpi") == 0)
+        && cballs_opt_smooth_pivot(cmd))
+        cBALLS_FAIL(cmd, "%s does not support options=smooth-pivot\n", cmd->searchMethod);
+#endif
+
     //B Parameters related to the searching method
     if (cmd->useLogHist==FALSE &&
         (strcmp(cmd->searchMethod,"balls-omp") == 0))
@@ -1469,6 +1554,14 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
     }
 
     if (scanopt(cmd->options, "edge-corrections")) {
+        if (!gd->computeTPCF)
+            cBALLS_FAIL(cmd, "%s: edge-corrections requires TPCFON=1\n", routineName);
+        if (scanopt(cmd->options, "only-2pcf"))
+            cBALLS_FAIL(cmd, "%s: edge-corrections requires 3PCF; remove only-2pcf\n",
+                        routineName);
+        if (cmd->mChebyshev < 0 || cmd->mChebyshev > (INT_MAX - 1) / 2)
+            cBALLS_FAIL(cmd, "%s: edge-correction window order is out of range\n",
+                        routineName);
         if (!scanopt(cmd->options, "no-normalize-HistZeta")) {
             cBALLS_FAIL(cmd, "\n%s: 'edge-corrections' in options must be %s\n",
                         routineName, "accompanied by 'no-normalize-HistZeta'.\n");
@@ -1480,10 +1573,13 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
             "\n\t%s: warning! 'read-mask' in options must be %s\n\t\t %s\n\n",
             routineName,
             "accompanied by properly setting infile, infileformat and iCatalogs parameters'.",
-                            "Must be in fits-healpix format, same Nside the data catalog.");
+                            "For a FITS companion mask, use the same Nside as the data catalog.");
     }
 
     if (scanopt(cmd->options, "no-normalize-HistZeta")) {
+        if (cballs_raw_legacy_multipoles(cmd) && cballs_opt_smooth_pivot(cmd))
+            cBALLS_FAIL(cmd, "%s: raw distinct legacy multipoles require smooth-pivot disabled\n",
+                        routineName);
         if (!scanopt(cmd->options, "edge-corrections")) {
             verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                     "\n\t%s: warning! 'no-normalize-HistZeta' in options %s\n", routineName,
@@ -2259,6 +2355,7 @@ local int print_make_info(struct cmdline_data* cmd,
         MAKE_SETTING(GGG_OMP_PIVOT_CHUNK_SIZE),
         MAKE_SETTING(GGG_MPI_PIVOT_CLAIM_SIZE),
         MAKE_SETTING(LYAFORESTOMPON),
+        MAKE_SETTING(LYAFORESTMPION),
         MAKE_SETTING(LYA1D_OMP_PIVOT_BLOCK_SIZE),
         MAKE_SETTING(OCTREESHEAROMPON),
         MAKE_SETTING(KDTREEBOXOMPON),
@@ -2290,12 +2387,15 @@ local int print_make_info(struct cmdline_data* cmd,
         MAKE_SETTING(ORIGINALCBON),
         MAKE_SETTING(ADDPIVOTNEIGHBOURSON),
         MAKE_SETTING(OCTREE3PCF3DOMPON),
+        MAKE_SETTING(OCTREE3PCF3DMPION),
+        MAKE_SETTING(CB3D_OMP_PIVOT_BLOCK_SIZE),
         MAKE_SETTING(OCTREESMOOTHINGON),
         MAKE_SETTING(OCTREEKKKOMPON),
         MAKE_SETTING(BALLSON),
         MAKE_SETTING(BALLS0357ON),
         MAKE_SETTING(ALLOW_BALLS_WITH_SMOOTHING),
-        MAKE_SETTING(OCTREEKKKBALLS4OMPON),
+        MAKE_SETTING(OCTREEBALLS4OMPON),
+        MAKE_SETTING(OCTREEBALLS4MPION),
         MAKE_SETTING(OCTREEGGGCROSSOMPON),
         MAKE_SETTING(DIRECTMETHODON),
         MAKE_SETTING(OCTREEGGGON),
@@ -2345,6 +2445,27 @@ local int print_make_info(struct cmdline_data* cmd,
         MAKE_SETTING(GSL_CFLAGS),
         MAKE_SETTING(GSL_LDFLAGS),
         MAKE_SETTING(GSL_LIBS),
+        MAKE_SETTING(BUILD_ADDONS),
+        MAKE_SETTING(BUILD_CLASSLIB),
+        MAKE_SETTING(BUILD_OPENMP),
+        MAKE_SETTING(BUILD_MPI),
+        MAKE_SETTING(BUILD_LYA),
+        MAKE_SETTING(BUILD_SHEAR),
+        MAKE_SETTING(BUILD_PRECISION),
+        MAKE_SETTING(DEFINEFLAGS),
+        MAKE_SETTING(SANITIZER_FLAGS),
+        MAKE_SETTING(PROJECT_WARNING_FLAGS),
+        MAKE_SETTING(DIMCODE),
+        MAKE_SETTING(OMPCODE),
+        MAKE_SETTING(SINGLEP),
+        MAKE_SETTING(LONG),
+        MAKE_SETTING(PYTHON_MACOSX_DEPLOYMENT_TARGET),
+        MAKE_SETTING(OPENMP_MACOSX_DEPLOYMENT_TARGET),
+        MAKE_SETTING(MACOS_DEPLOYMENT_FLAG),
+        MAKE_SETTING(GENERALLIBS),
+        MAKE_SETTING(GETPARAM),
+        MAKE_SETTING(MPICC),
+        MAKE_SETTING(UNAME_S),
     };
     const make_setting *groups[] = {
         code_settings,
@@ -2471,10 +2592,16 @@ local int print_make_info(struct cmdline_data* cmd,
     verb_print_zero(cmd->verbose,
                     "with OCTREE2BALLSMPI (distributed LogMultipole) engine\n");
 #endif
+#ifdef OCTREEBALLS4OMP
+    verb_print_zero(cmd->verbose, "with OCTREEBALLS4OMP (masked B4/complex edge) engine\n");
+#endif
+#ifdef OCTREEBALLS4MPI
+    verb_print_zero(cmd->verbose, "with OCTREEBALLS4MPI (distributed B4/complex edge) engine\n");
+#endif
 
 #ifdef BALLTREE2BALLSOMP3PCF
     verb_print_zero(cmd->verbose,
-                    "with BALLTREE2BALLSOMP3PCF (TreeCorr triple-task) engine\n");
+                    "with BALLTREE2BALLSOMP3PCF (LogMultipole frontier, 3PCF only) engine\n");
 #endif
 
 #ifdef BALLTREE2BALLSMPI3PCF
@@ -2493,6 +2620,22 @@ local int print_make_info(struct cmdline_data* cmd,
 
 #ifdef OCTREEKKKOMP
     verb_print_zero(cmd->verbose, "with OCTREEKKKOMP engine\n");
+#endif
+
+#ifdef LYAFORESTOMP
+    verb_print_zero(cmd->verbose, "with LYAFORESTOMP (seven radial/3D forest engines)\n");
+#endif
+#ifdef LYAFORESTMPI
+    verb_print_zero(cmd->verbose, "with LYAFORESTMPI (seven MPI+OpenMP forest engines)\n");
+#endif
+#ifdef OCTREE3PCF3DOMP
+    verb_print_zero(cmd->verbose, "with OCTREE3PCF3DOMP (scalar/survey Legendre estimator)\n");
+#endif
+#ifdef OCTREE3PCF3DMPI
+    verb_print_zero(cmd->verbose, "with OCTREE3PCF3DMPI (distributed scalar/survey estimator)\n");
+#endif
+#ifdef OCTREESHEAROMP
+    verb_print_zero(cmd->verbose, "with OCTREESHEAROMP (flat-sky spin-2 estimator)\n");
 #endif
 
 #ifdef DIRECTMETHOD
@@ -2524,7 +2667,7 @@ local int print_make_info(struct cmdline_data* cmd,
 //B speed up
 #ifdef SMOOTHPIVOT
         verb_print_zero(cmd->verbose,
-                            "with option smooth-pivot\n");
+                            "with SMOOTHPIVOT compiled; enable options=smooth-pivot only on supported engines\n");
 #endif
 
 #ifdef BALLS4SCANLEV
@@ -2633,10 +2776,10 @@ local int print_search_methods(struct cmdline_data* cmd,
          "Use no-one-ball for exact body traversal; theta controls cell acceptance."},
         {"kdtree-omp", "scalar; balanced k-d tree; OpenMP",
          "2PCF/3PCF multipoles",
-         "Exact traversal is the default. Add behavior-ball for aggregate-node acceptance; no-one-ball disables it; aggregation requires useLogHist=true."},
+         "Exact traversal is the default. Add behavior-ball for aggregate-node acceptance; no-one-ball disables it; aggregation requires useLogHist=true. no-normalize-HistZeta selects weighted raw distinct-triplet multipoles; smooth-pivot must be disabled for this mode."},
         {"balltree-omp", "scalar; FCFC-style PCA ball tree; OpenMP",
          "2PCF/3PCF multipoles",
-         "nsmooth sets leaf capacity. Exact traversal is the default; behavior-ball enables aggregate-node acceptance, no-one-ball disables it, and aggregation requires useLogHist=true."},
+         "nsmooth sets leaf capacity. Exact traversal is the default; behavior-ball enables aggregate-node acceptance, no-one-ball disables it, and aggregation requires useLogHist=true. no-normalize-HistZeta selects weighted raw distinct-triplet multipoles; smooth-pivot must be disabled for this mode."},
         {"balltree-2balls-omp", "scalar; FCFC PCA ball tree; TreeCorr dual/triple-node OpenMP scan",
          "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
          "TWOPCFON and TPCFON switch 2PCF and 3PCF independently at build time; only-2pcf and only-3pcf select one at runtime when both are built. The direct distinct-triplet 3PCF has cubic worst-case work and is not intended for full-sky NSIDE=1024 catalogs. TreeCorr-style cell aggregation is the default; nsmooth sets leaf capacity, theta scales radial and angular tolerances, weights-norm uses the distinct-triplet weight denominator, no-normalize-HistZeta returns raw sums, and no-two-balls forces exact body pairs and triplets."},
@@ -2645,10 +2788,10 @@ local int print_search_methods(struct cmdline_data* cmd,
          "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. TWOPCFON and TPCFON select the compiled orders; only-2pcf and only-3pcf select one at runtime. numberThreads sets OpenMP threads per rank. Runtime acceptance and normalization options match balltree-2balls-omp. The explicit triple-node 3PCF remains cubic even when distributed."},
         {"octree-2balls-omp", "scalar; native octree; dual-node 2PCF and LogMultipole 3PCF",
          "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-         "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one at runtime. The 2PCF uses TreeCorr-style two-ball acceptance. The 3PCF scans pivot-neighbor pairs, accumulates radial angular moments, removes q==r with second moments, and forms all radial-bin pairs without enumerating triples. theta controls radial and angular slop, no-two-balls selects exact body moments, and treecorr-direct-triples selects the slower cubic validation traversal."},
+         "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one at runtime. The 2PCF uses TreeCorr-style two-ball acceptance. The 3PCF scans pivot-neighbor pairs, accumulates radial angular moments, removes q==r with second moments, and forms all radial-bin pairs without enumerating triples. theta controls radial and angular slop, no-two-balls selects exact body moments, and treecorr-direct-triples selects the slower cubic validation traversal. read-mask selects masked autocorrelation: use a FITS companion mask, one columns-ascii-all/binary-all catalog, or set_catalog(mask=...) in cyballs. Only valid bodies enter pivots, neighbors, and normalization; an empty mask is an error."},
         {"octree-2balls-mpi", "scalar; native octree; deterministic MPI+OpenMP frontier",
          "distributed 2PCF and LogMultipole angular-multipole 3PCF",
-         "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. It accepts the octree-2balls-omp runtime options except treecorr-direct-triples, which remains a serial validation oracle."},
+         "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. It accepts the octree-2balls-omp runtime options, including read-mask with valid-body-only normalization, except treecorr-direct-triples, which remains a serial validation oracle. All ranks build the same masked tree and reduce its frontier tasks deterministically."},
         {"balltree-2balls-omp_3pcf", "scalar; FCFC PCA ball tree; TreeCorr LogMultipole pair factorization",
          "angular-multipole 3PCF with auto- and cross-catalog support",
          "TPCFON=1 is required. Pivot-neighbor tree scans accumulate radial field multipoles and form 3PCF bins from pair products, excluding q==r with node second moments. TreeCorr-style radial-bin slop and angular phase-error criteria control aggregation; completed large-radius moments are inherited while unresolved bins split the pivot. nsmooth sets the default leaf capacity; treecorr-singleton-leaves forces one body per leaf. theta=1 is the production setting, theta approaching zero converges to exact. Multipoles are normalized by distinct-triplet count by default; weights-norm uses the distinct-triplet weight denominator and no-normalize-HistZeta returns raw sums. no-two-balls selects exact body moments, and treecorr-direct-triples selects the slower validation traversal."},
@@ -2663,7 +2806,7 @@ local int print_search_methods(struct cmdline_data* cmd,
          "Select the correlation with KKCorrelation, KKKCorrelation, NNCorrelation, or NNEstimator."},
         {"octree-ggg-omp", "projected scalar; octree; OpenMP",
          "2PCF and angular-multipole 3PCF",
-         "Common options include KKKCorrelation, compute-HistN, read-mask, and edge-corrections. Add only-2pcf to skip all angular multipoles and 3PCF storage at runtime."},
+         "Common options include KKKCorrelation, compute-HistN, read-mask, and edge-corrections. Add only-2pcf to skip all angular multipoles and 3PCF storage. Window modes extend through mChebyshev normally, or 2*mChebyshev with edge-corrections or ggg-full-window. ggg-profile reports work and ordered-reduction timings."},
         {"octree-ggg-mpi", "projected scalar; octree; MPI+OpenMP",
          "distributed octree-ggg-omp estimator",
          "Run with mpiexec; numberThreads sets OpenMP threads per MPI rank."},
@@ -2691,12 +2834,15 @@ local int print_search_methods(struct cmdline_data* cmd,
         {"octree-ggg-omp-triangles", "projected scalar; octree; OpenMP",
          "explicit triangle-oriented 3PCF output",
          "Triangle-output variant of octree-ggg-omp."},
-        {"octree-kkk-balls4-omp", "scalar convergence; normal octree; OpenMP",
+        {"octree-balls4-omp", "scalar convergence; normal octree; OpenMP",
          "weighted convergence 2PCF and balls4 KKK 3PCF multipoles",
-         "Requires 3D, usePeriodic=false, and useLogHist=true. Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF; compute-HistN,and-CF writes pair-count/CF files. Keep SMOOTHPIVOTON=0; no-one-ball and no-two-balls disable their corresponding approximations."},
+         "Requires 3D, usePeriodic=false, and useLogHist=true. Enable OCTREEBALLS4OMPON=1. Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF; compute-HistN,and-CF writes pair-count/CF files. Works with SMOOTHPIVOTON=0 or 1; options=smooth-pivot is not supported. read-mask accepts an embedded columns-ascii-all/binary-all mask or an in-memory mask. edge-corrections,no-normalize-HistZeta uses distinct-neighbor body-pivot multipoles, window modes through 2*mChebyshev, and a complex solve; weights-norm enables weighted windows. Either no-one-ball or no-two-balls makes edge moments exact."},
+        {"octree-balls4-mpi", "scalar convergence; normal octree; MPI+OpenMP",
+         "distributed BALLS4 2PCF and 3PCF with masks and complex edge corrections",
+         "Enable OCTREEBALLS4MPION=1 and run with mpiexec; numberThreads is threads per rank. The runtime options match octree-balls4-omp, including read-mask and edge-corrections. Ranks own disjoint B4 work; raw sums are reduced before normalization and only rank 0 writes output. Edge pivot blocks are reduced in a fixed order. SMOOTHPIVOT is unsupported."},
         {"octree-kkk-balls4-omp-triangles", "scalar convergence; octree; OpenMP",
          "balls4 triangle-oriented KKK 3PCF",
-         "Triangle-output variant of octree-kkk-balls4-omp."},
+         "Triangle-output variant of octree-balls4-omp."},
         {"kdtree-box-omp", "periodic Cartesian box; k-d tree; OpenMP",
          "box 2PCF/3PCF",
          "Use usePeriodic=true; cute-box-fmt writes CUTE-compatible output."},
@@ -2718,15 +2864,18 @@ local int print_search_methods(struct cmdline_data* cmd,
         {"octree-3pcf-3d-omp", "3D scalar; exact octree leaves; OpenMP",
          "spherical-harmonic 2PCF/3PCF multipoles",
          "Use x,y,z,delta,weight input. compute-2pcf-3d and compute-3pcf-3d select outputs; octree-ggg-3d-omp is an alias."},
+        {"octree-3pcf-3d-mpi", "3D scalar; exact octree leaves; MPI+OpenMP pivot blocks",
+         "spherical-harmonic 2PCF/3PCF; data/random survey estimator and edge correction",
+         "Enable OCTREE3PCF3DMPION=1 and run with mpiexec. compute-2pcf-3d and compute-3pcf-3d select outputs. survey-estimator-3d uses data,random catalogs with iCatalogs=1,2. Catalogs are replicated; numberThreads is per rank. octree-ggg-3d-mpi is an alias."},
         {"lya-2pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
          "weighted anisotropic 2PCF",
-         "Requires infileformat=lya-ascii, one catalog, non-periodic geometry, and forest IDs."},
+         "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below."},
         {"lya-3pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
          "weighted five-dimensional 3PCF",
-         "Requires infileformat=lya-ascii, one catalog, non-periodic geometry, and forest IDs."},
+         "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below."},
         {"lya-2pcf-3pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
          "weighted 2PCF and 3PCF in one traversal",
-         "Requires infileformat=lya-ascii, one catalog, non-periodic geometry, and forest IDs."},
+         "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below."},
         {"lya-1d-2pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
          "weighted radial-only 2PCF",
          "Ignores transverse separation; lya2RpMax and lya2RpBins define |delta radial distance| bins."},
@@ -2735,10 +2884,31 @@ local int print_search_methods(struct cmdline_data* cmd,
          "Ignores transverse separation; lya3RMax and lya3RBins define signed pivot-lag bins."},
         {"lya-1d-2pcf-3pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
          "weighted radial-only 2PCF and 3PCF",
-         "Requires lya-ascii forest IDs; all correlated pixels must belong to distinct quasars."},
+         "Requires forest IDs; all correlated pixels must belong to distinct quasars."},
         {"lya-1d-tree-2pcf-omp", "radial Lyman-alpha pixels; exact 1D interval tree; OpenMP",
          "weighted radial-only 2PCF",
-         "Uses exact same-bin node aggregation and subtracts within-quasar pairs; lya2RpMax and lya2RpBins set the domain."}
+         "Uses exact same-bin node aggregation and subtracts within-quasar pairs; lya2RpMax and lya2RpBins set the domain."},
+        {"lya-2pcf-mpi", "Lyman-alpha pixels; 3D octree; MPI+OpenMP",
+         "weighted anisotropic 2PCF",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-2pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
+        {"lya-3pcf-mpi", "Lyman-alpha pixels; 3D octree; MPI+OpenMP",
+         "weighted five-dimensional 3PCF",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
+        {"lya-2pcf-3pcf-mpi", "Lyman-alpha pixels; 3D octree; MPI+OpenMP",
+         "weighted 2PCF and 3PCF",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-2pcf-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
+        {"lya-1d-2pcf-mpi", "Lyman-alpha pixels; radial range scan; MPI+OpenMP",
+         "weighted radial-only 2PCF",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-2pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
+        {"lya-1d-3pcf-mpi", "Lyman-alpha pixels; radial range scan; MPI+OpenMP",
+         "weighted radial-only 3PCF",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
+        {"lya-1d-2pcf-3pcf-mpi", "Lyman-alpha pixels; radial range scan; MPI+OpenMP",
+         "weighted radial-only 2PCF and 3PCF",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-2pcf-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
+        {"lya-1d-tree-2pcf-mpi", "Lyman-alpha pixels; radial interval tree; MPI+OpenMP",
+         "weighted radial-only 2PCF with same-forest subtraction",
+         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-tree-2pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."}
     };
     const size_t method_count =
         sizeof(known_methods) / sizeof(known_methods[0]);
@@ -2775,10 +2945,36 @@ local int print_search_methods(struct cmdline_data* cmd,
                         known_methods[i].correlations);
         verb_print_zero(cmd->verbose, "  use: %s\n",
                         known_methods[i].usage);
+        if (strncmp(known_methods[i].name, "lya-", 4) == 0)
+            verb_print_zero(cmd->verbose,
+                "  input: one x y z delta weight forest_id catalog (lya-ascii), or "
+                "cyballs.set_forest_catalog(positions, delta, weights, forest_ids). "
+                "DEFDIMENSION=3, observer-centered comoving coordinates and "
+                "usePeriodic=false are required even for radial searches. "
+                "Pairs exclude the same quasar; triplets require three distinct "
+                "quasars. Histograms are weight-normalized; empty bins are zero. "
+                "Use python/lya_corr_all_engines.py for DESI FITS/NPZ/ASCII, "
+                "one-time loading and MPI broadcasting. No smooth-pivot.\n");
+        if (strncmp(known_methods[i].name, "octree-3pcf-3d-", 15) == 0)
+            verb_print_zero(cmd->verbose,
+                "  modes: only-2pcf-3d, only-3pcf-3d, or "
+                "compute-2pcf-3d,compute-3pcf-3d. survey-estimator-3d "
+                "uses data/random catalogs and window correction. "
+                "exclude-same-los excludes pivot LOS matches, not neighbor-neighbor "
+                "LOS matches: this is not the three-distinct-forest estimator.\n");
+        if (strstr(known_methods[i].name, "2balls") != NULL)
+            verb_print_zero(cmd->verbose,
+                "  edge correction: add edge-corrections,no-normalize-HistZeta "
+                "for complex scalar 3PCF window deconvolution. Window modes "
+                "extend through 2*mChebyshev. weights-norm weights both signal "
+                "and window; empty/singular bins are zero. 2PCF is unchanged.\n");
     }
 
     verb_print_zero(cmd->verbose,
-                    "\nUse options=make-info to inspect the build profile and "
+                    "\nScalar angular engines preserve the observer frame in 3D and use "
+                    "tangent-plane angles with Euclidean chord bins. Coincident/radial/antipodal "
+                    "legs are excluded from angular multipoles, not from ordinary pair counts.\n"
+                    "Use options=make-info to inspect the build profile and "
                     "options=print-options for the full option list.\n\n");
     return SUCCESS;
 }
@@ -2821,6 +3017,10 @@ local int print_options(struct cmdline_data* cmd,
          "enable the scalar three-dimensional 2PCF"},
         {"compute-3pcf-3d", "3D scalar addon",
          "enable the spherical-harmonic three-dimensional 3PCF"},
+        {"compute-j-no-eq-i", "legacy/development",
+         "reserved legacy option; no effect in the production search kernels"},
+        {"pivot-loop", "legacy/development",
+         "reserved legacy option; its old KKK branch is disabled"},
         {"cute-box", "box output",
          "apply the CUTE-compatible periodic-box coordinate convention"},
         {"cute-box-fmt", "box output addon",
@@ -2837,6 +3037,10 @@ local int print_options(struct cmdline_data* cmd,
          "compute edge corrections from previously generated histogram files"},
         {"edge-effects", "octree KKK addon",
          "enable edge-effect count normalization in the KKK search"},
+        {"ggg-full-window", "octree GGG addon",
+         "retain window modes through 2*mChebyshev for diagnostics or later edge correction"},
+        {"ggg-profile", "octree GGG addon",
+         "report per-rank work, ordered-wait, merge, and wall timings"},
         {"exclude-los", "3D scalar addon",
          "alias for exclude-same-los"},
         {"exclude-pivot-los", "3D scalar addon",
@@ -2866,7 +3070,25 @@ local int print_options(struct cmdline_data* cmd,
         {"kappa-constant-one", "input/test models",
          "use one, rather than two, for kappa-constant"},
         {"lya-output-empty-bins", "Lyman-alpha addon",
-         "write zero-denominator bins in the five-dimensional 3PCF output"},
+         "write zero-denominator bins in radial and five-dimensional 3PCF output; supported by OpenMP and MPI"},
+        {"compute-2pcf-3d", "3D scalar OpenMP/MPI",
+         "enable the scalar 2PCF; combine with compute-3pcf-3d for both orders"},
+        {"compute-3pcf-3d", "3D scalar OpenMP/MPI",
+         "enable spherical-harmonic 3PCF multipoles"},
+        {"survey-estimator-3d", "3D scalar OpenMP/MPI",
+         "use data/random catalogs (iCatalogs=1,2), form D-alpha*R and random multipoles, then solve the window-coupling system"},
+        {"encore-survey-estimator", "3D scalar OpenMP/MPI",
+         "alias of survey-estimator-3d"},
+        {"survey-edge-correction", "3D scalar OpenMP/MPI",
+         "alias of survey-estimator-3d, not angular edge-corrections"},
+        {"survey-keep-top-multipole", "3D scalar OpenMP/MPI",
+         "also report the highest measured survey multipole instead of reserving it for window correction"},
+        {"exclude-same-los", "3D scalar OpenMP/MPI",
+         "exclude pivot/neighbor LOS_ID matches; does not exclude neighbor/neighbor LOS_ID matches"},
+        {"exclude-los", "3D scalar OpenMP/MPI",
+         "alias of exclude-same-los"},
+        {"exclude-pivot-los", "3D scalar OpenMP/MPI",
+         "alias of exclude-same-los"},
         {"KKCorrelation", "correlation",
          "select the convergence two-point correlation output"},
         {"KKKCorrelation", "correlation",
@@ -2894,7 +3116,7 @@ local int print_options(struct cmdline_data* cmd,
         {"no-check-two-bodies-eq-pos", "tree search",
          "skip the tree-build check for bodies at identical positions"},
         {"no-normalize-HistZeta", "multipoles",
-         "leave three-point multipole histograms unnormalized"},
+         "return raw three-point multipoles; KD-tree, balltree and BALLS4 exclude repeated neighbors in this mode"},
         {"no-one-ball", "tree search",
          "disable the one-ball aggregation path"},
         {"no-out-Hist", "output",
@@ -2954,7 +3176,7 @@ local int print_options(struct cmdline_data* cmd,
         {"Rcut/theta", "tree search",
          "set the tree cutoff radius to rangeN/theta"},
         {"read-mask", "input/search",
-         "read a second catalog as a mask and apply masked search logic"},
+         "use a supported companion or embedded mask, including set_catalog(mask=...); engine-specific support is listed by print-search-methods"},
         {"remove-mean", "tree search",
          "subtract the catalog mean convergence before tree construction"},
         {"rotation", "sky selection",
@@ -2972,7 +3194,7 @@ local int print_options(struct cmdline_data* cmd,
         {"smooth-min-cell", "smoothing addon",
          "smooth using the minimum accepted cell scale"},
         {"smooth-pivot", "OpenMP tree addons",
-         "smooth pivot bodies before evaluating their neighbors"},
+         "opt into supported pivot smoothing; not supported by forest, exact scalar-3D, or octree-balls4 engines; compiling SMOOTHPIVOT does not activate it"},
         {"statistics-histograms", "workflow",
          "compute statistics from a set of histogram realizations"},
         {"stop", "workflow",
@@ -2984,7 +3206,9 @@ local int print_options(struct cmdline_data* cmd,
         {"sw94", "tree search",
          "use the Salmon-Warren 1994 cell acceptance criterion"},
         {"treecorr-direct-triples", "balltree-2balls-omp_3pcf",
-         "use the slower genuine triple-node validation traversal"},
+         "use the slower genuine triple-node validation traversal; also supported by octree-2balls-omp, not its MPI variants"},
+        {"treecorr-bucket-leaves", "balltree-2balls-omp",
+         "use nsmooth bodies per leaf in the explicit triple-node algorithm"},
         {"treecorr-singleton-leaves", "balltree-2balls-omp_3pcf",
          "force one body per leaf instead of the nsmooth leaf capacity"},
         {"weights-norm", "correlation addons",

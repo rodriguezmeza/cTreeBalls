@@ -438,6 +438,8 @@ int fcfc_balltree_build(struct cmdline_data *cmd, struct global_data *gd,
     for (i = 0; i < nbody; i++) {
         SETV(tree->packed_points[i].pos, Pos(tree->bptr[i]));
         tree->packed_points[i].kappa = Kappa(tree->bptr[i]);
+        tree->packed_points[i].weighted_kappa =
+            Weight(tree->bptr[i])*Kappa(tree->bptr[i]);
     }
 #endif
 

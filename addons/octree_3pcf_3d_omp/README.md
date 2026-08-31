@@ -2,6 +2,10 @@
 
 cBalls addon for scalar-field 2PCF and 3PCF multipoles in three dimensions.
 
+The independent MPI sibling is described in
+[octree-3pcf-3d-mpi](../octree_3pcf_3d_mpi/README.md). Both use the same
+measurement kernel and fixed, ordered pivot-block reduction.
+
 ## Purpose
 
 This mode keeps the existing projected/2D cBalls estimators unchanged and adds a

@@ -20,7 +20,21 @@ The available search methods are:
 All methods require `DEFDIMENSION=3`, OpenMP, `usePeriodic=false`, exactly one
 input file, and `infileformat=lya-ascii`.
 
+Set `LYAFORESTMPION=1` for an MPI+OpenMP counterpart of every method above,
+replacing the final `-omp` with `-mpi`. See
+[`addons/lya_forest_mpi/README.md`](../lya_forest_mpi/README.md) for the
+replicated-catalog contract, example parameters, and rank-comparison tests.
+
 ## Input
+
+The multi-engine driver `python/lya_corr_all_engines.py` reads DESI DR1 delta
+FITS, NPZ, or this ASCII format once and retains the catalog across engines.
+Use `cyballs.cballs.set_forest_catalog(positions, delta, weights, forest_ids)`
+for direct NumPy input. Equal integer IDs identify the same quasar; observer
+distances and sightlines are initialized before tree construction. The driver
+broadcasts the retained arrays once for MPI. See
+[`python/README_lya_corr_all_engines.md`](../../python/README_lya_corr_all_engines.md)
+for a small public DESI download and run examples.
 
 The ASCII interchange format has six columns:
 

@@ -21,7 +21,7 @@
 #include "input_iolib_02.h"
 #endif
 
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
 #include "input_lya_forest_omp_02.h"
 #endif
 

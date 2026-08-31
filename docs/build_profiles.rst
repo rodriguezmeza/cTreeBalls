@@ -19,10 +19,12 @@ Profile Layers
     Optional search methods, I/O formats, Cython/PXD support, and experimental
     features.
 
-Current Default Profile
------------------------
+Typical Source Profile
+----------------------
 
-The current default source profile is:
+The source selects the following core features; local edits and packaging
+profiles can differ. Inspect the executable rather than inferring its build
+from this table:
 
 .. list-table::
    :header-rows: 1
@@ -54,6 +56,16 @@ The current default source profile is:
    * - ``LONGINTON``
      - ``1``
      - Compile ``INTEGER`` as ``long``.
+   * - ``SINGLEPON``
+     - ``0``
+     - Double storage/computation; ``1`` selects mixed storage with double arithmetic.
+   * - ``SMOOTHPIVOTON``
+     - ``0``
+     - Capability only; when compiled, ``smooth-pivot`` remains runtime opt-in.
+
+For MPI addons, the build selects the configured ``MPICC`` wrapper.
+The runtime must provide ``MPI_THREAD_FUNNELED`` or stronger support.
+See :doc:`search_methods` for independent OMP/MPI addon switches.
 
 Native Libraries
 ----------------
@@ -73,8 +85,10 @@ Use this command before debugging a build or Python ABI mismatch:
 .. code-block:: bash
 
    make --no-print-directory -s print-cyballs-build-env
+   ./cballs options=make-info
 
-It prints the flags consumed by ``setup.py`` when building ``cyballs``.
+The Make query prints flags for a new wrapper build. ``make-info`` prints
+the settings embedded in the existing executable; stale binaries may differ.
 
 Cython ABI Coupling
 -------------------
@@ -103,9 +117,14 @@ After changing any build profile setting:
 
 .. code-block:: bash
 
-   make clean
-   make PYTHON=python3 all
+   make -j4 cballs cyballs-static-lib
+   CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
    python3 -c "from cyballs import cballs; print(cballs().abi_sizes())"
+
+Use exactly the same profile for both steps. A one-off make override does not
+automatically reach setup.py's Make queries; use profile files or the consistent
+environment workflow in :doc:`installation`. Keep ready-library builds limited
+to freshly built matching archives. Restart Python after rebuilding.
 
 For documentation-only validation:
 

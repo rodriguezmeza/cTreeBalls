@@ -139,6 +139,7 @@ typedef char ErrorMsg[_ERRORMSGSIZE_];
 #include "cmdline_data.h"
 #include "options_cache.h"
 #include "global_data.h"
+#include "angular_contracts.h"
 
 global bodyptr bodytable[MAXITEMS];
 global nodeptr *nodetablescanlev[MAXITEMS];
@@ -165,6 +166,7 @@ global cellptr rootnode;                            // To make treenodes
 
 
 #include "datastruc_hist.h"
+#include "scalar_moments.h"
 
 // To use in inout and cballsio
 global real *inout_xval;

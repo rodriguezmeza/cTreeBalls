@@ -349,7 +349,7 @@ cdef class cballs:
                     for catalog in range(len(self._memory_catalogs))
                 ).encode()
                 memory_formats = ",".join(
-                    "memory"
+                    "lya-ascii" if self._memory_catalogs[catalog][6] is not None else "memory"
                     for catalog in range(len(self._memory_catalogs))
                 ).encode()
 
@@ -514,13 +514,41 @@ cdef class cballs:
         if self.allocated:
             self.struct_cleanup()
         entry = (positions_array, kappa_array, weights_array, mask_array,
-                 gamma1_array, gamma2_array)
+                 gamma1_array, gamma2_array, None)
         if catalog == len(self._memory_catalogs):
             self._memory_catalogs.append(entry)
         else:
             self._memory_catalogs[catalog] = entry
         self.computed = False
         self.ncp = set()
+        return True
+
+    def set_forest_catalog(self, positions, delta, weights, forest_ids):
+        """Register observer-centered Ly-alpha pixels without reading a file.
+
+        Coordinates are comoving Cartesian distances. IDs must be integer
+        arrays, never floating point (DESI IDs can exceed 2**53). Equal IDs
+        denote the same quasar. IDs are compacted internally to fit INTEGER;
+        original arrays remain unchanged. Requires a 3D Ly-alpha addon build.
+        """
+        ids = np.asarray(forest_ids)
+        pos = np.asarray(positions)
+        if ids.dtype.kind not in "iu" or ids.ndim != 1:
+            raise CosmoSevereError("forest_ids must be a one-dimensional integer array")
+        if pos.ndim != 2 or pos.shape[1] != 3 or ids.size != pos.shape[0]:
+            raise CosmoSevereError("positions must be (N, 3) with N forest IDs")
+        distance = np.hypot(np.hypot(pos[:, 0], pos[:, 1]), pos[:, 2])
+        if not np.all(np.isfinite(distance) & (distance > 0)):
+            raise CosmoSevereError("forest coordinates need positive finite observer distances")
+        w = np.asarray(weights)
+        if w.ndim != 1 or w.size != ids.size or not np.all(np.isfinite(w) & (w >= 0)):
+            raise CosmoSevereError("forest weights must be finite non-negative values")
+        if len(self._memory_catalogs) > 1:
+            raise CosmoSevereError("forest input requires exactly one catalog")
+        dense_ids = np.ascontiguousarray(np.unique(ids, return_inverse=True)[1],
+                                        dtype=np.int64)
+        self.set_catalog(positions, kappa=delta, weights=weights)
+        self._memory_catalogs[0] = self._memory_catalogs[0][:6] + (dense_ids,)
         return True
 
     def clear_catalogs(self):
@@ -546,6 +574,7 @@ cdef class cballs:
         cdef np.ndarray mask_array
         cdef np.ndarray gamma1_array
         cdef np.ndarray gamma2_array
+        cdef np.ndarray forest_ids_array
         cdef const double *kappa_ptr
         cdef const double *weights_ptr
         cdef const unsigned char *mask_ptr
@@ -586,6 +615,16 @@ cdef class cballs:
                 raise CosmoSevereError(
                     (<char *>self.cmd.error_message).decode("utf-8", "replace")
                 )
+            if entry[6] is not None:
+                forest_ids_array = entry[6]
+                status = cballs_set_memory_forest_ids(
+                    &self.cmd, &self.gd, ifile,
+                    <const int64_t *>np.PyArray_DATA(forest_ids_array),
+                    <size_t>positions_array.shape[0])
+                if status == FAILURE:
+                    raise CosmoSevereError(
+                        (<char *>self.cmd.error_message).decode("utf-8", "replace")
+                    )
 
     def _check_task_dependency(self, level):
         """

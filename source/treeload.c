@@ -122,7 +122,7 @@ global int MakeTree(struct  cmdline_data* cmd,
     double cpustartMiddle;
     bodyptr p;
     int i;
-    bool preserve_catalog_frame = FALSE;
+    bool preserve_catalog_frame = cballs_observer_frame(cmd);
 
     cpustart = CPUTIME;
     gd->bytes_tot_cells = 0;
@@ -457,7 +457,9 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 // For unit sphere rsmooth are given in arcmin. Here we transform to radians
 #ifdef SMOOTHPIVOT
 #define ARCMINTORAD   0.000290888208666
-        if (strnull(cmd->rsmooth)) {
+        if (!cballs_opt_smooth_pivot(cmd)) {
+            gd->rsmooth[0] = 0.0;
+        } else if (strnull(cmd->rsmooth)) {
             if (cballs_opt_fix_rsmooth(cmd)) {
                 //B Leave it as a refereence: green line
 //            gd->rsmooth[0] = 0.00416666665;       // (0.25 arcmin)/60

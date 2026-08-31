@@ -42,7 +42,8 @@ static INTEGER octree_2balls_native_count(struct cmdline_data *cmd,
     if (source == NULL) return 0;
     if (cballs_opt_read_mask(cmd) && Mask(source) == MASK_NODE_MASKED)
         return 0;
-    if (Type(source) == BODY || Type(source) == BODY3) return 1;
+    if (Type(source) == BODY || Type(source) == BODY3)
+        return !cballs_opt_read_mask(cmd) || Mask(source) == MASK_NODE_VALID;
     if (Type(source) == CELL && Nb(source) > 0) return Nb(source);
     return 0;
 }
@@ -179,6 +180,11 @@ static int octree_2balls_build_leaf(struct cmdline_data *cmd,
     const real field_weight = cballs_opt_weights_norm(cmd) ? Weight(body) : 0.0;
     int k;
 
+    if (cballs_opt_read_mask(cmd) && Mask(body) != MASK_NODE_VALID) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls: masked body reached the binary search tree");
+        return FAILURE;
+    }
     if (tree->npoint >= tree->capacity / 2) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: point capacity exceeded");
@@ -253,6 +259,7 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
 {
     fcfc_balltreeptr tree = NULL;
     INTEGER root = -1;
+    INTEGER live_count;
     int catalog = -1;
     int i;
 
@@ -274,14 +281,27 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
                  "octree-2balls-omp: native octree is not available for this catalog");
         return FAILURE;
     }
-    if ((uintmax_t)nbody >
+    /* The traversal and all its moments contain valid bodies only. Native
+     * mixed cells are opened, never copied as aggregate search nodes. */
+    live_count = octree_2balls_native_count(cmd, (nodeptr)roottable[catalog]);
+    if (live_count <= 0 || live_count > nbody) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls: catalog %d has no unmasked bodies "
+                 "or an invalid native body count", catalog + 1);
+        return FAILURE;
+    }
+    if ((uintmax_t)live_count >
 #ifdef LONGINT
         (uintmax_t)LONG_MAX / 2
 #else
         (uintmax_t)INT_MAX / 2
 #endif
-        || (uintmax_t)nbody > (uintmax_t)SIZE_MAX / (2 * sizeof(fcfc_ballnode))
-        || (uintmax_t)nbody > (uintmax_t)SIZE_MAX / sizeof(bodyptr)) {
+        || (uintmax_t)live_count > (uintmax_t)SIZE_MAX / (2 * sizeof(fcfc_ballnode))
+        || (uintmax_t)live_count > (uintmax_t)SIZE_MAX / sizeof(bodyptr)
+#ifdef SINGLEP
+        || (uintmax_t)live_count > (uintmax_t)SIZE_MAX / sizeof(fcfc_ballpoint)
+#endif
+        ) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: tree allocation size overflow");
         return FAILURE;
@@ -289,14 +309,14 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
 
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
-    tree->capacity = 2 * nbody;
-    tree->bptr = malloc((size_t)nbody * sizeof(*tree->bptr));
+    tree->capacity = 2 * live_count;
+    tree->bptr = malloc((size_t)live_count * sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
     if (tree->bptr == NULL || tree->nodes == NULL) goto allocation_failure;
     if (octree_2balls_build_native(cmd, tree, (nodeptr)roottable[catalog],
                                    0, &root) == FAILURE)
         goto failure;
-    if (root != OCTREE_2BALLS_ROOT || tree->npoint <= 0) {
+    if (root != OCTREE_2BALLS_ROOT || tree->npoint != live_count) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: invalid binary octree root");
         goto failure;
@@ -313,12 +333,17 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
 #endif
 
     gd->bytes_tot += sizeof(*tree)
-        + (size_t)nbody * sizeof(*tree->bptr)
+        + (size_t)live_count * sizeof(*tree->bptr)
         + (size_t)tree->capacity * sizeof(*tree->nodes)
 #ifdef SINGLEP
         + (size_t)tree->npoint * sizeof(*tree->packed_points)
 #endif
         ;
+    if (cballs_opt_read_mask(cmd))
+        verb_print(cmd->verbose,
+                   "octree-2balls: catalog %d mask keeps %" INTEGER_FMT
+                   " of %" INTEGER_FMT " bodies; binary capacity=%" INTEGER_FMT
+                   " nodes\n", catalog + 1, live_count, nbody, tree->capacity);
     *result = tree;
     return SUCCESS;
 

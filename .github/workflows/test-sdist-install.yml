@@ -1,0 +1,342 @@
+name: Continuous integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  octree-3pcf-3d-mpi:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        omp_sibling: ["0", "1"]
+    env:
+      MAKEFLAGS: "-e"
+      CC: mpicc
+      DEFDIMENSION: "3"
+      OCTREE3PCF3DMPION: "1"
+      OCTREE3PCF3DOMPON: ${{ matrix.omp_sibling }}
+      BALLTREEMPION: "0"
+      BALLTREE2BALLSMPION: "0"
+      BALLTREE2BALLSMPI3PCFON: "0"
+      OCTREE2BALLSMPION: "0"
+      OCTREEGGGMPION: "0"
+      OCTREEBALLS4MPION: "0"
+      LYAFORESTMPION: "0"
+      CFITSIOON: "0"
+      CFITSIOLIBON: "0"
+      USEGSL: "1"
+      GSLINTERNAL: "0"
+      CLASSLIBON: "1"
+      PXDON: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libopenmpi-dev openmpi-bin libgsl-dev zlib1g-dev
+          python -m pip install numpy Cython setuptools wheel mpi4py
+      - name: Build matching C and Cython MPI profiles
+        run: |
+          make -j2 cballs cyballs-static-lib
+          CBALLS_STATIC_LIBRARY_READY=1 python setup.py build_ext --inplace
+      - name: Check scalar and survey oracles, ranks, threads, and recovery
+        run: |
+          extra=()
+          if [ "$OCTREE3PCF3DOMPON" = 0 ]; then extra+=(--mpi-only); fi
+          PYTHONPATH="$PWD:$PWD/python" python tests/make_tests/test_octree_3pcf_3d_mpi.py \
+            --cballs ./cballs --mpi-command 'mpiexec --oversubscribe -n 2' \
+            --cython "${extra[@]}"
+          make test-search-methods test-make-info
+      - name: Check OpenMP baseline
+        if: matrix.omp_sibling == '1'
+        run: make test-octree-3pcf-3d-omp
+
+  lya-forest-mpi:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        omp_siblings: ["0", "1"]
+    env:
+      MAKEFLAGS: "-e"
+      CC: mpicc
+      DEFDIMENSION: "3"
+      LYAFORESTMPION: "1"
+      LYAFORESTOMPON: ${{ matrix.omp_siblings }}
+      SMOOTHPIVOTON: "0"
+      BALLTREEMPION: "0"
+      BALLTREE2BALLSMPION: "0"
+      BALLTREE2BALLSMPI3PCFON: "0"
+      OCTREE2BALLSMPION: "0"
+      OCTREEGGGMPION: "0"
+      OCTREEBALLS4MPION: "0"
+      CFITSIOON: "0"
+      CFITSIOLIBON: "0"
+      USEGSL: "1"
+      GSLINTERNAL: "0"
+      CLASSLIBON: "1"
+      PXDON: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libopenmpi-dev openmpi-bin libgsl-dev zlib1g-dev
+          python -m pip install numpy Cython setuptools wheel mpi4py pytest astropy matplotlib
+      - name: Build C and Cython with the same MPI profile
+        run: |
+          make -j2 cballs cyballs-static-lib
+          CBALLS_STATIC_LIBRARY_READY=1 python setup.py build_ext --inplace
+      - name: Compare every MPI mode, oracles, threads, and recoverable failures
+        run: |
+          extra=()
+          if [ "$LYAFORESTOMPON" = 0 ]; then extra+=(--mpi-only); fi
+          PYTHONPATH="$PWD:$PWD/python" python tests/make_tests/test_lya_forest_mpi.py \
+            --cballs ./cballs --mpi-command 'mpiexec --oversubscribe -n 2' \
+            --cython "${extra[@]}"
+          make test-search-methods test-make-info
+      - name: Preserve the OpenMP baseline
+        if: matrix.omp_siblings == '1'
+        run: make test-lya-forest-omp test-lya-forest-1d-omp
+      - name: Forest driver, DESI fixtures, in-memory oracles and two-rank suite
+        env:
+          LYA_DRIVER_MPI_COMMAND: "mpiexec --oversubscribe -n 2"
+        run: |
+          PYTHONPATH="$PWD:$PWD/python" python -m pytest -q \
+            tests/make_tests/test_lya_corr_all_engines.py
+
+  octree-balls4:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        smooth_pivot: [0, 1]
+    env:
+      MAKEFLAGS: "-e"
+      CC: mpicc
+      DEFDIMENSION: "3"
+      SMOOTHPIVOTON: ${{ matrix.smooth_pivot }}
+      OCTREEBALLS4OMPON: "1"
+      OCTREEBALLS4MPION: "1"
+      OCTREEGGGOMPON: "1"
+      OCTREEGGGMPION: "1"
+      KDTREEOMPON: "1"
+      BALLTREEOMPON: "1"
+      BALLTREEMPION: "1"
+      BALLTREE2BALLSOMPON: "1"
+      BALLTREE2BALLSMPION: "1"
+      BALLTREE2BALLSOMP3PCFON: "1"
+      BALLTREE2BALLSMPI3PCFON: "1"
+      OCTREE2BALLSOMPON: "1"
+      OCTREE2BALLSMPION: "1"
+      OCTREESMOOTHINGON: "0"
+      BALLSON: "0"
+      BALLS4SCANLEVON: "0"
+      TPCFON: "1"
+      TWOPCFON: "1"
+      NMultipolesON: "1"
+      NONORMHISTON: "1"
+      CLASSLIBON: "1"
+      PXDON: "1"
+      USEGSL: "1"
+      GSLINTERNAL: "0"
+      CFITSIOON: "0"
+      CFITSIOLIBON: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libopenmpi-dev openmpi-bin libgsl-dev zlib1g-dev
+          python -m pip install numpy Cython setuptools wheel pytest treecorr mpi4py
+      - name: Check C/Cython, masks, threads, and rejected smoothing
+        run: make -j2 test-octree-balls4-no-smoothing
+      - name: Check registered method and help
+        run: make test-search-methods
+      - name: Check masked complex windows, Cython, and two-rank MPI
+        run: make test-octree-balls4-edge test-octree-balls4-mpi
+      - name: Check scalar oracle, rotations, smoothing opt-in, and TreeCorr
+        run: python -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
+      - name: Check scalar numerical contracts with two MPI ranks
+        run: |
+          CBALLS_TEST_MPI=1 mpiexec --oversubscribe -n 2 \
+            python tests/make_tests/test_scalar_numerical_contract.py
+
+  two-ball-edge:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        dimension: [2, 3]
+    env:
+      # Use one profile for direct make calls and setup.py's make queries.
+      MAKEFLAGS: "-e"
+      CC: mpicc
+      DEFDIMENSION: ${{ matrix.dimension }}
+      CFITSIOON: "0"
+      CFITSIOLIBON: "0"
+      USEGSL: "0"
+      GSLINTERNAL: "0"
+      CLASSLIBON: "1"
+      PXDON: "1"
+      SMOOTHPIVOTON: "0"
+      TWOPCFON: "1"
+      TPCFON: "1"
+      BALLTREE2BALLSOMPON: "1"
+      BALLTREE2BALLSMPION: "1"
+      BALLTREE2BALLSOMP3PCFON: "1"
+      BALLTREE2BALLSMPI3PCFON: "1"
+      OCTREE2BALLSOMPON: "1"
+      OCTREE2BALLSMPION: "1"
+      LYAFORESTOMPON: "0"
+      LYAFORESTMPION: "0"
+      OCTREESHEAROMPON: "0"
+      OCTREE3PCF3DOMPON: "0"
+      OCTREE3PCF3DMPION: "0"
+      OCTREEBALLS4OMPON: "0"
+      OCTREEBALLS4MPION: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build and reference dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libopenmpi-dev openmpi-bin zlib1g-dev
+          python -m pip install numpy Cython setuptools wheel pytest treecorr
+      - name: Build the selected C profile
+        run: make -j2 cballs cyballs-static-lib
+      - name: Check windows, correction, masks, MPI, and deterministic reduction
+        run: |
+          python tests/make_tests/test_two_ball_edge_corrections.py \
+            --cballs ./cballs --dimension "$DEFDIMENSION" \
+            --mpi-command 'mpiexec --oversubscribe -n 2'
+      - name: Compare flat-sky multipoles to TreeCorr
+        if: matrix.dimension == 2
+        run: |
+          python tests/make_tests/test_two_ball_edge_corrections.py \
+            --cballs ./cballs --dimension 2 --treecorr \
+            --mpi-command 'mpiexec --oversubscribe -n 2'
+      - name: Build Cython and check in-memory edge corrections
+        if: matrix.dimension == 3
+        run: |
+          CBALLS_STATIC_LIBRARY_READY=1 python setup.py build_ext --inplace
+          python -m pytest -q tests/make_tests/test_two_ball_edge_cython.py \
+            tests/make_tests/test_kappa_corr_all_engines.py
+
+  c-regressions:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev zlib1g-dev
+      - name: Build C executable with strict warnings
+        run: make -j2 DEBUGCOMPILINGON=1 cballs
+      - name: Run production cell contracts
+        run: make DEBUGCOMPILINGON=1 test-cell-production
+      - name: Run C startup and numerical regressions
+        run: |
+          make DEBUGCOMPILINGON=1 test-parameter-parser
+          make DEBUGCOMPILINGON=1 test-parameter-file-parser
+          make DEBUGCOMPILINGON=1 test-standalone-parser
+          THREADS=4 REPEATS=2 make test-p0-regressions
+          make test-p2-regressions
+          make test-octree-3pcf-3d-omp
+      - name: Compare every active OpenMP search
+        run: MULTI_THREADS=4 make test-openmp-determinism
+
+  cython-regressions:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install native and Python build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev zlib1g-dev
+          python -m pip install --upgrade pip setuptools wheel \
+            "Cython>=0.29.36,<4" "numpy>=2.0"
+      - name: Build and install Cython extension
+        run: OCTREESHEAROMPON=1 python -m pip install . --no-build-isolation
+      - name: Run Cython lifecycle regressions
+        run: |
+          python tests/make_tests/test_p0_cython_instances.py
+          python tests/make_tests/test_p1_cython.py
+          python tests/make_tests/test_p2_cython.py
+          python tests/make_tests/test_p3_cython_startup.py
+          python tests/make_tests/test_shear_octree_omp.py
+
+  install-sdist:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev zlib1g-dev
+          python -m pip install --upgrade build twine
+      - name: Build and inspect the source distribution
+        run: |
+          python -m build --sdist
+          python -m twine check dist/*.tar.gz
+          tar -tzf dist/*.tar.gz > /tmp/ctreeballs-sdist-files.txt
+          grep -q '/addons/gsl/config.h$' /tmp/ctreeballs-sdist-files.txt
+          grep -q '/addons/gsl/specfunc/gamma.c$' /tmp/ctreeballs-sdist-files.txt
+          grep -q '/addons/cfitsiolib/cfitsio_ver_4.6.3/fitscore.c$' /tmp/ctreeballs-sdist-files.txt
+          grep -q '/include/tree_contracts.h$' /tmp/ctreeballs-sdist-files.txt
+          grep -q '/addons/octree_3pcf_3d_omp/search_octree_3pcf_3d_omp.c$' /tmp/ctreeballs-sdist-files.txt
+      - name: Install and import outside the checkout
+        run: |
+          python -m venv /tmp/ctreeballs-sdist
+          /tmp/ctreeballs-sdist/bin/python -m pip install "$GITHUB_WORKSPACE"/dist/*.tar.gz
+          cd /tmp
+          /tmp/ctreeballs-sdist/bin/python -c \
+            "from cyballs import cballs; b = cballs(); print(b.getVersion())"
+      - name: Run installed-extension regressions
+        run: |
+          /tmp/ctreeballs-sdist/bin/python tests/make_tests/test_p0_cython_instances.py
+          /tmp/ctreeballs-sdist/bin/python tests/make_tests/test_p1_cython.py
+          /tmp/ctreeballs-sdist/bin/python tests/make_tests/test_p2_cython.py
+          CBALLS_FAILURE_REPEATS=60 \
+            /tmp/ctreeballs-sdist/bin/python tests/make_tests/test_p3_cython_startup.py
+
+  sanitizers:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev zlib1g-dev
+      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: |
+          make -j2 DEBUGCOMPILINGON=1 SANITIZER=address,undefined cballs
+      - name: Run focused sanitizer paths
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-parameter-parser
+          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-parameter-file-parser
+          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-standalone-parser
+          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-sanitizer-smoke
+          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-octree-3pcf-3d-omp

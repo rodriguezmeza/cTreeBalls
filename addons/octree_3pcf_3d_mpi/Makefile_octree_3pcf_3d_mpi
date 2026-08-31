@@ -1,0 +1,11 @@
+# Numerical kernels are shared with the OpenMP sibling.
+ifeq ($(OCTREE3PCF3DMPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DOCTREE3PCF3DMPI -DCBALLS_MPI_ENABLED
+OCTREE3PCF3DMPI = $(MDIR)/addons/octree_3pcf_3d_mpi/
+vpath %.c $(OCTREE3PCF3DMPI)
+INCLUDES += -I$(OCTREE3PCF3DMPI)
+HEADERFILES += $(wildcard $(OCTREE3PCF3DMPI)/*.h)
+EXTERNAL += cb3d_mpi.o
+endif

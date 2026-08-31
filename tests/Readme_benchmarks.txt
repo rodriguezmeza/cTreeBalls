@@ -1,46 +1,38 @@
+Benchmark workflows
 
-First, download a Takahashi's realization (http://cosmo.phys.hirosaki-u.ac.jp/takahasi/allsky_raytracing/)
+Start with docs/benchmarks.rst and docs/search_methods.rst. Select an equivalent
+field, geometry, binning, estimator, and normalization before comparing times.
 
-$ cd tests/catalogs/Takahashi
-$ wget http://cosmo.phys.hirosaki-u.ac.jp/takahasi/allsky_raytracing/sub2/nres12/allskymap_nres12r081.zs9.mag.dat
+Current optional CPU suite:
+    addons/python_env/cputime_comparison/benchmark_kappa_corr.py
 
-Transform this Takahashi's file to HEALPix format. First edit file takahasi_to_fits.py to adapt to the name of file you just downloaded, and then execute:
+Its Readme.txt describes the Conda/Jupyter environment, external TreeCorr,
+Corrfunc, FCFC, lya2pcf and ENCORE sources, MPI, timing scopes, and CSV outputs.
+addons/python_env is a local optional workspace and may not be distributed.
+Do not confuse its general suite with the older tests/python script of the
+same name, which has a different CLI and a narrower benchmark purpose.
 
-$ python takahasi_to_fits.py
+Current catalog drivers:
+    python/kappa_corr_all_engines.py
+    python/lya_corr_all_engines.py
 
-In addons/Makefile_addons_settings do:
+Run each with --help and --list-engines. Read their READMEs for angle units,
+masking, normalization, and rank ownership. They retain in-memory input across
+engines rather than rereading files. Examples and notebooks are in examples/.
 
-SMOOTHPIVOTON = 1
-TPCFON = 0
+Before timing, from the root with matching C/Cython builds:
+    python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
 
-and in cTreeBalls directory:
+Use no-normalize-HistZeta,weights-norm for shared raw scalar 3PCF comparisons.
+Native kernels now exclude repeated neighbors; do not subtract them again.
+SMOOTHPIVOTON=1 does not turn smoothing on without options=smooth-pivot.
+Rebuild both C and Cython after changing flags, then restart the notebook kernel.
 
-$ make clean; make all
+A compiled 3PCF capability does not mean every pair-only timing performs the
+same work. Use supported runtime order selectors and inspect work_contract.
+Keep metadata, used-values files, counts, and numerical differences with timings.
+Only benchmark differences within the same estimator; forest radial/3D and
+angular/physical-3D outputs are not interchangeable.
 
-Then in directory "tests"
-
-$ time python3 python/benchmark_kappa_corr.py --kappa catalogs/Takahashi/allskymap_nres12r081_zs9_mag.fits --nsides "128,256,512,1024,2048" --threads 16 --nbins 20 --repeats 5 --outdir cputime_2pcf
-
-Now, do in addons/Makefile_addons_settings:
-
-TPCFON = 1
-
-and in cTreeBalls directory:
-
-$ make clean; make all
-
-and in tests folder:
-
-$ time python3 python/benchmark_kappa_corr.py --kappa catalogs/Takahashi/allskymap_nres12r081_zs9_mag.fits --nsides "128,256,512,1024,2048" --threads 16 --nbins 20 --repeats 5 --outdir cputime_3pcf
-
-
-Note: in some machines "make all" does not install cyballs. Try:
-
-$ python3.xx setup.py build
-$ python3.xx setup.py install
-
-and if last line does not work use:
-
-$ python3.xx setup.py install --user
-
-In general, we recommend the use of a python environment.
+Historical Takahashi download/plot workflows remain in tests/handson material.
+Use bounded small-catalog checks before downloading or processing full-sky maps.

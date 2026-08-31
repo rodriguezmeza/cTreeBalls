@@ -200,14 +200,7 @@ mode = sys.argv[4]
 rows = [tuple(map(float, line.split()))
         for line in catalog_path.read_text(encoding="ascii").splitlines()
         if line.strip()]
-# Standalone one-catalog startup centers every coordinate on the bounding-box
-# midpoint before tree construction. The reference must use that same frame
-# because the 3D angular basis is defined relative to the coordinate origin.
-center = tuple((min(row[axis] for row in rows)
-                + max(row[axis] for row in rows)) / 2.0
-               for axis in range(3))
-rows = [tuple(row[axis] - center[axis] for axis in range(3)) + (row[3],)
-        for row in rows]
+# Angular catalogs retain their observer-relative input frame.
 
 rmin = 0.02
 rmax = 1.4
@@ -219,36 +212,29 @@ expected = {name: [[[0.0 for _ in range(nbins)] for _ in range(nbins)]
             for name in ("cos", "sin", "sincos", "cossin")}
 denominator = [[0.0 for _ in range(nbins)] for _ in range(nbins)]
 
-def rotation(position):
-    x, y, z = position
-    alpha = beta = gamma = 0.01
-    a11 = 1.0 - gamma * alpha
-    a12 = alpha + gamma
-    return (
-        a11 * x + a12 * y - beta * z,
-        -a12 * x + a11 * y + gamma * beta * z,
-        beta * x + beta * alpha * y + z,
-    )
-
 def polar(pivot, neighbor):
-    dr = tuple(pivot[i] - neighbor[i] for i in range(3))
-    distance = math.sqrt(sum(value * value for value in dr))
-    q0 = rotation(pivot)
-    dr0 = tuple(pivot[i] - q0[i] for i in range(3))
-    reference = math.sqrt(sum(value * value for value in dr0))
-    if distance == 0.0 or reference == 0.0:
+    def dot(a, b):
+        return sum(x*y for x, y in zip(a, b))
+    def cross(a, b):
+        return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2],
+                a[0]*b[1]-a[1]*b[0])
+    dr = tuple(pivot[i]-neighbor[i] for i in range(3))
+    distance = math.sqrt(dot(dr, dr))
+    radius = math.sqrt(dot(pivot, pivot))
+    if not radius or not distance:
         return None
-    cosine = sum(dr[i] * dr0[i] for i in range(3)) / (distance * reference)
-    cosine = min(1.0, max(-1.0, cosine))
-    sine = math.sqrt(max(0.0, 1.0 - cosine * cosine))
-    cross = (
-        dr0[1] * pivot[2] - dr0[2] * pivot[1],
-        dr0[2] * pivot[0] - dr0[0] * pivot[2],
-        dr0[0] * pivot[1] - dr0[1] * pivot[0],
-    )
-    if sum(dr[i] * cross[i] for i in range(3)) < 0.0:
-        sine = -sine
-    return distance, cosine, sine
+    normal = tuple(x/radius for x in pivot)
+    axis = min(range(3), key=lambda i: abs(normal[i]))
+    first = tuple((1.0 if i == axis else 0.0)-normal[axis]*normal[i]
+                  for i in range(3))
+    length = math.sqrt(dot(first, first))
+    first = tuple(x/length for x in first)
+    second = cross(first, normal)
+    cosine, sine = -dot(dr, first), -dot(dr, second)
+    length = math.hypot(cosine, sine)
+    if length <= 1e-14*distance:
+        return None
+    return distance, cosine/length, sine/length
 
 def radial_bin(distance):
     if not rmin < distance < rmax:
@@ -260,8 +246,11 @@ for ip, iq, ir in itertools.permutations(range(len(rows)), 3):
     pivot = rows[ip]
     q = rows[iq]
     r = rows[ir]
-    dq, cosq1, sinq1 = polar(pivot[:3], q[:3])
-    dr, cosr1, sinr1 = polar(pivot[:3], r[:3])
+    pq, pr = polar(pivot[:3], q[:3]), polar(pivot[:3], r[:3])
+    if pq is None or pr is None:
+        continue
+    dq, cosq1, sinq1 = pq
+    dr, cosr1, sinr1 = pr
     nq = radial_bin(dq)
     nr = radial_bin(dr)
     if nq is None or nr is None:
@@ -381,35 +370,29 @@ expected = {name: [[[0.0 for _ in range(nbins)] for _ in range(nbins)]
                    for _ in range(orders)]
             for name in ("cos", "sin", "sincos", "cossin")}
 
-def rotation(position):
-    x, y, z = position
-    alpha = beta = gamma = 0.01
-    return (
-        (1.0 - gamma * alpha) * x + (alpha + gamma) * y - beta * z,
-        -(alpha + gamma) * x + (1.0 - gamma * alpha) * y
-        + gamma * beta * z,
-        beta * x + beta * alpha * y + z,
-    )
-
 def polar(pivot, neighbor):
-    dr = tuple(pivot[i] - neighbor[i] for i in range(3))
-    distance = math.sqrt(sum(value * value for value in dr))
-    q0 = rotation(pivot)
-    dr0 = tuple(pivot[i] - q0[i] for i in range(3))
-    reference = math.sqrt(sum(value * value for value in dr0))
-    if distance == 0.0 or reference == 0.0:
+    def dot(a, b):
+        return sum(x*y for x, y in zip(a, b))
+    def cross(a, b):
+        return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2],
+                a[0]*b[1]-a[1]*b[0])
+    dr = tuple(pivot[i]-neighbor[i] for i in range(3))
+    distance = math.sqrt(dot(dr, dr))
+    radius = math.sqrt(dot(pivot, pivot))
+    if not radius or not distance:
         return None
-    cosine = sum(dr[i] * dr0[i] for i in range(3)) / (distance * reference)
-    cosine = min(1.0, max(-1.0, cosine))
-    sine = math.sqrt(max(0.0, 1.0 - cosine * cosine))
-    cross = (
-        dr0[1] * pivot[2] - dr0[2] * pivot[1],
-        dr0[2] * pivot[0] - dr0[0] * pivot[2],
-        dr0[0] * pivot[1] - dr0[1] * pivot[0],
-    )
-    if sum(dr[i] * cross[i] for i in range(3)) < 0.0:
-        sine = -sine
-    return distance, cosine, sine
+    normal = tuple(x/radius for x in pivot)
+    axis = min(range(3), key=lambda i: abs(normal[i]))
+    first = tuple((1.0 if i == axis else 0.0)-normal[axis]*normal[i]
+                  for i in range(3))
+    length = math.sqrt(dot(first, first))
+    first = tuple(x/length for x in first)
+    second = cross(first, normal)
+    cosine, sine = -dot(dr, first), -dot(dr, second)
+    length = math.hypot(cosine, sine)
+    if length <= 1e-14*distance:
+        return None
+    return distance, cosine/length, sine/length
 
 def radial_bin(distance):
     if not rmin < distance < rmax:

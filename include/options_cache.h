@@ -63,7 +63,9 @@
     X(REMOVE_MEAN, remove_mean, "remove-mean", 52) \
     X(NO_CHECK_EQUAL_POSITIONS, no_check_equal_positions, \
       "no-check-two-bodies-eq-pos", 53) \
-    X(ONLY_2PCF, only_2pcf, "only-2pcf", 54)
+    X(ONLY_2PCF, only_2pcf, "only-2pcf", 54) \
+    X(GGG_FULL_WINDOW, ggg_full_window, "ggg-full-window", 55) \
+    X(GGG_PROFILE, ggg_profile, "ggg-profile", 56)
 
 #define CBALLS_OPTION_ENUM(symbol, accessor, text, bit) \
     CBALLS_OPTF_##symbol = 1ULL << (bit),

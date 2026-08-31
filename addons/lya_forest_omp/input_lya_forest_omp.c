@@ -8,6 +8,7 @@
 
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
+#include "lya_forest_parallel.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -98,7 +99,7 @@ local int lya_ascii_read_line(FILE *stream, char *line, size_t line_size,
     return SUCCESS;
 }
 
-global int inputdata_lya_ascii(struct cmdline_data *cmd,
+local int inputdata_lya_ascii_local(struct cmdline_data *cmd,
                                struct global_data *gd,
                                string filename, int ifile)
 {
@@ -250,3 +251,10 @@ cleanup:
 }
 
 #undef LYA_INPUT_LINE_MAX
+
+global int inputdata_lya_ascii(struct cmdline_data *cmd, struct global_data *gd,
+                               string filename, int ifile)
+{
+    const int status = inputdata_lya_ascii_local(cmd, gd, filename, ifile);
+    return lya_parallel_consensus(cmd, status, "Ly-alpha catalog input");
+}

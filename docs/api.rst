@@ -69,7 +69,29 @@ Python Module
 
    .. py:method:: clean_all()
 
-      Release C-owned allocations and clear Python-side staged parameters.
+      Release C-owned allocations, staged parameters, and registered catalogs.
+
+   .. py:method:: set_catalog(positions, kappa=None, weights=None, mask=None, gamma1=None, gamma2=None, catalog=0)
+
+      Register a contiguous catalog slot (zero-based). Positions have shape
+      ``(N, compiled_ndim)``; other arrays have shape ``(N,)``.
+      Omitted kappa/weights default to one. Masks must be boolean or 0/1;
+      request ``read-mask`` on a supported engine to apply them.
+      Prepared NumPy arrays are retained and copied into C storage at run time.
+      See :doc:`user/python` for ownership and a complete example.
+
+   .. py:method:: set_forest_catalog(positions, delta, weights, forest_ids)
+
+      Register observer-centered 3D forest pixels with integer quasar IDs.
+      Same IDs identify the same forest. See :doc:`lyman_alpha`.
+
+   .. py:method:: clear_catalogs()
+
+      Release active C state and remove retained catalog references.
+
+   .. py:property:: catalog_count
+
+      Number of registered in-memory catalogs.
 
    .. py:method:: abi_sizes()
 
@@ -91,6 +113,7 @@ Histogram Getters
 
 Histogram getters require live arrays. Call ``Run(level=["MainLoop"])`` first,
 read the arrays, then call ``clean_all()``.
+The returned arrays are NumPy copies, not views of freed C storage.
 
 .. py:method:: cballs.getrBins()
 
@@ -117,10 +140,19 @@ read the arrays, then call ``clean_all()``.
 
    Return one 3PCF multipole matrix. ``type`` values are:
    ``1=cos``, ``2=sin``, ``3=sincos``, ``4=cossin``.
+   ``m=1`` is the monopole. See :doc:`3pcf` for complex reconstruction.
 
 .. py:method:: cballs.getHistZetaM_EE(m)
 
-   Return the edge-corrected 3PCF multipole matrix when enabled.
+   Return the real part of an edge-corrected scalar 3PCF mode when enabled.
+
+.. py:method:: cballs.getHistZetaM_EE_Im(m)
+
+   Return its imaginary part.
+
+.. py:method:: cballs.getHistZetaM_EE_complex(m)
+
+   Return both parts as a complex NumPy matrix; ``m`` is one-based.
 
 Shear Getters
 ~~~~~~~~~~~~~

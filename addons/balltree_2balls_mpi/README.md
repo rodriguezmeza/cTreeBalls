@@ -5,6 +5,11 @@ This addon is the deterministic MPI+OpenMP counterpart of
 dual-node 2PCF traversal, and genuine `process3`/`process21`/`process111`
 triple-node 3PCF traversal.
 
+The shared [scalar numerical contract](../../docs/3pcf.rst) defines
+observer-centered tangent angles, chord bins, weighted raw distinct triplets,
+and the undefined-bearing policy. Use `no-normalize-HistZeta,weights-norm`
+for raw comparisons. Repeated neighbors are already excluded natively.
+
 Every rank builds the same fixed tree frontier. Frontier slot `i` belongs to
 rank `i % nranks`, OpenMP processes the owned slots, and task-indexed
 histograms are reduced to rank 0. Rank 0 publishes tasks in the same order as

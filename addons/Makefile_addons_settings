@@ -82,15 +82,14 @@ OCTREEGGGMPION = 1
 # LYAFORESTOMP
 # Exact weighted Lyman-alpha forest 2PCF and anisotropic 3PCF.
 LYAFORESTOMPON = 1
+# MPI counterparts for all seven Ly-alpha modes; OpenMP-only siblings are optional.
+LYAFORESTMPION = 1
 # Fixed pivot grouping for deterministic radial OpenMP reductions.
 LYA1D_OMP_PIVOT_BLOCK_SIZE ?= 256
 
 # OCTREESHEAROMP
 # Flat-sky weak-lensing shear 2PCF and natural 3PCF multipoles.
 # Enable with: make OCTREESHEAROMPON=1 cballs
-# this is the original:
-#OCTREESHEAROMPON ?= 0
-#
 OCTREESHEAROMPON ?= 1
 
 # KDTREEBOXOMP
@@ -257,6 +256,9 @@ ORIGINALCBON = 0
 # OCTREE3PCF3DOMP
 # 3D scalar 3PCF multipoles with spherical harmonics and OpenMP. Done by Eladio Moreno
 OCTREE3PCF3DOMPON = 1
+OCTREE3PCF3DMPION = 1
+# Fixed reduction blocks, independent of MPI ranks and OpenMP thread count.
+CB3D_OMP_PIVOT_BLOCK_SIZE ?= 64
 
 # OCTREESMOOTHING
 # some utils and definitions useful to smooth octree cells
@@ -278,11 +280,13 @@ BALLS0357ON = 0
 ALLOW_BALLS_WITH_SMOOTHING ?= 0
 
 
-# OCTREEKKKBALLS4OMP
-# For computing 3pcf using octree-kkk-balls4-omp
+# OCTREEBALLS4OMP
+# For computing 2pcf and 3pcf using octree-balls4-omp
 # Uses the normal treeload and its own BALLS4 pivot partition, independently
 # of OCTREESMOOTHINGON, BALLSON, and BALLS4SCANLEVON.
-OCTREEKKKBALLS4OMPON = 1
+OCTREEBALLS4OMPON = 1
+# Independent of SMOOTHPIVOTON; options=smooth-pivot is not supported.
+OCTREEBALLS4MPION = 1
 
 # OCTREEGGGCROSSOMP
 # For computing cross-3pcf using octree-ggg_cross-omp

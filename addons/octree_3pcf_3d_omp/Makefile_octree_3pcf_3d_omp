@@ -1,8 +1,11 @@
 # ----- MAKE FILE module definitions (octree_3pcf_3d_omp) -----
 # 3D scalar 3PCF multipoles with spherical harmonics and OpenMP.
 
+ifneq ($(filter 1,$(OCTREE3PCF3DOMPON) $(OCTREE3PCF3DMPION)),)
 ifeq ($(OCTREE3PCF3DOMPON),1)
 OPT2 += -DOCTREE3PCF3DOMP
+endif
+OPT2 += -DCB3D_OMP_PIVOT_BLOCK_SIZE=$(CB3D_OMP_PIVOT_BLOCK_SIZE)
 #OCTREE3PCF3DOMP = ../addons/octree_3pcf_3d_omp/
 OCTREE3PCF3DOMP = $(MDIR)/addons/octree_3pcf_3d_omp/
 #vpath %.c ./addons/octree_3pcf_3d_omp/

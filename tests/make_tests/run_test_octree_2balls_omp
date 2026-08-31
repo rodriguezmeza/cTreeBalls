@@ -293,4 +293,9 @@ else
     echo "SKIP: octree-2balls-omp 3PCF is disabled (TPCFON=0)"
 fi
 
+if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env" \
+    && grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
+    "${PYTHON:-python3}" ./make_tests/test_octree_2balls_mask.py --cballs "$CBALLS"
+fi
+
 echo "PASS: octree-2balls-omp exactness, aggregation, and OpenMP determinism"

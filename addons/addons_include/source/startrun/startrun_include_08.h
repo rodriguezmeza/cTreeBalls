@@ -27,7 +27,7 @@
 #include "startrun_iolib_05.h"
 #endif
 
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
 #include "startrun_lya_forest_omp_08.h"
 #endif
 

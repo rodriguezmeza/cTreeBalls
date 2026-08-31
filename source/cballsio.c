@@ -76,7 +76,20 @@ local int outfilefmt_int;
  Return (the error status):
     int SUCCESS or FAILURE
  */
+local int InputData_local(struct cmdline_data* cmd,
+                          struct global_data* gd, string filename, int ifile);
+
 int InputData(struct cmdline_data* cmd,
+              struct global_data* gd, string filename, int ifile)
+{
+    int status = InputData_local(cmd, gd, filename, ifile);
+#ifdef OCTREE3PCF3DMPI
+    status = cb3d_mpi_consensus(cmd, status, "3D catalog input");
+#endif
+    return status;
+}
+
+local int InputData_local(struct cmdline_data* cmd,
               struct  global_data* gd, string filename, int ifile)
 {
     string routineName = "InputData";
@@ -240,7 +253,7 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
             Gamma2(p) = Gamma2(q);
 #endif
             Weight(p) = Weight(q);
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
             LyaForestId(p) = LyaForestId(q);
             LyaDistance(p) = LyaDistance(q);
             SETV(LyaLOS(p), LyaLOS(q));
@@ -322,7 +335,7 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
             Type(p) = Type(q);
             Mass(p) = Mass(q);
             Weight(p) = Weight(q);
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
             LyaForestId(p) = LyaForestId(q);
             LyaDistance(p) = LyaDistance(q);
             SETV(LyaLOS(p), LyaLOS(q));

@@ -17,6 +17,8 @@
 #ifndef _protodefs_h
 #define _protodefs_h
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -49,6 +51,9 @@ int cballs_end_run_free_memory_guarded(struct cmdline_data *cmd,
 int cballs_compiled_ndim(void);
 int cballs_max_memory_catalogs(void);
 int cballs_search_method_id(const char *method);
+int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
+                                struct global_data *gd, int ifile,
+                                const int64_t *forest_ids, size_t nbody);
 int cballs_load_memory_catalog(struct cmdline_data *cmd,
                                struct global_data *gd,
                                int ifile,

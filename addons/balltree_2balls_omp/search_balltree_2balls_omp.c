@@ -126,6 +126,14 @@ static int treecorr_run_pair_tasks(
 #endif
 
 #ifdef THREEPCFCONVERGENCE
+static inline int treecorr_window_orders(const struct cmdline_data *cmd)
+{
+    if (!cballs_opt_edge_corrections(cmd)) return 0;
+    if (cmd->mChebyshev < 0 || cmd->mChebyshev > (INT_MAX - 1) / 2)
+        return -1;
+    return 2 * cmd->mChebyshev + 1;
+}
+
 static inline bool treecorr_normalize_3pcf(const struct cmdline_data *cmd)
 {
     return !scanopt(cmd->options, "no-normalize-HistZeta");
@@ -434,13 +442,36 @@ enum {
 typedef struct {
     real *components;
     real *normalization;
+    real *window_re;
+    real *window_im;
     size_t stride;
     size_t plane;
     size_t order_plane;
     int orders;
+    int window_orders;
     INTEGER body_triples;
     INTEGER cell_triples;
 } treecorr_triple_histogram;
+
+#include "treecorr_edge_correction.h"
+
+static void treecorr_initialize_triple_histogram(
+        treecorr_triple_histogram *hist, real *base, size_t stride,
+        int orders, int window_orders)
+{
+    hist->components = base;
+    hist->stride = stride;
+    hist->plane = stride * stride;
+    hist->order_plane = (size_t)orders * hist->plane;
+    hist->orders = orders;
+    hist->normalization = base + TREECORR_ZETA_COMPONENTS * hist->order_plane;
+    hist->window_orders = window_orders;
+    hist->window_re = window_orders ? hist->normalization + hist->plane : NULL;
+    hist->window_im = window_orders
+        ? hist->window_re + (size_t)window_orders * hist->plane : NULL;
+    hist->body_triples = 0;
+    hist->cell_triples = 0;
+}
 
 static const unsigned char treecorr_permutations[6][3] = {
     {0, 1, 2}, {0, 2, 1},
@@ -495,67 +526,8 @@ static bool treecorr_polar_coordinates_from_displacement(
 {
     (void)context;
     (void)neighbor;
-#if NDIM == 2
-    *cosphi = -dr[0] / distance;
-    *sinphi = -dr[1] / distance;
-#else
-#ifdef POLARAXIS
-    {
-        compute_vector q0 = {0.0, 0.0, 1.0};
-        compute_vector dr0;
-        compute_vector v21;
-        compute_vector v31;
-        compute_vector cross;
-        real chord2;
-        real chord;
-        real a;
-        real b;
-        real denominator;
-        real orientation;
-
-        DOTPSUBV(chord2, dr0, pivot, q0);
-        chord = chord2 > 0.0 ? rsqrt(chord2) : 0.0;
-        b = 2.0 * rasin(MIN(1.0, 0.5 * chord));
-#ifdef NOLIMBER
-        a = 2.0 * rasin(MIN(1.0, 0.5 * distance));
-#else
-        a = distance;
-#endif
-        denominator = a * rsin(b);
-        if (rabs(denominator) <= 16.0 * DBL_EPSILON) return FALSE;
-        *cosphi = ((real)neighbor[2]
-            - (1.0 - 0.5 * rsqr(a)) * rcos(b)) / denominator;
-        *cosphi = MAX(-1.0, MIN(1.0, *cosphi));
-        *sinphi = rsqrt(MAX(0.0, 1.0 - rsqr(*cosphi)));
-        SUBV(v21, q0, pivot);
-        SUBV(v31, neighbor, pivot);
-        CROSSVP(cross, v21, v31);
-        DOTVP(orientation, cross, pivot);
-        if (!(orientation < 0.0)) *sinphi = -*sinphi;
-    }
-#else
-    {
-        compute_vector q0;
-        compute_vector dr0;
-        compute_vector cross;
-        real reference2;
-        real projection;
-        real orientation;
-
-        dRotation3D(pivot, ROTANGLE, ROTANGLE, ROTANGLE, q0);
-        DOTPSUBV(reference2, dr0, pivot, q0);
-        if (!(reference2 > 0.0)) return FALSE;
-        DOTVP(projection, dr, dr0);
-        *cosphi = projection / (distance * rsqrt(reference2));
-        *cosphi = MAX(-1.0, MIN(1.0, *cosphi));
-        *sinphi = rsqrt(MAX(0.0, 1.0 - rsqr(*cosphi)));
-        CROSSVP(cross, dr0, pivot);
-        DOTVP(orientation, dr, cross);
-        if (orientation < 0.0) *sinphi = -*sinphi;
-    }
-#endif /* POLARAXIS */
-#endif /* NDIM */
-    return TRUE;
+    (void)distance;
+    return cballs_angular_phase(pivot, dr, cosphi, sinphi);
 }
 
 static bool treecorr_polar_coordinates(
@@ -575,7 +547,9 @@ static bool treecorr_polar_coordinates(
 static void treecorr_initialize_angular_tolerance(
         treecorr_search_context *context)
 {
-    const real max_order = (real)MAX(context->cmd->mChebyshev, 0);
+    const real max_order = cballs_opt_edge_corrections(context->cmd)
+        ? (real)(treecorr_window_orders(context->cmd) - 1)
+        : (real)MAX(context->cmd->mChebyshev, 0);
 
     /* TreeCorr's LogMultipole default is pi / (2 * max_n + 1). */
     context->angular_tolerance =
@@ -609,8 +583,13 @@ static int treecorr_node_orientation_status(
     *nr = treecorr_sloppy_bin(context, dr, sr);
     if (*nq < 0 || *nr < 0) return TREECORR_TRIPLE_SPLIT;
 
-    if (sq / dq > context->max_angular_ratio
-        || sr / dr > context->max_angular_ratio)
+    compute_vector legq, legr;
+    SUBV(legq, pivot->center, q->center);
+    SUBV(legr, pivot->center, r->center);
+    if (cballs_angular_extent(pivot->center, legq, pivot->radius, q->radius)
+            > context->max_angular_ratio
+        || cballs_angular_extent(pivot->center, legr, pivot->radius, r->radius)
+            > context->max_angular_ratio)
         return TREECORR_TRIPLE_SPLIT;
     if (!treecorr_polar_coordinates(context, pivot->center, q->center,
                                     &ignored, cosq, sinq)
@@ -633,15 +612,22 @@ static void treecorr_accumulate_modes(treecorr_triple_histogram *hist,
     real sinr = 0.0;
 
     hist->normalization[index] += denominator;
-    for (int order = 0; order < hist->orders; order++) {
-        treecorr_zeta_component(hist, TREECORR_ZETA_COS, order)[index]
-            += numerator * cosq * cosr;
-        treecorr_zeta_component(hist, TREECORR_ZETA_SIN, order)[index]
-            += numerator * sinq * sinr;
-        treecorr_zeta_component(hist, TREECORR_ZETA_SINCOS, order)[index]
-            += numerator * sinq * cosr;
-        treecorr_zeta_component(hist, TREECORR_ZETA_COSSIN, order)[index]
-            += numerator * cosq * sinr;
+    for (int order = 0; order < MAX(hist->orders, hist->window_orders); order++) {
+        if (order < hist->orders) {
+            treecorr_zeta_component(hist, TREECORR_ZETA_COS, order)[index]
+                += numerator * cosq * cosr;
+            treecorr_zeta_component(hist, TREECORR_ZETA_SIN, order)[index]
+                += numerator * sinq * sinr;
+            treecorr_zeta_component(hist, TREECORR_ZETA_SINCOS, order)[index]
+                += numerator * sinq * cosr;
+            treecorr_zeta_component(hist, TREECORR_ZETA_COSSIN, order)[index]
+                += numerator * cosq * sinr;
+        }
+        if (order < hist->window_orders) {
+            const size_t wi = (size_t)order * hist->plane + index;
+            hist->window_re[wi] += denominator * (cosq * cosr + sinq * sinr);
+            hist->window_im[wi] += denominator * (sinq * cosr - cosq * sinr);
+        }
         {
             const real next_cosq = cosq * cosq1 - sinq * sinq1;
             const real next_sinq = sinq * cosq1 + cosq * sinq1;
@@ -1055,26 +1041,17 @@ static int treecorr_allocate_triple_histograms(
         INTEGER **body_triples, INTEGER **cell_triples)
 {
     size_t tasks;
-    size_t plane;
-    size_t component_values;
     size_t values;
 
     *histograms = NULL;
     *values_per_task = 0;
     *body_triples = NULL;
     *cell_triples = NULL;
-    if (task_count <= 0 || orders <= 0
-        || stride > SIZE_MAX / stride)
+    if (task_count <= 0
+        || !treecorr_triple_values(stride, orders, treecorr_window_orders(cmd),
+                                   values_per_task))
         goto invalid_size;
     tasks = (size_t)task_count;
-    plane = stride * stride;
-    if ((size_t)orders > SIZE_MAX / TREECORR_ZETA_COMPONENTS
-        || (size_t)orders * TREECORR_ZETA_COMPONENTS > SIZE_MAX / plane)
-        goto invalid_size;
-    component_values = (size_t)orders * TREECORR_ZETA_COMPONENTS * plane;
-    if (component_values > SIZE_MAX - plane)
-        goto invalid_size;
-    *values_per_task = component_values + plane;
     if (tasks > SIZE_MAX / *values_per_task
         || (values = tasks * *values_per_task) > SIZE_MAX / sizeof(**histograms))
         goto invalid_size;
@@ -1306,21 +1283,16 @@ static int treecorr_split_task(const treecorr_triple_task *task,
     }
 }
 
-static INTEGER treecorr_task_target(size_t stride, int orders)
+static INTEGER treecorr_task_target(struct cmdline_data *cmd,
+                                    size_t stride, int orders)
 {
-    const size_t plane = stride <= SIZE_MAX / stride
-        ? stride * stride : SIZE_MAX;
     size_t values;
     size_t bytes;
     INTEGER target = TREECORR_TRIPLE_TASK_TARGET;
 
-    if (orders <= 0 || plane == SIZE_MAX
-        || (size_t)orders > SIZE_MAX / TREECORR_ZETA_COMPONENTS
-        || (size_t)orders * TREECORR_ZETA_COMPONENTS > SIZE_MAX / plane)
+    if (!treecorr_triple_values(stride, orders, treecorr_window_orders(cmd),
+                                &values))
         return 1;
-    values = (size_t)orders * TREECORR_ZETA_COMPONENTS * plane;
-    if (values > SIZE_MAX - plane) return 1;
-    values += plane;
     if (values > SIZE_MAX / sizeof(real)) return 1;
     bytes = values * sizeof(real);
     if (bytes > 0 && (size_t)target > TREECORR_TRIPLE_TASK_MEMORY / bytes)
@@ -1434,9 +1406,13 @@ typedef struct {
     real *self_sincos;
     real *normalization;
     real *normalization_sq;
+    real *neighbor_count; /* Exact 0, 1, or 2-or-more; shared scratch layout. */
+    real *window_cos;
+    real *window_sin;
     size_t stride;
     size_t values;
     int orders;
+    int window_orders;
     INTEGER body_visits;
     INTEGER accepted_nodes;
     INTEGER pair_tests;
@@ -1455,7 +1431,7 @@ typedef struct {
 } treecorr_multipole_pivot;
 
 static void treecorr_initialize_multipole_scratch(
-        treecorr_multipole_scratch *, real *, size_t, int, size_t);
+        treecorr_multipole_scratch *, real *, size_t, int, int, size_t);
 
 static inline real treecorr_node_field_sq_sum(
         const treecorr_search_context *context,
@@ -1496,7 +1472,7 @@ static void treecorr_multipole_add(
         treecorr_multipole_scratch *scratch, int radial_bin,
         real field_sum, real field_sq_sum,
         real normalization_sum, real normalization_sq_sum,
-        real cosphi1, real sinphi1)
+        INTEGER neighbors, real cosphi1, real sinphi1)
 {
     real cosphi = cosphi1;
     real sinphi = sinphi1;
@@ -1504,18 +1480,29 @@ static void treecorr_multipole_add(
 
     scratch->normalization[radial_bin] += normalization_sum;
     scratch->normalization_sq[radial_bin] += normalization_sq_sum;
+    scratch->neighbor_count[radial_bin] = MIN(2.0,
+        scratch->neighbor_count[radial_bin] + (real)MIN(neighbors, 2));
     scratch->field_cos[index] += field_sum;
     scratch->self_coscos[index] += field_sq_sum;
-    for (int order = 1; order < scratch->orders; order++) {
-        const real field_cos = field_sum * cosphi;
-        const real field_sin = field_sum * sinphi;
-
+    if (scratch->window_orders)
+        scratch->window_cos[index] += normalization_sum;
+    for (int order = 1;
+         order < MAX(scratch->orders, scratch->window_orders); order++) {
         index += scratch->stride;
-        scratch->field_cos[index] += field_cos;
-        scratch->field_sin[index] += field_sin;
-        scratch->self_coscos[index] += field_sq_sum * cosphi * cosphi;
-        scratch->self_sinsin[index] += field_sq_sum * sinphi * sinphi;
-        scratch->self_sincos[index] += field_sq_sum * sinphi * cosphi;
+        if (order < scratch->orders) {
+            const real field_cos = field_sum * cosphi;
+            const real field_sin = field_sum * sinphi;
+
+            scratch->field_cos[index] += field_cos;
+            scratch->field_sin[index] += field_sin;
+            scratch->self_coscos[index] += field_sq_sum * cosphi * cosphi;
+            scratch->self_sinsin[index] += field_sq_sum * sinphi * sinphi;
+            scratch->self_sincos[index] += field_sq_sum * sinphi * cosphi;
+        }
+        if (order < scratch->window_orders) {
+            scratch->window_cos[index] += normalization_sum * cosphi;
+            scratch->window_sin[index] += normalization_sum * sinphi;
+        }
         {
             const real next_cos = cosphi * cosphi1 - sinphi * sinphi1;
             const real next_sin = sinphi * cosphi1 + cosphi * sinphi1;
@@ -1547,7 +1534,8 @@ static int treecorr_multipole_pair_status_limited(
         return TREECORR_TRIPLE_OUTSIDE;
     if (!context->use_two_balls || !(distance > size)
         || size > treecorr_bin_slop_width(context, distance)
-        || size / distance > context->max_angular_ratio)
+        || cballs_angular_extent(pivot->position, dr, pivot->radius, neighbor_radius)
+            > context->max_angular_ratio)
         return TREECORR_TRIPLE_SPLIT;
     *radial_bin = treecorr_bin_index(context, distance);
     if (*radial_bin < 0 || !(distance < upper_limit))
@@ -1605,7 +1593,7 @@ static int treecorr_multipole_add_body(
         treecorr_multipole_add(
             scratch, radial_bin, field, field * field,
             normalization, normalization * normalization,
-            cosphi, sinphi);
+            1, cosphi, sinphi);
     }
     scratch->body_visits++;
     return SUCCESS;
@@ -1670,7 +1658,7 @@ static int treecorr_multipole_scan_neighbors(
             treecorr_node_field_sq_sum(context, neighbor),
             treecorr_node_normalization_sum(context, neighbor),
             treecorr_node_normalization_sq_sum(context, neighbor),
-            cosphi, sinphi);
+            treecorr_node_count(neighbor), cosphi, sinphi);
         scratch->accepted_nodes++;
         return SUCCESS;
     }
@@ -1705,6 +1693,11 @@ static void treecorr_multipole_finish_pivot_range(
 {
     for (int n1 = first_radial_bin; n1 < radial_bin_limit; n1++) {
         for (int n2 = n1; n2 <= radial_bins; n2++) {
+            /* A rounded (sum w)^2 - sum(w^2) is not a cardinality test. */
+            if (scratch->neighbor_count[n1] == 0.0
+                || scratch->neighbor_count[n2] == 0.0
+                || (n1 == n2 && scratch->neighbor_count[n1] < 2.0))
+                continue;
             const size_t hist_index = (size_t)n1 * hist->stride
                                     + (size_t)n2;
             const size_t transpose_index = (size_t)n2 * hist->stride
@@ -1718,6 +1711,25 @@ static void treecorr_multipole_finish_pivot_range(
             if (n1 != n2)
                 hist->normalization[transpose_index] +=
                     pivot->normalization_sum * denominator;
+            for (int order = 0; order < scratch->window_orders; order++) {
+                const size_t i = (size_t)order * scratch->stride + (size_t)n1;
+                const size_t j = (size_t)order * scratch->stride + (size_t)n2;
+                const size_t h = (size_t)order * hist->plane;
+                real re = scratch->window_cos[i] * scratch->window_cos[j]
+                        + scratch->window_sin[i] * scratch->window_sin[j];
+                const real im = scratch->window_sin[i] * scratch->window_cos[j]
+                              - scratch->window_cos[i] * scratch->window_sin[j];
+                /* The q==r contribution is w_q^2 at every complex order. */
+                if (n1 == n2) re -= scratch->normalization_sq[n1];
+                hist->window_re[h + hist_index] += pivot->normalization_sum * re;
+                hist->window_im[h + hist_index] += pivot->normalization_sum * im;
+                if (n1 != n2) {
+                    hist->window_re[h + transpose_index] +=
+                        pivot->normalization_sum * re;
+                    hist->window_im[h + transpose_index] -=
+                        pivot->normalization_sum * im;
+                }
+            }
             {
                 real coscos = scratch->field_cos[n1]
                             * scratch->field_cos[n2];
@@ -1967,6 +1979,13 @@ static void treecorr_multipole_clear_radial_through(
                    0, count * sizeof(real));
     memset(scratch->normalization, 0, count * sizeof(real));
     memset(scratch->normalization_sq, 0, count * sizeof(real));
+    memset(scratch->neighbor_count, 0, count * sizeof(real));
+    for (int order = 0; order < scratch->window_orders; order++) {
+        memset(scratch->window_cos + (size_t)order * scratch->stride,
+               0, count * sizeof(real));
+        memset(scratch->window_sin + (size_t)order * scratch->stride,
+               0, count * sizeof(real));
+    }
 }
 
 static void treecorr_multipole_copy_values(
@@ -2020,7 +2039,7 @@ static void treecorr_multipole_scan_body_partial(
         treecorr_multipole_add(
             scratch, radial_bin, field, field * field,
             normalization, normalization * normalization,
-            cosphi, sinphi);
+            1, cosphi, sinphi);
     }
     statistics->body_visits++;
 }
@@ -2082,7 +2101,7 @@ static void treecorr_multipole_scan_neighbors_partial(
             treecorr_node_field_sq_sum(context, neighbor),
             treecorr_node_normalization_sum(context, neighbor),
             treecorr_node_normalization_sq_sum(context, neighbor),
-            cosphi, sinphi);
+            treecorr_node_count(neighbor), cosphi, sinphi);
         statistics->accepted_nodes++;
         return;
     }
@@ -2113,6 +2132,54 @@ static void treecorr_multipole_scan_neighbors_partial(
             neighbor_tree->bptr[i], active_upper,
             max_unresolved_extent);
     }
+}
+
+/* Completed bins are expressed in their parent's tangent basis. Transport
+ * them before mixing them with moments evaluated at a descendant pivot. */
+static void treecorr_transport_moments(treecorr_multipole_scratch *scratch,
+        const cballs_storage_real *from, const cballs_storage_real *to)
+{
+#if NDIM == 3
+    real n0[3], a0[3], b0[3], n1[3], a1[3], b1[3], transported[3];
+    if (!cballs_angular_basis(from, n0, a0, b0)
+        || !cballs_angular_basis(to, n1, a1, b1)) return;
+    real dot, along, c, s;
+    DOTVP(dot, n0, n1);
+    if (!(1.0 + dot > 32.0*DBL_EPSILON)) return;
+    DOTVP(along, a0, n1);
+    for (int k = 0; k < 3; k++)
+        transported[k] = a0[k] - along*(n0[k]+n1[k])/(1.0+dot);
+    DOTVP(c, transported, a1);
+    DOTVP(s, transported, b1);
+    const real norm = hypot(c, s);
+    if (!(norm > 0.0)) return;
+    c /= norm; s /= norm;
+    real cm = 1.0, sm = 0.0;
+    for (int m = 0; m < MAX(scratch->orders, scratch->window_orders); m++) {
+        for (size_t b = 1; b < scratch->stride; b++) {
+            const size_t k = (size_t)m*scratch->stride+b;
+            if (m < scratch->orders) {
+                const real x = scratch->field_cos[k], y = scratch->field_sin[k];
+                const real cc = scratch->self_coscos[k], ss = scratch->self_sinsin[k];
+                const real cs = scratch->self_sincos[k];
+                scratch->field_cos[k] = cm*x-sm*y;
+                scratch->field_sin[k] = sm*x+cm*y;
+                scratch->self_coscos[k] = cm*cm*cc+sm*sm*ss-2*cm*sm*cs;
+                scratch->self_sinsin[k] = sm*sm*cc+cm*cm*ss+2*cm*sm*cs;
+                scratch->self_sincos[k] = cm*sm*(cc-ss)+(cm*cm-sm*sm)*cs;
+            }
+            if (m < scratch->window_orders) {
+                const real x = scratch->window_cos[k], y = scratch->window_sin[k];
+                scratch->window_cos[k] = cm*x-sm*y;
+                scratch->window_sin[k] = sm*x+cm*y;
+            }
+        }
+        const real next = cm*c-sm*s;
+        sm = sm*c+cm*s; cm = next;
+    }
+#else
+    (void)scratch; (void)from; (void)to;
+#endif
 }
 
 static int treecorr_balltree_depth(
@@ -2185,8 +2252,10 @@ static void treecorr_multipole_process_pivots_partial(
 
             treecorr_initialize_multipole_scratch(
                 &child_scratch, child_base, scratch->stride,
-                scratch->orders, scratch_values_per_level);
+                scratch->orders, scratch->window_orders, scratch_values_per_level);
             treecorr_multipole_copy_values(&child_scratch, scratch);
+            treecorr_transport_moments(&child_scratch, pivot.position,
+                pivot_tree->nodes[children[child_index]].center);
             treecorr_multipole_process_pivots_partial(
                 context, pivot_tree, children[child_index],
                 neighbor_tree, same_tree, &child_scratch, statistics,
@@ -2205,8 +2274,9 @@ static void treecorr_multipole_process_pivots_partial(
 
             treecorr_initialize_multipole_scratch(
                 &body_scratch, body_base, scratch->stride,
-                scratch->orders, scratch_values_per_level);
+                scratch->orders, scratch->window_orders, scratch_values_per_level);
             treecorr_multipole_copy_values(&body_scratch, scratch);
+            treecorr_transport_moments(&body_scratch, pivot.position, Pos(pivot_body));
             body_pivot.position = Pos(pivot_body);
             body_pivot.radius = 0.0;
             body_pivot.field_sum =
@@ -2237,17 +2307,21 @@ static int treecorr_allocate_multipole_scratch(
     size_t order_values;
     size_t values;
     size_t tasks;
+    const int window_orders = treecorr_window_orders(cmd);
 
     *storage = NULL;
     *values_per_level = 0;
     *values_per_task = 0;
-    if (task_count <= 0 || orders <= 0 || levels <= 0
+    if (task_count <= 0 || orders <= 0 || levels <= 0 || window_orders < 0
         || (size_t)orders > SIZE_MAX / order_arrays
         || (size_t)orders * order_arrays > SIZE_MAX / stride)
         goto invalid_size;
     order_values = order_arrays * (size_t)orders * stride;
-    if (stride > (SIZE_MAX - order_values) / 2) goto invalid_size;
-    *values_per_level = order_values + 2 * stride;
+    if (stride > (SIZE_MAX - order_values) / 3) goto invalid_size;
+    *values_per_level = order_values + 3 * stride;
+    if ((size_t)window_orders > (SIZE_MAX - *values_per_level) / 2 / stride)
+        goto invalid_size;
+    *values_per_level += 2 * (size_t)window_orders * stride;
     if ((size_t)levels > SIZE_MAX / *values_per_level)
         goto invalid_size;
     *values_per_task = (size_t)levels * *values_per_level;
@@ -2271,7 +2345,7 @@ invalid_size:
 
 static void treecorr_initialize_multipole_scratch(
         treecorr_multipole_scratch *scratch, real *base,
-        size_t stride, int orders, size_t values)
+        size_t stride, int orders, int window_orders, size_t values)
 {
     const size_t order_values = (size_t)orders * stride;
 
@@ -2282,9 +2356,14 @@ static void treecorr_initialize_multipole_scratch(
     scratch->self_sincos = scratch->self_sinsin + order_values;
     scratch->normalization = scratch->self_sincos + order_values;
     scratch->normalization_sq = scratch->normalization + stride;
+    scratch->neighbor_count = scratch->normalization_sq + stride;
+    scratch->window_cos = window_orders ? scratch->neighbor_count + stride : NULL;
+    scratch->window_sin = window_orders
+        ? scratch->window_cos + (size_t)window_orders * stride : NULL;
     scratch->stride = stride;
     scratch->values = values;
     scratch->orders = orders;
+    scratch->window_orders = window_orders;
     scratch->body_visits = 0;
     scratch->accepted_nodes = 0;
     scratch->pair_tests = 0;
@@ -2309,7 +2388,7 @@ static int treecorr_search_log_multipole(
     const size_t stride = (size_t)cmd->sizeHistN + 1;
     const int orders = cmd->mChebyshev + 1;
     const INTEGER target_tasks = run_3pcf
-        ? treecorr_task_target(stride, orders)
+        ? treecorr_task_target(cmd, stride, orders)
         : TREECORR_PAIR_FRONTIER_TARGET;
     const int leaf_capacity = scanopt(cmd->options, "treecorr-singleton-leaves")
         ? 1 : cmd->nsmooth;
@@ -2497,18 +2576,11 @@ static int treecorr_search_log_multipole(
 
         if (!treecorr_distributed_task_owned(itask)) continue;
 
-        hist.components = hist_base;
-        hist.stride = stride;
-        hist.plane = stride * stride;
-        hist.order_plane = (size_t)orders * hist.plane;
-        hist.orders = orders;
-        hist.normalization = hist_base
-            + TREECORR_ZETA_COMPONENTS * hist.order_plane;
-        hist.body_triples = 0;
-        hist.cell_triples = 0;
+        treecorr_initialize_triple_histogram(
+            &hist, hist_base, stride, orders, treecorr_window_orders(cmd));
         treecorr_initialize_multipole_scratch(
             &scratch, scratch_base, stride, orders,
-            scratch_values_per_level);
+            treecorr_window_orders(cmd), scratch_values_per_level);
 #ifdef TREECORR_BODY_PIVOT_LOG_MULTIPOLE
         treecorr_multipole_process_body_pivots(
             &context, tree1, frontier[itask], tree2,
@@ -2592,6 +2664,15 @@ static int treecorr_search_log_multipole(
         cell_total += task_cell_counts[itask];
     }
 
+    }
+    operation_status = treecorr_distributed_publish()
+        ? treecorr_publish_edge(cmd, gd, task_histograms, task_count,
+                                hist_values_per_task, stride, orders)
+        : SUCCESS;
+    if (treecorr_distributed_consensus(
+            cmd, operation_status, "two-ball edge correction") == FAILURE)
+        goto cleanup;
+    if (treecorr_distributed_publish()) {
     if (treecorr_normalize_3pcf(cmd)) {
         for (int n1 = 1; n1 <= cmd->sizeHistN; n1++)
             for (int n2 = 1; n2 <= cmd->sizeHistN; n2++) {
@@ -3048,15 +3129,8 @@ global int searchcalc_balltree_2balls_omp(
                    + (size_t)itask * triple_values_per_task;
         treecorr_triple_histogram hist;
 
-        hist.components = base;
-        hist.stride = stride;
-        hist.plane = stride * stride;
-        hist.order_plane = (size_t)triple_orders * hist.plane;
-        hist.orders = triple_orders;
-        hist.normalization = base
-            + TREECORR_ZETA_COMPONENTS * hist.order_plane;
-        hist.body_triples = 0;
-        hist.cell_triples = 0;
+        treecorr_initialize_triple_histogram(
+            &hist, base, stride, triple_orders, treecorr_window_orders(cmd));
 
         if (!treecorr_distributed_task_owned(itask)) continue;
 
@@ -3153,6 +3227,15 @@ global int searchcalc_balltree_2balls_omp(
         triple_cell_total += triple_task_cell_counts[itask];
     }
 
+    }
+    operation_status = treecorr_distributed_publish()
+        ? treecorr_publish_edge(cmd, gd, triple_task_histograms, frontier_count1,
+                                triple_values_per_task, stride, triple_orders)
+        : SUCCESS;
+    if (treecorr_distributed_consensus(
+            cmd, operation_status, "two-ball edge correction") == FAILURE)
+        goto cleanup;
+    if (treecorr_distributed_publish()) {
     if (treecorr_normalize_3pcf(cmd)) {
         for (int n1 = 1; n1 <= cmd->sizeHistN; n1++)
             for (int n2 = 1; n2 <= cmd->sizeHistN; n2++) {
@@ -3236,7 +3319,7 @@ global int searchcalc_balltree_2balls_omp(
     const bool run_3pcf = !only_2pcf;
     const size_t stride = (size_t)cmd->sizeHistN + 1;
     const int triple_orders = cmd->mChebyshev + 1;
-    const INTEGER target_tasks = treecorr_task_target(stride, triple_orders);
+    const INTEGER target_tasks = treecorr_task_target(cmd, stride, triple_orders);
     const int leaf_capacity = scanopt(cmd->options, "treecorr-bucket-leaves")
         ? cmd->nsmooth : 1;
     treecorr_search_context context;
@@ -3373,15 +3456,8 @@ global int searchcalc_balltree_2balls_omp(
                    + (size_t)itask * values_per_task;
         treecorr_triple_histogram hist;
 
-        hist.components = base;
-        hist.stride = stride;
-        hist.plane = stride * stride;
-        hist.order_plane = (size_t)triple_orders * hist.plane;
-        hist.orders = triple_orders;
-        hist.normalization = base
-            + TREECORR_ZETA_COMPONENTS * hist.order_plane;
-        hist.body_triples = 0;
-        hist.cell_triples = 0;
+        treecorr_initialize_triple_histogram(
+            &hist, base, stride, triple_orders, treecorr_window_orders(cmd));
         treecorr_run_task(&context, &tasks[itask], &hist);
         task_body_counts[itask] = hist.body_triples;
         task_cell_counts[itask] = hist.cell_triples;
@@ -3423,6 +3499,9 @@ global int searchcalc_balltree_2balls_omp(
         cell_total += task_cell_counts[itask];
     }
 
+    if (treecorr_publish_edge(cmd, gd, task_histograms, task_count,
+                              values_per_task, stride, triple_orders) == FAILURE)
+        goto cleanup;
     if (treecorr_normalize_3pcf(cmd)) {
         for (int n1 = 1; n1 <= cmd->sizeHistN; n1++)
             for (int n2 = 1; n2 <= cmd->sizeHistN; n2++) {

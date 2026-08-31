@@ -1,84 +1,51 @@
 Python Interface Reference
 ==========================
 
-The current extension module is ``cyballs`` and the wrapped class is
-``cballs``.  It calls the same C lifecycle as the command-line executable.
+The module is ``cyballs`` and the class is ``cballs``. The complete callable
+reference is :doc:`api`; :doc:`user/python` provides an in-memory workflow.
 
-Basic Lifecycle
----------------
+Lifecycle
+---------
 
-.. code-block:: python
+``set_default(**overrides)`` restores compiled C defaults and stages overrides.
+``set`` accepts one mapping or keyword arguments. Unknown names are rejected
+when ``Run`` passes them through the compiled parser.
 
-   from cyballs import cballs
+``Run(level=["MainLoop"])`` executes initialization and computation while
+keeping results alive. Read getters before requesting ``EndRun`` or cleanup.
+Arrays returned by histogram getters are NumPy copies.
 
-   model = cballs()
-   model.set(
-       nbody=4096,
-       sizeHistN=12,
-       mChebyshev=3,
-       rootDir="Output_python",
-       numberThreads=1,
-       verbose=0,
-       verbose_log=0,
-   )
-   cpu_time = model.Run()
-   radius = model.getrBins()
-   xi = model.getHistXi2pcf()
-   model.clean_all()
+Use ``struct_cleanup`` to release C state while retaining registered catalogs
+for another engine. Use ``clean_all`` when finished; it also clears parameters
+and catalog references. Cleanup belongs in a ``finally`` block.
 
-``set`` accepts either one mapping or keyword arguments.  ``Run`` expands the
-requested stage dependencies, converts the Python parameters into the C parser
-representation, initializes the search, and leaves result arrays available to
-the getters.  ``clean_all`` releases C allocations and clears the parameter
-dictionary.
+Catalog and Result APIs
+-----------------------
 
-Run Levels
-----------
+* ``set_catalog`` registers scalar, weighted, masked, or shear catalogs.
+* ``set_forest_catalog`` registers forest pixels with integer quasar IDs.
+* ``clear_catalogs`` drops registrations.
+* ``getrBins``, ``getHistNN`` and ``getHistXi2pcf`` expose supported pair products.
+* ``getHistZetaMsincos(m, type)`` exposes scalar angular components.
+* ``getHistZetaM_EE_complex(m)`` returns both parts of complex corrected modes.
 
-``Run(level=[...])`` accepts the last C stage required by the caller.  Its
-default, ``["MainLoop"]``, executes the full calculation while keeping arrays
-available to Python.  The common order is:
+Scalar multipole arguments are one-based: ``m=1`` means order zero.
+The raw reconstruction is ``coscos+sinsin + 1j*(sincos-cossin)``.
+Individual components depend on the tangent basis; use the complex combination
+for rotation and reference comparisons. See :doc:`3pcf`.
 
-1. ``input`` parses the staged Python parameters.
-2. ``StartRun_Common`` validates settings and allocates run state.
-3. ``PrintParameterFile`` records the used values.
-4. ``SetNumberThreads`` applies OpenMP thread control.
-5. ``MainLoop`` builds trees, performs searches, and evaluates histograms.
+Registration prepares/retains NumPy arrays and each run copies them to C-owned
+body storage. It avoids repeated I/O, not all allocation or copying.
+``getNBody`` preserves the compiled INTEGER width as a Python integer.
 
-Available Getters
------------------
+Build Coupling
+--------------
 
-``getrBins``
-    Radial-bin values.
+Only the root ``setup.py`` builds the extension. It generates
+``python/ccyballs.pxd`` from the template and selected feature flags.
+Do not manually set NDIM or add profile-specific fields to the generated file.
+After changes, rebuild C and Cython together and restart Python.
+See :doc:`build_profiles`.
 
-``getHistNN`` and ``getHistCF``
-    Neighbor-count and count-derived correlation histograms.
-
-``getHistXi2pcf``
-    Two-point correlation function.
-
-``getHistZetaMsincos(m, type)``
-    3PCF multipole matrix.  ``type`` selects cosine, sine, sine-cosine, or
-    cosine-sine components.
-
-``getHistZetaM_EE(m)``
-    Edge-corrected 3PCF multipole matrix when that build path is enabled.
-
-``getNThreads``, ``getnMultipoles``, ``getTheta``, ``getrsmooth``,
-``getCPUTime``, ``getVersion``, ``getRootDir``, and ``getNBody`` expose
-selected scalar state.
-
-Memory Ownership
-----------------
-
-The C core owns catalogs, trees, and histogram buffers after initialization.
-Call ``clean_all`` after copying required NumPy results.  For repeated runs in a
-long-lived process, do not retain references to arrays that depend on C memory
-after cleanup.
-
-See Also
---------
-
-See :doc:`user/python` for a task-oriented workflow and
-:doc:`code_structure` for Cython implementation details.
-
+For MPI, use matching mpi4py/native MPI libraries, identical rank lifecycle
+calls, and rank-0 result access. See :doc:`search_methods`.

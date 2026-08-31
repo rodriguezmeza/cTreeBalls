@@ -16,130 +16,170 @@ Major contributors:
 - Sofia Samario
 
 
-## Table of Contents
-
--   [Introduction](#introduction)
--   [Compiling and getting started](#compiling-and-getting-started)
--   [Configuration](#configuration)
--   [Parameters](#parameters)
--   [Python](#python)
--   [License](#license)
--   [Acknowledgements](#acknowledgements)
-
 ## Introduction
 
-**TreeBalls** (short-name **cBalls**) is a C code for computing correlation functions using tree and balls methods. So far can compute 2-point correlation function (2pcf) and 3-point correlation function (3pcf) for counts and scalar fields like convergence, the relevant scalar field in weak lensing.
+**cTreeBalls 1.1.0** provides the C executable `cballs`, the static library
+`libcballs.a`, and the Python extension `cyballs`. Optional addons measure:
 
-Complete documentation will be found here: [documentation](https://ctreeballs.readthedocs.io/en/latest/).
+- Counts and convergence: scalar angular 2PCF/3PCF on flat or spherical catalogs.
+- Shear: flat-sky spin-2 correlations and angular window correction.
+- Lyman-alpha forests: anisotropic 3D and radial-only 2PCF/3PCF with forest-ID exclusions.
+- Physical 3D scalar fields and ENCORE-style data/random survey estimators.
 
-## Compiling and getting started
+OpenMP and MPI availability depends on the selected build. Not every engine
+accepts every geometry, field, mask, or normalization.
 
-Download the code by cloning it from https://github.com/rodriguezmeza/cTreeBalls.
+## Documentation
 
-Dependencies: cBalls optionally needs gsl version 2.7.1 and cfitsio version 4.4.1 installed in your system. Sources are included. Therefore no need to make any changes. In case of problems go to web page https://www.gnu.org/software/gsl/ for details or ask to your system administrator. Make necessary changes in `Makefile_machine` file and look up for `GSL`. But in case you have problems installing GSL just set it off (switched off: USEGSL = 0) in `Makefile_settings`, the basic distribution will run okey. I/O cfitsio library is set it ON. Can be set it OFF in `addons/Makefile_settings`.
+- [Sphinx guide](https://ctreeballs.readthedocs.io/en/latest/)
+- [Installation](docs/installation.rst) and [build profiles](docs/build_profiles.rst)
+- [Search-method guide](docs/search_methods.rst)
+- [Scalar numerical contract](docs/3pcf.rst)
+- [Python API](docs/api.rst) and [in-memory catalogs](docs/user/python.rst)
+- [Benchmarking](docs/benchmarks.rst) and [regressions](tests/make_tests/README.md)
 
-Go to the cTreeBalls directory (`cd cTreeBalls/`) and compile (`make clean; make all`). If compilation attempt fails, you may need to open the Makefile_machine file and adapt the name of the compiler (default: gcc), of the optimization flag (default: `-O4 -ffast-math`) and of the OpenMP flag (default: `-fopenmp`; this flag is facultative, you are free to compile without OpenMP if you don't want parallel execution; note that you need the version 4.2 or higher of gcc to be able to compile with `-fopenmp`). The code has been tested with gcc version 10 and 12 and would be working with version 11, and 13. (In particular, for compiling on Mac >= 10.9 despite of the clang incompatibility with OpenMP).
+These source docs describe this checkout. Published packages and hosted docs
+may lag behind local changes; uploading source does not publish a PyPI release.
 
-To check that the code runs, if you are in `cTreeBalls` directory, type:
+## Build and Install
 
-    $ make clean; make all
-    $ cd tests
-    $ ../cballs
+Work inside a Python virtual or Conda environment. Native builds need a C
+compiler, OpenMP support for the OpenMP engines, make, ar, Python development
+headers, and zlib. Enabled MPI addons additionally require an MPI C compiler
+and runtime, normally `mpicc` and `mpiexec`.
 
-It will run using all default values and a directory named `Output` will be created under `tests`. **cBalls** will save all histograms files and a log file in `Output/tmp`. A file with the parameter values use in the run named `parameters_null-usedvalues` will also be saved. You may use it as a template to create your own parameter files.
+```sh
+git clone https://github.com/rodriguezmeza/cTreeBalls.git
+cd cTreeBalls
+python3 -m pip install numpy Cython setuptools wheel
+make -j4 cballs cyballs-static-lib
+CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
+```
 
-If you execute:
+The last command is a checkout build, not a package installation. Use
+`CBALLS_STATIC_LIBRARY_READY=1` only immediately after building the static
+library with the same profile. To install this checkout in the active environment:
 
-    $ ../cballs options=post-processing posScript="python scripts/plot2pcf.py"
+```sh
+python3 -m pip install .
+```
 
-will do the same but now will plot the 2pcf and save it as a pdf file. Now, let us use a parameter file, execute:
+To install a published PyPI release, use `python3 -m pip install cTreeBalls`.
+The import name is always `cyballs`. A pip installation does not install the
+checkout's `cballs` command, examples, or benchmark source trees.
 
-    $ ../cballs ./In/parameters_explained
+Configure `Makefile_settings`, `Makefile_machine`, and
+`addons/Makefile_addons_settings` before building. Bundled GSL and CFITSIO
+are selected with `GSLINTERNAL=1` and `CFITSIOLIBON=1`; system-library
+discovery uses `gsl-config` and `pkg-config cfitsio`. Keep C and Cython
+flags identical and rebuild both after changing a profile. Do not hand-edit
+the generated `python/ccyballs.pxd`.
 
-Directory `Output` is already created then **cBalls** will overwritte all histograms files, parameter file as was run, and the log file. The parameters_explained file is a reference input file, containing (and explaining) the use of all possible input parameters. In this case as can be seen in `parameters_explained` file a catalog of points is read from the file `kappa_nres12_zs9NS256r000.bin`.
+## Discover and Run
 
-To see a plot of the 2pcf, edit parameters_explained and set option to "post-processing" and execute again:
- 
-    $ ../cballs parameters_explained
+From the checkout root:
 
-At the end of the run you will, as before, have a pdf file of the plot.
+```sh
+./cballs --help
+./cballs options=make-info
+./cballs options=print-options
+./cballs options=print-search-methods
+./cballs search=octree-ggg-omp nbody=512 sizeHistN=6 mChebyshev=3 \
+    numberThreads=2 rootDir=Output_quick verbose=0 verbose_log=0
+```
 
-By default **cBalls** reads/writes catalog of points to analyzed files in 4-column format with x, y, z columns first and then value of the convergence field. It has a two line header:
+`make-info` reports the settings embedded in the executable, not merely the
+current Makefiles. `print-search-methods` lists registered methods and their
+requirements. Save the used-values file and build information with each run.
 
-    # nbody NDIM Lx Ly Lz
-    # nbody-value NDIM-value Lx Ly Lz - values
+For scalar angular 3PCF in 3D, use observer-centered positions and Euclidean
+chord bins. On a unit sphere, a separation angle `alpha` has chord length
+`2*sin(alpha/2)`. **Do not recenter a sky catalog.**
 
-Try running:
+The shared raw benchmark contract uses
+`options=no-normalize-HistZeta,weights-norm` and ordered distinct triplets.
+Repeated neighbors are removed inside the search. See the
+[3PCF contract](docs/3pcf.rst) for complex-mode conventions and normalization.
+Older affected multipoles must be recomputed.
 
-    $ ../cballs nbody=6480 o=points_on_sphere testmodel=unit-sphere-random options=stop
+`SMOOTHPIVOTON=1` only compiles support: `options=smooth-pivot` is required
+to activate it on supported methods. Setting `rsmooth` alone does not.
+Raw KD-tree/legacy balltree multipoles reject smoothing; BALLS4 has no
+smooth-pivot support. Validate approximate tree acceptance against exact
+small-catalog runs before interpreting speedups.
 
-In the `Output` directory you will have a file: `points_on_sphere.txt`. View its contents to see the two lines header and the 4 columns structure of data. You can plot this file:
+## Python and Notebooks
 
-    $ python scripts/plot3D_points-on-sphere.py
+Register a catalog already in memory:
 
-Note: in the above example `points_on_sphere` was not given an extension. By default **cBalls** gives to the output files the extension `.txt`.
+```python
+import numpy as np
+from cyballs import cballs
 
-You may also consult the code´s man page for more detailed information on how to run **cBalls**:
+rng = np.random.default_rng(123)
+xyz = rng.normal(size=(128, 3))
+xyz /= np.linalg.norm(xyz, axis=1)[:, None]
+model = cballs()
+try:
+    model.set(searchMethod="octree-ggg-omp", rootDir="Output_memory",
+              rangeN=1.0, rminHist=0.05, sizeHistN=6, mChebyshev=3,
+              numberThreads=2, useLogHist=True,
+              options="no-normalize-HistZeta,weights-norm,no-one-ball")
+    model.set_catalog(xyz, kappa=rng.normal(size=len(xyz)))
+    model.Run()
+    xi = model.getHistXi2pcf()
+    cc, ss, sc, cs = [model.getHistZetaMsincos(2, t) for t in range(1, 5)]
+    zeta_m1 = cc + ss + 1j*(sc-cs)
+finally:
+    model.clean_all()
+```
 
-    $ man ../docs/man/cballs.m
+Getters return NumPy copies. Registration retains prepared NumPy arrays;
+each run copies them into C-owned storage. This avoids repeated file reads,
+not all memory copies. Use `struct_cleanup()` between engines to retain
+registered catalogs, and `clean_all()` when finished.
 
-There is a html version of this manual version. Look for it (`docs/man/cballs.html`) an open it with a web explorer.
+Ready-to-use examples:
 
-## Configuration
+- [In-memory Python example](examples/cyballs_in_memory_catalog.py) and
+  [notebook](examples/cyballs_in_memory_catalog.ipynb)
+- [Kappa all-engines driver](python/README_kappa_corr_all_engines.md):
+  FITS/NPZ input, masks, complex edge corrections, OpenMP/MPI
+- [Forest all-engines driver](python/README_lya_corr_all_engines.md) and
+  [notebook](examples/lya_corr_all_engines.ipynb)
+- [Physical 3D/ENCORE comparison](examples/compare_octree_3pcf_3d_encore.py)
+  and [notebook](examples/compare_octree_3pcf_3d_encore.ipynb)
 
-cBalls can be configured by switching on/off several options. Configuration file is `Makefile_setting`.
+MPI Python runs require `mpi4py` linked to the same MPI implementation.
+Every rank must enter the same run and cleanup sequence; read published
+histograms on rank 0. The all-engines drivers manage catalog broadcasting.
 
-| Option         | Description                                                                                                                                                   |
-|:--------------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `DEFDIMENSION`       | `= 3` select dimension of the run: 2 or 3                                                                                                                     |
-| `USEGSL`       | `= 1` switch on/off computation using GSL routines. Optional.                                                                                                                      |
-| `GSLINTERNAL`     | `= 1` for enabling GSL internal sources<br />(if `= 0`, specify the corresponding compiler flags in `Makefile_machine` file)                                                             |
-| `OPENMPMACHINE`     | `= 1` for enabling OpenMP parallelism<br />(Specify the corresponding compiler flag in `Makefile_machine` file)                                                             |
-| `SINGLEPON`    | `= 0` for disabling single precision                                                                                                                             |
-| `LONGINTON`    | `= 1` for enabling long integers                                                                                                                             |
-| `ADDONSON`  | `= 1` for adding more funcionality to the code, like other searching methods, other catalog formats                                                                                                |
+## Tests and Documentation Builds
 
-**Note**:
-After changing `Makefile_settings` in order to have the new settings active in **cBalls** you have to re-compile the code: `make clean; make all`. 
+The documentation toolchain requires Python 3.11 or newer.
 
-## Parameters
+```sh
+make test-make-info test-search-methods
+python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
+CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/make_tests/test_scalar_numerical_contract.py
+python3 -m pip install -r docs/requirements.txt
+python3 -m sphinx -E -a -n -W --keep-going -b html docs docs/_build/html
+```
 
-The list of available command line parameters can be consulted using the `-h` or `--help` flags:
+Scalar numerical tests require a matching scalar C/Cython profile; MPI checks
+also require the MPI siblings and mpi4py. Repeat with both smoothing build
+settings. The main CI workflow covers profile-specific C/Cython, packaging,
+MPI, and sanitizer jobs. Small correctness tests are not full-sky timing claims.
 
-    $ ../cballs --help
-
-See also the man page as explained above. If you execute:
-
-    $ ../cballs --clue
-
-you will receive in response how **cBalls** should be executed using command line parameters. Just pick up the parameteres you need and, if necessary, modify their values according to your needs.
-
-## Python
-
-To install cBalls python module (cyballs) just execute (you already do it...):
-
-    $ make clean; make all
-
-To test it go to directory `tests` and run:
-
-    $ python ./In/test_cython_octree-ggg-omp.py
-
-Note: this interface in Cython was tested in a python environment with `python3.12`.
-
-## Plotting utilities
-
-Several Jupyter notebooks, written by Abraham Arvizu and Eladio Moreno, are available to process cBalls results. They are in the github repository: 
-
-https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks
-
-Other python scripts are in directory `tests/python`. Look for Readme files in `tests` and in `tests/python`.
-
+Open `docs/_build/html/index.html` after the Sphinx build. Additional plotting
+notebooks are maintained in
+[CBalls_plots](https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks).
 
 ## License
 
 **cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE). If you use this program in research work that results in publications, please cite the following paper:
 
-Abraham Arvizu et al., [arXiv:2048.16847](https://arxiv.org/abs/2408.16847)
+Abraham Arvizu et al., [arXiv:2408.16847](https://arxiv.org/abs/2408.16847)
 
 ## Acknowledgements
 
@@ -147,11 +187,13 @@ cBalls use/is based on the following codes or projects:
 -   [Zeno](https://home.ifa.hawaii.edu/users/barnes/zeno/index.html)
 -   [Gadget-2](https://wwwmpa.mpa-garching.mpg.de/gadget/)
 -   [CUTE](https://github.com/damonge/CUTE)
--   [Numerical recipies](https://numerical.recipes/)
+-   [Numerical Recipes](https://numerical.recipes/)
 -   [GSL](https://www.gnu.org/software/gsl/)
 -   [CLASS](https://github.com/lesgourg/class_public)
 -   [CFITSIO](https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html)
 -   [HEALPix](https://healpix.sourceforge.io/)
+-   [TreeCorr](https://github.com/rmjarvis/treecorr)
+-   [FCFC](https://github.com/cheng-zhao/FCFC)
 
 Also author acknowledges for helpful discussion and testing to the following people:
 

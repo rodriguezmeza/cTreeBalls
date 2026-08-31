@@ -65,7 +65,17 @@ method supports the intended cross-correlation.
 Units and Geometry
 ------------------
 
-For unit-sphere maps, ``rminHist`` and ``rangeN`` are angular separations in
-radians.  For Cartesian catalogs they follow the position units in the input
-file.  Record this convention with every output because the histogram files do
-not independently encode the input-unit metadata.
+For scalar angular searches on unit-sphere positions, ``rminHist`` and
+``rangeN`` are Euclidean chord distances. Convert an angle ``alpha`` in radians
+using ``r = 2*sin(alpha/2)``; invert with ``alpha = 2*asin(r/2)``.
+Radians are only a small-angle approximation to chord distances.
+
+Preserve the observer origin for spherical Fourier multipoles. The current
+ASCII readers and startup/tree paths do not recenter these catalogs.
+Physical-3D scalar and forest modes use coordinate distances instead;
+flat-sky shear has its own planar convention.
+Record the estimator and units with the outputs. See :doc:`../search_methods`.
+
+In-memory input uses ``cyballs.set_catalog``, or ``set_forest_catalog`` when
+forest IDs are needed. This avoids file I/O while retaining C-owned body
+storage at runtime. See :doc:`python`.

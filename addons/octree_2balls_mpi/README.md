@@ -4,6 +4,12 @@
 `octree-2balls-omp`. It uses the same native-octree binary view, dual-node
 2PCF traversal, and LogMultipole 3PCF estimator.
 
+It shares the repaired observer-frame, tangent-angle, chord-bin, and distinct
+raw-moment contract described in [the scalar guide](../../docs/3pcf.rst).
+`read-mask` and complex `edge-corrections,no-normalize-HistZeta` are
+supported; `weights-norm` applies catalog weights. Raw and corrected
+products are not interchangeable.
+
 The deterministic frontier is reproduced on every rank. Frontier slot `i`
 is owned by rank `i % nranks`; OpenMP distributes the rank-local slots. Each
 slot has an independent histogram, and MPI reduces those slot arrays before

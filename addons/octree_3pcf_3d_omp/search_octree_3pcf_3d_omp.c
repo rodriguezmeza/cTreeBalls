@@ -45,6 +45,13 @@
 
 #include <limits.h>
 
+#ifndef CB3D_OMP_PIVOT_BLOCK_SIZE
+#define CB3D_OMP_PIVOT_BLOCK_SIZE 64
+#endif
+#if CB3D_OMP_PIVOT_BLOCK_SIZE < 1
+#error CB3D_OMP_PIVOT_BLOCK_SIZE must be positive
+#endif
+
 #ifndef OCTREE3PCF3D_MAX_LMAX
 #define OCTREE3PCF3D_MAX_LMAX 32
 #endif
@@ -412,60 +419,48 @@ global int searchcalc_octree_3pcf_3d_omp(struct cmdline_data* cmd,
                                          INTEGER ipmin, INTEGER *ipmax,
                                          int cat1, int cat2)
 {
-    string routineName = "searchcalc_octree_3pcf_3d_omp";
     double cpustart = CPUTIME;
-    cb3d_result result;
+    cb3d_result result = {0};
     int compute_xi = FALSE;
     int compute_zeta = FALSE;
-    int exclude_same_los;
     int status = FAILURE;
 
-    memset(&result, 0, sizeof(result));
     if (cat1 != cat2) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: the 3D scalar multipole estimator requires an auto-catalog",
-                 routineName);
-        return FAILURE;
+                 cmd->searchMethod);
+        goto setup_done;
     }
     if (cb3d_validate(cmd, &compute_xi, &compute_zeta, FALSE) == FAILURE)
-        return FAILURE;
-    exclude_same_los = cb3d_exclude_same_los_option(cmd);
+        goto setup_done;
     if (cb3d_init_result(cmd, &result, compute_xi, compute_zeta) == FAILURE)
-        goto cleanup;
-
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-        "\n%s: 3D scalar estimator, nbins=%d, lmax=%d, nlm=%d, "
-        "2pcf=%d, 3pcf=%d, exclude_same_los=%d\n",
-        routineName, cmd->sizeHistN, cmd->mChebyshev,
-        (cmd->mChebyshev + 1)*(cmd->mChebyshev + 2)/2,
-        compute_xi, compute_zeta, exclude_same_los);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-        "%s: input fields: Pos=(x,y,z), delta=Kappa, weight=Weight\n",
-        routineName);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-        "%s: physical cutoff and exact-leaf pruning use rangeN=%g "
-        "(global Rcut=%g)\n\n", routineName, cmd->rangeN, gd->Rcut);
-
-    if (cb3d_measure(cmd, gd, btable, nbody, ipmin, ipmax[cat1], cat1,
-                     compute_xi, compute_zeta, exclude_same_los,
-                     &result) == FAILURE)
-        goto cleanup;
-    if (compute_zeta
-        && cb3d_print_zeta(cmd, gd, result.num, result.den,
-                           result.npivots, result.nbb) == FAILURE)
-        goto cleanup;
-    if (compute_xi
-        && cb3d_print_xi(cmd, gd, result.xi_num, result.xi_den,
-                         result.npivots, result.nbb) == FAILURE)
-        goto cleanup;
-
-    gd->cpusearch = CPUTIME - cpustart;
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nGoing out: CPU time = %lf %s\n",
-                        CPUTIME-cpustart, PRNUNITOFTIMEUSED);
+        goto setup_done;
     status = SUCCESS;
 
+setup_done:
+    status = cb3d_parallel_consensus(cmd, status, "3D scalar histogram setup");
+    if (status == FAILURE) goto cleanup;
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+        "\n%s: exact 3D scalar estimator; nbins=%d lmax=%d 2pcf=%d 3pcf=%d; "
+        "physical cutoff=%g (global Rcut=%g)\n",
+        cmd->searchMethod, cmd->sizeHistN, cmd->mChebyshev,
+        compute_xi, compute_zeta, cmd->rangeN, gd->Rcut);
+    status = cb3d_measure(cmd, gd, btable, nbody, ipmin, ipmax[cat1], cat1,
+                          compute_xi, compute_zeta,
+                          cb3d_exclude_same_los_option(cmd), &result);
+    if (status == FAILURE) goto cleanup;
+    if (cb3d_parallel_publish(cmd) && !cballs_opt_no_out_hist(cmd)) {
+        if (compute_zeta)
+            status = cb3d_print_zeta(cmd, gd, result.num, result.den,
+                                     result.npivots, result.nbb);
+        if (status == SUCCESS && compute_xi)
+            status = cb3d_print_xi(cmd, gd, result.xi_num, result.xi_den,
+                                   result.npivots, result.nbb);
+    }
+    status = cb3d_parallel_consensus(cmd, status, "3D scalar output");
+
 cleanup:
+    gd->cpusearch = CPUTIME - cpustart;
     cb3d_free_result(&result);
     return status;
 }
@@ -475,54 +470,48 @@ global int searchcalc_octree_3pcf_3d_omp_survey(
     bodyptr *btable, INTEGER *nbody,
     int dmr_cat, int normalized_random_cat, REAL random_scale)
 {
-    string routineName = "searchcalc_octree_3pcf_3d_omp_survey";
     double cpustart = CPUTIME;
-    cb3d_result numerator;
-    cb3d_result randoms;
+    cb3d_result numerator = {0};
+    cb3d_result randoms = {0};
     int compute_xi = FALSE;
     int compute_zeta = FALSE;
     int status = FAILURE;
 
-    memset(&numerator, 0, sizeof(numerator));
-    memset(&randoms, 0, sizeof(randoms));
     if (cb3d_validate(cmd, &compute_xi, &compute_zeta, TRUE) == FAILURE)
-        return FAILURE;
+        goto setup_done;
     if (cb3d_init_result(cmd, &numerator, compute_xi, compute_zeta) == FAILURE)
-        goto cleanup;
+        goto setup_done;
     if (cb3d_init_result(cmd, &randoms, compute_xi, compute_zeta) == FAILURE)
-        goto cleanup;
-
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-        "\n%s: ENCORE-style survey estimator; measuring D-R multipoles "
-        "through ell=%d\n", routineName, cmd->mChebyshev);
-    if (cb3d_measure(cmd, gd, btable, nbody, 1, nbody[dmr_cat], dmr_cat,
-                     compute_xi, compute_zeta, FALSE,
-                     &numerator) == FAILURE)
-        goto cleanup;
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-        "%s: measuring normalized random multipoles\n", routineName);
-    if (cb3d_measure(cmd, gd, btable, nbody, 1,
-                     nbody[normalized_random_cat], normalized_random_cat,
-                     compute_xi, compute_zeta, FALSE,
-                     &randoms) == FAILURE)
-        goto cleanup;
-
-    if (compute_zeta
-        && cb3d_print_survey_zeta(cmd, gd, &numerator, &randoms,
-                                  random_scale) == FAILURE)
-        goto cleanup;
-    if (compute_xi
-        && cb3d_print_survey_xi(cmd, gd, &numerator, &randoms,
-                                random_scale) == FAILURE)
-        goto cleanup;
-
-    gd->cpusearch = CPUTIME - cpustart;
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nGoing out: CPU time = %lf %s\n",
-                        CPUTIME-cpustart, PRNUNITOFTIMEUSED);
+        goto setup_done;
     status = SUCCESS;
 
+setup_done:
+    status = cb3d_parallel_consensus(cmd, status, "3D survey histogram setup");
+    if (status == FAILURE) goto cleanup;
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+        "\n%s: ENCORE-style survey estimator; measuring D-R and random "
+        "multipoles through ell=%d\n", cmd->searchMethod, cmd->mChebyshev);
+    status = cb3d_measure(cmd, gd, btable, nbody, 1, nbody[dmr_cat], dmr_cat,
+                          compute_xi, compute_zeta, FALSE, &numerator);
+    if (status == FAILURE) goto cleanup;
+    status = cb3d_measure(cmd, gd, btable, nbody, 1,
+                          nbody[normalized_random_cat], normalized_random_cat,
+                          compute_xi, compute_zeta, FALSE, &randoms);
+    if (status == FAILURE) goto cleanup;
+
+    /* Solve the window system only after both globally summed measurements. */
+    if (cb3d_parallel_publish(cmd) && !cballs_opt_no_out_hist(cmd)) {
+        if (compute_zeta)
+            status = cb3d_print_survey_zeta(cmd, gd, &numerator, &randoms,
+                                            random_scale);
+        if (status == SUCCESS && compute_xi)
+            status = cb3d_print_survey_xi(cmd, gd, &numerator, &randoms,
+                                          random_scale);
+    }
+    status = cb3d_parallel_consensus(cmd, status, "3D survey edge correction/output");
+
 cleanup:
+    gd->cpusearch = CPUTIME - cpustart;
     cb3d_free_result(&numerator);
     cb3d_free_result(&randoms);
     return status;
@@ -641,50 +630,44 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                        int compute_xi, int compute_zeta,
                        int exclude_same_los, cb3d_resultptr result)
 {
-    const char *routine_name = "cb3d_measure";
-    size_t nb = (size_t)cmd->sizeHistN;
-    size_t nacc = ((size_t)cmd->mChebyshev + 1)*nb*nb;
+    const size_t nb = (size_t)cmd->sizeHistN;
+    const size_t nacc = ((size_t)cmd->mChebyshev + 1)*nb*nb;
+    const INTEGER first_block = cb3d_parallel_first(cmd);
+    const INTEGER block_stride = cb3d_parallel_stride(cmd);
     int allocation_failed = FALSE;
+    int status = SUCCESS;
     ErrorMsg allocation_error = "";
 
     if (cat < 0 || cat >= gd->ninfiles || btable[cat] == NULL
         || nbody[cat] <= 0 || roottable[cat] == NULL) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "%s: catalog %d is not ready for tree traversal",
-                 routine_name, cat);
-        return FAILURE;
-    }
-    if (ipmin < 1 || ipmax < ipmin || ipmax > nbody[cat]) {
+                 "cb3d_measure: catalog %d is not ready for tree traversal", cat);
+        status = FAILURE;
+    } else if (ipmin < 1 || ipmax < ipmin || ipmax > nbody[cat]) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "%s: invalid pivot interval [%" INTEGER_FMT
-                 ",%" INTEGER_FMT "] for catalog %d with %" INTEGER_FMT
-                 " bodies", routine_name, ipmin, ipmax, cat, nbody[cat]);
-        return FAILURE;
+                 "cb3d_measure: invalid pivot interval");
+        status = FAILURE;
     }
+    status = cb3d_parallel_consensus(cmd, status, "3D traversal validation");
+    if (status == FAILURE) return FAILURE;
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat], cat);
 #else
 #error OPENMPMACHINE is not defined. Switch it on in Makefile_settings
 #endif
-
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nRunning 3D scalar 2PCF/3PCF for catalog %d... "
-                        "completed pivot node:\n", cat);
+    const INTEGER pivot_count = ipmax - ipmin + 1;
+    const INTEGER block_count = 1 + (pivot_count - 1)/CB3D_OMP_PIVOT_BLOCK_SIZE;
 
 #pragma omp parallel default(none) \
-    shared(cmd,gd,btable,nbody,roottable,ipmin,ipmax,cat,result,nacc,nb, \
+    shared(cmd,gd,btable,roottable,ipmin,ipmax,cat,result,nacc,nb, \
            compute_xi,compute_zeta,exclude_same_los,allocation_failed, \
-           allocation_error)
+           allocation_error,first_block,block_stride,block_count)
     {
-        bodyptr p;
-        INTEGER ip;
         cb3d_hist hist;
         ErrorMsg thread_error = "";
-        int hist_ready =
-            cb3d_init_hist(cmd, gd, &hist, compute_xi, compute_zeta,
-                           exclude_same_los, thread_error) == SUCCESS;
-
+        int hist_ready = cb3d_init_hist(cmd, gd, &hist, compute_xi, compute_zeta,
+                                        exclude_same_los, thread_error) == SUCCESS;
         if (!hist_ready) {
 #pragma omp critical(cb3d_allocation_failure)
             {
@@ -694,34 +677,40 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                 allocation_failed = TRUE;
             }
         }
-
 #pragma omp barrier
-
-#pragma omp for schedule(dynamic)
-        for (p = btable[cat] + ipmin - 1; p < btable[cat] + ipmax; p++) {
-            if (allocation_failed) continue;
-            if (Update(p) == FALSE) continue;
-            if (hist.read_mask && Mask(p) == FALSE) continue;
-
-            cb3d_clear_pivot(&hist);
-            hist.pivot_weight = Weight(p);
-            hist.pivot_field = Weight(p) * Kappa(p);
-            if (hist.exclude_same_los)
-                hist.pivot_los = Octree3pcf3dLosId(p);
-            cb3d_walktree(gd, p, (nodeptr)roottable[cat], &hist);
-            cb3d_accumulate_pivot(&hist);
-            hist.npivots_thread++;
-
-            ip = p - btable[cat] + 1;
-            if (cmd->stepState > 0 && ip % cmd->stepState == 0)
-                verb_print_min_info(cmd->verbose, cmd->verbose_log,
-                                    gd->outlog, "%" INTEGER_FMT " ", ip);
-        }
-
-        if (hist_ready) {
+#pragma omp for schedule(dynamic,1) ordered
+        for (INTEGER block = first_block; block < block_count; block += block_stride) {
             if (!allocation_failed) {
-#pragma omp critical(cb3d_histogram_reduction)
-                {
+                const INTEGER first = ipmin - 1 + block*CB3D_OMP_PIVOT_BLOCK_SIZE;
+                const INTEGER count = MIN((INTEGER)CB3D_OMP_PIVOT_BLOCK_SIZE,
+                                           ipmax - first);
+                if (compute_zeta) {
+                    cb3d_zero_array(hist.num, nacc);
+                    cb3d_zero_array(hist.den, nacc);
+                }
+                if (compute_xi) {
+                    cb3d_zero_array(hist.xi_num, nb);
+                    cb3d_zero_array(hist.xi_den, nb);
+                }
+                hist.nbbcalcthread = 0;
+                hist.npivots_thread = 0;
+                for (INTEGER offset = 0; offset < count; offset++) {
+                    bodyptr p = btable[cat] + first + offset;
+                    if (Update(p) == FALSE) continue;
+                    if (hist.read_mask && Mask(p) == FALSE) continue;
+                    cb3d_clear_pivot(&hist);
+                    hist.pivot_weight = Weight(p);
+                    hist.pivot_field = Weight(p)*Kappa(p);
+                    if (hist.exclude_same_los)
+                        hist.pivot_los = Octree3pcf3dLosId(p);
+                    cb3d_walktree(gd, p, (nodeptr)roottable[cat], &hist);
+                    cb3d_accumulate_pivot(&hist);
+                    hist.npivots_thread++;
+                }
+            }
+#pragma omp ordered
+            {
+                if (!allocation_failed) {
                     if (compute_zeta) {
                         cb3d_add_arrays(result->num, hist.num, nacc);
                         cb3d_add_arrays(result->den, hist.den, nacc);
@@ -734,17 +723,26 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                     result->npivots += hist.npivots_thread;
                 }
             }
-            cb3d_free_hist(&hist);
         }
+        if (hist_ready) cb3d_free_hist(&hist);
     }
-
-    if (allocation_failed) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_, "%s: %s",
-                 routine_name, allocation_error[0] != '\0'
-                     ? allocation_error : "worker allocation failed");
+    if (allocation_failed)
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "cb3d_measure: %s",
+                 allocation_error[0] ? allocation_error : "worker allocation failed");
+    status = cb3d_parallel_consensus(cmd, allocation_failed ? FAILURE : SUCCESS,
+                                     "3D traversal workers");
+    if (status == FAILURE) return FAILURE;
+    INTEGER counters[2] = {result->nbb, result->npivots};
+    if ((compute_zeta
+         && (cb3d_parallel_reduce_reals(cmd, result->num, nacc) == FAILURE
+             || cb3d_parallel_reduce_reals(cmd, result->den, nacc) == FAILURE))
+        || (compute_xi
+            && (cb3d_parallel_reduce_reals(cmd, result->xi_num, nb) == FAILURE
+                || cb3d_parallel_reduce_reals(cmd, result->xi_den, nb) == FAILURE))
+        || cb3d_parallel_reduce_integers(cmd, counters, 2) == FAILURE)
         return FAILURE;
-    }
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
+    result->nbb = counters[0];
+    result->npivots = counters[1];
     return SUCCESS;
 }
 

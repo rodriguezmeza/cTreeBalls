@@ -1089,7 +1089,7 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
 }
 //E RADECR_FIELD
 
-#if defined(OCTREE3PCF3DOMP) && NDIM == 3
+#if (defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)) && NDIM == 3
 local int cb3d_cfitsio_count_columns_tokens(string columns)
 {
     int count = 0;
@@ -1133,7 +1133,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     double *arrayKappa;
     int anynul;
     int status = 0;
-#if defined(OCTREE3PCF3DOMP) && NDIM == 3
+#if (defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)) && NDIM == 3
     double *arrayWeight = NULL;
     LONGLONG *arrayLosId = NULL;
     int read_weight = scanopt(cmd->options, "with-weight");
@@ -1218,7 +1218,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
         fits_report_error(stderr, status);
     }
 
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     if (read_weight) {
         colnum = gd->columns[4];
         arrayWeight = (double*) allocate(cmd->nbody * sizeof(double));
@@ -1249,7 +1249,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
         Pos(p)[0] = arrayX[index];
         Pos(p)[1] = arrayY[index];
         Pos(p)[2] = arrayZ[index];
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
         Weight(p) = read_weight ? arrayWeight[index] : weight;
         if (arrayLosId != NULL) {
             Octree3pcf3dLosId(p) = (INTEGER)arrayLosId[index];
@@ -1265,7 +1265,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     free(arrayX);
     free(arrayY);
     free(arrayZ);
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     free(arrayWeight);
     free(arrayLosId);
     if (invalid_los_id)
@@ -1280,7 +1280,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
         Type(p) = BODY;
         Mass(p) = mass;
-#ifndef OCTREE3PCF3DOMP
+#if !defined(OCTREE3PCF3DOMP) && !defined(OCTREE3PCF3DMPI)
         Weight(p) = weight;
 #endif
         Id(p) = p-bodytable[ifile]+1;

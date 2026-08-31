@@ -15,6 +15,13 @@ completed on coarse pivots; their moments are inherited while only unresolved
 small-radius bins descend the pivot tree. `no-two-balls` disables node
 acceptance and gives exact body-level pivot-neighbor moments.
 
+In 3D, the angular bound uses projected tangent bearings, including pivot
+motion. Inherited moments and their second moments are transported into
+each descendant pivot's tangent basis before mixing with newly scanned bins.
+Keep observer-centered positions and chord bins. See
+[the scalar contract](../../docs/3pcf.rst) for mode handedness, weighting,
+undefined bearings, and distinct-neighbor normalization.
+
 `nsmooth` is the default leaf capacity. Add `treecorr-singleton-leaves` for
 the most aggressive node acceptance at the cost of a larger tree. The former
 genuine triple-node traversal remains available for validation with

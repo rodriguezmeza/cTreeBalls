@@ -33,6 +33,14 @@ Discovery Commands
 
    ./cballs --help
    ./cballs --clue
+   ./cballs options=make-info
+   ./cballs options=print-options
+   ./cballs options=print-search-methods
+
+These report compiled build settings, registered option descriptions, and
+method availability/usage respectively. Help-only paths currently may return
+a nonzero process status after printing; inspect the output rather than
+treating them as a computation smoke test.
 
 The available defaults depend on ``Makefile_settings`` and enabled add-ons, so
 the help output from the compiled executable takes precedence over copied
@@ -49,7 +57,7 @@ Common Parameters
      - Typical default
      - Purpose
    * - ``searchMethod``
-     - ``octree-sincos-omp`` for the unit-sphere defaults
+     - build dependent; choose an enabled method explicitly
      - Select the tree, octree, k-d-tree, or neighbor-box implementation.
    * - ``infile``
      - empty
@@ -80,7 +88,12 @@ Common Parameters
      - Console and log verbosity.
    * - ``options``
      - empty
-     - Comma-separated behavior flags such as ``compute-HistN`` and ``and-CF``.
+     - Comma-separated behavior flags; support depends on the chosen engine.
+
+Raw scalar angular comparisons use
+``no-normalize-HistZeta,weights-norm``. ``smooth-pivot`` is an explicit opt-in,
+not a consequence of compiling ``SMOOTHPIVOT``. See :doc:`../3pcf` and
+:doc:`../search_methods` before combining options.
 
 The complete historical parameter descriptions remain in :doc:`../params` and
 ``tests/In/parameters_explained``.

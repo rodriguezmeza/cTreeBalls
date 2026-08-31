@@ -8,6 +8,20 @@ The leaf capacity is controlled by `nsmooth` (FCFC recommends `8`). Exact
 point traversal is the default. `behavior-ball` enables cTreeBalls' approximate
 cell aggregation; `no-one-ball` explicitly restores exact traversal.
 
+## Numerical contract
+
+In 3D, preserve observer-centered coordinates and use chord-distance bins
+for sky catalogs. Higher modes use projected tangent bearings.
+`no-normalize-HistZeta` now selects weighted raw **distinct-triplet** sums;
+the native kernel subtracts repeated-neighbor second moments. Add
+`weights-norm` for the common cross-engine benchmark option set. Do not
+subtract those self terms again in Python. The legacy normalized mode is
+a different contract; see [the scalar guide](../../docs/3pcf.rst).
+
+`SMOOTHPIVOTON=1` compiles support without activating it. Raw balltree
+multipoles reject explicit `smooth-pivot`. Setting `rsmooth` alone does
+not activate smoothing. The OMP and MPI siblings share these rules.
+
 The adapted FCFC construction code is distributed under the MIT license. See
 the notice in `fcfc_balltree.c`.
 

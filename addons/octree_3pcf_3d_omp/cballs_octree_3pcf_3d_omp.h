@@ -4,17 +4,22 @@
 #ifndef _cballs_octree_3pcf_3d_omp_h
 #define _cballs_octree_3pcf_3d_omp_h
 
-case 166:                   // search=octree-3pcf-3d-omp
+#ifdef OCTREE3PCF3DOMP
+case 166:
+#endif
+#ifdef OCTREE3PCF3DMPI
+case 192:
+#endif
     {
     int survey_mode = scanopt(cmd->options, "survey-estimator-3d")
                    || scanopt(cmd->options, "encore-survey-estimator")
                    || scanopt(cmd->options, "survey-edge-correction");
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "\n\tevalHist: with octree-3pcf-3d-omp method\n\n");
+                           "\n\tevalHist: with 3D scalar octree method\n\n");
 
 #if NDIM != 3
     cBALLS_FAIL(cmd,
-                "octree-3pcf-3d-omp requires DEFDIMENSION=3 in Makefile_settings");
+                "3D scalar octree requires DEFDIMENSION=3 in Makefile_settings");
 #endif
 
     if (survey_mode) {
@@ -24,23 +29,26 @@ case 166:                   // search=octree-3pcf-3d-omp
 
         if (cballs_opt_read_mask(cmd))
             cBALLS_FAIL(cmd,
-                        "octree-3pcf-3d-omp survey mode does not use read-mask; "
+                        "3D scalar octree survey mode does not use read-mask; "
                         "encode the selection in the data and random catalogs");
         if (gd->ninfiles != 2 || gd->iCatalogs[0] == gd->iCatalogs[1])
             cBALLS_FAIL(cmd,
-                        "octree-3pcf-3d-omp survey mode requires exactly two "
+                        "3D scalar octree survey mode requires exactly two "
                         "distinct catalogs: data,random");
 
-        if (cb3d_prepare_survey_catalogs(
+        if (cb3d_parallel_consensus(cmd, cb3d_prepare_survey_catalogs(
                 cmd, gd, bodytable, gd->nbodyTable,
                 gd->iCatalogs[0], gd->iCatalogs[1],
-                &dmr_cat, &random_cat, &random_scale) == FAILURE)
+                &dmr_cat, &random_cat, &random_scale),
+                "3D catalog/tree preparation") == FAILURE)
             return FAILURE;
-        if (MakeTree(cmd, gd, bodytable[dmr_cat],
-                     gd->nbodyTable[dmr_cat], dmr_cat) == FAILURE)
+        if (cb3d_parallel_consensus(cmd, MakeTree(cmd, gd, bodytable[dmr_cat],
+                     gd->nbodyTable[dmr_cat], dmr_cat),
+                "3D catalog/tree preparation") == FAILURE)
             return FAILURE;
-        if (MakeTree(cmd, gd, bodytable[random_cat],
-                     gd->nbodyTable[random_cat], random_cat) == FAILURE)
+        if (cb3d_parallel_consensus(cmd, MakeTree(cmd, gd, bodytable[random_cat],
+                     gd->nbodyTable[random_cat], random_cat),
+                "3D catalog/tree preparation") == FAILURE)
             return FAILURE;
         if (searchcalc_octree_3pcf_3d_omp_survey(
                 cmd, gd, bodytable, gd->nbodyTable,
@@ -54,7 +62,8 @@ case 166:                   // search=octree-3pcf-3d-omp
         DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile]) {
             Update(p) = TRUE;
         }
-        if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile)
+        if (cb3d_parallel_consensus(cmd, MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile),
+                "3D catalog/tree preparation")
             == FAILURE)
             return FAILURE;
     } else {
@@ -62,7 +71,8 @@ case 166:                   // search=octree-3pcf-3d-omp
             DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile]) {
                 Update(p) = TRUE;
             }
-            if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile)
+            if (cb3d_parallel_consensus(cmd, MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile),
+                "3D catalog/tree preparation")
                 == FAILURE)
                 return FAILURE;
         }

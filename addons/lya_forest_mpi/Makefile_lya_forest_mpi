@@ -1,0 +1,11 @@
+# Shared Ly-alpha kernels are compiled by Makefile_lya_forest_omp.
+ifeq ($(LYAFORESTMPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DLYAFORESTMPI -DCBALLS_MPI_ENABLED
+LYAFORESTMPI = $(MDIR)/addons/lya_forest_mpi/
+vpath %.c $(LYAFORESTMPI)
+INCLUDES += -I$(LYAFORESTMPI)
+HEADERFILES += $(wildcard $(LYAFORESTMPI)/*.h)
+EXTERNAL += lya_forest_mpi.o
+endif

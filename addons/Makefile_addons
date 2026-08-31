@@ -152,8 +152,11 @@ endif
 
 # LYAFORESTOMP
 # Weighted Lyman-alpha forest 2PCF and anisotropic 3PCF.
-ifeq ($(LYAFORESTOMPON),1)
+ifneq ($(filter 1,$(LYAFORESTOMPON) $(LYAFORESTMPION)),)
 include $(MACHINES_DIR)/addons/lya_forest_omp/Makefile_lya_forest_omp
+endif
+ifeq ($(LYAFORESTMPION),1)
+include $(MACHINES_DIR)/addons/lya_forest_mpi/Makefile_lya_forest_mpi
 endif
 #
 
@@ -366,8 +369,11 @@ endif
 
 # OCTREE3PCF3DOMP
 # 3D scalar 3PCF multipoles with spherical harmonics and OpenMP.
-ifeq ($(OCTREE3PCF3DOMPON),1)
+ifneq ($(filter 1,$(OCTREE3PCF3DOMPON) $(OCTREE3PCF3DMPION)),)
 include $(MACHINES_DIR)/addons/octree_3pcf_3d_omp/Makefile_octree_3pcf_3d_omp
+endif
+ifeq ($(OCTREE3PCF3DMPION),1)
+include $(MACHINES_DIR)/addons/octree_3pcf_3d_mpi/Makefile_octree_3pcf_3d_mpi
 endif
 #
 
@@ -413,10 +419,13 @@ include $(MACHINES_DIR)/addons/kdtree_cute_box/Makefile_kdtree_cute_box
 endif
 #
 
-# OCTREEKKKBALLS4OMP
-# For computing 3pcf using octree-kkk-balls4-omp
-ifeq ($(OCTREEKKKBALLS4OMPON),1)
-include $(MACHINES_DIR)/addons/octree_kkk_balls4_omp/Makefile_octree_kkk_balls4_omp
+# OCTREEBALLS4OMP
+# For computing 3pcf using octree-balls4-omp
+ifeq ($(OCTREEBALLS4OMPON),1)
+include $(MACHINES_DIR)/addons/octree_balls4_omp/Makefile_octree_balls4_omp
+endif
+ifeq ($(OCTREEBALLS4MPION),1)
+include $(MACHINES_DIR)/addons/octree_balls4_mpi/Makefile_octree_balls4_mpi
 endif
 #
 

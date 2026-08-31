@@ -1,0 +1,15 @@
+ifeq ($(OCTREEBALLS4MPION),1)
+MPICC ?= mpicc
+CC := $(MPICC)
+OPT2 += -DOCTREEBALLS4MPI -DCBALLS_MPI_ENABLED
+OCTREEBALLS4MPI = $(MDIR)/addons/octree_balls4_mpi/
+OCTREEBALLS4SOURCE = $(MDIR)/addons/octree_balls4_omp/
+vpath %.c $(OCTREEBALLS4MPI):$(OCTREEBALLS4SOURCE)
+INCLUDES += -I$(OCTREEBALLS4MPI) -I$(OCTREEBALLS4SOURCE)
+HEADERFILES += $(wildcard $(OCTREEBALLS4MPI)/*.h) $(wildcard $(OCTREEBALLS4SOURCE)/*.h)
+HEADERFILES += $(MDIR)/addons/balltree_2balls_omp/treecorr_edge_correction.h
+EXTERNAL += fcfc_octree_balls4_mpi.o
+ifneq ($(OCTREEBALLS4OMPON),1)
+EXTERNAL += search_octree_balls4_omp.o balls4_edge.o
+endif
+endif

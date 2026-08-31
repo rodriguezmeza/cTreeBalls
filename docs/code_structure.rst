@@ -64,6 +64,10 @@ Module map
        ``node`` header so tree traversal can work on ``nodeptr`` values.
    * - ``include/datastruc_hist.h``
      - Per-thread and global histogram workspaces used by the search code.
+   * - ``include/angular_contracts.h``
+     - Observer-frame selection, tangent phases, and projected angular bounds.
+   * - ``include/scalar_moments.h``
+     - Weighted raw KD/balltree moments and distinct-neighbor subtraction.
    * - ``include/protodefs.h``
      - Shared function prototypes and add-on include hook for APIs that need to
        be visible across C modules.
@@ -86,9 +90,6 @@ Module map
      - Shared search utilities: histogram initialization, body property
        reduction, acceptance/rejection checks, periodic wrapping, coordinate
        conversion, and histogram diagnostics.
-   * - ``source/cballsutils_with-RADECPOS.c``
-     - RA/DEC-position variant of ``cballsutils.c``. Keep it in sync with
-       ``cballsutils.c`` when enabling or maintaining that build path.
    * - ``source/cballs.c``
      - Main computation driver and histogram output dispatch. This is where
        search-method selection reaches the concrete search implementation.
@@ -97,8 +98,8 @@ Module map
        dictionary into CLASS-style ``file_content``, calls C modules, exposes
        histogram getters, and releases C allocations.
    * - ``python/ccyballs.pxd``
-     - Cython declarations for the C structs and functions that Python needs.
-       Only expose fields here when the wrapper really consumes them.
+     - Generated Cython declarations. Edit the ``.pxd.in`` template/addon
+       declaration sources, then regenerate with the selected build profile.
    * - ``addons/``
      - Optional search methods, input formats, and bundled libraries. Add-ons
        connect through the ``//B socket:`` include points in core files.
@@ -118,8 +119,11 @@ Most C routines receive two pointers:
     owns histogram buffers, input catalog metadata, output paths, timing
     counters, tree statistics, and allocation flags used during cleanup.
 
-The large catalog and tree tables are declared as project globals in
-``include/globaldefs.h``:
+The legacy catalog/tree symbols are declared in ``include/globaldefs.h``.
+Cython switches them through a per-object ``cballs_runtime_state`` before
+entering C, so live wrapper objects retain independent owned state. This is
+not a guarantee of unrestricted concurrent entry from arbitrary Python threads.
+The active symbols include:
 
 ``bodytable[MAXITEMS]``
     Per-catalog body arrays.
@@ -199,8 +203,8 @@ To add a user-visible parameter:
    reproducible.
 5. Validate derived constraints in ``CheckParameters`` when invalid
    combinations would otherwise fail later.
-6. If the parameter is exposed to Python, mirror it in ``python/ccyballs.pxd``
-   and set or document it in ``python/cyballs.pyx``.
+6. If Python needs direct access, update ``python/ccyballs.pxd.in`` or the addon
+   declaration source and the wrapper. Rebuild to generate ``ccyballs.pxd``.
 
 Adding input/output formats
 ---------------------------
@@ -250,12 +254,12 @@ dictionary in ``self._pars``. ``Run`` converts that dictionary into
 ``MainLoop`` according to the requested dependency level.
 
 Getter methods such as ``getrBins``, ``getHistNN``, ``getHistXi2pcf``, and
-``getHistZetaMsincos`` copy C arrays into NumPy arrays. They assume the relevant
-run stage has already completed and that ``sizeHistN`` still matches the
-allocated histogram dimensions.
+``getHistZetaMsincos`` validate the required runtime state and copy C arrays
+into NumPy arrays. Call them before cleanup and after a successful compatible run.
 
-When changing C struct fields consumed by Python, update both
-``python/ccyballs.pxd`` and the getter or setup code in ``python/cyballs.pyx``.
+When changing C struct fields consumed by Python, update the
+``python/ccyballs.pxd.in`` template/addon sources and the getter or setup code
+in ``python/cyballs.pyx``. Do not edit the generated PXD directly.
 The wrapper intentionally exposes only a subset of the C structs; avoid adding
 fields to the ``.pxd`` unless Python needs direct access.
 

@@ -31,7 +31,7 @@
 #include "startrun_iolib_04.h"
 #endif
 
-#ifdef LYAFORESTOMP
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
 #include "startrun_lya_forest_omp_03.h"
 #endif
 

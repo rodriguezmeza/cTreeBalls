@@ -1,8 +1,10 @@
 # ----- Makefile definitions: Lyman-alpha forest OpenMP addon -----
 
+ifneq ($(filter 1,$(LYAFORESTOMPON) $(LYAFORESTMPION)),)
 ifeq ($(LYAFORESTOMPON),1)
-OPT2 += -DLYAFORESTOMP \
-	-DLYA1D_OMP_PIVOT_BLOCK_SIZE=$(LYA1D_OMP_PIVOT_BLOCK_SIZE)
+OPT2 += -DLYAFORESTOMP
+endif
+OPT2 += -DLYA1D_OMP_PIVOT_BLOCK_SIZE=$(LYA1D_OMP_PIVOT_BLOCK_SIZE)
 LYAFORESTOMP = $(MDIR)/addons/lya_forest_omp/
 vpath %.c $(LYAFORESTOMP)
 INCLUDES += -I$(LYAFORESTOMP)

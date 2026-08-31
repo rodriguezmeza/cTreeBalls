@@ -1,4 +1,4 @@
-# ----- TreeCorr-style two-ball traversal over the native octree -----
+# ----- two-ball traversal over the native octree -----
 
 ifeq ($(OCTREE2BALLSOMPON),1)
 OPT2 += -DOCTREE2BALLSOMP

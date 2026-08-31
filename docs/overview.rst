@@ -29,9 +29,10 @@ Introduction
 
 cTreeBalls is a C code for computing two-point and three-point correlation
 functions with tree- and ball-based neighbor searches.  It supports number
-counts and scalar fields such as weak-lensing convergence, Cartesian and
-unit-sphere geometries, multiple catalog formats, OpenMP parallelism, and a
-Cython interface for Python workflows.
+counts and scalar fields such as weak-lensing convergence, flat-sky spin-2
+shear, forest-aware radial/3D estimators, and physical-3D survey multipoles.
+OpenMP/MPI engines and a Cython interface are selected by build profile.
+See :doc:`search_methods`; different field families are not interchangeable.
 
 The three related projects cover complementary stages of a weak-lensing
 analysis: cTreeBalls measures correlation functions from catalogs or maps,
@@ -47,8 +48,11 @@ Clone and build the executable, static library, and Python extension:
 
    git clone https://github.com/rodriguezmeza/cTreeBalls.git
    cd cTreeBalls
-   make clean
-   make PYTHON=python3 all
+   python3 -m pip install numpy Cython setuptools wheel
+   make -j4 cballs cyballs-static-lib
+   CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
+
+Configure the same profile for both steps as explained in :doc:`installation`.
 
 Then run the compact synthetic example from the repository root:
 
@@ -99,4 +103,3 @@ License
 
 cTreeBalls is open source and distributed under the MIT license.  See
 :doc:`citing` for citation and acknowledgement guidance.
-

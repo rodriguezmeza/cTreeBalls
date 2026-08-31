@@ -1,42 +1,12 @@
+cTreeBalls documentation
 
-See the link:
+See README.rst in this directory for build instructions.
+Maintained entry point: docs/index.rst.
+Strict HTML check, from the source root:
 
-https://github.com/lsst
-https://github.com/LSSTDESC
+    python3 -m sphinx -E -a -n -W --keep-going -b html docs docs/_build/html
 
-for examples of how to document.
-
-
-See for Sphinx documentation making:
-
-https://www.sphinx-doc.org/en/master/tutorial/index.html
-https://www.youtube.com/watch?v=nZttMg_n_s0
-https://docs.readthedocs.io/en/stable/intro/getting-started-with-sphinx.html
-https://sphinx-themes.org/
-
-To create a html version of man page do from cTreeBalls directory:
-
-man doc/cballs.m | man2html -topm 0 -botm 0 -cgiurl \$title.html doc/cballs.m > doc/cballs.html
-
-If we follow tutorial en youtube:
-
-sphinx-quickstart
-
-$ pip install sphinx
-
-Install additional themes or MkDocs
-pip install sphinx-rtd-theme
-pip install mkdocs
-
-
-Other useful links
-
-https://sphinx-tutorial.readthedocs.io/step-1/
-https://github.com/kiith-sa/RestructuredText-tutorial/tree/master
-
-$ make
-
-$ make html
-$ make latexpdf
-$ make man
-$ make 
+Open docs/_build/html/index.html after building.
+Edit .rst sources, not generated HTML, LaTeX, or the historical man pages.
+The current numerical contract is in docs/3pcf.rst; engine selection is in
+docs/search_methods.rst. Old documentation under addons/docs_v1.0.0 is archival.

@@ -13,7 +13,9 @@ def catalog_positions(x, y, kappa, weights):
     try:
         probe.set_catalog(positions_2d, kappa=kappa, weights=weights)
     except CosmoSevereError:
-        return np.column_stack((x, y, np.zeros_like(x)))
+        # A plane through the observer has degenerate spherical bearings.
+        positions = np.column_stack((x, y, np.ones_like(x)))
+        return positions / np.linalg.norm(positions, axis=1)[:, None]
     probe.clear_catalogs()
     return positions_2d
 

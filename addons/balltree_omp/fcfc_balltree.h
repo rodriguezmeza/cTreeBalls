@@ -32,6 +32,7 @@ typedef struct {
 typedef struct {
     vector pos;
     real kappa;
+    real weighted_kappa;
 } fcfc_ballpoint;
 #endif
 

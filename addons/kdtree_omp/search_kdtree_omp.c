@@ -411,7 +411,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #ifdef NOSTANDARNORMHIST
         xi = 1.0;
 #else
-        xi = num/den;
+        xi = cballs_raw_legacy_multipoles(cmd) ? 1.0 : num/den;
 #endif // ! NONORMHIST
         verb_print(cmd->verbose,
                    "kdtree-omp: p falses found = %ld and %e %e %e\n",
@@ -558,7 +558,8 @@ local void walk_kdtree_one_ball(struct cmdline_data *cmd,
         if (cp < kd->nsplit) {
             DOTPSUBV(drpq2, dr, Pos(p), ntab[cp].cmpos);
             dr1 = rsqrt(drpq2);
-            if ((Radius(p) + ntab[cp].bnd.radius)/dr1 < gd->deltaR) {
+            if ((Radius(p) + ntab[cp].bnd.radius)/dr1 < gd->deltaR
+                && cballs_angular_cell_ok(cmd, Pos(p), dr, 0.0, ntab[cp].bnd.radius)) {
                 sumnode_sincos_cell(cmd, gd, p, ntab[cp], bptr,
                                     nbbcalcthread, nbccalcthread, hist);
                 SetNext(cp);
@@ -620,42 +621,19 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #endif
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
 #ifdef SINGLEP
-                        xi = q->kappa;
+                        xi = cballs_raw_legacy_multipoles(cmd) ? q->weighted_kappa : q->kappa;
 #else
-                        xi = Kappa(q);
+                        xi = cballs_raw_legacy_multipoles(cmd) ? Weight(q)*Kappa(q) : Kappa(q);
 #endif
 #ifdef TPCF
-                        REAL cosphi,sinphi;
-#if NDIM == 3
-                        REAL s, sy;
-                        compute_vector pr0;
-                        DOTVP(s, dr, hist->dr0);
-                        cosphi = s/(dr1*hist->drpq);
-                        CROSSVP(pr0,hist->dr0,Pos(p));
-                        DOTVP(sy, dr, pr0);
-#ifdef SINGLEP
-                        if (rabs(cosphi)>1.0)
-                            sinphi = 0.0;
-                        else
-                            sinphi = sqrt(1.0 - cosphi*cosphi);
-#else
-                        sinphi = rsqrt(1.0 - rsqr(cosphi));
-#endif
-                        if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                        cosphi = -dr[0]/dr1;
-                        sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-#ifdef SINGLEP
-                        if (cosphi>1.0) cosphi = 1.0;
-                        if (cosphi<-1.0) cosphi = -1.0;
-#else
-                        if (rabs(cosphi)>1.0)
-                            verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
-#endif
-                        CHEBYSHEVTUOMPSINCOS;
+                        real cosphi, sinphi;
+                        if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                            if (cballs_raw_legacy_multipoles(cmd))
+                                cballs_accumulate_raw_moments(cmd, p, hist, n,
+                                    xi, xi*xi, cosphi, sinphi);
+                            else
+                                CHEBYSHEVTUOMPSINCOS;
+                        }
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
@@ -670,30 +648,19 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         hist->histNNSubXi2pcfthread[n] + 1.;
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
 #ifdef SINGLEP
-                        xi = q->kappa;
+                        xi = cballs_raw_legacy_multipoles(cmd) ? q->weighted_kappa : q->kappa;
 #else
-                        xi = Kappa(q);
+                        xi = cballs_raw_legacy_multipoles(cmd) ? Weight(q)*Kappa(q) : Kappa(q);
 #endif
 #ifdef TPCF
-                            real cosphi,sinphi;
-#if NDIM == 3
-                            real s, sy;
-                            compute_vector pr0;
-                            DOTVP(s, dr, hist->dr0);
-                            cosphi = s/(dr1*hist->drpq);
-                            CROSSVP(pr0,hist->dr0,Pos(p));
-                            DOTVP(sy, dr, pr0);
-                            sinphi = rsqrt(1.0 - rsqr(cosphi));;
-                            if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                            cosphi = -dr[0]/dr1;
-                            sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-                            if (rabs(cosphi)>1.0)
-                                verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                               cosphi);
-                            CHEBYSHEVTUOMPSINCOS;
+                            real cosphi, sinphi;
+                            if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                                if (cballs_raw_legacy_multipoles(cmd))
+                                    cballs_accumulate_raw_moments(cmd, p, hist, n,
+                                        xi, xi*xi, cosphi, sinphi);
+                                else
+                                    CHEBYSHEVTUOMPSINCOS;
+                            }
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
@@ -735,40 +702,17 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                     hist->histNNSubXi2pcfthread[n] + npoints;
                     hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
                         
-                    xi = npoints*ntab.kappa;
+                    xi = cballs_raw_legacy_multipoles(cmd) ? ntab.weighted_kappa_sum : npoints*ntab.kappa;
 
 #ifdef TPCF
-                    REAL cosphi,sinphi;
-#if NDIM == 3
-                    REAL s, sy;
-                    compute_vector pr0;
-                    DOTVP(s, dr, hist->dr0);
-                    cosphi = s/(dr1*hist->drpq);
-                    CROSSVP(pr0,hist->dr0,Pos(p));
-                    DOTVP(sy, dr, pr0);
-#ifdef SINGLEP
-                    if (rabs(cosphi)>1.0)
-                        sinphi = 0.0;
-                    else
-                        sinphi = sqrt(1.0 - cosphi*cosphi);
-#else
-                    sinphi = rsqrt(1.0 - rsqr(cosphi));;
-#endif
-                    if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                    cosphi = -dr[0]/dr1;
-                    sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-#ifdef SINGLEP
-                    if (cosphi>1.0) cosphi = 1.0;
-                    if (cosphi<-1.0) cosphi = -1.0;
-#else
-                    if (rabs(cosphi)>1.0)
-                        verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                        cosphi);
-#endif
-                    CHEBYSHEVTUOMPSINCOS;
+                    real cosphi, sinphi;
+                    if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                        if (cballs_raw_legacy_multipoles(cmd))
+                            cballs_accumulate_raw_moments(cmd, p, hist, n,
+                                xi, ntab.weighted_kappa_sq_sum, cosphi, sinphi);
+                        else
+                            CHEBYSHEVTUOMPSINCOS;
+                    }
 #endif
                     hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;
@@ -782,27 +726,16 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                     hist->histNNSubXi2pcfthread[n] =
                     hist->histNNSubXi2pcfthread[n] + npoints;
                     hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
-                    xi = npoints*ntab.kappa;
+                    xi = cballs_raw_legacy_multipoles(cmd) ? ntab.weighted_kappa_sum : npoints*ntab.kappa;
 #ifdef TPCF
                     real cosphi, sinphi;
-#if NDIM == 3
-                    real s, sy;
-                    compute_vector pr0;
-                    DOTVP(s, dr, hist->dr0);
-                    cosphi = s/(dr1*hist->drpq);
-                    CROSSVP(pr0,hist->dr0,Pos(p));
-                    DOTVP(sy, dr, pr0);
-                    sinphi = rsqrt(1.0 - rsqr(cosphi));;
-                    if (sy < 0) sinphi *= -1.0;
-#else // ! NDIM
-                    cosphi = -dr[0]/dr1;
-                    sinphi = -dr[1]/dr1;
-#endif // ! NDIM
-                    if (rabs(cosphi)>1.0)
-                        verb_log_print(cmd->verbose, gd->outlog,
-                        "sumenode: Warning!... cossphi must be in (-1,1): %g\n",
-                                           cosphi);
-                    CHEBYSHEVTUOMPSINCOS;
+                    if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
+                        if (cballs_raw_legacy_multipoles(cmd))
+                            cballs_accumulate_raw_moments(cmd, p, hist, n,
+                                xi, ntab.weighted_kappa_sq_sum, cosphi, sinphi);
+                        else
+                            CHEBYSHEVTUOMPSINCOS;
+                    }
 #endif
                     hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;

@@ -2,22 +2,23 @@ cTreeBalls
 ==========
 
 **cTreeBalls** measures two- and three-point correlation functions from point
-catalogs and scalar fields using tree- and ball-based search methods.  The
+catalogs, scalar fields, shear, and Lyman-alpha forests using tree- and
+ball-based search methods. Supported estimators depend on the build. The
 project provides:
 
 * the compiled C command-line executable ``cballs``;
 * the static library ``libcballs.a``;
 * the Cython extension ``cyballs``;
-* test catalogs, plotting scripts, and benchmark workflows.
+* OpenMP and MPI addon engines, test catalogs, plotting scripts, and benchmarks.
 
-The guide is organized like the companion 3ptWL projects: begin with the
-overview, installation, and quickstart; use the task-oriented pages for real
-runs; then consult the tutorials and developer reference.
+This guide describes the 1.1.0 source tree, including the repaired scalar
+numerical contract. Published packages may lag behind local changes.
+Begin with :doc:`search_methods` to select the correct field and geometry.
 
 Basic Usage
 -----------
 
-Install the Python interface from PyPI:
+Install a published Python release from PyPI:
 
 .. code-block:: bash
 
@@ -32,15 +33,18 @@ Then import the compiled wrapper as ``cyballs``:
 For a no-checkout notebook workflow, open the standalone Colab example:
 `cTreeBalls minimal Colab notebook <https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb>`_.
 
-Build from a source checkout only when you also need the ``cballs`` command-line
-executable, the static library, test catalogs, or development files:
+Use a source checkout for the ``cballs`` executable, current unpublished
+changes, test catalogs, or development files:
 
 .. code-block:: bash
 
    git clone https://github.com/rodriguezmeza/cTreeBalls.git
    cd cTreeBalls
-   make clean
-   make PYTHON=python3 all
+   python3 -m pip install numpy Cython setuptools wheel
+   make -j4 cballs cyballs-static-lib
+   CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
+
+Configure one matching profile first; see :doc:`installation`.
 
 Run a compact synthetic-catalog calculation:
 
@@ -92,8 +96,12 @@ add-ons remains available under Tutorials and Reference.
    user/inputs
    user/outputs
    user/python
+   search_methods
    shear
+   lyman_alpha
+   scalar_3d
    performance
+   benchmarks
 
 .. toctree::
    :maxdepth: 2

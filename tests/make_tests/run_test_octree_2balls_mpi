@@ -177,4 +177,7 @@ compare_numeric_outputs "$TMP_ROOT/omp-and-cf" "$TMP_ROOT/mpi-and-cf" \
     || fail_with_log "MPI and-CF output differs from OpenMP" \
                      "$TMP_ROOT/mpi-and-cf/run.log"
 
+MPIEXEC="$MPIEXEC" MPIEXEC_ARGS="$MPIEXEC_ARGS" MPI_RANKS="$MPI_RANKS" \
+    "$PYTHON" ./make_tests/test_octree_2balls_mask.py --cballs "$CBALLS" --mpi
+
 echo "PASS: OCTREE2BALLSMPI exactness, aggregation, modes, and rank determinism"

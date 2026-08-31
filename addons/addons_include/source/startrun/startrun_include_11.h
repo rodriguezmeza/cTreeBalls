@@ -116,8 +116,11 @@
 #include "startrun_octree_ggg_omp_triangles_11.h"           // 68
 #endif
 
-#ifdef OCTREEKKKBALLS4OMP
-#include "startrun_octree_kkk_balls4_omp_11.h"              // 69
+#ifdef OCTREEBALLS4OMP
+#include "startrun_octree_balls4_omp_11.h"              // 69
+#endif
+#ifdef OCTREEBALLS4MPI
+#include "startrun_octree_balls4_mpi_11.h"
 #endif
 
 #ifdef OCTREEKKKBALLS4OMPTRIANGLES
@@ -151,9 +154,15 @@
 #ifdef OCTREE3PCF3DOMP
 #include "startrun_octree_3pcf_3d_omp_11.h"                 // 166
 #endif
+#ifdef OCTREE3PCF3DMPI
+#include "startrun_octree_3pcf_3d_mpi_11.h"                // 192
+#endif
 
 #ifdef LYAFORESTOMP
 #include "startrun_lya_forest_omp_11.h"                    // 169-171, 180-182
+#endif
+#ifdef LYAFORESTMPI
+#include "startrun_lya_forest_mpi_11.h"                    // 185-191
 #endif
 
 

@@ -15,6 +15,8 @@ the one used to compile cTreeBalls.
 
 The module is also importable.  A Python script or notebook can construct a
 ``KappaCatalog`` and call ``run_engine_suite`` without any FITS input.
+``--edge-corrections`` selects corrected complex 3PCF multipoles. Engine
+groups then include only methods supporting that product and the input mask.
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ class EngineSpec:
     has_3pcf: bool = True
     force_log_bins: bool = False
     supports_mask: bool = False
+    supports_edge: bool = False
     note: str = ""
 
 
@@ -59,22 +62,23 @@ KAPPA_ENGINES: Dict[str, EngineSpec] = {
     "balls-omp": EngineSpec(),
     "kdtree-omp": EngineSpec(),
     "balltree-omp": EngineSpec(),
-    "balltree-2balls-omp": EngineSpec(),
-    "balltree-2balls-mpi": EngineSpec(mpi=True),
-    "octree-2balls-omp": EngineSpec(),
-    "octree-2balls-mpi": EngineSpec(mpi=True),
-    "balltree-2balls-omp_3pcf": EngineSpec(has_2pcf=False),
-    "balltree-2balls-mpi_3pcf": EngineSpec(mpi=True, has_2pcf=False),
+    "balltree-2balls-omp": EngineSpec(supports_edge=True),
+    "balltree-2balls-mpi": EngineSpec(mpi=True, supports_edge=True),
+    "octree-2balls-omp": EngineSpec(supports_mask=True, supports_edge=True),
+    "octree-2balls-mpi": EngineSpec(mpi=True, supports_mask=True, supports_edge=True),
+    "balltree-2balls-omp_3pcf": EngineSpec(has_2pcf=False, supports_edge=True),
+    "balltree-2balls-mpi_3pcf": EngineSpec(mpi=True, has_2pcf=False, supports_edge=True),
     "balltree-mpi": EngineSpec(mpi=True),
     "octree-kkk-omp": EngineSpec(),
-    "octree-ggg-omp": EngineSpec(supports_mask=True),
-    "octree-ggg-mpi": EngineSpec(mpi=True, supports_mask=True),
+    "octree-ggg-omp": EngineSpec(supports_mask=True, supports_edge=True),
+    "octree-ggg-mpi": EngineSpec(mpi=True, supports_mask=True, supports_edge=True),
     "octree-sincos-omp-addons": EngineSpec(),
     "tree-omp-sincos": EngineSpec(),
     "direct-sincos": EngineSpec(),
     "direct-simple-sincos": EngineSpec(),
     "octree-ggg-omp-triangles": EngineSpec(has_2pcf=False),
-    "octree-kkk-balls4-omp": EngineSpec(force_log_bins=True),
+    "octree-balls4-omp": EngineSpec(force_log_bins=True, supports_mask=True, supports_edge=True),
+    "octree-balls4-mpi": EngineSpec(mpi=True, force_log_bins=True, supports_mask=True, supports_edge=True),
     "octree-kkk-balls4-omp-triangles": EngineSpec(
         has_2pcf=False, force_log_bins=True
     ),
@@ -92,6 +96,9 @@ INCOMPATIBLE_ENGINE_REASONS = {
     "octree-box-omp": "is a periodic Cartesian-box estimator",
     "neighbor-boxes-omp": "is a periodic Cartesian-box estimator",
     "octree-3pcf-3d-omp": "computes a physical 3D statistic, not angular kappa",
+    "octree-ggg-3d-omp": "alias of the physical 3D scalar estimator",
+    "octree-3pcf-3d-mpi": "computes a physical 3D statistic, not angular kappa",
+    "octree-ggg-3d-mpi": "alias of the physical 3D scalar MPI estimator",
     "lya-2pcf-omp": "requires Ly-alpha forest IDs and radial-pixel semantics",
     "lya-3pcf-omp": "requires Ly-alpha forest IDs and radial-pixel semantics",
     "lya-2pcf-3pcf-omp": "requires Ly-alpha forest IDs and radial-pixel semantics",
@@ -99,6 +106,25 @@ INCOMPATIBLE_ENGINE_REASONS = {
     "lya-1d-3pcf-omp": "requires Ly-alpha forest IDs and radial-pixel semantics",
     "lya-1d-2pcf-3pcf-omp": "requires Ly-alpha forest IDs and radial-pixel semantics",
     "lya-1d-tree-2pcf-omp": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-2pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-3pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-2pcf-3pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-1d-2pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-1d-3pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-1d-2pcf-3pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+    "lya-1d-tree-2pcf-mpi": "requires Ly-alpha forest IDs and radial-pixel semantics",
+}
+
+for _forest_method in tuple(INCOMPATIBLE_ENGINE_REASONS):
+    if _forest_method.startswith("lya-"):
+        INCOMPATIBLE_ENGINE_REASONS[_forest_method] = (
+            "requires forest IDs and observer distances; use "
+            "python/lya_corr_all_engines.py and set_forest_catalog()"
+        )
+
+METHOD_ALIASES = {
+    "octree-ggg-3d-omp": "octree-3pcf-3d-omp",
+    "octree-ggg-3d-mpi": "octree-3pcf-3d-mpi",
 }
 
 
@@ -167,6 +193,15 @@ class RunConfig:
     verbose: int = 1
     verbose_log: int = 1
     continue_on_error: bool = False
+    edge_corrections: bool = False
+
+    @property
+    def wants_edge_corrections(self) -> bool:
+        return (
+            self.edge_corrections
+            or self.result_type == "edge_effects"
+            or "edge-corrections" in _split_options(self.options)
+        )
 
     def normalized(self) -> "RunConfig":
         output_dir = Path(self.output_dir).expanduser().resolve()
@@ -189,12 +224,18 @@ class RunConfig:
             raise ValueError("require 0 < theta_min < theta_max")
         if self.result_type not in {"sincos", "edge_effects"}:
             raise ValueError("result_type must be sincos or edge_effects")
+        options = tuple(_split_options(self.options))
+        edge = self.wants_edge_corrections
+        if edge and "only-2pcf" in options:
+            raise ValueError("edge corrections require 3PCF; remove only-2pcf")
         return RunConfig(
             **{
                 **self.__dict__,
                 "engines": engines,
                 "output_dir": output_dir,
-                "options": tuple(_split_options(self.options)),
+                "options": options,
+                "edge_corrections": edge,
+                "result_type": "edge_effects" if edge else self.result_type,
             }
         )
 
@@ -282,7 +323,9 @@ def print_engine_table(available: Sequence[str]) -> None:
         products = "3PCF" if not spec.has_2pcf else (
             "2PCF" if not spec.has_3pcf else "2PCF+3PCF"
         )
-        print(f"  {name:38s} {state:11s} {parallel:12s} {products}")
+        mask = "mask=yes" if spec.supports_mask else "mask=no"
+        edge = "edge=yes" if spec.supports_edge else "edge=no"
+        print(f"  {name:38s} {state:11s} {parallel:12s} {products:9s} {mask} {edge}")
     incompatible = [name for name in available if name in INCOMPATIBLE_ENGINE_REASONS]
     if incompatible:
         print("\nBuilt engines intentionally rejected by a kappa-map driver:")
@@ -290,7 +333,10 @@ def print_engine_table(available: Sequence[str]) -> None:
             print(f"  {name:38s} {INCOMPATIBLE_ENGINE_REASONS[name]}")
 
 
-def resolve_engines(tokens: Sequence[str], available: Sequence[str]) -> list[str]:
+def resolve_engines(
+    tokens: Sequence[str], available: Sequence[str], *,
+    edge_corrections: bool = False, masked: bool = False,
+) -> list[str]:
     requested: list[str] = []
     for token in tokens or ("octree-ggg-omp",):
         requested.extend(item.strip() for item in token.split(",") if item.strip())
@@ -316,12 +362,26 @@ def resolve_engines(tokens: Sequence[str], available: Sequence[str]) -> list[str
                 raise ValueError(f"{name} is not registered as a kappa engine")
             if name not in available_set:
                 raise ValueError(f"{name} is not present in the active cballs build")
+            if edge_corrections and not KAPPA_ENGINES[name].supports_edge:
+                raise ValueError(f"{name} does not support angular edge corrections")
+            if masked and not KAPPA_ENGINES[name].supports_mask:
+                raise ValueError(f"{name} does not support read-mask in this driver")
             additions = [name]
+        if edge_corrections:
+            additions = [item for item in additions if KAPPA_ENGINES[item].supports_edge]
+        if masked:
+            additions = [item for item in additions if KAPPA_ENGINES[item].supports_mask]
         for item in additions:
             if item not in selected:
                 selected.append(item)
     if not selected:
-        raise ValueError("the selected build contains no requested kappa engines")
+        requirements = []
+        if edge_corrections:
+            requirements.append("edge corrections")
+        if masked:
+            requirements.append("read-mask")
+        suffix = " supporting " + " and ".join(requirements) if requirements else ""
+        raise ValueError("the selected build contains no requested kappa engines" + suffix)
     return selected
 
 
@@ -476,7 +536,7 @@ def get_mpi_comm(required: bool) -> Any:
         from mpi4py import MPI
     except ImportError as exc:
         raise RuntimeError(
-            "multi-rank in-memory MPI execution requires mpi4py; install mpi4py "
+            "MPI engines (including one-rank suites) require mpi4py; install mpi4py "
             "against the same MPI used to build cTreeBalls"
         ) from exc
     return MPI.COMM_WORLD
@@ -540,6 +600,16 @@ def engine_parameters(config: RunConfig, engine: str, masked: bool) -> dict:
     if masked and "read-mask" not in options:
         options.append("read-mask")
     options = _split_options(options)
+    if engine in {"octree-balls4-omp", "octree-balls4-mpi"} and "smooth-pivot" in options:
+        raise ValueError(f"{engine} does not support options=smooth-pivot")
+    if config.wants_edge_corrections:
+        if not spec.supports_edge:
+            raise ValueError(f"{engine} does not support angular edge corrections")
+        if "only-2pcf" in options:
+            raise ValueError("edge corrections require 3PCF; remove only-2pcf")
+        options = _split_options(
+            [*options, "edge-corrections", "no-normalize-HistZeta"]
+        )
     return {
         "searchMethod": engine,
         "rangeN": rmax,
@@ -567,13 +637,16 @@ def engine_parameters(config: RunConfig, engine: str, masked: bool) -> dict:
 
 def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
     spec = KAPPA_ENGINES[engine]
-    options = set(config.options)
+    options = set(_split_options(config.options))
+    edge = config.wants_edge_corrections
     want_2pcf = spec.has_2pcf and "only-3pcf" not in options
     want_3pcf = spec.has_3pcf and "only-2pcf" not in options
     result: Dict[str, Any] = {
         "engine": engine,
         "cpu_time": float(balls.getCPUTime()),
         "nbody": int(balls.getNBody()),
+        "result_type": "edge_effects" if edge else config.result_type,
+        "edge_corrections": edge,
         "warnings": [],
     }
     try:
@@ -593,7 +666,7 @@ def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
         try:
             multipoles = int(balls.getnMultipoles())
             result["multipoles"] = multipoles
-            if config.result_type == "sincos":
+            if not edge:
                 for order in range(1, multipoles + 2):
                     components = []
                     for component, name in enumerate(
@@ -612,7 +685,24 @@ def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
                     result[f"zeta_edge_{order}"] = np.asarray(
                         balls.getHistZetaM_EE(order)
                     ).copy()
+                    result[f"zeta_edge_im_{order}"] = np.asarray(
+                        balls.getHistZetaM_EE_Im(order)
+                    ).copy()
+                    for key in (f"zeta_edge_{order}", f"zeta_edge_im_{order}"):
+                        value = result[key]
+                        if value.shape != (config.bins, config.bins):
+                            raise ValueError(f"{key} has unexpected shape {value.shape}")
+                        if not np.all(np.isfinite(value)):
+                            raise ValueError(f"{key} contains nonfinite values")
+                    result[f"zeta_edge_complex_{order}"] = (
+                        result[f"zeta_edge_{order}"]
+                        + 1j * result[f"zeta_edge_im_{order}"]
+                    )
         except Exception as exc:
+            if edge:
+                raise RuntimeError(
+                    f"{engine}: requested edge-corrected 3PCF is unavailable: {exc}"
+                ) from exc
             result["warnings"].append(f"3PCF multipoles unavailable: {exc}")
     return result
 
@@ -633,6 +723,11 @@ def save_engine_results(root: Path, result: dict) -> None:
         if match:
             np.savetxt(
                 python_root / f"histZetaM_EE_{match.group(1)}.txt", value
+            )
+        match_im = re.fullmatch(r"zeta_edge_im_(\d+)", key)
+        if match_im:
+            np.savetxt(
+                python_root / f"histZetaM_EE_Im_{match_im.group(1)}.txt", value
             )
     metadata = {
         key: value
@@ -655,16 +750,24 @@ def run_engine_suite(
 
     config = config.normalized()
     if comm is None:
-        comm = SerialComm()
+        comm = get_mpi_comm(
+            mpi_environment_size() > 1
+            or any(KAPPA_ENGINES[e].mpi for e in config.engines if e in KAPPA_ENGINES)
+        )
     catalog = catalog.normalized()
     masked = catalog.mask is not None
     for engine in config.engines:
         if engine not in KAPPA_ENGINES:
             raise ValueError(f"unknown kappa engine: {engine}")
+        # Validate requested products before constructing an object on any rank.
+        engine_parameters(config, engine, masked)
         if masked and not KAPPA_ENGINES[engine].supports_mask:
+            supported = ", ".join(
+                name for name, spec in KAPPA_ENGINES.items() if spec.supports_mask
+            )
             raise ValueError(
                 f"{engine} does not document read-mask semantics; use "
-                "octree-ggg-omp or octree-ggg-mpi for a masked kappa map"
+                f"one of {supported} for a masked kappa map"
             )
 
     config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -742,6 +845,8 @@ def run_engine_suite(
                 engine: {
                     "cpu_time": value.get("cpu_time"),
                     "wall_time": value.get("wall_time"),
+                    "edge_corrections": value["edge_corrections"],
+                    "result_type": value["result_type"],
                     "warnings": value.get("warnings", []),
                 }
                 for engine, value in results.items()
@@ -789,7 +894,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--save-catalog-npz", type=Path)
     parser.add_argument(
         "--engine", "--engines", dest="engines", action="append", default=[],
-        help="repeat or use comma lists; all, all-omp, and all-mpi are accepted",
+        help="repeat or use comma lists; all, all-omp, and all-mpi select available "
+             "methods compatible with the requested edge correction and mask",
     )
     parser.add_argument("--list-engines", action="store_true")
     parser.add_argument("--cballs", type=Path, default=DEFAULT_CBALLS)
@@ -814,8 +920,13 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--phiR", type=float, default=90.0)
     parser.add_argument("--more-options", action="append", default=[])
     parser.add_argument(
+        "--edge-corrections", action="store_true",
+        help="compute and save complex edge-corrected 3PCF; equivalent to --type edge_effects",
+    )
+    parser.add_argument(
         "--type", dest="result_type", choices=("sincos", "edge_effects"),
         default="sincos",
+        help="3PCF output: sincos components or edge-corrected complex multipoles",
     )
     parser.add_argument("--verbose", type=int, default=1)
     parser.add_argument("--verbose-log", type=int, default=1)
@@ -842,7 +953,10 @@ def main() -> int:
         executable_only = [
             name for name in executable_methods if name not in cython_methods
         ]
-        cython_only = [name for name in cython_methods if name not in executable_methods]
+        cython_only = [
+            name for name in cython_methods
+            if name not in executable_methods and name not in METHOD_ALIASES
+        ]
         if executable_only or cython_only:
             print(
                 "WARNING: cballs and cyballs were built with different search "
@@ -862,26 +976,48 @@ def main() -> int:
         if args.list_engines:
             print_engine_table(available)
             return 0
-        engines = resolve_engines(args.engines, available)
+        config = RunConfig(
+            engines=args.engines or ("octree-ggg-omp",),
+            output_dir=args.outdir,
+            theta_min=args.theta_min,
+            theta_max=args.theta_max,
+            theta_scale=args.theta_scale,
+            bins=args.nbins,
+            multipoles=args.multipoles,
+            threads=args.threads,
+            use_log_bins=not args.linear_bins,
+            tree_theta=args.tree_theta,
+            nsmooth=args.nsmooth,
+            phi_left=args.phiL,
+            phi_right=args.phiR,
+            theta_left=args.thetaL,
+            theta_right=args.thetaR,
+            options=args.more_options,
+            result_type=args.result_type,
+            verbose=args.verbose,
+            verbose_log=args.verbose_log,
+            continue_on_error=args.continue_on_error,
+            edge_corrections=args.edge_corrections,
+        ).normalized()
+        engines = resolve_engines(
+            args.engines, available, edge_corrections=config.wants_edge_corrections,
+            masked=args.mask is not None or "read-mask" in config.options,
+        )
         needs_mpi = any(KAPPA_ENGINES[engine].mpi for engine in engines)
-        if needs_mpi and args.mpi_ranks > 1 and os.environ.get(MPI_CHILD_ENV) != "1":
+        if (needs_mpi and args.mpi_ranks > 1 and mpi_environment_size() == 1
+                and os.environ.get(MPI_CHILD_ENV) != "1"):
             return spawn_mpi(args)
 
-        # Multi-rank jobs need mpi4py so rank 0 can broadcast the one catalog
-        # read.  A single-rank MPI engine can let the C addon own MPI directly.
-        python_mpi_required = needs_mpi and (
-            args.mpi_ranks > 1
-            or os.environ.get(MPI_CHILD_ENV) == "1"
-            or mpi_environment_size() > 1
-        )
+        # Python owns MPI for the entire suite, including one-rank MPI runs.
+        # An engine cleanup must not finalize MPI before the next engine runs.
+        python_mpi_required = needs_mpi or mpi_environment_size() > 1
         comm = get_mpi_comm(python_mpi_required)
         if os.environ.get(MPI_CHILD_ENV) == "1" and comm.size != args.mpi_ranks:
             raise RuntimeError(
                 f"mpiexec started {comm.size} ranks, expected {args.mpi_ranks}"
             )
 
-        catalog = None
-        if comm.rank == 0:
+        def load_catalog():
             if args.fits is not None:
                 catalog = catalog_from_healpix(
                     args.fits,
@@ -913,30 +1049,29 @@ def main() -> int:
                 f"Catalog loaded once on rank 0: {catalog.nbody} bodies",
                 flush=True,
             )
+            return catalog
+        catalog = None
+        load_error = None
+        if comm.rank == 0:
+            try:
+                catalog = load_catalog()
+            except Exception as exc:
+                load_error = f"{type(exc).__name__}: {exc}"
+        load_error = comm.bcast(load_error, root=0)
+        if load_error:
+            raise RuntimeError(load_error)
         catalog = broadcast_catalog(comm, catalog)
 
-        config = RunConfig(
-            engines=engines,
-            output_dir=args.outdir,
-            theta_min=args.theta_min,
-            theta_max=args.theta_max,
-            theta_scale=args.theta_scale,
-            bins=args.nbins,
-            multipoles=args.multipoles,
-            threads=args.threads,
-            use_log_bins=not args.linear_bins,
-            tree_theta=args.tree_theta,
-            nsmooth=args.nsmooth,
-            phi_left=args.phiL,
-            phi_right=args.phiR,
-            theta_left=args.thetaL,
-            theta_right=args.thetaR,
-            options=args.more_options,
-            result_type=args.result_type,
-            verbose=args.verbose,
-            verbose_log=args.verbose_log,
-            continue_on_error=args.continue_on_error,
-        )
+        # NPZ masks are only known after the one catalog read and broadcast.
+        config.engines = tuple(resolve_engines(
+            args.engines, available, edge_corrections=config.wants_edge_corrections,
+            masked=catalog.mask is not None or "read-mask" in config.options,
+        ))
+        if comm.rank == 0:
+            print(
+                "Selected " + ("edge-corrected " if config.wants_edge_corrections else "")
+                + "engines: " + ", ".join(config.engines), flush=True,
+            )
         run_engine_suite(catalog, config, comm=comm)
         if comm.rank == 0:
             print(f"Results written to {Path(args.outdir).expanduser().resolve()}")

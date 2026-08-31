@@ -1,88 +1,57 @@
 Build Configuration
 ===================
 
-cTreeBalls uses three layers of build configuration:
+Three files select the native and Python profile:
 
-``Makefile_settings``
-    Core feature switches such as dimension, GSL, OpenMP, and add-ons.
+* ``Makefile_settings``: dimensions, GSL, OpenMP, and addon support.
+* ``Makefile_machine``: toolchain, precision, optimization, and library discovery.
+* ``addons/Makefile_addons_settings``: engines, I/O, Cython hooks, and optional features.
 
-``Makefile_machine``
-    Compiler, optimization, Python executable, OpenMP flag, and external
-    library paths.
+See :doc:`../build_profiles` for dependency and ABI details.
+Use :doc:`../search_methods` to select the corresponding engine switches.
 
-``addons/Makefile_addons_settings``
-    Optional search methods, I/O libraries, Cython declarations, and
-    experimental features.
+Important Controls
+------------------
 
-Core Settings
--------------
+``DEFDIMENSION``
+    Body coordinate dimension, 2 or 3. Radial forest searches still require 3.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 25 15 60
+``TWOPCFON`` / ``TPCFON``
+    Compiled scalar correlation orders. Runtime selectors are engine-specific.
 
-   * - Setting
-     - Default
-     - Meaning
-   * - ``DEFDIMENSION``
-     - ``3``
-     - Compile for two- or three-dimensional positions.
-   * - ``USEGSL``
-     - ``1``
-     - Enable GSL-dependent routines.
-   * - ``GSLINTERNAL``
-     - ``1``
-     - Build bundled GSL sources; set to ``0`` for a configured system GSL.
-   * - ``OPENMPMACHINE``
-     - ``1``
-     - Enable OpenMP compilation and ``numberThreads``.
-   * - ``ADDONSON``
-     - ``1``
-     - Include optional engines, formats, parser support, and Python hooks.
+``SINGLEPON``
+    ``0`` retains double storage/computation; ``1`` selects mixed precision:
+    compact storage for selected data with double computation/accumulation.
+    This is not a blanket float32 histogram build. Validate numerical errors.
 
-Important Add-on Settings
--------------------------
+``SMOOTHPIVOTON``
+    Compile pivot-smoothing capability. It does not activate smoothing without
+    ``options=smooth-pivot``. Unsupported engines reject the runtime request.
 
-``OCTREEGGGOMPON``, ``KDTREEOMPON``, ``KDTREEBOXOMPON``, and
-``NEIGHBORBOXESOMPON`` select search implementations.  ``CLASSLIBON`` and
-``PXDON`` support the Cython wrapper.  ``IOLIBON`` and ``CFITSIOON`` enable
-additional catalog formats.  ``TWOPCFON`` and ``TPCFON`` control compilation
-of two- and three-point statistics.
+``CLASSLIBON`` / ``PXDON``
+    Parser and wrapper hooks required by cyballs, together with ``ADDONSON=1``
+    and ``USEGSL=1``.
 
-Several lower sections of ``addons/Makefile_addons_settings`` are explicitly
-marked experimental or development-only.  Do not enable them for production
-without validating against the repository test suite.
-
-Machine Variables
------------------
-
-``CC``
-    C compiler, normally ``gcc``.
-
-``PYTHON``
-    Python executable used for the extension build.  Override with
-    ``PYTHON=python3`` at make time.
-
-``GSLINTERNAL``
-    Default is currently ``1``, not ``0``.
+``CC`` / ``MPICC``
+    C compiler and MPI wrapper. Enabled MPI addons select MPI-aware compilation.
+    The selected compiler and its OpenMP runtime must agree.
 
 ``OPTFLAG``
-    Optimization flags are currently ``-O3 -fno-fast-math``.
+    The source profile uses ``-O3 -fno-fast-math``. Do not assume historical
+    ``-ffast-math`` instructions preserve the numerical contract.
 
-``OMPFLAG``
-    OpenMP compiler flag, currently ``-fopenmp``.
+``PYTHON``
+    Interpreter used by Make's Python targets. Select the same environment
+    for setup.py, pip, tests, and notebooks.
 
-``NAGBODYDIR``
-    Base path used when external GSL or CFITSIO libraries are selected.
+Inspect and Rebuild
+-------------------
 
-For the full C/Cython profile coupling, see :doc:`../build_profiles`.
+``./cballs options=make-info`` reports the executable's compiled settings.
+``make --no-print-directory -s print-cyballs-build-env`` reports the profile
+that a new wrapper build will consume. They answer different questions.
 
-After Changing Settings
------------------------
-
-.. code-block:: bash
-
-   make clean
-   make PYTHON=python3 all
-
-Record the three configuration files with benchmark and production outputs.
+Rebuild both C and Cython after changing a profile; use the matching commands
+in :doc:`../installation`. A command-line make override alone is not carried
+into an independent Python build. Retain the profile and actual module path
+alongside scientific outputs.

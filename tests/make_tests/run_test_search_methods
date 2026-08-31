@@ -86,14 +86,34 @@ check_method_help 'balltree-2balls-mpi_3pcf' \
     'deterministic MPI+OpenMP LogMultipole frontier'
 check_method_help 'balltree-2balls-mpi_3pcf' \
     'treecorr-direct-triples, which remains an OpenMP validation oracle'
-check_method_help 'octree-kkk-balls4-omp' \
+check_method_help 'octree-balls4-omp' \
     'weighted convergence 2PCF and balls4 KKK 3PCF multipoles'
-check_method_help 'octree-kkk-balls4-omp' \
+check_method_help 'octree-balls4-omp' \
     'Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF'
-check_method_help 'octree-kkk-balls4-omp' \
+check_method_help 'octree-balls4-omp' \
     'compute-HistN,and-CF writes pair-count/CF files'
-check_method_help 'octree-kkk-balls4-omp' \
-    'Keep SMOOTHPIVOTON=0'
+check_method_help 'octree-balls4-omp' \
+    'Works with SMOOTHPIVOTON=0 or 1; options=smooth-pivot is not supported'
+check_method_help 'octree-balls4-omp' \
+    'window modes through 2*mChebyshev'
+check_method_help 'octree-balls4-mpi' \
+    'Enable OCTREEBALLS4MPION=1 and run with mpiexec'
+check_method_help 'lya-2pcf-mpi' 'Enable LYAFORESTMPION=1'
+check_method_help 'octree-3pcf-3d-mpi' 'Enable OCTREE3PCF3DMPION=1'
+check_method_help 'octree-3pcf-3d-mpi' 'data/random survey estimator and edge correction'
+check_method_help 'lya-1d-tree-2pcf-mpi' 'weighted radial-only 2PCF with same-forest subtraction'
+check_method_help 'lya-2pcf-omp' 'cyballs.set_forest_catalog'
+check_method_help 'lya-2pcf-mpi' 'python/lya_corr_all_engines.py'
+check_method_help 'octree-3pcf-3d-mpi' 'not the three-distinct-forest estimator'
+
+for option in compute-2pcf-3d compute-3pcf-3d survey-estimator-3d \
+    encore-survey-estimator survey-edge-correction survey-keep-top-multipole \
+    exclude-same-los exclude-los exclude-pivot-los treecorr-bucket-leaves; do
+    if ! grep -Fq -- "- ${option} [" "${options_output}"; then
+        printf 'FAIL: print-options is missing %s\n' "${option}" >&2
+        exit 1
+    fi
+done
 
 if ! grep -Fq -- '- print-search-methods [startup]:' "${options_output}"; then
     printf 'FAIL: print-options does not advertise print-search-methods\n' >&2

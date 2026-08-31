@@ -26,6 +26,12 @@ pairs and triplets, providing the reference path used by the regression tests.
 `nsmooth` sets leaf capacity, `theta` scales the split tolerances, and
 `weights-norm` selects weighted scalar normalization.
 
+Three-dimensional angular phases and acceptance use projected tangent
+bearings in the original observer frame, with chord-distance bins.
+See [the scalar contract](../../docs/3pcf.rst) for the positive complex-mode
+convention and undefined-bearing policy. Raw `no-normalize-HistZeta` runs
+already exclude repeated neighbors; do not remove them again in Python.
+
 The 3PCF multipoles are normalized at runtime by default. Add
 `no-normalize-HistZeta` to retain raw distinct-triplet sums. With
 `weights-norm`, the denominator is the distinct-triplet weight sum; otherwise

@@ -5,13 +5,13 @@
 local bool iolib_preserve_common_catalog_frame(
         struct cmdline_data *cmd, struct global_data *gd)
 {
-    bool preserve = FALSE;
+    bool preserve = cballs_observer_frame(cmd);
 
     (void)cmd;
     (void)gd;
 
-#ifdef OCTREE3PCF3DOMP
-    preserve = gd->searchMethod_int == 166
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
+    preserve |= cb3d_is_method(cmd->searchMethod)
         && (scanopt(cmd->options, "survey-estimator-3d")
             || scanopt(cmd->options, "encore-survey-estimator")
             || scanopt(cmd->options, "survey-edge-correction"));
@@ -409,7 +409,7 @@ local int inputdata_ascii_mcolumns(struct cmdline_data* cmd, struct  global_data
         Mass(p) = mass;
         Weight(p) = weight;
         Id(p) = p-bodytable[ifile]+1;
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
         Octree3pcf3dLosId(p) = Id(p);
 #endif
 #if NDIM == 3
@@ -548,7 +548,7 @@ cleanup_root:
         }
         kavg += Kappa(p);
     }
-#ifdef OCTREE3PCF3DOMP
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     gd->octree3pcf3d_los_ids[ifile] = TRUE;
 #endif
     verb_print_q(2, cmd->verbose,

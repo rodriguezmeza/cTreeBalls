@@ -41,6 +41,15 @@ PYTHON_FILES = python/cyballs.pyx setup.py python/ccyballs.pxd.in
 
 all: $(EXEC) lib$(EXEC).a cyballs
 
+# Reader headers may be dropped by later legacy HEADERFILES assignments.
+cballsio.o: $(wildcard $(MDIR)/addons/iolib/*.h) \
+            $(wildcard $(MDIR)/addons/cfitsio/*.h)
+
+search_balltree_2balls_omp.o search_balltree_2balls_mpi.o \
+search_balltree_2balls_omp_3pcf.o search_balltree_2balls_mpi_3pcf.o \
+search_octree_2balls_omp.o search_octree_2balls_mpi.o: \
+	$(MDIR)/addons/balltree_2balls_omp/treecorr_edge_correction.h
+
 lib$(EXEC).a: $(OBJS) $(EXTERNAL)
 	$(AR)  $@ $(addprefix $(WRKDIR)/, $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
 
@@ -77,6 +86,11 @@ print-cyballs-build-env:
 	@printf '__CBALLS_OCTREE2BALLSMPION__=%s\n' '$(OCTREE2BALLSMPION)'
 	@printf '__CBALLS_BALLTREEMPION__=%s\n' '$(BALLTREEMPION)'
 	@printf '__CBALLS_OCTREEGGGMPION__=%s\n' '$(OCTREEGGGMPION)'
+	@printf '__CBALLS_OCTREEBALLS4MPION__=%s\n' '$(OCTREEBALLS4MPION)'
+	@printf '__CBALLS_LYAFORESTOMPON__=%s\n' '$(LYAFORESTOMPON)'
+	@printf '__CBALLS_LYAFORESTMPION__=%s\n' '$(LYAFORESTMPION)'
+	@printf '__CBALLS_OCTREE3PCF3DOMPON__=%s\n' '$(OCTREE3PCF3DOMPON)'
+	@printf '__CBALLS_OCTREE3PCF3DMPION__=%s\n' '$(OCTREE3PCF3DMPION)'
 	@printf '__CBALLS_GSLINTERNAL__=%s\n' '$(GSLINTERNAL)'
 	@printf '__CBALLS_MACOSX_DEPLOYMENT_TARGET__=%s\n' '$(MACOSX_DEPLOYMENT_TARGET)'
 #E
@@ -87,13 +101,13 @@ print-cyballs-build-env:
 #
 .PHONY: test-default test-balls test-p0-regressions test-p1-regressions \
 	test-p2-regressions test-p2-cython test-cell-production \
-	test-openmp-determinism test-kdtree-no-one-ball \
+	test-openmp-determinism test-octree-ggg-fast-path test-kdtree-no-one-ball \
 	test-balltree-omp test-balltree-2balls-omp test-balltree-2balls-mpi \
 	test-balltree-2balls-3pcf \
 	test-balltree-2balls-omp-3pcf test-balltree-2balls-mpi-3pcf \
-	test-octree-2balls-omp \
+	test-octree-2balls-omp test-octree-2balls-mask \
 	test-balltree-mpi test-octree-2balls-mpi test-octree-ggg-mpi \
-	test-octree-3pcf-3d-omp test-octree-kkk-balls4-no-smoothing \
+	test-octree-3pcf-3d-omp test-octree-balls4-no-smoothing \
 		test-lya-forest-omp test-lya-forest-1d-omp \
 	test-lya2pcf-reference \
 	test-p3-cython test-sanitizer-smoke \
@@ -233,6 +247,15 @@ test-singlep-search:
 	rm -rf "$$tmp"; \
 	exit $$status
 
+.PHONY: test-scalar-numerical-contract
+test-scalar-numerical-contract: $(EXEC) cyballs
+	$(PYTHON) tests/make_tests/test_scalar_numerical_contract.py
+
+test-octree-ggg-fast-path: $(EXEC) cyballs
+	$(PYTHON) tests/make_tests/test_octree_ggg_fast_path.py
+	$(PYTHON) tests/make_tests/test_octree_ggg_only_2pcf.py
+	$(PYTHON) tests/make_tests/test_octree_ggg_edge_corrections.py
+
 test-openmp-determinism: $(EXEC) cyballs
 	cd tests && bash ./make_tests/run_test_openmp_determinism
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
@@ -276,6 +299,14 @@ test-octree-2balls-omp: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./make_tests/run_test_octree_2balls_omp
 
+test-octree-2balls-mask: $(EXEC)
+	$(PYTHON) tests/make_tests/test_octree_2balls_mask.py --cballs $(CURDIR)/$(EXEC)
+
+.PHONY: test-two-ball-edge
+test-two-ball-edge: $(EXEC)
+	$(PYTHON) tests/make_tests/test_two_ball_edge_corrections.py \
+		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION)
+
 test-octree-2balls-mpi:
 	$(MAKE) -B OCTREE2BALLSMPION=1 cballs
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
@@ -291,19 +322,51 @@ test-octree-ggg-mpi:
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
 		bash ./make_tests/run_test_octree_ggg_mpi
 
+.PHONY: test-octree-3pcf-3d-mpi
+test-octree-3pcf-3d-mpi: $(EXEC)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_octree_3pcf_3d_mpi.py \
+		--cballs $(CURDIR)/$(EXEC) \
+		--mpi-command "$(MPIEXEC) -n 2" $(CB3D_MPI_TEST_ARGS)
+
 test-octree-3pcf-3d-omp: $(EXEC)
 	CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./tests/make_tests/run_test_octree_3pcf_3d_omp
 
-test-octree-kkk-balls4-no-smoothing:
+.PHONY: test-octree-balls4-no-smoothing test-octree-balls4-profile
+test-octree-balls4-no-smoothing:
 	$(MAKE) -B OCTREESMOOTHINGON=0 BALLSON=0 BALLS4SCANLEVON=0 \
-		OCTREEKKKBALLS4OMPON=1 cballs cyballs
-	CBALLS=$(CURDIR)/$(EXEC) PYTHONDONTWRITEBYTECODE=1 \
-		$(PYTHON) tests/make_tests/test_octree_kkk_balls4_no_smoothing.py
+		OCTREEBALLS4OMPON=1 test-octree-balls4-profile
+
+test-octree-balls4-profile: $(EXEC) cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	CBALLS=$(CURDIR)/$(EXEC) PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(PYTHONPATH) \
+		$(PYTHON) tests/make_tests/test_octree_balls4_no_smoothing.py
+
+.PHONY: test-octree-balls4-edge test-octree-balls4-mpi
+test-octree-balls4-edge: $(EXEC) cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) \
+		$(PYTHON) tests/make_tests/test_octree_balls4_edge.py --cballs $(CURDIR)/$(EXEC) --cython
+
+test-octree-balls4-mpi: $(EXEC)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_octree_balls4_edge.py \
+		--cballs $(CURDIR)/$(EXEC) --mpi-command "$(if $(MPIEXEC),$(MPIEXEC),mpiexec) -n 2"
 
 test-lya-forest-omp: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		$(PYTHON) ./make_tests/test_lya_forest_omp.py
+
+.PHONY: test-lya-corr-all-engines
+test-lya-corr-all-engines: cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) \
+		$(PYTHON) -m pytest -q tests/make_tests/test_lya_corr_all_engines.py
+
+.PHONY: test-lya-forest-mpi
+test-lya-forest-mpi: $(EXEC)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_lya_forest_mpi.py \
+		--cballs $(CURDIR)/$(EXEC) \
+		--mpi-command "$(if $(MPIEXEC),$(MPIEXEC),mpiexec) -n 2" $(LYA_MPI_TEST_ARGS)
 
 test-lya-forest-1d-omp: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
