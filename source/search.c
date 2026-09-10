@@ -70,10 +70,9 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         verb_print(cmd->verbose, "with option behavior-ball... \n");
     if (cballs_opt_no_one_ball(cmd))
         verb_print(cmd->verbose, "with option no-one-ball... \n");
-#ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd))
         verb_print(cmd->verbose,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
-#endif
 #ifndef TPCF
         verb_print(cmd->verbose, "computing only 2pcf... \n");
 #endif

@@ -5,15 +5,18 @@
 
 #B Set of settings
 #
+ifneq ($(filter 1,$(KDTREEOMPON) $(KDTREEMPION)),)
 ifeq ($(KDTREEOMPON),1)
 OPT2 += -DKDTREEOMP
+endif
 #KDTREEOMP = ../addons/kdtree_omp/
 KDTREEOMP = $(MDIR)/addons/kdtree_omp/
 #vpath %.c ./addons/kdtree_omp/
 vpath %.c $(MDIR)/addons/kdtree_omp/
 INCLUDES += -I$(KDTREEOMP)
-HEADERFILES = $(wildcard $(KDTREEOMP)/*.h)
-EXTERNAL += kdtree.o search_kdtree_omp.o
+HEADERFILES += $(wildcard $(KDTREEOMP)/*.h)
+HEADERFILES += $(MDIR)/addons/balltree_2balls_omp/dual_node_edge_correction.h
+EXTERNAL += kdtree.o search_kdtree_omp.o kdtree_edge.o
 endif
 #
 #E

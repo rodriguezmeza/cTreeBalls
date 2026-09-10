@@ -3,6 +3,8 @@
 
 #include "fcfc_octree_ggg_mpi.h"
 
+#define OCTREEGGGMPIMETHOD 172
+
 global int searchcalc_octree_ggg_mpi(struct cmdline_data *,
                                      struct global_data *, bodyptr *,
                                      INTEGER *, INTEGER, INTEGER *, int, int);

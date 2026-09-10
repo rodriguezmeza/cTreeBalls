@@ -9,7 +9,7 @@ from cyballs import cballs
 
 def parameters(root_dir, nbody):
     return {
-        "searchMethod": "octree-ggg-omp",
+        "searchMethod": "octree-2balls-omp",
         "testmodel": "simple-cubic",
         "nbody": nbody,
         "rootDir": root_dir,

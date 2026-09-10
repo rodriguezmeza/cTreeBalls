@@ -244,7 +244,7 @@ def _ctree_settings(config: ComparisonConfig, root: Path) -> Dict[str, object]:
         "iCatalogs": "1,2",
         "options": (
             "survey-estimator-3d,compute-2pcf-3d,compute-3pcf-3d,"
-            "survey-keep-top-multipole"
+            "survey-keep-top-multipole,no-smooth-pivot"
         ),
     }
 
@@ -316,7 +316,7 @@ def run_ctreeballs_cli(
         (
             "options=pos-and-convergence-weight,survey-estimator-3d,"
             "compute-2pcf-3d,compute-3pcf-3d,"
-            "survey-keep-top-multipole"
+            "survey-keep-top-multipole,no-smooth-pivot"
         ),
     ]
     if config.search_method.endswith("-mpi"):

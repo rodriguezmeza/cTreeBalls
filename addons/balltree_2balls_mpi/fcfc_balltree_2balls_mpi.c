@@ -32,7 +32,8 @@ static int mpi_finalized = FALSE;
 static int method_selected(const struct cmdline_data *cmd)
 {
     return cmd->searchMethod != NULL
-        && strcmp(cmd->searchMethod, BALLTREE_2BALLS_MPI_METHOD) == 0;
+        && strcmp(cmd->searchMethod, BALLTREE_2BALLS_MPI_METHOD) == 0
+        && !cballs_opt_legacy_one_ball(cmd);
 }
 
 static void finalize_at_exit(void)

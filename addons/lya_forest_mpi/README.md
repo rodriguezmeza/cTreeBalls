@@ -14,6 +14,7 @@ Build with an MPI C compiler (`MPICC`, normally `mpicc`), OpenMP, and
 | lya-1d-3pcf-mpi | 189 | Radial-only signed-lag 3PCF |
 | lya-1d-2pcf-3pcf-mpi | 190 | Both radial estimators |
 | lya-1d-tree-2pcf-mpi | 191 | Exact interval-tree radial 2PCF |
+| lya-1d-tree-3pcf-mpi | 194 | Exact interval-tree radial 3PCF |
 
 ## Run
 
@@ -46,6 +47,8 @@ The shared OpenMP kernels evaluate disjoint cyclic subsets of work:
 - Radial scans partition fixed `LYA1D_OMP_PIVOT_BLOCK_SIZE` pivot blocks.
 - The radial tree partitions fixed blocks of node-pair tasks and, separately,
   same-forest subtraction tasks.
+- The radial 3PCF tree partitions fixed pivot blocks. Each pivot uses exact
+  signed-bin node moments and sparse same-forest neighbor-pair subtraction.
 
 There must be enough logical blocks to occupy the requested ranks. Small
 catalogs may use only one rank for a radial/tree workload.
@@ -69,16 +72,16 @@ writes histograms and logs. Output filenames and columns match the corresponding
 
 ## Cython
 
-Cython accepts the same seven method names and file-based input. Launch Python
+Cython accepts the same eight method names and file-based input. Launch Python
 under `mpiexec`, import `mpi4py.MPI`, and have **every rank** call `Run` and
 cleanup in the same order. Read the output files only on rank 0 after `Run`
 returns. MPI initialized by Python is not finalized by a cyballs object.
 Generic kappa in-memory arrays do not include forest IDs or the required
 radial metadata and are not a replacement for `lya-ascii` input.
 Use the forest-specific `set_forest_catalog(positions, delta, weights, forest_ids)`
-API instead. The `python/lya_corr_all_engines.py` driver reads DESI FITS, ASCII
+API instead. The `tests/python/lya_corr_all_engines.py` driver reads DESI FITS, ASCII
 or NPZ once on rank 0, broadcasts NumPy arrays once, and retains them across all
-selected engines. See `python/README_lya_corr_all_engines.md`.
+selected engines. See `tests/python/README_lya_corr_all_engines.md`.
 
 ## Tests
 

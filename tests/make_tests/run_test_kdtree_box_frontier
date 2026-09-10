@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-kdtree-box.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    echo "ERROR: $1" >&2
+    [ ! -f "${2:-/dev/null}" ] || cat "$2" >&2
+    exit 1
+}
+
+make_info=$("$CBALLS" options=make-info 2>&1 || true)
+grep -Eq -- 'KDTREEBOXOMPON[[:space:]]+= 1' <<<"$make_info" \
+    || fail_with_log "the active build does not enable KDTREEBOXOMP"
+grep -q -- 'with BALLS4SCANLEV:' <<<"$make_info" \
+    || fail_with_log "the active build does not enable BALLS4SCANLEV"
+
+run_case()
+{
+    local threads=$1
+    local output="$TMP_ROOT/t$threads"
+
+    mkdir -p "$output"
+    "$CBALLS" search=kdtree-box-omp testmodel=simple-cubic-random \
+        nbody=4096 lengthBox=2 rootDir="$output" numberThreads="$threads" \
+        usePeriodic=true useLogHist=false rangeN=0.2 rminHist=0.005 \
+        sizeHistN=8 nsmooth=8 seed=123 stepState=1000000 \
+        verbose=2 verbose_log=0 \
+        options=compute-HistN,and-CF,no-smooth-pivot \
+        >"$output/run.log" 2>&1 \
+        || fail_with_log "kdtree-box-omp failed with $threads threads" \
+                         "$output/run.log"
+}
+
+run_case 1
+run_case "$MULTI_THREADS"
+
+grep -q -- 'KD scan-level frontier has' "$TMP_ROOT/t1/run.log" \
+    || fail_with_log "the periodic KD frontier was not activated" \
+                     "$TMP_ROOT/t1/run.log"
+! grep -q -- 'scanLevelB4' "$TMP_ROOT/t1/run.log" \
+    || fail_with_log "periodic KD unexpectedly allocated an octree B4 table" \
+                     "$TMP_ROOT/t1/run.log"
+
+reference_list=$(cd "$TMP_ROOT/t1" && \
+    find . -maxdepth 1 -type f \
+        \( -name 'hist*.txt' -o -name rbins.txt \) -print | LC_ALL=C sort)
+candidate_list=$(cd "$TMP_ROOT/t$MULTI_THREADS" && \
+    find . -maxdepth 1 -type f \
+        \( -name 'hist*.txt' -o -name rbins.txt \) -print | LC_ALL=C sort)
+[ -n "$reference_list" ] || fail_with_log "no periodic KD output was produced"
+[ "$reference_list" = "$candidate_list" ] \
+    || fail_with_log "periodic KD output file sets differ"
+
+while IFS= read -r filename; do
+    cmp -s "$TMP_ROOT/t1/$filename" "$TMP_ROOT/t$MULTI_THREADS/$filename" \
+        || fail_with_log "periodic KD is not repeatable: $filename" \
+                         "$TMP_ROOT/t$MULTI_THREADS/run.log"
+done <<<"$reference_list"
+
+echo "PASS: KDTREEBOXOMP scan-level frontier is $MULTI_THREADS-thread repeatable"

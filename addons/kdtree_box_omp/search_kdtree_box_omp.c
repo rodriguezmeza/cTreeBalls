@@ -13,6 +13,7 @@
 #include "globaldefs.h"
 
 #include "kdtree.h"
+#include "../kdtree_omp/kdtree_scan_frontier.h"
 
 //B Some macros and definitions
 #define KD_COORD_DELTA(a, b) ((real)(a) - (real)(b))
@@ -266,9 +267,27 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
 //E
     gd->ncellTable[cat1] = kd->nnode;               // Equivalent of octree cells
 
+    const INTEGER pivot_count = ipmax[cat1] - ipmin + 1;
+#ifdef BALLS4SCANLEV
+    const bool complete_auto_catalog = cat1 == cat2 && ipmin == 1
+        && ipmax[cat1] == nbody[cat1] && btab[cat1] == kd->body_base;
+    const kdtree_scan_frontier pivot_frontier =
+        kdtree_scan_frontier_make(kd, pivot_count, complete_auto_catalog);
+    const INTEGER task_count = pivot_frontier.count;
+    verb_print(cmd->verbose,
+               "%s: KD scan-level frontier has %" INTEGER_FMT
+               " tasks in %s order\n",
+               cmd->searchMethod, task_count,
+               pivot_frontier.tree_order ? "tree" : "catalog");
+#else
+    const kdtree_scan_frontier pivot_frontier = {pivot_count, FALSE};
+    const INTEGER task_count = pivot_count;
+#endif
+
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
-    rootnode, cat1, cat2, kd, ipfalse, allocation_failed)
+    rootnode, cat1, cat2, kd, ipfalse, allocation_failed, \
+    pivot_count, pivot_frontier, task_count)
     {
         bodyptr p;
         int n;
@@ -296,32 +315,41 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
         real lbox_h = 0.5*lbox;
 
 #pragma omp for nowait schedule(static,1)
-    DO_BODY(p, btab[cat1]+ipmin-1, btab[cat1]+ipmax[cat1]) {
-        if (allocation_failed) continue;
-        for (n = 1; n <= cmd->sizeHistN; n++) {
-            hist.histXi2pcfthreadsub[n] = 0.0;      // Affects only 2pcf
+        for (INTEGER task = 0; task < task_count; task++) {
+            INTEGER first;
+            INTEGER end;
+            kdtree_scan_frontier_range(&pivot_frontier, kd, pivot_count,
+                                       ipmin - 1, task, &first, &end);
+            for (INTEGER pivot_index = first; pivot_index < end;
+                 pivot_index++) {
+                p = kdtree_scan_frontier_body(
+                    &pivot_frontier, kd, btab[cat1], pivot_index);
+                if (allocation_failed) continue;
+                for (n = 1; n <= cmd->sizeHistN; n++) {
+                    hist.histXi2pcfthreadsub[n] = 0.0;
+                }
+
+                cp = KDROOT;
+                do {
+                    Intersect_bp(ntab[cp], gd->RcutSq, Pos(p),
+                                 lbox, lbox_h, GetNextCell, Continue);
+                Continue:
+                    if (cp < kd->nsplit) {
+                        cp = Lower(cp);
+                        continue;
+                    } else {
+                        sumnode_sincos(cmd, gd, p, ntab[cp], bptr,
+                                       &nbbcalcthread, &nbccalcthread,
+                                       &hist);
+                    }
+                GetNextCell:
+                    SetNext(cp);
+                } while (cp != KDROOT);
+
+                computeBodyProperties_sincos(cmd, gd, p, nbody[cat1],
+                                             &hist);
+            }
         }
-
-        //B Walking the kdtree
-        cp = KDROOT;
-        do {
-            Intersect_bp(ntab[cp], gd->RcutSq, Pos(p),
-                         lbox, lbox_h, GetNextCell, Continue);
-        Continue:
-            if (cp < kd->nsplit) {
-                cp = Lower(cp);
-                continue;
-            } else {
-                sumnode_sincos(cmd, gd, p, ntab[cp], bptr,
-                               &nbbcalcthread, &nbccalcthread, &hist);
-            } // ! cp < nsplit
-            GetNextCell:
-            SetNext(cp);
-        } while (cp != KDROOT);
-        //E Walking the kdtree
-
-        computeBodyProperties_sincos(cmd, gd, p, nbody[cat1], &hist);
-    } // end do body p // end pragma omp DO_BODY p
 
         /* Publish in thread-ID order so floating-point sums are repeatable. */
 #ifdef OPENMPCODE
@@ -423,10 +451,9 @@ local int print_info(struct cmdline_data* cmd,
             return FAILURE;
         }
     }
-#ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd))
         verb_print(cmd->verbose,
                    "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
-#endif
 #ifndef TPCF
         verb_print(cmd->verbose, "computing only 2pcf... \n");
 #endif

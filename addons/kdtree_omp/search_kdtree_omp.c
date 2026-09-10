@@ -13,6 +13,15 @@
 #include "globaldefs.h"
 
 #include "kdtree.h"
+#include "kdtree_parallel.h"
+#include "kdtree_scan_frontier.h"
+
+#ifndef KDTREE_OMP_PIVOT_BLOCK_SIZE
+#define KDTREE_OMP_PIVOT_BLOCK_SIZE 64
+#endif
+#if KDTREE_OMP_PIVOT_BLOCK_SIZE < 1
+#error "KDTREE_OMP_PIVOT_BLOCK_SIZE must be positive"
+#endif
 
 //B Some macros and definitions
 //INTERSECT: macro to determine if node intersects search ball
@@ -109,7 +118,7 @@ local void sumnode_sincos(struct  cmdline_data*, struct  global_data*,
                           gdhistptr_sincos_omp);
 local void sumnode_sincos_cell(struct  cmdline_data*,
                                struct  global_data*, bodyptr,
-                               ballnode, bodyptr *,
+                               ballnode, ballxptr,
                                INTEGER *, INTEGER *,
                                gdhistptr_sincos_omp);
 local void walk_kdtree_exact(struct cmdline_data*, struct global_data*,
@@ -120,6 +129,59 @@ local void walk_kdtree_one_ball(struct cmdline_data*, struct global_data*,
                                gdhistptr_sincos_omp);
 local int print_info(struct cmdline_data* cmd,
                      struct  global_data* gd);
+
+static int kdtree_reduce_results(struct cmdline_data *cmd,
+                                 struct global_data *gd)
+{
+    if (!cballs_opt_only_3pcf(cmd)) {
+        real *vectors[] = {gd->histNN, gd->histNNSubXi2pcf,
+                           gd->histXi2pcf};
+        for (size_t i = 0; i < sizeof(vectors)/sizeof(vectors[0]); i++)
+            if (kdtree_reduce(cmd, vectors[i] + 1,
+                              (size_t)cmd->sizeHistN) == FAILURE)
+                return FAILURE;
+#ifdef SMOOTHPIVOT
+        if (kdtree_reduce(cmd, gd->histNNSubXi2pcftotal + 1,
+                          (size_t)cmd->sizeHistN) == FAILURE)
+            return FAILURE;
+#endif
+    }
+#ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
+        if (kdtree_reduce(cmd, gd->histNNSub + 1,
+                          (size_t)cmd->sizeHistN) == FAILURE)
+            return FAILURE;
+        real ***matrices[] = {gd->histZetaMcos, gd->histZetaMsin,
+                              gd->histZetaMsincos, gd->histZetaMcossin};
+        for (size_t c = 0; c < sizeof(matrices)/sizeof(matrices[0]); c++)
+            for (int m = 1; m <= cmd->mChebyshev+1; m++)
+                for (int n = 1; n <= cmd->sizeHistN; n++)
+                    if (kdtree_reduce(cmd, matrices[c][m][n] + 1,
+                                      (size_t)cmd->sizeHistN) == FAILURE)
+                        return FAILURE;
+    }
+#endif
+    INTEGER counts[3] = {gd->nbbcalc, gd->nbccalc, gd->ncccalc};
+    if (kdtree_reduce_counts(cmd, counts, 3) == FAILURE) return FAILURE;
+    if (kdtree_publish(cmd)) {
+        gd->nbbcalc = counts[0];
+        gd->nbccalc = counts[1];
+        gd->ncccalc = counts[2];
+    }
+    return SUCCESS;
+}
+
+static void kdtree_finish_2pcf_pivot(struct cmdline_data *cmd, bodyptr p,
+                                    gdhistptr_sincos_omp hist)
+{
+    real pivot_field = Weight(p)*Kappa(p);
+#ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)) pivot_field = KappaRmin(p);
+#endif
+    for (int n = 1; n <= cmd->sizeHistN; n++)
+        hist->histXi2pcfthread[n] +=
+            pivot_field*hist->histXi2pcfthreadsub[n];
+}
 
 static inline bool kdtree_accept_body(struct cmdline_data *cmd,
                                       struct global_data *gd,
@@ -185,9 +247,35 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     ballxptr kd;
     int nbucket;
     real cpu_build_kdtree;
-    const bool use_one_ball =
-        cballs_opt_behavior_ball(cmd)
-        && !cballs_opt_no_one_ball(cmd);
+    const bool use_one_ball = !cballs_opt_no_one_ball(cmd);
+    const bool only_2pcf = cballs_opt_only_2pcf(cmd);
+    const bool only_3pcf = cballs_opt_only_3pcf(cmd);
+#ifdef TWOPCF
+    const bool run_2pcf = !only_3pcf;
+#else
+    const bool run_2pcf = FALSE;
+#endif
+#ifdef TPCF
+    const bool run_3pcf = !only_2pcf;
+#else
+    const bool run_3pcf = FALSE;
+#endif
+
+    if (only_2pcf && only_3pcf)
+        cBALLS_FAIL(cmd, "%s: only-2pcf and only-3pcf are mutually exclusive\n",
+                    cmd->searchMethod);
+    if (only_2pcf && !run_2pcf)
+        cBALLS_FAIL(cmd, "%s: only-2pcf requires TWOPCFON=1\n",
+                    cmd->searchMethod);
+    if (only_3pcf && !run_3pcf)
+        cBALLS_FAIL(cmd, "%s: only-3pcf requires TPCFON=1\n",
+                    cmd->searchMethod);
+    if (!run_2pcf && !run_3pcf)
+        cBALLS_FAIL(cmd, "%s: build enables neither 2PCF nor 3PCF\n",
+                    cmd->searchMethod);
+    if (cballs_opt_edge_corrections(cmd) && only_2pcf)
+        cBALLS_FAIL(cmd, "%s: edge-corrections require 3PCF; remove only-2pcf\n",
+                    cmd->searchMethod);
 
     cpustart = CPUTIME;
     if (print_info(cmd, gd) == FAILURE)
@@ -199,6 +287,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 
     search_init_gd_hist_sincos(cmd, gd);
     int allocation_failed = FALSE;
+    INTEGER ipmask = 0;
 
 #ifdef SMOOTHPIVOT
     INTEGER ipfalse;
@@ -223,6 +312,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     //E
     verb_print(cmd->verbose, "\nkdtree build: nbucket = %d\n",nbucket);
     kd = init_kdtree(cmd, gd, btab[cat2], nbody[cat2]);
+    if (kd == NULL) return FAILURE;
     if (build_kdtree(cmd, gd, kd, nbucket) == FAILURE) {
         finish_kdtree(kd);
         return FAILURE;
@@ -230,7 +320,22 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "kdtree build: CPU time = %lf\n",
                CPUTIME-cpu_build_kdtree);
 //E
-    gd->ncellTable[cat1] = kd->nnode;               // Equivalent of octree cells
+    gd->ncellTable[cat2] = kd->nnode;               // Equivalent of octree cells
+
+    INTEGER normalization_nbody = nbody[cat1];
+    if (cballs_opt_read_mask(cmd)) {
+        normalization_nbody = 0;
+        for (bodyptr count_body = btab[cat1];
+             count_body < btab[cat1] + nbody[cat1]; count_body++)
+            if (Mask(count_body) != MASK_NODE_MASKED)
+                normalization_nbody++;
+    }
+    if (normalization_nbody <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: mask selected no pivots", cmd->searchMethod);
+        finish_kdtree(kd);
+        return FAILURE;
+    }
 
 #ifdef SMOOTHPIVOT
     if (prepare_smooth_pivots(cmd, gd, btab, nbody,
@@ -240,25 +345,57 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
     }
 #endif
 
+    if (cballs_opt_edge_corrections(cmd)) {
+        int edge_status = kdtree_edge_search(cmd, gd, btab, nbody, ipmin,
+                                              ipmax, cat1, cat2, kd);
+        finish_kdtree(kd);
+        gd->cpusearch = CPUTIME - cpustart;
+        return edge_status;
+    }
+
+    const INTEGER pivot_count = ipmax[cat1] - ipmin + 1;
+#ifdef BALLS4SCANLEV
+    const bool complete_auto_catalog = cat1 == cat2 && ipmin == 1
+        && ipmax[cat1] == nbody[cat1] && btab[cat1] == kd->body_base;
+    const kdtree_scan_frontier pivot_frontier =
+        kdtree_scan_frontier_make(kd, pivot_count, complete_auto_catalog);
+    const INTEGER block_count = pivot_frontier.count;
+    verb_print(cmd->verbose,
+               "%s: KD scan-level frontier has %" INTEGER_FMT
+               " tasks in %s order\n",
+               cmd->searchMethod, block_count,
+               pivot_frontier.tree_order ? "tree" : "catalog");
+#else
+    const INTEGER block_count =
+        1 + (pivot_count - 1)/(INTEGER)KDTREE_OMP_PIVOT_BLOCK_SIZE;
+    const kdtree_scan_frontier pivot_frontier = {block_count, FALSE};
+#endif
+
 #ifdef SMOOTHPIVOT
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
     rootnode, cat1, cat2, kd, ipfalse, icountNbRmin, icountNbRminOverlap, \
-    allocation_failed, use_one_ball)
+    allocation_failed, use_one_ball, run_2pcf, run_3pcf, ipmask, \
+    normalization_nbody, block_count, pivot_count, pivot_frontier)
 #else
 #pragma omp parallel default(none)   \
     shared(cmd,gd,btab,nbody,roottable,ipmin,ipmax, \
-    rootnode, cat1, cat2, kd, allocation_failed, use_one_ball)
+    rootnode, cat1, cat2, kd, allocation_failed, use_one_ball, \
+    run_2pcf, run_3pcf, ipmask, normalization_nbody, block_count, pivot_count, \
+    pivot_frontier)
 #endif
     {
-        bodyptr p;
-        int n;
-        INTEGER nbbcalcthread = 0;
-        INTEGER nbccalcthread = 0;
-        
         gdhist_sincos_omp hist;
-        int hist_ready =
+        const int hist_allocated =
             search_init_sincos_omp(cmd, gd, &hist) == SUCCESS;
+        int hist_ready = hist_allocated;
+        real *histNNSubBlock = NULL;
+        if (hist_ready && run_3pcf) {
+            histNNSubBlock = calloc((size_t)cmd->sizeHistN + 1,
+                                    sizeof(*histNNSubBlock));
+            if (histNNSubBlock == NULL)
+                hist_ready = FALSE;
+        }
         if (!hist_ready) {
 #pragma omp atomic write
             allocation_failed = TRUE;
@@ -266,133 +403,201 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 
 #pragma omp barrier
 
-        INTEGER ipfalsethreads;
-        ipfalsethreads = 0;
-
-#ifdef SMOOTHPIVOT
-        INTEGER icountNbRminthread;
-        icountNbRminthread=0;
-        INTEGER icountNbRminOverlapthread;
-        icountNbRminOverlapthread=0;
-#endif
-#pragma omp for nowait schedule(static,1)
-    DO_BODY(p, btab[cat1]+ipmin-1, btab[cat1]+ipmax[cat1]) {
-        if (allocation_failed) continue;
-// p and q are in differents node structures... cat1!=cat2...
-#ifdef SMOOTHPIVOT
-        if (Update(p) == FALSE) {
-            ipfalsethreads++;
-            continue;
-        }
-#endif
-        for (n = 1; n <= cmd->sizeHistN; n++) {
-            hist.histNNSubthread[n] = 0.0;          // Affects only 3pcf
-            hist.histXi2pcfthreadsub[n] = 0.0;      // Affects only 2pcf
-#ifdef SMOOTHPIVOT
-            hist.histNNSubXi2pcfthreadp[n] = 0.;    // Affects only 2pcf
-#endif
-        }
-#ifdef TPCF
-            CLRM_ext_ext(hist.histXithreadcos, cmd->mChebyshev+1,
-                         cmd->sizeHistN);
-            CLRM_ext_ext(hist.histXithreadsin, cmd->mChebyshev+1, 
-                         cmd->sizeHistN);
-#if NDIM == 3
-            dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE, hist.q0);
-            DOTPSUBV(hist.drpq2, hist.dr0, Pos(p), hist.q0);
-            hist.drpq = rsqrt(hist.drpq2);
-            //B Random rotation of dr0:
-#ifdef PTOPIVOTROTATION
-            real rtheta;
-            compute_vector dr0rot;
-            rtheta = xrandom(0.0, TWOPI);
-            RotationVecAWRtoVecB(dr0rot, hist.dr0, Pos(p), rtheta);
-            SETV(hist.dr0, dr0rot);
-#endif
-            //E
-#endif // ! NDIM
-#endif
-
-        if (use_one_ball)
-            walk_kdtree_one_ball(cmd, gd, p, kd,
-                                 &nbbcalcthread, &nbccalcthread, &hist);
-        else
-            walk_kdtree_exact(cmd, gd, p, kd,
-                              &nbbcalcthread, &nbccalcthread, &hist);
-
-#ifdef SMOOTHPIVOT
-        for (n = 1; n <= cmd->sizeHistN; n++) {
-            hist.histNNSubXi2pcfthreadp[n] =
-                        ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
-            hist.histNNSubXi2pcfthreadtotal[n] +=
-                        hist.histNNSubXi2pcfthreadp[n];
-                hist.histNNSubthread[n] =
-                    ((real)NbRmin(p))*hist.histNNSubthread[n];
-        }
-#endif
-
-//B Normalization of histograms
-        computeBodyProperties_sincos(cmd, gd, p, nbody[cat1], &hist);
-//E
-
-#ifdef SMOOTHPIVOT
-        icountNbRminthread += NbRmin(p);
-        icountNbRminOverlapthread += NbRminOverlap(p);
-#endif
-        INTEGER ip;
-        ip = p - btab[cat1] + 1;
-        if (ip%cmd->stepState == 0) {
-            verb_log_print(cmd->verbose_log, gd->outlog,
-                           " - Completed pivot: %ld\n", ip);
-        }
-    } // end do body p // end pragma omp DO_BODY p
-
-        /* Publish in thread-ID order so floating-point sums are repeatable. */
-#ifdef OPENMPCODE
-        int thread_id = omp_get_thread_num();
-        int thread_count = omp_get_num_threads();
+#ifdef BALLS4SCANLEV
+#pragma omp for schedule(dynamic,1) ordered
 #else
-        int thread_id = 0;
-        int thread_count = 1;
+#pragma omp for schedule(static,1) ordered
 #endif
-        for (int thread_turn = 0; thread_turn < thread_count; thread_turn++) {
-#pragma omp barrier
-        if (thread_id == thread_turn && hist_ready && !allocation_failed) {
-            for (n = 1; n <= cmd->sizeHistN; n++) {
-                gd->histNN[n] += hist.histNthread[n];
-                gd->histNNSub[n] += hist.histNNSubthread[n];
-                gd->histNNSubXi2pcf[n] += hist.histNNSubXi2pcfthread[n];
+        for (INTEGER block = 0; block < block_count; block++) {
+            const bool owned = kdtree_task_owned(cmd, block);
+            INTEGER nbbcalcblock = 0;
+            INTEGER nbccalcblock = 0;
+            INTEGER ipfalseblock = 0;
+            INTEGER ipmaskblock = 0;
 #ifdef SMOOTHPIVOT
-                gd->histNNSubXi2pcftotal[n] += hist.histNNSubXi2pcfthreadtotal[n];
+            INTEGER icountNbRminblock = 0;
+            INTEGER icountNbRminOverlapblock = 0;
 #endif
-                gd->histXi2pcf[n] += hist.histXi2pcfthread[n];
-            }
+
+            if (hist_ready && !allocation_failed && owned) {
+                for (int n = 1; n <= cmd->sizeHistN; n++) {
+                    hist.histNthread[n] = 0.0;
+                    hist.histNNSubthread[n] = 0.0;
+                    hist.histNNSubXi2pcfthread[n] = 0.0;
+#ifdef SMOOTHPIVOT
+                    hist.histNNSubXi2pcfthreadp[n] = 0.0;
+                    hist.histNNSubXi2pcfthreadtotal[n] = 0.0;
+#endif
+                    hist.histXi2pcfthread[n] = 0.0;
+                    hist.histXi2pcfthreadsub[n] = 0.0;
+                    if (histNNSubBlock != NULL)
+                        histNNSubBlock[n] = 0.0;
+                }
 #ifdef TPCF
-                int m;
-                for (m=1; m<=cmd->mChebyshev+1; m++) {
-                    ADDM_ext(gd->histZetaMcos[m],gd->histZetaMcos[m],
-                             hist.histZetaMthreadcos[m],cmd->sizeHistN);
-                    ADDM_ext(gd->histZetaMsin[m],gd->histZetaMsin[m],
-                             hist.histZetaMthreadsin[m],cmd->sizeHistN);
-                    ADDM_ext(gd->histZetaMsincos[m],gd->histZetaMsincos[m],
-                             hist.histZetaMthreadsincos[m],cmd->sizeHistN);
-                    // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-                    ADDM_ext(gd->histZetaMcossin[m],gd->histZetaMcossin[m],
-                             hist.histZetaMthreadcossin[m],cmd->sizeHistN);
+                if (run_3pcf) {
+                    for (int m = 1; m <= cmd->mChebyshev+1; m++) {
+                        CLRM_ext(hist.histZetaMthreadcos[m],
+                                 cmd->sizeHistN);
+                        CLRM_ext(hist.histZetaMthreadsin[m],
+                                 cmd->sizeHistN);
+                        CLRM_ext(hist.histZetaMthreadsincos[m],
+                                 cmd->sizeHistN);
+                        CLRM_ext(hist.histZetaMthreadcossin[m],
+                                 cmd->sizeHistN);
+                    }
                 }
 #endif
-            gd->nbbcalc += nbbcalcthread;
-            gd->nbccalc += nbccalcthread;
-#ifdef SMOOTHPIVOT
-            ipfalse += ipfalsethreads;
-            icountNbRmin += icountNbRminthread;
-            icountNbRminOverlap += icountNbRminOverlapthread;
-#endif
-        }
-        }
-#pragma omp barrier
 
-        if (hist_ready)
+                INTEGER first;
+                INTEGER end;
+#ifdef BALLS4SCANLEV
+                kdtree_scan_frontier_range(
+                    &pivot_frontier, kd, pivot_count, ipmin - 1,
+                    block, &first, &end);
+#else
+                first = ipmin - 1
+                      + block*(INTEGER)KDTREE_OMP_PIVOT_BLOCK_SIZE;
+                end = MIN(first + (INTEGER)KDTREE_OMP_PIVOT_BLOCK_SIZE,
+                          ipmax[cat1]);
+#endif
+                for (INTEGER pivot_index = first;
+                     pivot_index < end; pivot_index++) {
+                    bodyptr p = kdtree_scan_frontier_body(
+                        &pivot_frontier,
+                        kd, btab[cat1], pivot_index);
+
+                    if (cballs_opt_read_mask(cmd)
+                        && Mask(p) == MASK_NODE_MASKED) {
+                        ipmaskblock++;
+                        continue;
+                    }
+#ifdef SMOOTHPIVOT
+                    if (cballs_opt_smooth_pivot(cmd) && Update(p) == FALSE) {
+                        ipfalseblock++;
+                        continue;
+                    }
+#endif
+                    for (int n = 1; n <= cmd->sizeHistN; n++) {
+                        hist.histNNSubthread[n] = 0.0;
+                        hist.histXi2pcfthreadsub[n] = 0.0;
+#ifdef SMOOTHPIVOT
+                        hist.histNNSubXi2pcfthreadp[n] = 0.0;
+#endif
+                    }
+#ifdef TPCF
+                    if (run_3pcf) {
+                        CLRM_ext_ext(hist.histXithreadcos,
+                                     cmd->mChebyshev+1, cmd->sizeHistN);
+                        CLRM_ext_ext(hist.histXithreadsin,
+                                     cmd->mChebyshev+1, cmd->sizeHistN);
+#if NDIM == 3
+                        dRotation3D(Pos(p), ROTANGLE, ROTANGLE, ROTANGLE,
+                                    hist.q0);
+                        DOTPSUBV(hist.drpq2, hist.dr0, Pos(p), hist.q0);
+                        hist.drpq = rsqrt(hist.drpq2);
+#ifdef PTOPIVOTROTATION
+                        real rtheta = xrandom(0.0, TWOPI);
+                        compute_vector dr0rot;
+                        RotationVecAWRtoVecB(dr0rot, hist.dr0, Pos(p), rtheta);
+                        SETV(hist.dr0, dr0rot);
+#endif
+#endif
+                    }
+#endif
+
+                    if (use_one_ball)
+                        walk_kdtree_one_ball(cmd, gd, p, kd,
+                                             &nbbcalcblock, &nbccalcblock,
+                                             &hist);
+                    else
+                        walk_kdtree_exact(cmd, gd, p, kd,
+                                          &nbbcalcblock, &nbccalcblock,
+                                          &hist);
+
+#ifdef SMOOTHPIVOT
+                    for (int n = 1; n <= cmd->sizeHistN; n++) {
+                        if (run_2pcf) {
+                            hist.histNNSubXi2pcfthreadp[n] =
+                                ((real)NbRmin(p))
+                                * hist.histNNSubXi2pcfthreadp[n];
+                            hist.histNNSubXi2pcfthreadtotal[n] +=
+                                hist.histNNSubXi2pcfthreadp[n];
+                        }
+                        if (run_3pcf)
+                            hist.histNNSubthread[n] =
+                                ((real)NbRmin(p))*hist.histNNSubthread[n];
+                    }
+#endif
+
+                    if (run_3pcf) {
+                        computeBodyProperties_sincos(
+                            cmd, gd, p, normalization_nbody, &hist);
+                        for (int n = 1; n <= cmd->sizeHistN; n++)
+                            histNNSubBlock[n] += hist.histNNSubthread[n];
+                    } else if (run_2pcf) {
+                        kdtree_finish_2pcf_pivot(cmd, p, &hist);
+                    }
+
+#ifdef SMOOTHPIVOT
+                    icountNbRminblock += NbRmin(p);
+                    icountNbRminOverlapblock += NbRminOverlap(p);
+#endif
+                    const INTEGER ip = p - btab[cat1] + 1;
+                    if (ip%cmd->stepState == 0)
+                        verb_log_print(cmd->verbose_log, gd->outlog,
+                                       " - Completed pivot: %ld\n", ip);
+                }
+            }
+
+#pragma omp ordered
+            {
+            if (hist_ready && !allocation_failed && owned) {
+                for (int n = 1; n <= cmd->sizeHistN; n++) {
+                    if (run_2pcf) {
+                        gd->histNN[n] += hist.histNthread[n];
+                        gd->histNNSubXi2pcf[n] +=
+                            hist.histNNSubXi2pcfthread[n];
+#ifdef SMOOTHPIVOT
+                        gd->histNNSubXi2pcftotal[n] +=
+                            hist.histNNSubXi2pcfthreadtotal[n];
+#endif
+                        gd->histXi2pcf[n] += hist.histXi2pcfthread[n];
+                    }
+                    if (run_3pcf)
+                        gd->histNNSub[n] += histNNSubBlock[n];
+                }
+#ifdef TPCF
+                if (run_3pcf) {
+                    for (int m=1; m<=cmd->mChebyshev+1; m++) {
+                        ADDM_ext(gd->histZetaMcos[m],gd->histZetaMcos[m],
+                                 hist.histZetaMthreadcos[m],cmd->sizeHistN);
+                        ADDM_ext(gd->histZetaMsin[m],gd->histZetaMsin[m],
+                                 hist.histZetaMthreadsin[m],cmd->sizeHistN);
+                        ADDM_ext(gd->histZetaMsincos[m],
+                                 gd->histZetaMsincos[m],
+                                 hist.histZetaMthreadsincos[m],
+                                 cmd->sizeHistN);
+                        ADDM_ext(gd->histZetaMcossin[m],
+                                 gd->histZetaMcossin[m],
+                                 hist.histZetaMthreadcossin[m],
+                                 cmd->sizeHistN);
+                    }
+                }
+#endif
+                gd->nbbcalc += nbbcalcblock;
+                gd->nbccalc += nbccalcblock;
+                ipmask += ipmaskblock;
+#ifdef SMOOTHPIVOT
+                ipfalse += ipfalseblock;
+                icountNbRmin += icountNbRminblock;
+                icountNbRminOverlap += icountNbRminOverlapblock;
+#endif
+            }
+            }
+        }
+
+        free(histNNSubBlock);
+        if (hist_allocated)
             search_free_sincos_omp(cmd, gd, &hist);
     } // end pragma omp parallel
 
@@ -403,20 +608,66 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
         return FAILURE;
     }
 
+    INTEGER selection_counts[4] = {ipmask, 0, 0, 0};
+#ifdef SMOOTHPIVOT
+    selection_counts[1] = ipfalse;
+    selection_counts[2] = icountNbRmin;
+    selection_counts[3] = icountNbRminOverlap;
+#endif
+    if (kdtree_reduce_results(cmd, gd) == FAILURE
+        || kdtree_reduce_counts(cmd, selection_counts, 4) == FAILURE) {
+        finish_kdtree(kd);
+        return FAILURE;
+    }
+    if (kdtree_publish(cmd)) {
+        ipmask = selection_counts[0];
+#ifdef SMOOTHPIVOT
+        ipfalse = selection_counts[1];
+        icountNbRmin = selection_counts[2];
+        icountNbRminOverlap = selection_counts[3];
+#endif
+    }
+
+    int selection_status = SUCCESS;
+    if (kdtree_publish(cmd)
+        && nbody[cat1] - ipmask
+#ifdef SMOOTHPIVOT
+           - (cballs_opt_smooth_pivot(cmd) ? ipfalse : 0)
+#endif
+           <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: mask/smoothing selected no pivots", cmd->searchMethod);
+        selection_status = FAILURE;
+    }
+    if (kdtree_consensus(cmd, selection_status,
+                         "KDTREE pivot selection") == FAILURE) {
+        finish_kdtree(kd);
+        return FAILURE;
+    }
+
+    if (!kdtree_publish(cmd)) {
+        finish_kdtree(kd);
+        gd->cpusearch = CPUTIME - cpustart;
+        return SUCCESS;
+    }
+
 #ifdef SMOOTHPIVOT
     real xi, den, num;
     int mm;
-        num = (real)nbody[cat1];
-        den = (real)(nbody[cat1]-ipfalse);
+        num = (real)normalization_nbody;
+        den = (real)(normalization_nbody-ipfalse);
 #ifdef NOSTANDARNORMHIST
         xi = 1.0;
 #else
-        xi = cballs_raw_legacy_multipoles(cmd) ? 1.0 : num/den;
+        xi = cballs_raw_legacy_multipoles(cmd)
+            ? 1.0 : cballs_normalize_or_zero(num, den);
 #endif // ! NONORMHIST
         verb_print(cmd->verbose,
-                   "kdtree-omp: p falses found = %ld and %e %e %e\n",
+                   "%s: p falses found = %" INTEGER_FMT " and %e %e %e\n",
+                   cmd->searchMethod,
                    ipfalse, num, den, xi);
 #ifdef TPCF
+        if (run_3pcf) {
             for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
                 MULMS_ext(gd->histZetaMcos[mm], gd->histZetaMcos[mm],
                           xi,cmd->sizeHistN);
@@ -428,11 +679,12 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
                 MULMS_ext(gd->histZetaMcossin[mm], gd->histZetaMcossin[mm],
                           xi,cmd->sizeHistN);
             }
+        }
 #endif
 #endif
 
     //B Normalization of histograms
-        if (!cballs_opt_asymmetric(cmd)) {
+        if (run_2pcf && !cballs_opt_asymmetric(cmd)) {
             for (n = 1; n <= cmd->sizeHistN; n++) {
 #ifdef SMOOTHPIVOT
                 if (cmd->verbose>3)
@@ -453,7 +705,7 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
 #endif
     //E
             }
-        } else {
+        } else if (run_2pcf) {
             for (n = 1; n <= cmd->sizeHistN; n++) {
 #ifdef SMOOTHPIVOT
                 if (cmd->verbose>3)
@@ -472,22 +724,25 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
             }
         }
 
-    if (cballs_opt_compute_histn(cmd)) {
+    if (run_2pcf && cballs_opt_compute_histn(cmd)) {
 #ifdef SMOOTHPIVOT
-            search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse);
+            search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse-ipmask);
 #else
-            search_compute_HistN(cmd, gd, nbody[cat1]);
+            search_compute_HistN(cmd, gd, nbody[cat1]-ipmask);
 #endif
     }
 
 #ifdef SMOOTHPIVOT
-        verb_print(cmd->verbose, "kdtree-omp: p falses found = %ld\n",ipfalse);
+        verb_print(cmd->verbose, "%s: p falses found = %" INTEGER_FMT "\n",
+                   cmd->searchMethod, ipfalse);
         //B kappa Avg Rmin
         verb_print(cmd->verbose,
-                   "kdtree-omp: count NbRmin found = %ld\n",icountNbRmin);
+                   "%s: count NbRmin found = %" INTEGER_FMT "\n",
+                   cmd->searchMethod, icountNbRmin);
         verb_print(cmd->verbose,
-                   "kdtree-omp: count overlap found = %ld\n",icountNbRminOverlap);
-        
+                   "%s: count overlap found = %" INTEGER_FMT "\n",
+                   cmd->searchMethod, icountNbRminOverlap);
+
         bodyptr pp;
         INTEGER ifalsecount;
         ifalsecount = 0;
@@ -500,9 +755,12 @@ global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
                 itruecount++;
             }
         }
-        verb_print(cmd->verbose, "kdtree-omp: p falses found = %ld\n",ifalsecount);
-        verb_print(cmd->verbose, "kdtree-omp: p true found = %ld\n",itruecount);
-        verb_print(cmd->verbose, "kdtree-omp: total = %ld\n",itruecount+ifalsecount);
+        verb_print(cmd->verbose, "%s: p falses found = %" INTEGER_FMT "\n",
+                   cmd->searchMethod, ifalsecount);
+        verb_print(cmd->verbose, "%s: p true found = %" INTEGER_FMT "\n",
+                   cmd->searchMethod, itruecount);
+        verb_print(cmd->verbose, "%s: total = %" INTEGER_FMT "\n",
+                   cmd->searchMethod, itruecount+ifalsecount);
         //E
 #endif
 
@@ -525,6 +783,7 @@ local void walk_kdtree_exact(struct cmdline_data *cmd,
 
     do {
         Intersect(ntab[cp], gd->RcutSq, Pos(p), exact_next_cell);
+        if (ntab[cp].valid_count == 0) goto exact_next_cell;
         if (cp < kd->nsplit) {
             cp = Lower(cp);
             continue;
@@ -546,7 +805,6 @@ local void walk_kdtree_one_ball(struct cmdline_data *cmd,
                                 gdhistptr_sincos_omp hist)
 {
     ballnode *ntab = kd->ntab;
-    bodyptr *bptr = kd->bptr;
     INTEGER cp = KDROOT;
 
     do {
@@ -555,12 +813,20 @@ local void walk_kdtree_one_ball(struct cmdline_data *cmd,
         compute_vector dr;
 
         Intersect(ntab[cp], gd->RcutSq, Pos(p), one_ball_next_cell);
+        if (ntab[cp].valid_count == 0) goto one_ball_next_cell;
         if (cp < kd->nsplit) {
             DOTPSUBV(drpq2, dr, Pos(p), ntab[cp].cmpos);
+            if (cmd->usePeriodic) {
+                VWrapAll(dr);
+                DOTVP(drpq2, dr, dr);
+            }
             dr1 = rsqrt(drpq2);
-            if ((Radius(p) + ntab[cp].bnd.radius)/dr1 < gd->deltaR
-                && cballs_angular_cell_ok(cmd, Pos(p), dr, 0.0, ntab[cp].bnd.radius)) {
-                sumnode_sincos_cell(cmd, gd, p, ntab[cp], bptr,
+            if (!kdtree_node_contains_body(kd, &ntab[cp], p)
+                && dr1 > 0.0
+                && (Radius(p) + ntab[cp].bnd.radius)/dr1 < gd->deltaR
+                && cballs_angular_cell_ok(cmd, Pos(p), dr, 0.0,
+                                          ntab[cp].bnd.geometric_radius)) {
+                sumnode_sincos_cell(cmd, gd, p, ntab[cp], kd,
                                     nbbcalcthread, nbccalcthread, hist);
                 SetNext(cp);
                 continue;
@@ -594,6 +860,16 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
     compute_vector dr;
     int n;
     real xi;
+#ifdef TWOPCF
+    const bool run_2pcf = !cballs_opt_only_3pcf(cmd);
+#else
+    const bool run_2pcf = FALSE;
+#endif
+#ifdef TPCF
+    const bool run_3pcf = !cballs_opt_only_2pcf(cmd);
+#else
+    const bool run_3pcf = FALSE;
+#endif
 
     INTEGER pj;
 
@@ -603,6 +879,13 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 #else
         q = kd->bptr[pj];
 #endif
+#ifdef SINGLEP
+        bodyptr source_q = kd->bptr[pj];
+#else
+        bodyptr source_q = q;
+#endif
+        if (source_q == p || (cballs_opt_read_mask(cmd)
+            && Mask(source_q) == MASK_NODE_MASKED)) continue;
         if (kdtree_accept_body(cmd, gd, p, q, &dr1, dr)) {
             if (cmd->useLogHist) {
                 if(dr1>cmd->rminHist) {
@@ -612,20 +895,21 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                     else
                         n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
                     if (n<=cmd->sizeHistN && n>=1) {
-                        hist->histNthread[n] = hist->histNthread[n] + 1.;
-                        hist->histNNSubXi2pcfthread[n] =
-                        hist->histNNSubXi2pcfthread[n] + 1.;
+                        if (run_2pcf) {
+                            hist->histNthread[n] += 1.0;
+                            hist->histNNSubXi2pcfthread[n] += 1.0;
 #ifdef SMOOTHPIVOT
-                        hist->histNNSubXi2pcfthreadp[n] =
-                        hist->histNNSubXi2pcfthreadp[n] + 1.;
+                            hist->histNNSubXi2pcfthreadp[n] += 1.0;
 #endif
-                        hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+                        }
+                        if (run_3pcf) hist->histNNSubthread[n] += 1.0;
 #ifdef SINGLEP
                         xi = cballs_raw_legacy_multipoles(cmd) ? q->weighted_kappa : q->kappa;
 #else
                         xi = cballs_raw_legacy_multipoles(cmd) ? Weight(q)*Kappa(q) : Kappa(q);
 #endif
 #ifdef TPCF
+                        if (run_3pcf) {
                         real cosphi, sinphi;
                         if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                             if (cballs_raw_legacy_multipoles(cmd))
@@ -634,8 +918,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                             else
                                 CHEBYSHEVTUOMPSINCOS;
                         }
+                        }
 #endif
-                        hist->histXi2pcfthreadsub[n] += xi;
+                        if (run_2pcf)
+                            hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
                     }
                 }
@@ -643,16 +929,21 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                 if(dr1>cmd->rminHist) {
                     n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
                     if (n<=cmd->sizeHistN && n>=1) {
-                        hist->histNthread[n] = hist->histNthread[n] + 1.;
-                        hist->histNNSubXi2pcfthread[n] =
-                        hist->histNNSubXi2pcfthread[n] + 1.;
-                        hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+                        if (run_2pcf) {
+                            hist->histNthread[n] += 1.0;
+                            hist->histNNSubXi2pcfthread[n] += 1.0;
+#ifdef SMOOTHPIVOT
+                            hist->histNNSubXi2pcfthreadp[n] += 1.0;
+#endif
+                        }
+                        if (run_3pcf) hist->histNNSubthread[n] += 1.0;
 #ifdef SINGLEP
                         xi = cballs_raw_legacy_multipoles(cmd) ? q->weighted_kappa : q->kappa;
 #else
                         xi = cballs_raw_legacy_multipoles(cmd) ? Weight(q)*Kappa(q) : Kappa(q);
 #endif
 #ifdef TPCF
+                        if (run_3pcf) {
                             real cosphi, sinphi;
                             if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                                 if (cballs_raw_legacy_multipoles(cmd))
@@ -661,8 +952,10 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                                 else
                                     CHEBYSHEVTUOMPSINCOS;
                             }
+                        }
 #endif
-                        hist->histXi2pcfthreadsub[n] += xi;
+                        if (run_2pcf)
+                            hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
                     }
                 }
@@ -674,7 +967,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
 
 local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                                struct  global_data* gd, bodyptr p,
-                               ballnode ntab, bodyptr *bptr,
+                               ballnode ntab, ballxptr kd,
                                INTEGER *nbbcalcthread, INTEGER *nbccalcthread,
                                gdhistptr_sincos_omp hist)
 {
@@ -683,9 +976,20 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
     compute_vector dr;
     int n;
     real xi;
+#ifdef TWOPCF
+    const bool run_2pcf = !cballs_opt_only_3pcf(cmd);
+#else
+    const bool run_2pcf = FALSE;
+#endif
+#ifdef TPCF
+    const bool run_3pcf = !cballs_opt_only_2pcf(cmd);
+#else
+    const bool run_3pcf = FALSE;
+#endif
 
-    int npoints;
-    npoints = ntab.last - ntab.first + 1;
+    const real npoints = (real)ntab.valid_count;
+    if (ntab.valid_count == 0 || kdtree_node_contains_body(kd, &ntab, p))
+        return;
     DOTPSUBV(drpq2, dr, Pos(p), ntab.cmpos);
     dr1 = rsqrt(drpq2);
     if (dr1 < cmd->rangeN) {
@@ -697,14 +1001,19 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                 else
                     n = (int)(rlog10(dr1/cmd->rminHist) * gd->i_deltaR) + 1;
                 if (n<=cmd->sizeHistN && n>=1) {
-                    hist->histNthread[n] = hist->histNthread[n] +  npoints;
-                    hist->histNNSubXi2pcfthread[n] =
-                    hist->histNNSubXi2pcfthread[n] + npoints;
-                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
-                        
+                    if (run_2pcf) {
+                        hist->histNthread[n] += npoints;
+                        hist->histNNSubXi2pcfthread[n] += npoints;
+#ifdef SMOOTHPIVOT
+                        hist->histNNSubXi2pcfthreadp[n] += npoints;
+#endif
+                    }
+                    if (run_3pcf) hist->histNNSubthread[n] += npoints;
+
                     xi = cballs_raw_legacy_multipoles(cmd) ? ntab.weighted_kappa_sum : npoints*ntab.kappa;
 
 #ifdef TPCF
+                    if (run_3pcf) {
                     real cosphi, sinphi;
                     if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                         if (cballs_raw_legacy_multipoles(cmd))
@@ -713,8 +1022,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         else
                             CHEBYSHEVTUOMPSINCOS;
                     }
+                    }
 #endif
-                    hist->histXi2pcfthreadsub[n] += xi;
+                    if (run_2pcf)
+                        hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;
                 } // ! n in (1,sizeHistN)
             } // dr1 > rminHist
@@ -722,12 +1033,17 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
             if(dr1>cmd->rminHist) {
                 n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
                 if (n<=cmd->sizeHistN && n>=1) {
-                    hist->histNthread[n] = hist->histNthread[n] +  npoints;
-                    hist->histNNSubXi2pcfthread[n] =
-                    hist->histNNSubXi2pcfthread[n] + npoints;
-                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
+                    if (run_2pcf) {
+                        hist->histNthread[n] += npoints;
+                        hist->histNNSubXi2pcfthread[n] += npoints;
+#ifdef SMOOTHPIVOT
+                        hist->histNNSubXi2pcfthreadp[n] += npoints;
+#endif
+                    }
+                    if (run_3pcf) hist->histNNSubthread[n] += npoints;
                     xi = cballs_raw_legacy_multipoles(cmd) ? ntab.weighted_kappa_sum : npoints*ntab.kappa;
 #ifdef TPCF
+                    if (run_3pcf) {
                     real cosphi, sinphi;
                     if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                         if (cballs_raw_legacy_multipoles(cmd))
@@ -736,8 +1052,10 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         else
                             CHEBYSHEVTUOMPSINCOS;
                     }
+                    }
 #endif
-                    hist->histXi2pcfthreadsub[n] += xi;
+                    if (run_2pcf)
+                        hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;
                 } // ! n in (1, sizeHistN)
             } // ! dr1 > rminHist
@@ -752,27 +1070,28 @@ local int print_info(struct cmdline_data* cmd,
     const bool behavior_ball = cballs_opt_behavior_ball(cmd);
     const bool no_one_ball = cballs_opt_no_one_ball(cmd);
 
-    verb_print(cmd->verbose, "Search: Running ... (kdtree-omp) \n");
+    verb_print(cmd->verbose, "Search: Running ... (%s) \n", cmd->searchMethod);
 
     if (behavior_ball) {
-        verb_print(cmd->verbose, "with option behavior-ball... \n");
-        if (!no_one_ball && !cmd->useLogHist) {
-//            error("behavior-ball and useLogHist=false are incompatible!");
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "print_info: behavior-ball and useLogHist=false are incompatible");
-            return FAILURE;
-        }
+        verb_print(cmd->verbose,
+                   "behavior-ball is explicit; cell aggregation is already the default... \n");
+    } else if (!no_one_ball) {
+        verb_print(cmd->verbose, "with default one-ball cell aggregation... \n");
     }
     if (no_one_ball) {
         verb_print(cmd->verbose, "with option no-one-ball... \n");
-        if (behavior_ball)
-            verb_print(cmd->verbose,
-                       "no-one-ball disables behavior-ball cell aggregation... \n");
-    }
-#ifdef SMOOTHPIVOT
         verb_print(cmd->verbose,
-                   "with option smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
-#endif
+                   "no-one-ball disables default cell aggregation... \n");
+    }
+    if (cballs_opt_smooth_pivot(cmd))
+        verb_print(cmd->verbose,
+                   "with compiled-default smooth-pivot... rsmooth=%g\n",gd->rsmooth[0]);
+    else
+        verb_print(cmd->verbose, "with no-smooth-pivot... \n");
+    if (cballs_opt_only_2pcf(cmd))
+        verb_print(cmd->verbose, "computing only 2pcf... \n");
+    if (cballs_opt_only_3pcf(cmd))
+        verb_print(cmd->verbose, "computing only 3pcf... \n");
 #ifndef TPCF
         verb_print(cmd->verbose, "computing only 2pcf... \n");
 #endif

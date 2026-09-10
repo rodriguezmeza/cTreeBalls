@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MULTI_THREADS=${MULTI_THREADS:-4}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-kdtree-2balls.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+fail_with_log()
+{
+    echo "ERROR: $1" >&2
+    [ ! -f "${2:-/dev/null}" ] || cat "$2" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- '-DKDTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable KDTREE2BALLSOMP"
+grep -q -- '-DBALLTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the exact reference engine is not enabled"
+has_public_legacy=false
+if grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env"; then
+    has_public_legacy=true
+fi
+
+run_case()
+{
+    local name=$1 method=$2 threads=$3 options=$4 use_log=${5:-false}
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    "$CBALLS" search="$method" testmodel=simple-cubic-random \
+        nbody=512 lengthBox=2 rootDir="$output" numberThreads="$threads" \
+        usePeriodic=false useLogHist="$use_log" rangeN=0.5 rminHist=0.005 \
+        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0.08 theta=1 seed=123 \
+        stepState=1000000 verbose=2 verbose_log=0 options="$options" \
+        >"$output/run.log" 2>&1 \
+        || fail_with_log "$name failed" "$output/run.log"
+}
+
+run_rejected()
+{
+    local name=$1 options=$2 expected=$3
+    local output="$TMP_ROOT/$name"
+    local status
+
+    mkdir -p "$output"
+    set +e
+    "$CBALLS" search=kdtree-2balls-omp testmodel=simple-cubic-random \
+        nbody=64 lengthBox=2 rootDir="$output" numberThreads=1 \
+        usePeriodic=false useLogHist=true rangeN=0.5 rminHist=0.005 \
+        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0.08 theta=1 seed=123 \
+        stepState=1000000 verbose=2 verbose_log=0 options="$options" \
+        >"$output/run.log" 2>&1
+    status=$?
+    set -e
+    [ "$status" -ne 0 ] \
+        || fail_with_log "$name unexpectedly succeeded" "$output/run.log"
+    grep -Fq -- "$expected" "$output/run.log" \
+        || fail_with_log "$name did not report the expected error" \
+                         "$output/run.log"
+}
+
+compare_numeric()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+from pathlib import Path
+import math
+import sys
+
+left, right = map(Path, sys.argv[1:])
+names = sorted(path.name for path in left.glob("*.txt"))
+if not names or names != sorted(path.name for path in right.glob("*.txt")):
+    raise SystemExit("output file sets differ")
+for name in names:
+    def values(path):
+        tokens = []
+        for line in path.read_text(encoding="ascii").splitlines():
+            tokens.extend(line.split("#", 1)[0].split())
+        return [float(value) for value in tokens]
+    a, b = values(left / name), values(right / name)
+    if len(a) != len(b):
+        raise SystemExit(f"{name}: output lengths differ")
+    for index, (x, y) in enumerate(zip(a, b)):
+        if not math.isclose(x, y, rel_tol=5e-11, abs_tol=5e-12):
+            raise SystemExit(f"{name}:{index}: {x:.17g} != {y:.17g}")
+PY
+}
+
+legacy=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot
+run_case legacy-compat-one kdtree-2balls-omp 1 \
+    "$legacy,legacy-one-ball" true
+run_case legacy-compat-many kdtree-2balls-omp "$MULTI_THREADS" \
+    "$legacy,legacy-one-ball" true
+compare_numeric "$TMP_ROOT/legacy-compat-one" \
+                "$TMP_ROOT/legacy-compat-many" \
+    || fail_with_log "legacy-one-ball is not thread deterministic" \
+                     "$TMP_ROOT/legacy-compat-many/run.log"
+grep -Fq -- 'dispatching to the kdtree-omp legacy kernel' \
+    "$TMP_ROOT/legacy-compat-one/run.log" \
+    || fail_with_log "legacy-one-ball did not take the compatibility dispatch" \
+                     "$TMP_ROOT/legacy-compat-one/run.log"
+if $has_public_legacy; then
+    run_case legacy-reference kdtree-omp 1 "$legacy" true
+    compare_numeric "$TMP_ROOT/legacy-reference" \
+                    "$TMP_ROOT/legacy-compat-one" \
+        || fail_with_log "legacy-one-ball differs from kdtree-omp" \
+                         "$TMP_ROOT/legacy-compat-one/run.log"
+fi
+
+run_case legacy-exact-one kdtree-2balls-omp 1 \
+    "$legacy,legacy-one-ball,no-one-ball" true
+run_case legacy-exact-many kdtree-2balls-omp "$MULTI_THREADS" \
+    "$legacy,legacy-one-ball,no-one-ball" true
+compare_numeric "$TMP_ROOT/legacy-exact-one" \
+                "$TMP_ROOT/legacy-exact-many" \
+    || fail_with_log "legacy no-one-ball is not thread deterministic" \
+                     "$TMP_ROOT/legacy-exact-many/run.log"
+if $has_public_legacy; then
+    run_case legacy-exact-reference kdtree-omp 1 \
+        "$legacy,no-one-ball" true
+    compare_numeric "$TMP_ROOT/legacy-exact-reference" \
+                    "$TMP_ROOT/legacy-exact-one" \
+        || fail_with_log "legacy-one-ball did not preserve no-one-ball" \
+                         "$TMP_ROOT/legacy-exact-one/run.log"
+fi
+
+run_rejected legacy-conflict \
+    'only-2pcf,no-smooth-pivot,legacy-one-ball,no-two-balls' \
+    'legacy-one-ball cannot be combined with'
+
+exact=KKKCorrelation,compute-HistN,out-m-HistZeta,no-two-balls,no-smooth-pivot
+run_case reference balltree-2balls-omp 1 "$exact"
+run_case exact-one kdtree-2balls-omp 1 "$exact"
+run_case exact-many kdtree-2balls-omp "$MULTI_THREADS" "$exact"
+compare_numeric "$TMP_ROOT/reference" "$TMP_ROOT/exact-one" \
+    || fail_with_log "exact KD scan differs from the independent exact oracle" \
+                     "$TMP_ROOT/exact-one/run.log"
+for file in "$TMP_ROOT/exact-one"/*.txt; do
+    cmp -s "$file" "$TMP_ROOT/exact-many/${file##*/}" \
+        || fail_with_log "exact output is not thread deterministic: ${file##*/}" \
+                         "$TMP_ROOT/exact-many/run.log"
+done
+
+aggregate=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot,dual-node-bin-slop
+run_case aggregate-one kdtree-2balls-omp 1 "$aggregate" true
+run_case aggregate-many kdtree-2balls-omp "$MULTI_THREADS" "$aggregate" true
+if grep -q -- '-DBALLS4SCANLEV\([[:space:]]\|$\)' <<<"$build_env"; then
+    grep -q -- 'balanced scan-level task frontier enabled by BALLS4SCANLEV' \
+        "$TMP_ROOT/aggregate-many/run.log" \
+        || fail_with_log "BALLS4SCANLEV did not enable the two-ball KD frontier" \
+                         "$TMP_ROOT/aggregate-many/run.log"
+    ! grep -q -- 'scanLevelB4' "$TMP_ROOT/aggregate-many/run.log" \
+        || fail_with_log "two-ball KD search unexpectedly allocated the octree B4 table" \
+                         "$TMP_ROOT/aggregate-many/run.log"
+fi
+for file in "$TMP_ROOT/aggregate-one"/*.txt; do
+    cmp -s "$file" "$TMP_ROOT/aggregate-many/${file##*/}" \
+        || fail_with_log "aggregate output is not thread deterministic: ${file##*/}" \
+                         "$TMP_ROOT/aggregate-many/run.log"
+done
+nbccalc=$(sed -n 's/.*nbccalc = \([0-9][0-9]*\).*/\1/p' \
+                   "$TMP_ROOT/aggregate-many/run.log" | head -1)
+[ "${nbccalc:-0}" -gt 0 ] \
+    || fail_with_log "the dual-node path accepted no KD node pairs" \
+                     "$TMP_ROOT/aggregate-many/run.log"
+
+run_case only-two kdtree-2balls-omp 2 \
+    compute-HistN,only-2pcf,no-two-balls,no-smooth-pivot
+[ -f "$TMP_ROOT/only-two/histXi2pcf.txt" ] \
+    || fail_with_log "only-2pcf produced no 2PCF" "$TMP_ROOT/only-two/run.log"
+! find "$TMP_ROOT/only-two" -name 'histZetaM*' | grep -q . \
+    || fail_with_log "only-2pcf produced 3PCF files" "$TMP_ROOT/only-two/run.log"
+
+run_case only-three kdtree-2balls-omp 2 \
+    KKKCorrelation,out-m-HistZeta,only-3pcf,no-two-balls,no-smooth-pivot
+[ -f "$TMP_ROOT/only-three/histZetaM_cos_1.txt" ] \
+    || fail_with_log "only-3pcf produced no 3PCF" "$TMP_ROOT/only-three/run.log"
+[ ! -e "$TMP_ROOT/only-three/histXi2pcf.txt" ] \
+    || fail_with_log "only-3pcf produced a 2PCF" "$TMP_ROOT/only-three/run.log"
+
+if grep -q -- '-DSMOOTHPIVOT\([[:space:]]\|$\)' <<<"$build_env"; then
+    smooth=KKKCorrelation,compute-HistN,out-m-HistZeta,no-two-balls
+    run_case smooth-one kdtree-2balls-omp 1 "$smooth"
+    run_case smooth-many kdtree-2balls-omp "$MULTI_THREADS" "$smooth"
+    for file in "$TMP_ROOT/smooth-one"/*.txt; do
+        cmp -s "$file" "$TMP_ROOT/smooth-many/${file##*/}" \
+            || fail_with_log "smooth output is not thread deterministic: ${file##*/}" \
+                             "$TMP_ROOT/smooth-many/run.log"
+    done
+fi
+
+echo "PASS: KDTREE2BALLSOMP compatibility, exactness, dual-node scan, modes, and determinism"

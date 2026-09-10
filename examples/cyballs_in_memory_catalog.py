@@ -25,7 +25,7 @@ def main():
         balls = cballs()
         balls.set(
             {
-                "searchMethod": "octree-ggg-omp",
+                "searchMethod": "octree-2balls-omp",
                 "rangeN": 0.8,
                 "rminHist": 0.02,
                 "sizeHistN": 12,

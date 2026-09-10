@@ -3,7 +3,7 @@
 
         case BALLTREE2BALLSMETHOD:
             verb_print(cmd->verbose,
-                       "\n\tevalHist: printing TreeCorr-style dual/triple-node method\n\n");
+                       "\n\tevalHist: printing balltree dual/triple-node method\n\n");
 #ifdef TWOPCF
             if (!scanopt(cmd->options, "only-3pcf")) {
                 if (cballs_opt_compute_histn(cmd))

@@ -24,8 +24,12 @@ case OCTREE2BALLSMPIMETHOD: {
                                        gd->nbodyTable[ifile], ifile);
         }
     }
-    tree_status = fcfc_octree_2balls_mpi_consensus(
-        cmd, tree_status, "MPI native-octree construction");
+    if (cballs_opt_legacy_one_ball(cmd))
+        tree_status = fcfc_octree_ggg_mpi_consensus(
+            cmd, tree_status, "MPI octree-GGG compatibility construction");
+    else
+        tree_status = fcfc_octree_2balls_mpi_consensus(
+            cmd, tree_status, "MPI native-octree construction");
     if (tree_status == FAILURE) return FAILURE;
 
     if (cballs_opt_read_mask(cmd)) {

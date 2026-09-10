@@ -5,10 +5,12 @@ ifeq ($(LYAFORESTOMPON),1)
 OPT2 += -DLYAFORESTOMP
 endif
 OPT2 += -DLYA1D_OMP_PIVOT_BLOCK_SIZE=$(LYA1D_OMP_PIVOT_BLOCK_SIZE)
+OPT2 += -DLYA1D_TREE3_LEAF_SIZE=$(LYA1D_TREE3_LEAF_SIZE)
 LYAFORESTOMP = $(MDIR)/addons/lya_forest_omp/
 vpath %.c $(LYAFORESTOMP)
 INCLUDES += -I$(LYAFORESTOMP)
 HEADERFILES += $(wildcard $(LYAFORESTOMP)/*.h)
 EXTERNAL += input_lya_forest_omp.o search_lya_forest_omp.o \
-	search_lya_forest_1d_omp.o search_lya_forest_1d_tree_omp.o
+	search_lya_forest_1d_omp.o search_lya_forest_1d_tree_omp.o \
+	search_lya_forest_1d_tree_3pcf_omp.o
 endif

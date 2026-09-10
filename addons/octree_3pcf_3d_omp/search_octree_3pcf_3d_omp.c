@@ -36,14 +36,18 @@
    - The code supports ASCII/FITS catalog readers already present in cBalls;
      Kappa(p) is interpreted as delta, Weight(p) as w.
    - exclude-same-los (aliases exclude-los and exclude-pivot-los) removes
-     pivot-neighbor pairs with equal LOS IDs. It therefore removes i=j_LOS and
-     i=k_LOS terms, but does not subtract j=k_LOS terms from the harmonic
-     product.
+     pivot-neighbor pairs with equal LOS IDs.
+   - exclude-all-same-los additionally subtracts neighbor-neighbor products
+     with equal LOS IDs. It is the Ly-alpha contract in which all three
+     members of an accepted triplet belong to distinct forests.
  =============================================================================*/
 
 #include "globaldefs.h"
 
 #include <limits.h>
+#ifdef BALLS4SCANLEV
+#include "octree_scan_frontier.h"
+#endif
 
 #ifndef CB3D_OMP_PIVOT_BLOCK_SIZE
 #define CB3D_OMP_PIVOT_BLOCK_SIZE 64
@@ -64,6 +68,11 @@
 #define CB3D_ALM_INDEX(b,nlm,n) (((b)*(nlm)) + (n))
 
 typedef struct {
+    bodyptr body;
+    int bin;
+} cb3d_neighbor;
+
+typedef struct {
     int nbins;
     int lmax;
     int nlm;
@@ -76,16 +85,28 @@ typedef struct {
     REAL *shell_w;
     REAL *shell_w2;
     REAL *shell_f2;
+    REAL *same_los_power;
+    REAL *same_los_weight;
+    REAL *group_alm_re;
+    REAL *group_alm_im;
+    REAL *group_shell_w;
     REAL *num;
     REAL *den;
     REAL *xi_num;
     REAL *xi_den;
     int *active_bins;
+    int *group_active_bins;
     unsigned char *bin_active;
+    unsigned char *group_bin_active;
+    cb3d_neighbor *neighbors;
+    size_t neighbor_count;
+    size_t neighbor_capacity;
     int nactive;
+    int group_nactive;
     int compute_xi;
     int compute_zeta;
     int exclude_same_los;
+    int exclude_all_same_los;
     int read_mask;
     int use_log_hist;
     int use_periodic;
@@ -116,26 +137,36 @@ typedef struct {
 local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
                          cb3d_histptr h,
                          int compute_xi, int compute_zeta,
-                         int exclude_same_los, ErrorMsg allocation_error);
+                         int exclude_same_los, int exclude_all_same_los,
+                         ErrorMsg allocation_error);
 local void cb3d_free_hist(cb3d_histptr h);
 local void cb3d_clear_pivot(cb3d_histptr h);
 local void cb3d_activate_bin(cb3d_histptr h, int b);
 local int cb3d_bin_index(cb3d_histptr h, REAL r);
 local int cb3d_reject_cell(struct global_data* gd, bodyptr p, nodeptr q,
                            cb3d_histptr h);
-local void cb3d_walktree(struct global_data* gd,
-                         bodyptr p, nodeptr q, cb3d_histptr h);
-local void cb3d_add_body(struct global_data* gd,
-                         bodyptr p, bodyptr q, cb3d_histptr h);
+local int cb3d_walktree(struct global_data* gd,
+                        bodyptr p, nodeptr q, cb3d_histptr h,
+                        ErrorMsg allocation_error);
+local int cb3d_add_body(struct global_data* gd,
+                        bodyptr p, bodyptr q, cb3d_histptr h,
+                        ErrorMsg allocation_error);
+local int cb3d_prepare_same_los_correction(struct global_data* gd,
+                                           bodyptr p, cb3d_histptr h,
+                                           ErrorMsg allocation_error);
 local void cb3d_accumulate_pivot(cb3d_histptr h);
 local int cb3d_get_modes(struct cmdline_data* cmd,
                          int *compute_xi, int *compute_zeta);
 local int cb3d_exclude_same_los_option(struct cmdline_data* cmd);
+local int cb3d_exclude_all_same_los_option(struct cmdline_data* cmd);
 local void cb3d_init_ylm_norm(int lmax, REAL *norm);
 local void cb3d_init_ylm_recurrence(cb3d_histptr h);
 local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int b, REAL field,
                                          double xhat, double yhat,
                                          double zhat);
+local void cb3d_accumulate_ylm_to(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
+                                  int b, REAL field, double xhat,
+                                  double yhat, double zhat);
 local int cb3d_print_zeta(struct cmdline_data* cmd, struct global_data* gd,
                           REAL *num, REAL *den, INTEGER npivots, INTEGER nbb);
 local int cb3d_print_xi(struct cmdline_data* cmd, struct global_data* gd,
@@ -151,7 +182,8 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                        bodyptr *btable, INTEGER *nbody,
                        INTEGER ipmin, INTEGER ipmax, int cat,
                        int compute_xi, int compute_zeta,
-                       int exclude_same_los, cb3d_resultptr result);
+                       int exclude_same_los, int exclude_all_same_los,
+                       cb3d_resultptr result);
 local int cb3d_validate(struct cmdline_data* cmd,
                         int *compute_xi, int *compute_zeta,
                         int survey_mode);
@@ -447,7 +479,8 @@ setup_done:
         compute_xi, compute_zeta, cmd->rangeN, gd->Rcut);
     status = cb3d_measure(cmd, gd, btable, nbody, ipmin, ipmax[cat1], cat1,
                           compute_xi, compute_zeta,
-                          cb3d_exclude_same_los_option(cmd), &result);
+                          cb3d_exclude_same_los_option(cmd),
+                          cb3d_exclude_all_same_los_option(cmd), &result);
     if (status == FAILURE) goto cleanup;
     if (cb3d_parallel_publish(cmd) && !cballs_opt_no_out_hist(cmd)) {
         if (compute_zeta)
@@ -492,11 +525,11 @@ setup_done:
         "\n%s: ENCORE-style survey estimator; measuring D-R and random "
         "multipoles through ell=%d\n", cmd->searchMethod, cmd->mChebyshev);
     status = cb3d_measure(cmd, gd, btable, nbody, 1, nbody[dmr_cat], dmr_cat,
-                          compute_xi, compute_zeta, FALSE, &numerator);
+                          compute_xi, compute_zeta, FALSE, FALSE, &numerator);
     if (status == FAILURE) goto cleanup;
     status = cb3d_measure(cmd, gd, btable, nbody, 1,
                           nbody[normalized_random_cat], normalized_random_cat,
-                          compute_xi, compute_zeta, FALSE, &randoms);
+                          compute_xi, compute_zeta, FALSE, FALSE, &randoms);
     if (status == FAILURE) goto cleanup;
 
     /* Solve the window system only after both globally summed measurements. */
@@ -628,7 +661,8 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                        bodyptr *btable, INTEGER *nbody,
                        INTEGER ipmin, INTEGER ipmax, int cat,
                        int compute_xi, int compute_zeta,
-                       int exclude_same_los, cb3d_resultptr result)
+                       int exclude_same_los, int exclude_all_same_los,
+                       cb3d_resultptr result)
 {
     const size_t nb = (size_t)cmd->sizeHistN;
     const size_t nacc = ((size_t)cmd->mChebyshev + 1)*nb*nb;
@@ -637,6 +671,10 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
     int allocation_failed = FALSE;
     int status = SUCCESS;
     ErrorMsg allocation_error = "";
+#ifdef BALLS4SCANLEV
+    bodyptr *pivot_order = NULL;
+    INTEGER ordered_pivot_count = 0;
+#endif
 
     if (cat < 0 || cat >= gd->ninfiles || btable[cat] == NULL
         || nbody[cat] <= 0 || roottable[cat] == NULL) {
@@ -656,18 +694,43 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
 #else
 #error OPENMPMACHINE is not defined. Switch it on in Makefile_settings
 #endif
+#ifdef BALLS4SCANLEV
+    status = cballs_octree_scan_body_order(
+        cmd, gd, btable[cat] + ipmin - 1, btable[cat] + ipmax,
+        cat, &pivot_order, &ordered_pivot_count);
+    status = cb3d_parallel_consensus(
+        cmd, status, "3D scan-level body frontier");
+    if (status == FAILURE) {
+        free(pivot_order);
+        return FAILURE;
+    }
+    verb_print(cmd->verbose,
+               "octree-3pcf-3d: BALLS4SCANLEV spatially ordered %"
+               INTEGER_FMT " exact body pivots\n",
+               ordered_pivot_count);
+    const INTEGER pivot_count = ordered_pivot_count;
+#else
     const INTEGER pivot_count = ipmax - ipmin + 1;
+#endif
     const INTEGER block_count = 1 + (pivot_count - 1)/CB3D_OMP_PIVOT_BLOCK_SIZE;
 
+#ifdef BALLS4SCANLEV
+#define CB3D_SCAN_SHARED ,pivot_order
+#else
+#define CB3D_SCAN_SHARED
+#endif
 #pragma omp parallel default(none) \
     shared(cmd,gd,btable,roottable,ipmin,ipmax,cat,result,nacc,nb, \
-           compute_xi,compute_zeta,exclude_same_los,allocation_failed, \
-           allocation_error,first_block,block_stride,block_count)
+           compute_xi,compute_zeta,exclude_same_los,exclude_all_same_los, \
+           allocation_failed, \
+           allocation_error,first_block,block_stride,block_count,pivot_count \
+           CB3D_SCAN_SHARED)
     {
         cb3d_hist hist;
         ErrorMsg thread_error = "";
         int hist_ready = cb3d_init_hist(cmd, gd, &hist, compute_xi, compute_zeta,
-                                        exclude_same_los, thread_error) == SUCCESS;
+                                        exclude_same_los, exclude_all_same_los,
+                                        thread_error) == SUCCESS;
         if (!hist_ready) {
 #pragma omp critical(cb3d_allocation_failure)
             {
@@ -681,9 +744,13 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
 #pragma omp for schedule(dynamic,1) ordered
         for (INTEGER block = first_block; block < block_count; block += block_stride) {
             if (!allocation_failed) {
+#ifdef BALLS4SCANLEV
+                const INTEGER first = block*CB3D_OMP_PIVOT_BLOCK_SIZE;
+#else
                 const INTEGER first = ipmin - 1 + block*CB3D_OMP_PIVOT_BLOCK_SIZE;
+#endif
                 const INTEGER count = MIN((INTEGER)CB3D_OMP_PIVOT_BLOCK_SIZE,
-                                           ipmax - first);
+                                           pivot_count - block*CB3D_OMP_PIVOT_BLOCK_SIZE);
                 if (compute_zeta) {
                     cb3d_zero_array(hist.num, nacc);
                     cb3d_zero_array(hist.den, nacc);
@@ -695,7 +762,11 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                 hist.nbbcalcthread = 0;
                 hist.npivots_thread = 0;
                 for (INTEGER offset = 0; offset < count; offset++) {
+#ifdef BALLS4SCANLEV
+                    bodyptr p = pivot_order[first + offset];
+#else
                     bodyptr p = btable[cat] + first + offset;
+#endif
                     if (Update(p) == FALSE) continue;
                     if (hist.read_mask && Mask(p) == FALSE) continue;
                     cb3d_clear_pivot(&hist);
@@ -703,7 +774,20 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                     hist.pivot_field = Weight(p)*Kappa(p);
                     if (hist.exclude_same_los)
                         hist.pivot_los = Octree3pcf3dLosId(p);
-                    cb3d_walktree(gd, p, (nodeptr)roottable[cat], &hist);
+                    if (cb3d_walktree(gd, p, (nodeptr)roottable[cat], &hist,
+                                      thread_error) == FAILURE
+                        || cb3d_prepare_same_los_correction(
+                               gd, p, &hist, thread_error) == FAILURE) {
+#pragma omp critical(cb3d_allocation_failure)
+                        {
+                            if (!allocation_failed)
+                                snprintf(allocation_error,
+                                         sizeof(allocation_error), "%s",
+                                         thread_error);
+                            allocation_failed = TRUE;
+                        }
+                        break;
+                    }
                     cb3d_accumulate_pivot(&hist);
                     hist.npivots_thread++;
                 }
@@ -726,6 +810,10 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
         }
         if (hist_ready) cb3d_free_hist(&hist);
     }
+#undef CB3D_SCAN_SHARED
+#ifdef BALLS4SCANLEV
+    free(pivot_order);
+#endif
     if (allocation_failed)
         snprintf(cmd->error_message, _ERRORMSGSIZE_, "cb3d_measure: %s",
                  allocation_error[0] ? allocation_error : "worker allocation failed");
@@ -781,13 +869,21 @@ local int cb3d_exclude_same_los_option(struct cmdline_data* cmd)
 {
     return scanopt(cmd->options, "exclude-same-los")
         || scanopt(cmd->options, "exclude-los")
-        || scanopt(cmd->options, "exclude-pivot-los");
+        || scanopt(cmd->options, "exclude-pivot-los")
+        || cb3d_exclude_all_same_los_option(cmd);
+}
+
+local int cb3d_exclude_all_same_los_option(struct cmdline_data* cmd)
+{
+    return scanopt(cmd->options, "exclude-all-same-los")
+        || scanopt(cmd->options, "lya-distinct-forests");
 }
 
 local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
                          cb3d_histptr h,
                          int compute_xi, int compute_zeta,
-                         int exclude_same_los, ErrorMsg allocation_error)
+                         int exclude_same_los, int exclude_all_same_los,
+                         ErrorMsg allocation_error)
 {
     int nb = cmd->sizeHistN;
     int lmax = cmd->mChebyshev;
@@ -802,6 +898,7 @@ local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
     h->compute_xi = compute_xi;
     h->compute_zeta = compute_zeta;
     h->exclude_same_los = exclude_same_los;
+    h->exclude_all_same_los = exclude_all_same_los;
     h->read_mask = cballs_opt_read_mask(cmd);
     h->use_log_hist = cmd->useLogHist;
     h->use_periodic = cmd->usePeriodic;
@@ -835,6 +932,17 @@ local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
         CB3D_ALLOC(shell_w, (size_t)nb);
         CB3D_ALLOC(shell_w2, (size_t)nb);
         CB3D_ALLOC(shell_f2, (size_t)nb);
+        if (exclude_all_same_los) {
+            CB3D_ALLOC(same_los_power, nacc);
+            CB3D_ALLOC(same_los_weight, (size_t)nb*(size_t)nb);
+            CB3D_ALLOC(group_alm_re, nalm);
+            CB3D_ALLOC(group_alm_im, nalm);
+            CB3D_ALLOC(group_shell_w, (size_t)nb);
+            CB3D_ALLOC(group_active_bins, (size_t)nb);
+            CB3D_ALLOC(group_bin_active, (size_t)nb);
+            memset(h->group_bin_active, 0,
+                   (size_t)nb*sizeof(*h->group_bin_active));
+        }
         CB3D_ALLOC(num, nacc);
         CB3D_ALLOC(den, nacc);
         CB3D_ALLOC(active_bins, (size_t)nb);
@@ -874,12 +982,21 @@ local void cb3d_free_hist(cb3d_histptr h)
     free(h->shell_w);
     free(h->shell_w2);
     free(h->shell_f2);
+    free(h->same_los_power);
+    free(h->same_los_weight);
+    free(h->group_alm_re);
+    free(h->group_alm_im);
+    free(h->group_shell_w);
     free(h->num);
     free(h->den);
     free(h->xi_num);
     free(h->xi_den);
     free(h->active_bins);
+    free(h->group_active_bins);
     free(h->bin_active);
+    free(h->group_bin_active);
+    free(h->neighbors);
+    memset(h, 0, sizeof(*h));
 }
 
 local void cb3d_clear_pivot(cb3d_histptr h)
@@ -889,6 +1006,7 @@ local void cb3d_clear_pivot(cb3d_histptr h)
     for (i = 0; i < h->nactive; i++)
         h->bin_active[h->active_bins[i]] = 0;
     h->nactive = 0;
+    h->neighbor_count = 0;
 }
 
 local void cb3d_activate_bin(cb3d_histptr h, int b)
@@ -945,25 +1063,30 @@ local int cb3d_reject_cell(struct global_data* gd, bodyptr p, nodeptr q,
     return distance_squared >= cutoff * cutoff;
 }
 
-local void cb3d_walktree(struct global_data* gd,
-                         bodyptr p, nodeptr q, cb3d_histptr h)
+local int cb3d_walktree(struct global_data* gd,
+                        bodyptr p, nodeptr q, cb3d_histptr h,
+                        ErrorMsg allocation_error)
 {
     nodeptr child;
 
-    if (((nodeptr)p) == q) return;
+    if (((nodeptr)p) == q) return SUCCESS;
     if (Type(q) == CELL) {
         if ((h->read_mask && Mask(q) == MASK_NODE_MASKED)
             || cb3d_reject_cell(gd, p, q, h))
-            return;
-        for (child = More(q); child != Next(q); child = Next(child))
-            cb3d_walktree(gd, p, child, h);
+            return SUCCESS;
+        for (child = More(q); child != Next(q); child = Next(child)) {
+            if (cb3d_walktree(gd, p, child, h, allocation_error) == FAILURE)
+                return FAILURE;
+        }
     } else {
-        cb3d_add_body(gd, p, (bodyptr)q, h);
+        return cb3d_add_body(gd, p, (bodyptr)q, h, allocation_error);
     }
+    return SUCCESS;
 }
 
-local void cb3d_add_body(struct global_data* gd,
-                         bodyptr p, bodyptr q, cb3d_histptr h)
+local int cb3d_add_body(struct global_data* gd,
+                        bodyptr p, bodyptr q, cb3d_histptr h,
+                        ErrorMsg allocation_error)
 {
     REAL dr2;
     REAL dr1;
@@ -971,21 +1094,21 @@ local void cb3d_add_body(struct global_data* gd,
     int b;
     REAL f, w;
 
-    if (p == q) return;
-    if (h->read_mask && Mask(q) == FALSE) return;
-    if (Update(q) == FALSE) return;
+    if (p == q) return SUCCESS;
+    if (h->read_mask && Mask(q) == FALSE) return SUCCESS;
+    if (Update(q) == FALSE) return SUCCESS;
     if (h->exclude_same_los
-        && h->pivot_los == Octree3pcf3dLosId(q)) return;
+        && h->pivot_los == Octree3pcf3dLosId(q)) return SUCCESS;
 
     DOTPSUBV(dr2, dr, Pos(p), Pos(q));
     if (h->use_periodic) {
         VWrapAll(dr);
         DOTVP(dr2, dr, dr);
     }
-    if (dr2 <= h->rmin2 || dr2 >= h->rcut2) return;
+    if (dr2 <= h->rmin2 || dr2 >= h->rcut2) return SUCCESS;
     dr1 = rsqrt(dr2);
     b = cb3d_bin_index(h, dr1);
-    if (b < 0) return;
+    if (b < 0) return SUCCESS;
 
     w = Weight(q);
     f = w * Kappa(q);
@@ -1006,9 +1129,147 @@ local void cb3d_add_body(struct global_data* gd,
         h->shell_w[b]  += w;
         h->shell_w2[b] += w*w;
         h->shell_f2[b] += f*f;
+        if (h->exclude_all_same_los) {
+            if (h->neighbor_count == h->neighbor_capacity) {
+                size_t capacity = h->neighbor_capacity == 0
+                    ? 256 : 2*h->neighbor_capacity;
+                cb3d_neighbor *replacement;
+
+                if (capacity < h->neighbor_capacity
+                    || capacity > SIZE_MAX/sizeof(*replacement)) {
+                    snprintf(allocation_error, _ERRORMSGSIZE_,
+                             "3D LOS neighbor workspace size overflow");
+                    return FAILURE;
+                }
+                replacement = (cb3d_neighbor *)realloc(
+                    h->neighbors, capacity*sizeof(*replacement));
+                if (replacement == NULL) {
+                    snprintf(allocation_error, _ERRORMSGSIZE_,
+                             "not enough memory for 3D LOS neighbor workspace");
+                    return FAILURE;
+                }
+                h->neighbors = replacement;
+                h->neighbor_capacity = capacity;
+            }
+            h->neighbors[h->neighbor_count].body = q;
+            h->neighbors[h->neighbor_count].bin = b;
+            h->neighbor_count++;
+        }
     }
 
     h->nbbcalcthread++;
+    return SUCCESS;
+}
+
+local int cb3d_compare_neighbor_los(const void *left, const void *right)
+{
+    const cb3d_neighbor *a = (const cb3d_neighbor *)left;
+    const cb3d_neighbor *b = (const cb3d_neighbor *)right;
+    INTEGER a_los = Octree3pcf3dLosId(a->body);
+    INTEGER b_los = Octree3pcf3dLosId(b->body);
+
+    return a_los < b_los ? -1 : (a_los > b_los ? 1 : 0);
+}
+
+local int cb3d_prepare_same_los_correction(struct global_data* gd,
+                                           bodyptr p, cb3d_histptr h,
+                                           ErrorMsg allocation_error)
+{
+    size_t begin;
+    int i1_active, i2_active, ell, m;
+
+    (void)allocation_error;
+    if (!h->compute_zeta || !h->exclude_all_same_los) return SUCCESS;
+
+    for (i1_active = 0; i1_active < h->nactive; i1_active++) {
+        int b1 = h->active_bins[i1_active];
+        for (i2_active = 0; i2_active < h->nactive; i2_active++) {
+            int b2 = h->active_bins[i2_active];
+            h->same_los_weight[(size_t)b1*(size_t)h->nbins + (size_t)b2] = 0.0;
+            for (ell = 0; ell <= h->lmax; ell++)
+                h->same_los_power[CB3D_ACC_INDEX(ell, b1, b2, h->nbins)] = 0.0;
+        }
+    }
+    if (h->neighbor_count < 2) return SUCCESS;
+
+    qsort(h->neighbors, h->neighbor_count, sizeof(*h->neighbors),
+          cb3d_compare_neighbor_los);
+    begin = 0;
+    while (begin < h->neighbor_count) {
+        size_t end = begin + 1;
+        size_t item;
+
+        while (end < h->neighbor_count
+               && Octree3pcf3dLosId(h->neighbors[end].body)
+                  == Octree3pcf3dLosId(h->neighbors[begin].body))
+            end++;
+        h->group_nactive = 0;
+        for (item = begin; item < end; item++) {
+            bodyptr q = h->neighbors[item].body;
+            int b = h->neighbors[item].bin;
+            REAL dr2, radius;
+            REAL field = Weight(q)*Kappa(q);
+            compute_vector dr;
+
+            if (!h->group_bin_active[b]) {
+                size_t offset = (size_t)b*(size_t)h->nlm;
+                h->group_bin_active[b] = 1;
+                h->group_active_bins[h->group_nactive++] = b;
+                memset(h->group_alm_re + offset, 0,
+                       (size_t)h->nlm*sizeof(*h->group_alm_re));
+                memset(h->group_alm_im + offset, 0,
+                       (size_t)h->nlm*sizeof(*h->group_alm_im));
+                h->group_shell_w[b] = 0.0;
+            }
+            DOTPSUBV(dr2, dr, Pos(p), Pos(q));
+            if (h->use_periodic) {
+                VWrapAll(dr);
+                DOTVP(dr2, dr, dr);
+            }
+            radius = rsqrt(dr2);
+            cb3d_accumulate_ylm_to(
+                h, h->group_alm_re, h->group_alm_im, b, field,
+                (double)dr[0]/(double)radius,
+                (double)dr[1]/(double)radius,
+                (double)dr[2]/(double)radius);
+            h->group_shell_w[b] += Weight(q);
+        }
+
+        for (i1_active = 0; i1_active < h->group_nactive; i1_active++) {
+            int b1 = h->group_active_bins[i1_active];
+            for (i2_active = i1_active;
+                 i2_active < h->group_nactive; i2_active++) {
+                int b2 = h->group_active_bins[i2_active];
+                REAL group_weight = h->group_shell_w[b1]*h->group_shell_w[b2];
+
+                h->same_los_weight[(size_t)b1*(size_t)h->nbins + (size_t)b2]
+                    += group_weight;
+                if (b1 != b2)
+                    h->same_los_weight[(size_t)b2*(size_t)h->nbins + (size_t)b1]
+                        += group_weight;
+                for (ell = 0; ell <= h->lmax; ell++) {
+                    REAL power = 0.0;
+                    for (m = 0; m <= ell; m++) {
+                        int n = CB3D_LM_INDEX(ell, m);
+                        size_t i1 = CB3D_ALM_INDEX(b1, h->nlm, n);
+                        size_t i2 = CB3D_ALM_INDEX(b2, h->nlm, n);
+                        REAL product = h->group_alm_re[i1]*h->group_alm_re[i2]
+                                     + h->group_alm_im[i1]*h->group_alm_im[i2];
+                        power += m == 0 ? product : 2.0*product;
+                    }
+                    h->same_los_power[
+                        CB3D_ACC_INDEX(ell, b1, b2, h->nbins)] += power;
+                    if (b1 != b2)
+                        h->same_los_power[
+                            CB3D_ACC_INDEX(ell, b2, b1, h->nbins)] += power;
+                }
+            }
+        }
+        for (i1_active = 0; i1_active < h->group_nactive; i1_active++)
+            h->group_bin_active[h->group_active_bins[i1_active]] = 0;
+        begin = end;
+    }
+    return SUCCESS;
 }
 
 local void cb3d_accumulate_pivot(cb3d_histptr h)
@@ -1045,7 +1306,11 @@ local void cb3d_accumulate_pivot(cb3d_histptr h)
                 }
 
                 d = h->shell_w[b1] * h->shell_w[b2];
-                if (b1 == b2) {
+                if (h->exclude_all_same_los) {
+                    diag_f = h->same_los_power[idx];
+                    diag_w = h->same_los_weight[
+                        (size_t)b1*(size_t)h->nbins + (size_t)b2];
+                } else if (b1 == b2) {
                     diag_f = ((REAL)(2*ell + 1) / (REAL)CB3D_FOURPI) * h->shell_f2[b1];
                     diag_w = h->shell_w2[b1];
                 }
@@ -1125,6 +1390,14 @@ local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int radial_bin,
                                          REAL field, double xhat,
                                          double yhat, double zhat)
 {
+    cb3d_accumulate_ylm_to(h, h->alm_re, h->alm_im, radial_bin, field,
+                           xhat, yhat, zhat);
+}
+
+local void cb3d_accumulate_ylm_to(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
+                                  int radial_bin, REAL field, double xhat,
+                                  double yhat, double zhat)
+{
     int m, ell;
     size_t offset = (size_t)radial_bin * (size_t)h->nlm;
     double ymm_re = (double)h->ylm_norm[0];
@@ -1134,8 +1407,8 @@ local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int radial_bin,
     for (m = 0; m <= h->lmax; m++) {
         int n = CB3D_LM_INDEX(m, m);
         size_t index = offset + (size_t)n;
-        h->alm_re[index] += (REAL)(weighted_field * ymm_re);
-        h->alm_im[index] -= (REAL)(weighted_field * ymm_im);
+        alm_re[index] += (REAL)(weighted_field * ymm_re);
+        alm_im[index] -= (REAL)(weighted_field * ymm_im);
 
         if (m < h->lmax) {
             double y_lm2_re = ymm_re;
@@ -1149,8 +1422,8 @@ local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int radial_bin,
             y_lm1_re = (double)h->ylm_a[n] * zhat * ymm_re;
             y_lm1_im = (double)h->ylm_a[n] * zhat * ymm_im;
             index = offset + (size_t)n;
-            h->alm_re[index] += (REAL)(weighted_field * y_lm1_re);
-            h->alm_im[index] -= (REAL)(weighted_field * y_lm1_im);
+            alm_re[index] += (REAL)(weighted_field * y_lm1_re);
+            alm_im[index] -= (REAL)(weighted_field * y_lm1_im);
 
             for (ell = m + 2; ell <= h->lmax; ell++) {
                 double ylm_re;
@@ -1162,8 +1435,8 @@ local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int radial_bin,
                 ylm_im = (double)h->ylm_a[n] * zhat * y_lm1_im
                        - (double)h->ylm_b[n] * y_lm2_im;
                 index = offset + (size_t)n;
-                h->alm_re[index] += (REAL)(weighted_field * ylm_re);
-                h->alm_im[index] -= (REAL)(weighted_field * ylm_im);
+                alm_re[index] += (REAL)(weighted_field * ylm_re);
+                alm_im[index] -= (REAL)(weighted_field * ylm_im);
                 y_lm2_re = y_lm1_re;
                 y_lm2_im = y_lm1_im;
                 y_lm1_re = ylm_re;

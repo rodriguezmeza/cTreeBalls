@@ -152,6 +152,19 @@ global bool accept_body(struct cmdline_data* cmd, struct  global_data* gd,
                         bodyptr, nodeptr, real *, compute_vector);
 
 #ifdef SMOOTHPIVOT
+typedef int (*cballs_smooth_claim_accumulator)(struct cmdline_data *cmd,
+                                               struct global_data *gd,
+                                               bodyptr pivot, bodyptr claimed,
+                                               void *context);
+
+global int prepare_smooth_pivots_with_accumulator(
+                                 struct cmdline_data* cmd,
+                                 struct global_data* gd,
+                                 bodyptr *btable, INTEGER *nbody,
+                                 INTEGER ipmin, INTEGER *ipmax,
+                                 int cat1, int cat2,
+                                 cballs_smooth_claim_accumulator accumulator,
+                                 void *accumulator_context);
 global int prepare_smooth_pivots(struct cmdline_data* cmd,
                                  struct global_data* gd,
                                  bodyptr *btable, INTEGER *nbody,

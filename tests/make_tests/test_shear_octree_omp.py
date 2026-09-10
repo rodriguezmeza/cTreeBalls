@@ -17,6 +17,7 @@ BINS = 2
 PHI_BINS = 16
 RMIN = 0.01
 RMAX = 2.0
+EXACT_OPTIONS = "no-out-Hist,no-one-ball,no-smooth-pivot"
 
 
 def fixture():
@@ -299,7 +300,8 @@ def direct_triplet_oracle(catalogs):
     }
 
 
-def configured_model(catalogs, threads, *, periodic=False):
+def configured_model(catalogs, threads, *, periodic=False,
+                     options=EXACT_OPTIONS, rsmooth=None, theta=1.0):
     balls = cballs()
     catalog_selection = ",".join(str(index + 1)
                                  for index in range(len(catalogs)))
@@ -314,14 +316,17 @@ def configured_model(catalogs, threads, *, periodic=False):
             "sizeHistN": BINS,
             "sizeHistPhi": PHI_BINS,
             "mChebyshev": NMAX,
+            "theta": theta,
             "lengthBox": 2.2,
             "numberThreads": threads,
             "verbose": 0,
             "verbose_log": 0,
             "rootDir": tempfile.mkdtemp(prefix="ctreeballs-shear-output-"),
-            "options": "no-out-Hist",
+            "options": options,
         }
     )
+    if rsmooth is not None:
+        balls.set({"rsmooth": rsmooth})
     for catalog_index, (positions, gamma, weights) in enumerate(catalogs):
         balls.set_catalog(
             positions, weights=weights,
@@ -331,36 +336,62 @@ def configured_model(catalogs, threads, *, periodic=False):
     return balls
 
 
-def run_catalogs(catalogs, threads):
-    balls = configured_model(catalogs, threads)
+def run_catalogs(catalogs, threads, *, options=EXACT_OPTIONS,
+                 statistics="both", rsmooth=None, theta=1.0):
+    balls = configured_model(
+        catalogs, threads, options=options, rsmooth=rsmooth, theta=theta,
+    )
     try:
         balls.Run(level=["MainLoop"])
-        upsilon_x = balls.getShearUpsilonXMultipoles().copy()
-        multipoles_x = balls.getShearGammaXMultipoles().copy()
-        angular_x = balls.getShearGammaX().copy()
-        if not np.array_equal(upsilon_x,
-                              balls.getShearUpsilonMultipoles()):
-            raise AssertionError("Upsilon x-projection alias disagrees")
-        if not np.array_equal(multipoles_x,
-                              balls.getShearGammaMultipoles()):
-            raise AssertionError("Gamma multipole x-projection alias disagrees")
-        if not np.array_equal(angular_x, balls.getShearGamma()):
-            raise AssertionError("Gamma angular x-projection alias disagrees")
-        return {
-            "xi_plus": balls.getShearXiPlus().copy(),
-            "xi_minus": balls.getShearXiMinus().copy(),
-            "xi_weight": balls.getShearXiWeight().copy(),
-            "upsilon": upsilon_x,
-            "window": balls.getShearWindowMultipoles().copy(),
-            "multipoles": multipoles_x,
-            "angular": angular_x,
-        }
+        result = {}
+        if statistics in {"2pcf", "both"}:
+            result.update(
+                xi_plus=balls.getShearXiPlus().copy(),
+                xi_minus=balls.getShearXiMinus().copy(),
+                xi_weight=balls.getShearXiWeight().copy(),
+            )
+        else:
+            try:
+                balls.getShearXiPlus()
+            except CosmoSevereError:
+                pass
+            else:
+                raise AssertionError("pair getter accepted a 3PCF-only run")
+
+        if statistics in {"3pcf", "both"}:
+            upsilon_x = balls.getShearUpsilonXMultipoles().copy()
+            multipoles_x = balls.getShearGammaXMultipoles().copy()
+            angular_x = balls.getShearGammaX().copy()
+            if not np.array_equal(upsilon_x,
+                                  balls.getShearUpsilonMultipoles()):
+                raise AssertionError("Upsilon x-projection alias disagrees")
+            if not np.array_equal(multipoles_x,
+                                  balls.getShearGammaMultipoles()):
+                raise AssertionError(
+                    "Gamma multipole x-projection alias disagrees"
+                )
+            if not np.array_equal(angular_x, balls.getShearGamma()):
+                raise AssertionError("Gamma angular x-projection alias disagrees")
+            result.update(
+                upsilon=upsilon_x,
+                window=balls.getShearWindowMultipoles().copy(),
+                multipoles=multipoles_x,
+                angular=angular_x,
+            )
+        else:
+            try:
+                balls.getShearGammaXMultipoles()
+            except CosmoSevereError:
+                pass
+            else:
+                raise AssertionError("3PCF getter accepted a 2PCF-only run")
+        return result
     finally:
         balls.struct_cleanup()
 
 
-def run_once(positions, gamma, weights, threads):
-    return run_catalogs([(positions, gamma, weights)], threads)
+def run_once(positions, gamma, weights, threads, **kwargs):
+    return run_catalogs([(positions, gamma, weights)], threads, **kwargs)
 
 
 def assert_close(actual, expected):
@@ -385,6 +416,65 @@ def test_oracle_and_openmp_determinism():
     for name in one_thread:
         if not np.array_equal(one_thread[name], many_threads[name]):
             raise AssertionError(f"OpenMP result is not deterministic: {name}")
+
+
+def test_runtime_order_selection_and_accepted_nodes():
+    positions, gamma, weights = fixture()
+    exact = run_once(positions, gamma, weights, 1)
+    pair = run_once(
+        positions, gamma, weights, 1,
+        options=f"{EXACT_OPTIONS},only-2pcf", statistics="2pcf",
+    )
+    triple = run_once(
+        positions, gamma, weights, 1,
+        options=f"{EXACT_OPTIONS},only-3pcf", statistics="3pcf",
+    )
+    assert_close(pair, {name: exact[name] for name in pair})
+    assert_close(triple, {name: exact[name] for name in triple})
+
+    production_options = "no-out-Hist,no-smooth-pivot"
+    accepted_one = run_once(
+        positions, gamma, weights, 1, options=production_options,
+    )
+    accepted_many = run_once(
+        positions, gamma, weights, min(4, os.cpu_count() or 1),
+        options=production_options,
+    )
+    for name, values in accepted_one.items():
+        if not np.all(np.isfinite(values)):
+            raise AssertionError(f"accepted-node result is not finite: {name}")
+        if not np.array_equal(values, accepted_many[name]):
+            raise AssertionError(
+                f"accepted-node OpenMP result is not deterministic: {name}"
+            )
+    if all(np.array_equal(accepted_one[name], exact[name]) for name in exact):
+        raise AssertionError("fixture did not exercise accepted shear nodes")
+
+    tight = run_once(
+        positions, gamma, weights, 1,
+        options=production_options, theta=1.0e-8,
+    )
+    assert_close(tight, exact)
+
+
+def test_smooth_pivot_is_deterministic():
+    positions, gamma, weights = fixture()
+    smooth_options = "no-out-Hist,no-one-ball"
+    one_thread = run_once(
+        positions, gamma, weights, 1,
+        options=smooth_options, rsmooth=0.08,
+    )
+    many_threads = run_once(
+        positions, gamma, weights, min(4, os.cpu_count() or 1),
+        options=smooth_options, rsmooth=0.08,
+    )
+    for name, values in one_thread.items():
+        if not np.all(np.isfinite(values)):
+            raise AssertionError(f"smooth-pivot result is not finite: {name}")
+        if not np.array_equal(values, many_threads[name]):
+            raise AssertionError(
+                f"smooth-pivot OpenMP result is not deterministic: {name}"
+            )
 
 
 def test_active_spin2_rotation_invariance():
@@ -491,8 +581,10 @@ def test_getter_and_geometry_failures_are_recoverable():
 
 if __name__ == "__main__":
     test_oracle_and_openmp_determinism()
+    test_runtime_order_selection_and_accepted_nodes()
+    test_smooth_pivot_is_deterministic()
     test_active_spin2_rotation_invariance()
     test_three_catalog_tomography_matches_direct_triplets()
     test_getter_and_geometry_failures_are_recoverable()
-    print("PASS: shear Gamma^x oracle, spin-2 rotation, tomography, recovery, "
-          "and OpenMP determinism")
+    print("PASS: shear exact/accepted Gamma^x, runtime orders, smooth pivots, "
+          "spin-2 rotation, tomography, recovery, and OpenMP determinism")

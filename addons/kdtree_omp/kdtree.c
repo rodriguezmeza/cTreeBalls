@@ -12,12 +12,11 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
-#include <assert.h>
 #include "globaldefs.h"
 #include "kdtree.h"
 
 local void set_radius(struct cmdline_data*, ballnode *, bodyptr *, int, int);
-local void set_cofm(ballnode *, bodyptr *, int, int);
+local void set_cofm(struct cmdline_data *, ballnode *, bodyptr *, int, int);
 local void set_bounds(bound *, bodyptr *, INTEGER, INTEGER);
 local INTEGER  median_index(bodyptr *, int, INTEGER, INTEGER);
 local void combine_nodes(struct cmdline_data*,
@@ -35,17 +34,37 @@ ballxptr init_kdtree(struct cmdline_data* cmd,
     ballxptr kd;
     INTEGER i, j;
 
-    kd = (ballxptr) allocate(sizeof(ballcontext));
+    if (nbody <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "init_kdtree: catalog is empty");
+        return NULL;
+    }
+    kd = calloc(1, sizeof(*kd));
+    if (kd == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "init_kdtree: unable to allocate tree context");
+        return NULL;
+    }
     kd->npoint = nbody;
-    kd->bptr = (bodyptr *) allocate(nbody * sizeof(bodyptr));
+    kd->body_base = btab;
+    if (cballs_malloc_checked((void **)&kd->bptr, (size_t)nbody,
+            sizeof(*kd->bptr), "KDTREE body pointers", cmd->error_message,
+            _ERRORMSGSIZE_) == FAILURE) {
+        finish_kdtree(kd);
+        return NULL;
+    }
     gd->bytes_tot += nbody*sizeof(bodyptr);
     verb_print(cmd->verbose,
         "Allocated %g MByte for particle storage in kd tree structure.\n",
                nbody*sizeof(bodyptr)*INMB);
     for (i = j = 0; i < nbody; i++)
         kd->bptr[j++] = nthBody(btab, i);           // ( btab + i )
-    assert(j == kd->npoint);                        // Check counting all
-                                                    //  Terminates run if not
+    if (j != kd->npoint) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "init_kdtree: body pointer publication failed");
+        finish_kdtree(kd);
+        return NULL;
+    }
     set_bounds(&kd->bnd, kd->bptr, 0, kd->npoint - 1);
 
     return kd;
@@ -54,10 +73,12 @@ ballxptr init_kdtree(struct cmdline_data* cmd,
 // Free kd tree memory
 void finish_kdtree(ballxptr kd)
 {
+    if (kd == NULL) return;
 #ifdef SINGLEP
     free(kd->packed_points);
 #endif
     free(kd->bptr);
+    free(kd->body_order);
     free(kd->ntab);
     free(kd);
 }
@@ -74,6 +95,11 @@ int build_kdtree(struct cmdline_data* cmd,
     ballnode *ntab;
 
     //B Find number of nodes and number of times to split
+    if (kd == NULL || kd->npoint <= 0 || nbucket <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "build_kdtree: invalid tree or leaf capacity");
+        return FAILURE;
+    }
     n = kd->npoint;
     k = 1;
     while (n > nbucket) {
@@ -84,10 +110,14 @@ int build_kdtree(struct cmdline_data* cmd,
     kd->nsplit = k;
     //E
 
-    ntab = kd->ntab = (ballnode *) allocate(kd->nnode * sizeof(ballnode));
+    if (cballs_calloc_checked((void **)&kd->ntab, (size_t)kd->nnode,
+            sizeof(*kd->ntab), "KDTREE nodes", cmd->error_message,
+            _ERRORMSGSIZE_) == FAILURE)
+        return FAILURE;
+    ntab = kd->ntab;
     gd->bytes_tot += kd->nnode*sizeof(ballnode);
     verb_print(cmd->verbose,
-               "Number of nbodies, nodes, and nsplit: %d %d %d\n",
+               "Number of nbodies, nodes, and nsplit: %" INTEGER_FMT " %d %d\n",
                kd->npoint, kd->nnode, kd->nsplit);
     verb_print(cmd->verbose,
                "Allocated %g MByte for particle storage in kd node tab.\n\n",
@@ -141,6 +171,15 @@ int build_kdtree(struct cmdline_data* cmd,
 
     upward_pass(cmd, kd, KDROOT);
 
+    if (cballs_malloc_checked((void **)&kd->body_order,
+            (size_t)kd->npoint, sizeof(*kd->body_order),
+            "KDTREE body order", cmd->error_message,
+            _ERRORMSGSIZE_) == FAILURE)
+        return FAILURE;
+    for (j = 0; j < kd->npoint; j++)
+        kd->body_order[kd->bptr[j] - kd->body_base] = j;
+    gd->bytes_tot += kd->npoint * sizeof(*kd->body_order);
+
 #ifdef SINGLEP
     if (cballs_malloc_checked((void **)&kd->packed_points,
             (size_t)kd->npoint, sizeof(*kd->packed_points),
@@ -177,6 +216,7 @@ local void set_radius(struct cmdline_data* cmd,
             dmax = d;
     }
 
+    kd->bnd.geometric_radius = cballs_store_upper_bound(rsqrt(dmax));
     if (cmd->theta == 0.0) {
         kd->bnd.radius = cballs_store_upper_bound(MAX_REAL_NUMBER);
     } else {
@@ -186,7 +226,8 @@ local void set_radius(struct cmdline_data* cmd,
 }
 
 //  Compute cell inertia tensor and deformation factor
-local void set_inertia(ballnode *kd, bodyptr *bptr, int lo, int hi)
+local void set_inertia(struct cmdline_data *cmd, ballnode *kd,
+                       bodyptr *bptr, int lo, int hi)
 {
     int i, k;
     int l;
@@ -194,6 +235,8 @@ local void set_inertia(ballnode *kd, bodyptr *bptr, int lo, int hi)
     CLRM(kd->Ixy);
 
     for (i = lo; i <= hi; ++i) {
+        if (cballs_opt_read_mask(cmd)
+            && Mask(bptr[i]) == MASK_NODE_MASKED) continue;
         DO_COORD(k) {
             DO_COORD(l) {
                 kd->Ixy[k][l] +=
@@ -210,27 +253,31 @@ local void set_inertia(ballnode *kd, bodyptr *bptr, int lo, int hi)
     real Ixx = kd->Ixy[0][0];
     real Iyy = kd->Ixy[1][1];
     real Ixy = kd->Ixy[0][1];
-    etap = (Ixx - Iyy)/(Ixx + Iyy);
-    etax = 2.0*Ixy/(Ixx + Iyy);
+    const real dxy = Ixx + Iyy;
+    etap = dxy != 0.0 ? (Ixx - Iyy)/dxy : 0.0;
+    etax = dxy != 0.0 ? 2.0*Ixy/dxy : 0.0;
     kd->etaxy = rsqrt( rsqr(etap) + rsqr(etax) );
 #if NDIM == 3
     //B etaxz
     real Izz = kd->Ixy[2][2];
     real Ixz = kd->Ixy[0][2];
-    etap = (Ixx - Izz)/(Ixx + Izz);
-    etax = 2.0*Ixz/(Ixx + Izz);
+    const real dxz = Ixx + Izz;
+    etap = dxz != 0.0 ? (Ixx - Izz)/dxz : 0.0;
+    etax = dxz != 0.0 ? 2.0*Ixz/dxz : 0.0;
     kd->etaxz = rsqrt( rsqr(etap) + rsqr(etax) );
     //B etayz
     real Iyz = kd->Ixy[1][2];
-    etap = (Iyy - Izz)/(Iyy + Izz);
-    etax = 2.0*Iyz/(Iyy + Izz);
+    const real dyz = Iyy + Izz;
+    etap = dyz != 0.0 ? (Iyy - Izz)/dyz : 0.0;
+    etax = dyz != 0.0 ? 2.0*Iyz/dyz : 0.0;
     kd->etayz = rsqrt( rsqr(etap) + rsqr(etax) );
 #endif
     //E
 }
 
 //  Computes cell center of mass and averages scalar fields
-local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
+local void set_cofm(struct cmdline_data *cmd, ballnode *kd,
+                    bodyptr *bptr, int lo, int hi)
 {
     compute_vector cmpos_sum;
     int i;
@@ -239,14 +286,26 @@ local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
     kd->weight = 0.0;
     kd->weighted_kappa_sum = 0.0;
     kd->weighted_kappa_sq_sum = 0.0;
+    kd->kappa_sum = 0.0;
+    kd->kappa_sq_sum = 0.0;
+    kd->weight_sum = 0.0;
+    kd->weight_sq_sum = 0.0;
+    kd->valid_count = 0;
     CLRV(cmpos_sum);
 
     for (i = lo; i <= hi; ++i) {
+        if (cballs_opt_read_mask(cmd)
+            && Mask(bptr[i]) == MASK_NODE_MASKED) continue;
 #ifdef KappaAvgON
         KappaAvg += KappaAvg(bptr[i]);
 #else
         KappaAvg += Kappa(bptr[i]);
 #endif
+        kd->valid_count++;
+        kd->kappa_sum += Kappa(bptr[i]);
+        kd->kappa_sq_sum += Kappa(bptr[i])*Kappa(bptr[i]);
+        kd->weight_sum += Weight(bptr[i]);
+        kd->weight_sq_sum += Weight(bptr[i])*Weight(bptr[i]);
         kd->weight += Mass(bptr[i]);
         const real field = Weight(bptr[i])*Kappa(bptr[i]);
         kd->weighted_kappa_sum += field;
@@ -264,7 +323,8 @@ local void set_cofm(ballnode *kd, bodyptr *bptr, int lo, int hi)
         SETV(kd->cmpos, kd->bnd.center);
     }
     
-    kd->kappa = KappaAvg/((real)(hi-lo+1));
+    kd->kappa = kd->valid_count > 0
+        ? KappaAvg/(real)kd->valid_count : 0.0;
 }
 
 //  Compute bounds from body pointers in specified range
@@ -282,6 +342,11 @@ local void set_bounds(bound *bndptr, bodyptr *bptr, INTEGER lo, INTEGER hi)
         else if (bnd.maxb[k] < Pos(bptr[i])[k])
             bnd.maxb[k] = Pos(bptr[i])[k];
       }
+    }
+
+    DO_COORD(k) {
+        bnd.width[k] = bnd.maxb[k] - bnd.minb[k];
+        bnd.center[k] = 0.5*(bnd.maxb[k] + bnd.minb[k]);
     }
 
     *bndptr = bnd;				                        // store actual bounds
@@ -344,11 +409,11 @@ local void upward_pass(struct cmdline_data* cmd, ballxptr kd, int cell)
     } else {                                        // scan bodies in node
         set_bounds(&ntab[cell].bnd, kd->bptr,
                    ntab[cell].first, ntab[cell].last);
-        set_cofm(&ntab[cell], kd->bptr,
+        set_cofm(cmd, &ntab[cell], kd->bptr,
                  ntab[cell].first, ntab[cell].last);
         set_radius(cmd, &ntab[cell], kd->bptr,
                    ntab[cell].first, ntab[cell].last);
-        set_inertia(&ntab[cell], kd->bptr,
+        set_inertia(cmd, &ntab[cell], kd->bptr,
                    ntab[cell].first, ntab[cell].last);
     }
 }
@@ -394,11 +459,15 @@ local void combine_nodes(struct cmdline_data* cmd,
     }
 
     // KappaAvg
-    INTEGER n1 = p1->last - p1->first + 1;
-    INTEGER n2 = p2->last - p2->first + 1;
-    pout->kappa = (n1*p1->kappa + n2*p2->kappa)/((real)(n1+n2));
+    pout->valid_count = p1->valid_count + p2->valid_count;
+    pout->kappa = pout->valid_count > 0
+        ? (p1->kappa_sum+p2->kappa_sum)/(real)pout->valid_count : 0.0;
     pout->weighted_kappa_sum = p1->weighted_kappa_sum + p2->weighted_kappa_sum;
     pout->weighted_kappa_sq_sum = p1->weighted_kappa_sq_sum + p2->weighted_kappa_sq_sum;
+    pout->kappa_sum = p1->kappa_sum + p2->kappa_sum;
+    pout->kappa_sq_sum = p1->kappa_sq_sum + p2->kappa_sq_sum;
+    pout->weight_sum = p1->weight_sum + p2->weight_sum;
+    pout->weight_sq_sum = p1->weight_sq_sum + p2->weight_sq_sum;
 
     // radius
     int i;
@@ -431,6 +500,7 @@ local void combine_nodes(struct cmdline_data* cmd,
             dmax = d;
     }
 
+    pout->bnd.geometric_radius = cballs_store_upper_bound(rsqrt(dmax));
     if (cmd->theta == 0.0) {
         pout->bnd.radius = cballs_store_upper_bound(MAX_REAL_NUMBER);
     } else {
@@ -447,6 +517,8 @@ local void combine_nodes(struct cmdline_data* cmd,
     for (i = lo; i <= hi; ++i) {
         DO_COORD(k) {
             DO_COORD(l) {
+                if (!cballs_opt_read_mask(cmd)
+                    || Mask(bptr[i]) != MASK_NODE_MASKED)
                 pout->Ixy[k][l] +=
                             Mass(bptr[i])*Pos(bptr[i])[k]*Pos(bptr[i])[l];
             }
@@ -458,6 +530,8 @@ local void combine_nodes(struct cmdline_data* cmd,
     for (i = lo; i <= hi; ++i) {
         DO_COORD(k) {
             DO_COORD(l) {
+                if (!cballs_opt_read_mask(cmd)
+                    || Mask(bptr[i]) != MASK_NODE_MASKED)
                 pout->Ixy[k][l] +=
                             Mass(bptr[i])*Pos(bptr[i])[k]*Pos(bptr[i])[l];
             }
@@ -472,20 +546,23 @@ local void combine_nodes(struct cmdline_data* cmd,
     real Ixx = pout->Ixy[0][0];
     real Iyy = pout->Ixy[1][1];
     real Ixy = pout->Ixy[0][1];
-    etap = (Ixx - Iyy)/(Ixx + Iyy);
-    etax = 2.0*Ixy/(Ixx + Iyy);
+    const real dxy = Ixx + Iyy;
+    etap = dxy != 0.0 ? (Ixx - Iyy)/dxy : 0.0;
+    etax = dxy != 0.0 ? 2.0*Ixy/dxy : 0.0;
     pout->etaxy = rsqrt( rsqr(etap) + rsqr(etax) );
 #if NDIM == 3
     //B etaxz
     real Izz = pout->Ixy[2][2];
     real Ixz = pout->Ixy[0][2];
-    etap = (Ixx - Izz)/(Ixx + Izz);
-    etax = 2.0*Ixz/(Ixx + Izz);
+    const real dxz = Ixx + Izz;
+    etap = dxz != 0.0 ? (Ixx - Izz)/dxz : 0.0;
+    etax = dxz != 0.0 ? 2.0*Ixz/dxz : 0.0;
     pout->etaxz = rsqrt( rsqr(etap) + rsqr(etax) );
     //B etayz
     real Iyz = pout->Ixy[1][2];
-    etap = (Iyy - Izz)/(Iyy + Izz);
-    etax = 2.0*Iyz/(Iyy + Izz);
+    const real dyz = Iyy + Izz;
+    etap = dyz != 0.0 ? (Iyy - Izz)/dyz : 0.0;
+    etax = dyz != 0.0 ? 2.0*Iyz/dyz : 0.0;
     pout->etayz = rsqrt( rsqr(etap) + rsqr(etax) );
 #endif
     //E

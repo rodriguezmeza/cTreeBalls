@@ -22,8 +22,10 @@ Major contributors:
 `libcballs.a`, and the Python extension `cyballs`. Optional addons measure:
 
 - Counts and convergence: scalar angular 2PCF/3PCF on flat or spherical catalogs.
-- Shear: flat-sky spin-2 correlations and angular window correction.
-- Lyman-alpha forests: anisotropic 3D and radial-only 2PCF/3PCF with forest-ID exclusions.
+- Shear: full-sky spin-2 correlations, parallel transport, and angular window
+  correction over octree, KD-tree, and ball-tree dual-node traversals.
+- Lyman-alpha forests: anisotropic 3D and radial-only 2PCF/3PCF with
+  forest-ID exclusions, plus an equal-LOS within-forest radial 2PCF.
 - Physical 3D scalar fields and ENCORE-style data/random survey estimators.
 
 OpenMP and MPI availability depends on the selected build. Not every engine
@@ -84,7 +86,7 @@ From the checkout root:
 ./cballs options=make-info
 ./cballs options=print-options
 ./cballs options=print-search-methods
-./cballs search=octree-ggg-omp nbody=512 sizeHistN=6 mChebyshev=3 \
+./cballs search=octree-2balls-omp nbody=512 sizeHistN=6 mChebyshev=3 \
     numberThreads=2 rootDir=Output_quick verbose=0 verbose_log=0
 ```
 
@@ -102,11 +104,13 @@ Repeated neighbors are removed inside the search. See the
 [3PCF contract](docs/3pcf.rst) for complex-mode conventions and normalization.
 Older affected multipoles must be recomputed.
 
-`SMOOTHPIVOTON=1` only compiles support: `options=smooth-pivot` is required
-to activate it on supported methods. Setting `rsmooth` alone does not.
-Raw KD-tree/legacy balltree multipoles reject smoothing; BALLS4 has no
-smooth-pivot support. Validate approximate tree acceptance against exact
-small-catalog runs before interpreting speedups.
+`SMOOTHPIVOTON=1` enables pivot smoothing by default on active engines that
+advertise support through `options=print-search-methods`. Add
+`options=no-smooth-pivot` to recover the unsmoothed estimator. The explicit
+`smooth-pivot` spelling remains accepted. Compact dual-node traversal does not
+smooth pivots; the `legacy-one-ball` compatibility mode does where documented.
+Validate approximate tree acceptance against exact small-catalog runs before
+interpreting speedups.
 
 ## Python and Notebooks
 
@@ -121,7 +125,7 @@ xyz = rng.normal(size=(128, 3))
 xyz /= np.linalg.norm(xyz, axis=1)[:, None]
 model = cballs()
 try:
-    model.set(searchMethod="octree-ggg-omp", rootDir="Output_memory",
+    model.set(searchMethod="octree-2balls-omp", rootDir="Output_memory",
               rangeN=1.0, rminHist=0.05, sizeHistN=6, mChebyshev=3,
               numberThreads=2, useLogHist=True,
               options="no-normalize-HistZeta,weights-norm,no-one-ball")
@@ -143,9 +147,10 @@ Ready-to-use examples:
 
 - [In-memory Python example](examples/cyballs_in_memory_catalog.py) and
   [notebook](examples/cyballs_in_memory_catalog.ipynb)
-- [Kappa all-engines driver](python/README_kappa_corr_all_engines.md):
-  FITS/NPZ input, masks, complex edge corrections, OpenMP/MPI
-- [Forest all-engines driver](python/README_lya_corr_all_engines.md) and
+- [Kappa all-engines driver](tests/python/README_kappa_corr_all_engines.md):
+  FITS/NPZ input, masks, complex edge corrections, OpenMP/MPI, and
+  ordinary/flattened 3PCF plots
+- [Forest all-engines driver](tests/python/README_lya_corr_all_engines.md) and
   [notebook](examples/lya_corr_all_engines.ipynb)
 - [Physical 3D/ENCORE comparison](examples/compare_octree_3pcf_3d_encore.py)
   and [notebook](examples/compare_octree_3pcf_3d_encore.ipynb)
@@ -181,7 +186,7 @@ notebooks are maintained in
 
 Abraham Arvizu et al., [arXiv:2408.16847](https://arxiv.org/abs/2408.16847)
 
-## Acknowledgements
+## Acknowledgments
 
 cBalls use/is based on the following codes or projects:
 -   [Zeno](https://home.ifa.hawaii.edu/users/barnes/zeno/index.html)
@@ -192,7 +197,6 @@ cBalls use/is based on the following codes or projects:
 -   [CLASS](https://github.com/lesgourg/class_public)
 -   [CFITSIO](https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html)
 -   [HEALPix](https://healpix.sourceforge.io/)
--   [TreeCorr](https://github.com/rmjarvis/treecorr)
 -   [FCFC](https://github.com/cheng-zhao/FCFC)
 
 Also author acknowledges for helpful discussion and testing to the following people:
@@ -204,3 +208,7 @@ Also author acknowledges for helpful discussion and testing to the following peo
 - Gustavo Niz
 - Axel Romero Tisnado
 - Sofia Samario
+
+The dual-node traversal and split criteria were informed by
+[TreeCorr](https://github.com/rmjarvis/TreeCorr); redistributed adaptations
+retain the applicable BSD license notices.

@@ -25,8 +25,9 @@ Important Controls
     This is not a blanket float32 histogram build. Validate numerical errors.
 
 ``SMOOTHPIVOTON``
-    Compile pivot-smoothing capability. It does not activate smoothing without
-    ``options=smooth-pivot``. Unsupported engines reject the runtime request.
+    Compile and enable pivot smoothing by default on supported engines. Use
+    ``options=no-smooth-pivot`` to disable it. Unsupported engines remain
+    unsmoothed and reject an explicit ``options=smooth-pivot`` request.
 
 ``CLASSLIBON`` / ``PXDON``
     Parser and wrapper hooks required by cyballs, together with ``ADDONSON=1``

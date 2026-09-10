@@ -1,0 +1,7 @@
+#ifndef CTREEBALLS_PRINT_KDTREE_SHEAR_SPHERE_2BALLS_OMP_H
+#define CTREEBALLS_PRINT_KDTREE_SHEAR_SPHERE_2BALLS_OMP_H
+
+verb_print(cmd->verbose,
+           "with KDTREESHEARSPHERE2BALLSOMP (full-sky spin-2 KD two-ball) engine\n");
+
+#endif

@@ -35,6 +35,14 @@ typedef struct _node {
 #ifdef THREEPCFSHEAR
     real gamma1;
     real gamma2;
+    /* Cell-only weighted second moments for accepted-node shear walks. */
+    real shear_weight_sum;
+    real shear_weight2;
+    real shear_gamma2_re;
+    real shear_gamma2_im;
+    real shear_gamma_abs2;
+    /* Worst accumulated spin-phase error of cell-local spherical moments. */
+    real shear_transport_error;
 #endif
 
     real weight;                                    // to weight fields...
@@ -78,6 +86,11 @@ typedef struct _node {
     real weightrmin;                                // to weight fields...
     INTEGER nbrmin;
     INTEGER nbrmin_overlap;
+#ifdef THREEPCFSHEAR
+    /* Weighted spin-2 sum owned by this deterministic smooth pivot. */
+    real gamma1rmin;
+    real gamma2rmin;
+#endif
 #endif
 //E
 
@@ -107,6 +120,12 @@ typedef struct _node {
 //B shear
 #define Gamma1(x)    (((nodeptr) (x))->gamma1)
 #define Gamma2(x)    (((nodeptr) (x))->gamma2)
+#define ShearWeightSum(x) (((nodeptr) (x))->shear_weight_sum)
+#define ShearWeight2(x) (((nodeptr) (x))->shear_weight2)
+#define ShearGamma2Re(x) (((nodeptr) (x))->shear_gamma2_re)
+#define ShearGamma2Im(x) (((nodeptr) (x))->shear_gamma2_im)
+#define ShearGammaAbs2(x) (((nodeptr) (x))->shear_gamma_abs2)
+#define ShearTransportError(x) (((nodeptr) (x))->shear_transport_error)
 //E
 #endif
 
@@ -148,6 +167,10 @@ typedef struct _node {
 #define WeightRmin(x)  (((nodeptr) (x))->weightrmin)// Sum_p-in-rmin weight_p
 #define NbRmin(x) (((nodeptr) (x))->nbrmin)
 #define NbRminOverlap(x) (((nodeptr) (x))->nbrmin_overlap)
+#ifdef THREEPCFSHEAR
+#define Gamma1Rmin(x) (((nodeptr) (x))->gamma1rmin)
+#define Gamma2Rmin(x) (((nodeptr) (x))->gamma2rmin)
+#endif
 #endif
 //E
 

@@ -50,8 +50,8 @@ importing a compiled extension.
 The maintained launchers and their Python programs are in ``tests/make_tests``.
 ``tests/scripts`` retains older catalog-specific workflows. See
 :doc:`benchmarks` and ``tests/make_tests/README.md`` for numerical contracts.
-Scalar CI checks both smoothing profiles, MPI ranks, and TreeCorr references;
-the main test workflow also covers C/Cython, packaging, and sanitizer jobs.
+Scalar CI checks both smoothing profiles, MPI ranks, and exact dual-node
+limits; the main test workflow also covers C/Cython, packaging, and sanitizer jobs.
 The documentation workflow builds HTML with warnings treated as errors.
 
 Adding Parameters

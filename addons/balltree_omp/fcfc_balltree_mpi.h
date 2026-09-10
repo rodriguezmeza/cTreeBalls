@@ -3,7 +3,7 @@
 #ifndef _fcfc_balltree_mpi_h
 #define _fcfc_balltree_mpi_h
 
-#ifdef BALLTREEMPI
+#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
 
 #include <stdint.h>
 #include <mpi.h>
@@ -46,6 +46,6 @@ int fcfc_balltree_mpi_scheduler_destroy(struct cmdline_data *,
 int fcfc_balltree_mpi_reduce_reals(struct cmdline_data *, real *, size_t);
 int fcfc_balltree_mpi_reduce_integers(struct cmdline_data *, INTEGER *, size_t);
 
-#endif /* BALLTREEMPI */
+#endif /* BALLTREEMPI || BALLTREE2BALLS_LEGACY_MPI_COMPAT */
 
 #endif /* !_fcfc_balltree_mpi_h */

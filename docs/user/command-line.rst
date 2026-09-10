@@ -6,7 +6,7 @@ on the command line.
 
 .. code-block:: bash
 
-   ./cballs searchMethod=octree-ggg-omp nbody=4096 rootDir=Output
+   ./cballs searchMethod=octree-2balls-omp nbody=4096 rootDir=Output
 
 Syntax
 ------
@@ -91,9 +91,9 @@ Common Parameters
      - Comma-separated behavior flags; support depends on the chosen engine.
 
 Raw scalar angular comparisons use
-``no-normalize-HistZeta,weights-norm``. ``smooth-pivot`` is an explicit opt-in,
-not a consequence of compiling ``SMOOTHPIVOT``. See :doc:`../3pcf` and
-:doc:`../search_methods` before combining options.
+``no-normalize-HistZeta,weights-norm,no-smooth-pivot``. A
+``SMOOTHPIVOTON=1`` build otherwise enables smoothing on supported engines.
+See :doc:`../3pcf` and :doc:`../search_methods` before combining options.
 
 The complete historical parameter descriptions remain in :doc:`../params` and
 ``tests/In/parameters_explained``.

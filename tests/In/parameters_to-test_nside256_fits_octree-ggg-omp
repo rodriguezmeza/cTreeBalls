@@ -23,14 +23,14 @@
 #
 #
 #
-searchMethod =                       octree-ggg-omp
+searchMethod =                       octree-2balls-omp
 #
 theta =                              1
 nsmooth =                            1
 #
 rsmooth =
 #
-options =                           compute-HistN,and-CF,out-m-HistZeta
+options =                           compute-HistN,and-CF,out-m-HistZeta,legacy-one-ball
 #options=header-info,stop
 #
 infile =                            ./catalogs/Takahashi/allskymap_nres08r081_zs9_mag.fits

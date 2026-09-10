@@ -21,6 +21,11 @@ def test_make_info_covers_resolved_build_profiles():
     source = (ROOT / "source/startrun.c").read_text()
     names = set(re.findall(r"MAKE_SETTING\((\w+)\)", source))
     expected = {"BUILD_MPI", "BUILD_LYA", "BUILD_SHEAR", "BUILD_PRECISION", "MPICC",
-                "LYAFORESTMPION", "OCTREE3PCF3DMPION", "OCTREEBALLS4MPION",
-                "LYA1D_OMP_PIVOT_BLOCK_SIZE", "CB3D_OMP_PIVOT_BLOCK_SIZE"}
+                "KDTREEMPION", "KDTREE2BALLSOMPON", "KDTREE2BALLSMPION",
+                "LYAFORESTMPION", "OCTREE3PCF3DMPION",
+                "OCTREEBALLS4MPION",
+                "LYA1D_OMP_PIVOT_BLOCK_SIZE", "LYA1D_TREE3_LEAF_SIZE",
+                "CB3D_OMP_PIVOT_BLOCK_SIZE", "GGG_OMP_PIVOT_CHUNK_SIZE",
+                "GGG_OMP_FRONTIER_TARGET_TASKS", "GGG_OMP_FRONTIER_MIN_ACTIVE",
+                "GGG_MPI_PIVOT_CLAIM_SIZE"}
     assert expected <= names

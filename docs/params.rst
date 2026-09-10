@@ -9,11 +9,12 @@ Parameters related to the searching method
 -------------------------------------------
 
 :searchMethod: (str or list) [alias: search]
-    The searching method to use. Default is ``tree-omp-sincos``. Fastest method so far is ``octree-ggg-omp``.
+    The searching method to use. Choose one reported by
+    ``cballs options=print-search-methods``; availability is build dependent.
 
     Use it as::
 
-        searchMethod = octree-ggg-omp
+        searchMethod = octree-2balls-omp
 
     In command line version do not use spaces before and after ``=`` or it won't be parsed correctly. In a parameter file you have more liberty.
 
@@ -104,4 +105,3 @@ Miscellaneous parameters
     - It is not necessary to specify all the parameters. You need to give only the ones apropriate to the run. The rest of parameters will use their default values if they are OK with you.
 
     - When you specify the root output directory using: ``rootDir``, and this is a single directory that will be located in the pwd dir, then do not use ``./`` at the begining of the name or ``/`` at its end.
-

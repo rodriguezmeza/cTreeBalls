@@ -7,7 +7,8 @@ Legendre multipoles. They are not the observer-tangent Fourier estimator
 described in :doc:`3pcf`, and are excluded from the angular-kappa driver.
 
 Enable ``OCTREE3PCF3DOMPON=1`` and/or ``OCTREE3PCF3DMPION=1`` with
-``DEFDIMENSION=3``. The ``octree-ggg-3d-omp``/``mpi`` names are aliases.
+``DEFDIMENSION=3``. The active OpenMP and MPI names are
+``octree-3pcf-3d-omp`` and ``octree-3pcf-3d-mpi``.
 The default computes 3PCF; select ``only-2pcf-3d``, ``only-3pcf-3d``,
 or ``compute-2pcf-3d,compute-3pcf-3d`` explicitly when comparing timings.
 

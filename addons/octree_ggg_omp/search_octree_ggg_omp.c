@@ -13,6 +13,10 @@
 
 // Work to do in order to use with boxes not centered at (0,0,...)
 
+#if defined(OCTREE2BALLS_GGG_MPI_COMPAT) && !defined(OCTREEGGGMPI)
+#define OCTREEGGGMPI
+#endif
+
 #include "globaldefs.h"
 #include <float.h>
 #ifdef OCTREEGGGMPI
@@ -555,6 +559,22 @@ local int PrintHistZetaM_sincos_edge_effects(struct  cmdline_data*,
 #define GGG_WINDOW_ORDERS(cmd) \
     ((cballs_opt_edge_corrections(cmd) || cballs_opt_ggg_full_window(cmd)) \
         ? 2*(cmd)->mChebyshev + 1 : (cmd)->mChebyshev + 1)
+
+local bool ggg_need_histn_multipoles(struct cmdline_data *cmd,
+                                     bool run_threepcf)
+{
+    if (!run_threepcf) return FALSE;
+#ifndef NONORMHIST
+    return TRUE;
+#else
+    if (!cballs_opt_no_normalize_histzeta(cmd)) return TRUE;
+    if (cballs_opt_edge_corrections(cmd)
+        || cballs_opt_ggg_full_window(cmd))
+        return TRUE;
+    return cballs_opt_compute_histn(cmd)
+        && !cballs_opt_no_out_hist(cmd);
+#endif
+}
 #endif
 
 #ifdef THREEPCFCONVERGENCE
@@ -598,8 +618,9 @@ local inline void ggg_accumulate_modes(
     gdhistptr_sincos_omp_ggg_N histN, int n,
     real cosphi, real sinphi, real xi, real xiN)
 {
-    const int orders = GGG_WINDOW_ORDERS(cmd);
     const int signal_orders = cmd->mChebyshev + 1;
+    const int orders = histN != NULL
+        ? GGG_WINDOW_ORDERS(cmd) : signal_orders;
     real t_previous = 1.0, t_before = 0.0;
     real u_previous = 0.0, u_before = 0.0;
 
@@ -616,13 +637,15 @@ local inline void ggg_accumulate_modes(
             u = 2.0*cosphi*u_previous - u_before;
         }
         const real sine = u*sinphi;
-        const real nc = xiN*t;
-        const real ns = xiN*sine;
-        histN->histXithreadcos[m][n] += nc;
-        histN->histXithreadsin[m][n] += ns;
-        histN->histXithreaddiagcos[m][n] += nc*nc;
-        histN->histXithreaddiagsin[m][n] += ns*ns;
-        histN->histXithreaddiagsincos[m][n] += ns*nc;
+        if (histN != NULL) {
+            const real nc = xiN*t;
+            const real ns = xiN*sine;
+            histN->histXithreadcos[m][n] += nc;
+            histN->histXithreadsin[m][n] += ns;
+            histN->histXithreaddiagcos[m][n] += nc*nc;
+            histN->histXithreaddiagsin[m][n] += ns*ns;
+            histN->histXithreaddiagsincos[m][n] += ns*nc;
+        }
         if (m <= signal_orders) {
             const real kc = xi*t;
             const real ks = (xi*u)*sinphi;
@@ -675,6 +698,15 @@ local real normalize_zeta_ggg(real numerator,
                      + gdlN->histZetaMsin[1][n1][n2];
 
     return cballs_normalize_or_zero(numerator, denominator);
+}
+#endif
+
+#ifdef SMOOTHPIVOT
+/* Smooth ownership is prepared on catalog bodies. BALLS4 frontiers also
+ * contain aggregate cells, which must retain their ordinary tree moments. */
+local bool ggg_uses_smooth_body_pivot(struct cmdline_data *cmd, nodeptr pivot)
+{
+    return cballs_opt_smooth_pivot(cmd) && Type(pivot) != CELL;
 }
 #endif
 
@@ -769,10 +801,18 @@ local int compute_edge_corrections_ggg(struct cmdline_data *cmd,
             bool singular = FALSE;
             int row, column;
 
+            for (row=1; row<=nmax+1; row++) {
+                gdl->histZetaM_EE[row][n1][n2] = 0.0;
+                gdl->histZetaM_EE_Im[row][n1][n2] = 0.0;
+            }
+
             memset(matrix, 0, matrix_count*sizeof(*matrix));
             memset(rhs, 0, (size_t)multipoles*sizeof(*rhs));
-            if (ggg_complex_abs2(nzero) <= DBL_MIN)
+            if (!isfinite((double)nzero.re) || !isfinite((double)nzero.im)
+                || ggg_complex_abs2(nzero) <= DBL_MIN) {
+                singular_bins++;
                 continue;
+            }
 
             for (row=0; row<multipoles; row++) {
                 int ell = row-nmax;
@@ -784,6 +824,13 @@ local int compute_edge_corrections_ggg(struct cmdline_data *cmd,
                         order, n1, n2);
                     matrix[(size_t)row*multipoles+column] =
                         ggg_complex_div(value, nzero);
+                    if (!isfinite((double)matrix[
+                            (size_t)row*multipoles+column].re)
+                        || !isfinite((double)matrix[
+                            (size_t)row*multipoles+column].im)) {
+                        singular = TRUE;
+                        break;
+                    }
                     if (ggg_complex_abs2(
                             matrix[(size_t)row*multipoles+column])
                         > matrix_scale)
@@ -794,6 +841,15 @@ local int compute_edge_corrections_ggg(struct cmdline_data *cmd,
                     gdl->histZetaMcos, gdl->histZetaMsin,
                     gdl->histZetaMsincos, gdl->histZetaMcossin,
                     ell, n1, n2), nzero);
+                if (singular || !isfinite((double)rhs[row].re)
+                    || !isfinite((double)rhs[row].im)) {
+                    singular = TRUE;
+                    break;
+                }
+            }
+            if (singular || !isfinite((double)matrix_scale)) {
+                singular_bins++;
+                continue;
             }
             tolerance = 128.0*DBL_EPSILON*(1.0+sqrt(matrix_scale));
 
@@ -802,14 +858,24 @@ local int compute_edge_corrections_ggg(struct cmdline_data *cmd,
                 real pivot_norm = ggg_complex_abs2(
                     matrix[(size_t)column*multipoles+column]);
                 int candidate;
+                if (!isfinite((double)pivot_norm)) {
+                    singular = TRUE;
+                    break;
+                }
                 for (candidate=column+1; candidate<multipoles; candidate++) {
                     real candidate_norm = ggg_complex_abs2(
                         matrix[(size_t)candidate*multipoles+column]);
+                    if (!isfinite((double)candidate_norm)) {
+                        singular = TRUE;
+                        break;
+                    }
                     if (candidate_norm > pivot_norm) {
                         pivot = candidate;
                         pivot_norm = candidate_norm;
                     }
                 }
+                if (singular)
+                    break;
                 if (pivot_norm <= tolerance*tolerance) {
                     singular = TRUE;
                     break;
@@ -861,6 +927,17 @@ local int compute_edge_corrections_ggg(struct cmdline_data *cmd,
                 continue;
             }
             for (row=nmax; row<multipoles; row++) {
+                if (!isfinite((double)rhs[row].re)
+                    || !isfinite((double)rhs[row].im)) {
+                    singular = TRUE;
+                    break;
+                }
+            }
+            if (singular) {
+                singular_bins++;
+                continue;
+            }
+            for (row=nmax; row<multipoles; row++) {
                 int output_index = row-nmax+1;
                 gdl->histZetaM_EE[output_index][n1][n2] = rhs[row].re;
                 gdl->histZetaM_EE_Im[output_index][n1][n2] = rhs[row].im;
@@ -897,6 +974,12 @@ local FILE *outpivots;
 #ifndef GGG_OMP_PIVOT_CHUNK_SIZE
 #define GGG_OMP_PIVOT_CHUNK_SIZE 4096
 #endif
+#ifndef GGG_OMP_FRONTIER_TARGET_TASKS
+#define GGG_OMP_FRONTIER_TARGET_TASKS 256
+#endif
+#ifndef GGG_OMP_FRONTIER_MIN_ACTIVE
+#define GGG_OMP_FRONTIER_MIN_ACTIVE 64
+#endif
 #ifndef GGG_MPI_PIVOT_CLAIM_SIZE
 #define GGG_MPI_PIVOT_CLAIM_SIZE 65536
 #endif
@@ -904,16 +987,133 @@ local FILE *outpivots;
 #if GGG_OMP_PIVOT_CHUNK_SIZE < 1
 #error GGG_OMP_PIVOT_CHUNK_SIZE must be positive
 #endif
+#if GGG_OMP_FRONTIER_TARGET_TASKS < 1
+#error GGG_OMP_FRONTIER_TARGET_TASKS must be positive
+#endif
+#if GGG_OMP_FRONTIER_MIN_ACTIVE < 1
+#error GGG_OMP_FRONTIER_MIN_ACTIVE must be positive
+#endif
+#if GGG_OMP_FRONTIER_MIN_ACTIVE > GGG_OMP_PIVOT_CHUNK_SIZE
+#error GGG_OMP_FRONTIER_MIN_ACTIVE must not exceed GGG_OMP_PIVOT_CHUNK_SIZE
+#endif
 #if GGG_MPI_PIVOT_CLAIM_SIZE < 1
 #error GGG_MPI_PIVOT_CLAIM_SIZE must be positive
 #endif
+
+typedef struct {
+    INTEGER *offsets;
+    INTEGER count;
+    INTEGER task_count;
+    INTEGER active_count;
+    INTEGER target_active;
+} ggg_task_frontier;
+
+local bool ggg_frontier_pivot_is_active(
+    struct cmdline_data *cmd, bodyptr *btable, INTEGER ipmin,
+    int cat1, INTEGER task, bool run_threepcf)
+{
+#ifndef BALLS4SCANLEV
+    bodyptr pivot = btable[cat1] + ipmin - 1 + task;
+#else
+    nodeptr pivot = nodetablescanlevB4[cat1][task];
+    (void)btable;
+    (void)ipmin;
+#endif
+
+#ifdef SMOOTHPIVOT
+    if (Update(pivot) == FALSE) return FALSE;
+#endif
+    if (cballs_opt_read_mask(cmd) && Mask(pivot) == FALSE) return FALSE;
+#if defined(NMultipoles) && defined(NONORMHIST)
+    if (run_threepcf && cballs_opt_patch_with_all(cmd)
+        && UpdatePivot(pivot) == FALSE)
+        return FALSE;
+#else
+    (void)run_threepcf;
+#endif
+    return TRUE;
+}
+
+local void ggg_task_frontier_free(ggg_task_frontier *frontier)
+{
+    if (frontier == NULL) return;
+    free(frontier->offsets);
+    memset(frontier, 0, sizeof(*frontier));
+}
+
+local int ggg_task_frontier_build(
+    struct cmdline_data *cmd, bodyptr *btable, INTEGER ipmin,
+    int cat1, INTEGER task_count, bool run_threepcf,
+    ggg_task_frontier *frontier)
+{
+    size_t maximum_ranges;
+    INTEGER target_active;
+    INTEGER range_start = 0;
+    INTEGER range_active = 0;
+
+    memset(frontier, 0, sizeof(*frontier));
+    if (task_count < 0 || (uintmax_t)task_count > SIZE_MAX) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-GGG adaptive frontier size is out of range");
+        return FAILURE;
+    }
+    frontier->task_count = task_count;
+    if (task_count == 0) return SUCCESS;
+
+    /* Eligibility is immutable after smooth-pivot preparation. Re-evaluate it
+     * below instead of retaining a byte-sized flag for every catalog row. */
+    for (INTEGER task = 0; task < task_count; task++)
+        frontier->active_count += ggg_frontier_pivot_is_active(
+            cmd, btable, ipmin, cat1, task, run_threepcf);
+
+    target_active = frontier->active_count
+                    / GGG_OMP_FRONTIER_TARGET_TASKS;
+    if (frontier->active_count % GGG_OMP_FRONTIER_TARGET_TASKS != 0)
+        target_active++;
+    target_active = MAX(target_active,
+                        (INTEGER)GGG_OMP_FRONTIER_MIN_ACTIVE);
+    target_active = MIN(target_active,
+                        (INTEGER)GGG_OMP_PIVOT_CHUNK_SIZE);
+    frontier->target_active = target_active;
+
+    maximum_ranges = (size_t)task_count / GGG_OMP_FRONTIER_MIN_ACTIVE;
+    if ((size_t)task_count % GGG_OMP_FRONTIER_MIN_ACTIVE != 0)
+        maximum_ranges++;
+    if (maximum_ranges == SIZE_MAX
+        || maximum_ranges + 1 > SIZE_MAX / sizeof(*frontier->offsets)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-GGG adaptive frontier allocation overflow");
+        return FAILURE;
+    }
+    frontier->offsets = malloc(
+        (maximum_ranges + 1) * sizeof(*frontier->offsets));
+    if (frontier->offsets == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-GGG could not allocate adaptive frontier offsets");
+        return FAILURE;
+    }
+    frontier->offsets[0] = 0;
+    for (INTEGER task = 0; task < task_count; task++) {
+        range_active += ggg_frontier_pivot_is_active(
+            cmd, btable, ipmin, cat1, task, run_threepcf);
+        if (range_active >= target_active
+            || task + 1 - range_start >= GGG_OMP_PIVOT_CHUNK_SIZE) {
+            frontier->offsets[++frontier->count] = task + 1;
+            range_start = task + 1;
+            range_active = 0;
+        }
+    }
+    if (range_start < task_count)
+        frontier->offsets[++frontier->count] = task_count;
+    return SUCCESS;
+}
 
 #ifdef OCTREEGGGMPI
 local int reduce_octree_ggg_histograms(
     struct cmdline_data *cmd, struct global_data *gd,
     gdlptr_sincos_omp_ggg gdl, bool run_threepcf,
 #ifdef NMultipoles
-    gdlptr_sincos_omp_ggg_N gdlN,
+    bool need_histn_multipoles, gdlptr_sincos_omp_ggg_N gdlN,
 #endif
     INTEGER *ipmask,
 #ifdef SMOOTHPIVOT
@@ -944,7 +1144,8 @@ local int reduce_octree_ggg_histograms(
         size_t plane;
         size_t numerator_count;
 #ifdef NMultipoles
-        const size_t window_orders = (size_t)GGG_WINDOW_ORDERS(cmd);
+        const size_t window_orders = need_histn_multipoles
+            ? (size_t)GGG_WINDOW_ORDERS(cmd) : 0;
         size_t window_count;
 #endif
         if ((bins != 0 && bins > SIZE_MAX / bins)
@@ -955,11 +1156,13 @@ local int reduce_octree_ggg_histograms(
             goto overflow;
         count += 4 * numerator_count;
 #ifdef NMultipoles
-        if ((window_orders != 0 && plane > SIZE_MAX / window_orders)
-            || (window_count = window_orders * plane,
-                window_count > (SIZE_MAX - count) / 4))
-            goto overflow;
-        count += 4 * window_count;
+        if (need_histn_multipoles) {
+            if ((window_orders != 0 && plane > SIZE_MAX / window_orders)
+                || (window_count = window_orders * plane,
+                    window_count > (SIZE_MAX - count) / 4))
+                goto overflow;
+            count += 4 * window_count;
+        }
 #endif
     }
 #endif
@@ -1014,10 +1217,12 @@ local int reduce_octree_ggg_histograms(
     PACK_ZETA(gdl->histZetaMsincos, cmd->mChebyshev + 1);
     PACK_ZETA(gdl->histZetaMcossin, cmd->mChebyshev + 1);
 #ifdef NMultipoles
-    PACK_ZETA(gdlN->histZetaMcos, GGG_WINDOW_ORDERS(cmd));
-    PACK_ZETA(gdlN->histZetaMsin, GGG_WINDOW_ORDERS(cmd));
-    PACK_ZETA(gdlN->histZetaMsincos, GGG_WINDOW_ORDERS(cmd));
-    PACK_ZETA(gdlN->histZetaMcossin, GGG_WINDOW_ORDERS(cmd));
+    if (need_histn_multipoles) {
+        PACK_ZETA(gdlN->histZetaMcos, GGG_WINDOW_ORDERS(cmd));
+        PACK_ZETA(gdlN->histZetaMsin, GGG_WINDOW_ORDERS(cmd));
+        PACK_ZETA(gdlN->histZetaMsincos, GGG_WINDOW_ORDERS(cmd));
+        PACK_ZETA(gdlN->histZetaMcossin, GGG_WINDOW_ORDERS(cmd));
+    }
 #endif
     }
 #endif
@@ -1063,10 +1268,12 @@ local int reduce_octree_ggg_histograms(
         UNPACK_ZETA(gdl->histZetaMsincos, cmd->mChebyshev + 1);
         UNPACK_ZETA(gdl->histZetaMcossin, cmd->mChebyshev + 1);
 #ifdef NMultipoles
-        UNPACK_ZETA(gdlN->histZetaMcos, GGG_WINDOW_ORDERS(cmd));
-        UNPACK_ZETA(gdlN->histZetaMsin, GGG_WINDOW_ORDERS(cmd));
-        UNPACK_ZETA(gdlN->histZetaMsincos, GGG_WINDOW_ORDERS(cmd));
-        UNPACK_ZETA(gdlN->histZetaMcossin, GGG_WINDOW_ORDERS(cmd));
+        if (need_histn_multipoles) {
+            UNPACK_ZETA(gdlN->histZetaMcos, GGG_WINDOW_ORDERS(cmd));
+            UNPACK_ZETA(gdlN->histZetaMsin, GGG_WINDOW_ORDERS(cmd));
+            UNPACK_ZETA(gdlN->histZetaMsincos, GGG_WINDOW_ORDERS(cmd));
+            UNPACK_ZETA(gdlN->histZetaMcossin, GGG_WINDOW_ORDERS(cmd));
+        }
 #endif
         }
 #endif
@@ -1137,6 +1344,10 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     cpustart = CPUTIME;
     gd->cpusearch = 0.0;
     const bool run_threepcf = !cballs_opt_only_2pcf(cmd);
+#ifdef NMultipoles
+    const bool need_histn_multipoles =
+        ggg_need_histn_multipoles(cmd, run_threepcf);
+#endif
     const bool profile = cballs_opt_ggg_profile(cmd);
     const double profile_start = profile ? omp_get_wtime() : 0.0;
     double profile_work = 0.0, profile_wait = 0.0, profile_merge = 0.0;
@@ -1232,7 +1443,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     }
 #ifdef NMultipoles
     int gdln_local_status = SUCCESS;
-    if (run_threepcf)
+    if (need_histn_multipoles)
         gdln_local_status =
             search_init_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
     int gdln_status = gdln_local_status;
@@ -1243,7 +1454,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
             "MPI octree-GGG N-multipole histogram initialization");
 #endif
     if (gdln_status == FAILURE) {
-        if (run_threepcf && gdln_local_status == SUCCESS)
+        if (need_histn_multipoles && gdln_local_status == SUCCESS)
             search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
         search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
 #ifdef DEBUG
@@ -1271,8 +1482,29 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #else
     INTEGER pivot_task_count = gd->nnodescanlevTableB4[cat1];
 #endif
+    ggg_task_frontier frontier;
+    int frontier_local_status = ggg_task_frontier_build(
+        cmd, btable, ipmin, cat1, pivot_task_count, run_threepcf, &frontier);
+    int frontier_status = frontier_local_status;
+#ifdef OCTREEGGGMPI
+    if (distributed)
+        frontier_status = fcfc_octree_ggg_mpi_consensus(
+            cmd, frontier_status, "MPI octree-GGG adaptive frontier");
+#endif
+    if (frontier_status == FAILURE) {
+        ggg_task_frontier_free(&frontier);
+#ifdef NMultipoles
+        if (need_histn_multipoles)
+            search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+        search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+#ifdef DEBUG
+        fclose(outpivots);
+#endif
+        return FAILURE;
+    }
     INTEGER task_first = 0;
-    INTEGER task_last = pivot_task_count;
+    INTEGER task_last = frontier.count;
     int scheduler_status = SUCCESS;
     int work_done = FALSE;
 #ifdef OCTREEGGGMPI
@@ -1280,14 +1512,25 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     memset(&scheduler, 0, sizeof(scheduler));
     if (distributed) {
         int thread_hint = omp_get_max_threads();
-        INTEGER step = (INTEGER)GGG_MPI_PIVOT_CLAIM_SIZE;
+        INTEGER average_span = 1;
+        INTEGER step;
+        if (frontier.count > 0) {
+            average_span = pivot_task_count / frontier.count;
+            if (pivot_task_count % frontier.count != 0)
+                average_span++;
+        }
+        step = (INTEGER)GGG_MPI_PIVOT_CLAIM_SIZE / average_span;
+        if ((INTEGER)GGG_MPI_PIVOT_CLAIM_SIZE % average_span != 0)
+            step++;
+        step = MAX((INTEGER)1, step);
         if (fcfc_octree_ggg_mpi_scheduler_init(
-                cmd, &scheduler, pivot_task_count, step) == FAILURE) {
+                cmd, &scheduler, frontier.count, step) == FAILURE) {
 #ifdef NMultipoles
-            if (run_threepcf)
+            if (need_histn_multipoles)
                 search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
             search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+            ggg_task_frontier_free(&frontier);
 #ifdef DEBUG
             fclose(outpivots);
 #endif
@@ -1295,10 +1538,26 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
         }
         verb_print(cmd->verbose,
                    "octree-ggg-mpi: %d ranks, %d OpenMP threads, "
-                   "%" INTEGER_FMT " pivot tasks\n",
+                   "%" INTEGER_FMT " pivots in %" INTEGER_FMT
+                   " adaptive frontier tasks\n",
                    fcfc_octree_ggg_mpi_size(), thread_hint,
-                   pivot_task_count);
+                   pivot_task_count, frontier.count);
     }
+#endif
+
+    verb_print(cmd->verbose,
+               "%s: adaptive frontier has %" INTEGER_FMT
+               " tasks for %" INTEGER_FMT " active of %" INTEGER_FMT
+               " pivots (target %" INTEGER_FMT ", maximum span %d)\n",
+               routineName, frontier.count, frontier.active_count,
+               frontier.task_count, frontier.target_active,
+               GGG_OMP_PIVOT_CHUNK_SIZE);
+#ifdef NMultipoles
+    if (run_threepcf && !need_histn_multipoles)
+        verb_print(cmd->verbose,
+                   "%s: count/window multipoles are not required; "
+                   "skipping their allocation and tree-walk arithmetic\n",
+                   routineName);
 #endif
 
 #if defined(NMultipoles) && defined(NONORMHIST)
@@ -1333,6 +1592,12 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
              "%s: DEBUG can not be used with SMOOTHPIVOT turned OFF.",
              routineName);
+    ggg_task_frontier_free(&frontier);
+#ifdef NMultipoles
+    if (need_histn_multipoles)
+        search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
+#endif
+    search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
     return FAILURE;
 #else
 #pragma omp parallel default(shared)                                        \
@@ -1419,8 +1684,8 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     int worker_ready = hist_ready;
 #ifdef NMultipoles
     gdhist_sincos_omp_ggg_N histN;
-    int hist_n_ready = !run_threepcf;
-    if (run_threepcf)
+    int hist_n_ready = !need_histn_multipoles;
+    if (need_histn_multipoles)
         hist_n_ready = hist_ready &&
             search_init_sincos_omp_ggg_N(cmd, gd, &histN) == SUCCESS;
     worker_ready = worker_ready && hist_n_ready;
@@ -1467,7 +1732,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
         {
           if (!distributed) {
               task_first = 0;
-              task_last = pivot_task_count;
+              task_last = frontier.count;
               scheduler_status = SUCCESS;
           }
 #ifdef OCTREEGGGMPI
@@ -1482,15 +1747,11 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #pragma omp barrier
         if (allocation_failed || work_done) break;
 
-      INTEGER chunk_count =
-          (task_last - task_first + GGG_OMP_PIVOT_CHUNK_SIZE - 1)
-          / GGG_OMP_PIVOT_CHUNK_SIZE;
 #pragma omp for schedule(dynamic, 1) ordered
-      for (INTEGER ichunk = 0; ichunk < chunk_count; ichunk++) {
-          INTEGER chunk_first = task_first
-              + ichunk * GGG_OMP_PIVOT_CHUNK_SIZE;
-          INTEGER chunk_last = MIN(
-              chunk_first + GGG_OMP_PIVOT_CHUNK_SIZE, task_last);
+      for (INTEGER ifrontier = task_first;
+           ifrontier < task_last; ifrontier++) {
+          INTEGER chunk_first = frontier.offsets[ifrontier];
+          INTEGER chunk_last = frontier.offsets[ifrontier + 1];
           const double work_start = profile ? omp_get_wtime() : 0.0;
 
           /* These are chunk accumulators.  Clearing them here gives every
@@ -1517,11 +1778,13 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
               CLRM_ext(hist.histZetaMthreadcossin[m], cmd->sizeHistN);
           }
 #ifdef NMultipoles
-          for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
-              CLRM_ext(histN.histZetaMthreadcos[m], cmd->sizeHistN);
-              CLRM_ext(histN.histZetaMthreadsin[m], cmd->sizeHistN);
-              CLRM_ext(histN.histZetaMthreadsincos[m], cmd->sizeHistN);
-              CLRM_ext(histN.histZetaMthreadcossin[m], cmd->sizeHistN);
+          if (need_histn_multipoles) {
+              for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+                  CLRM_ext(histN.histZetaMthreadcos[m], cmd->sizeHistN);
+                  CLRM_ext(histN.histZetaMthreadsin[m], cmd->sizeHistN);
+                  CLRM_ext(histN.histZetaMthreadsincos[m], cmd->sizeHistN);
+                  CLRM_ext(histN.histZetaMthreadcossin[m], cmd->sizeHistN);
+              }
           }
 #endif
           }
@@ -1565,6 +1828,11 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           }
 #endif
 
+#ifdef SMOOTHPIVOT
+          real smooth_pivot_count = ggg_uses_smooth_body_pivot(
+              cmd, (nodeptr)p) ? (real)NbRmin(p) : 1.0;
+#endif
+
 //B segment to be included below...
 #ifdef TWOPCF
           for (n = 1; n <= cmd->sizeHistN; n++) {
@@ -1580,7 +1848,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
               hist.histNNSubthread[n] = 0.0;
           //B 3pcf convergence & shear counting
 #ifdef NMultipoles
-          if (run_threepcf)
+          if (need_histn_multipoles)
               for (n = 1; n <= cmd->sizeHistN; n++)
                   histN.histNNSubthread[n] = 0.0;
 #endif
@@ -1603,16 +1871,18 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
           //B 3pcf convergence & shear counting
-          CLRM_ext_ext(histN.histXithreadcos,
-                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
-          CLRM_ext_ext(histN.histXithreadsin,
-                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
-          CLRM_ext_ext(histN.histXithreaddiagcos,
-                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
-          CLRM_ext_ext(histN.histXithreaddiagsin,
-                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
-          CLRM_ext_ext(histN.histXithreaddiagsincos,
-                       GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+          if (need_histn_multipoles) {
+              CLRM_ext_ext(histN.histXithreadcos,
+                           GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+              CLRM_ext_ext(histN.histXithreadsin,
+                           GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+              CLRM_ext_ext(histN.histXithreaddiagcos,
+                           GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+              CLRM_ext_ext(histN.histXithreaddiagsin,
+                           GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+              CLRM_ext_ext(histN.histXithreaddiagsincos,
+                           GGG_WINDOW_ORDERS(cmd), cmd->sizeHistN);
+          }
           //E
 #endif
           }
@@ -1642,7 +1912,8 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           if (run_threepcf)
               normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                        p, ((nodeptr) roottable[cat2]),
-                                       gd->rSizeTable[cat2], &hist, &histN);
+                                       gd->rSizeTable[cat2], &hist,
+                                       need_histn_multipoles ? &histN : NULL);
           else
               normal_walktree_sincos(cmd, gd, btable, cat2,
                                      p, ((nodeptr) roottable[cat2]),
@@ -1653,7 +1924,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
-                        ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
+                        smooth_pivot_count*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!! they are in not a BALLS4SCANLEV domain
@@ -1668,12 +1939,12 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           for (n = 1; n <= cmd->sizeHistN; n++)
               // Check if these lines are needed!!!
               hist.histNNSubthread[n] =
-                    ((real)NbRmin(p))*hist.histNNSubthread[n];
+                    smooth_pivot_count*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, p,
                                            ipmax[cat1]-ipmin+1, &hist);
-          if (run_threepcf)
+          if (need_histn_multipoles)
               computeBodyProperties_sincos_ggg_N(
                   cmd, gd, p, ipmax[cat1]-ipmin+1, &histN);
 #else // ! BALLS4SCANLEV
@@ -1681,7 +1952,8 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
               normal_walktree_sincos_N(cmd, gd, btable, cat2,
                                        (bodyptr)p,
                                        ((nodeptr) roottable[cat2]),
-                                       gd->rSizeTable[cat2], &hist, &histN);
+                                       gd->rSizeTable[cat2], &hist,
+                                       need_histn_multipoles ? &histN : NULL);
           else
               normal_walktree_sincos(cmd, gd, btable, cat2,
                                      (bodyptr)p,
@@ -1692,7 +1964,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
-                        ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
+                        smooth_pivot_count*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!! they are in a BALLS4SCANLEV domain
@@ -1707,12 +1979,12 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           for (n = 1; n <= cmd->sizeHistN; n++)
         // Check if these lines are needed!!! they are in a BALLS4SCANLEV domain
                 hist.histNNSubthread[n] =
-                                ((real)NbRmin(p))*hist.histNNSubthread[n];
+                                smooth_pivot_count*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
                                            gd->nnodescanlevTableB4[cat1], &hist);
-          if (run_threepcf)
+          if (need_histn_multipoles)
               computeBodyProperties_sincos_ggg_N(
                   cmd, gd, (bodyptr)p,
                   gd->nnodescanlevTableB4[cat1], &histN);
@@ -1730,7 +2002,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
-                        ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
+                        smooth_pivot_count*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!! they are in not a BALLS4SCANLEV domain
@@ -1744,7 +2016,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           for (n = 1; n <= cmd->sizeHistN; n++)
               // Check if these lines are needed!!!
                 hist.histNNSubthread[n] =
-                            ((real)NbRmin(p))*hist.histNNSubthread[n];
+                            smooth_pivot_count*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, p,
@@ -1757,7 +2029,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #ifdef SMOOTHPIVOT
           for (n = 1; n <= cmd->sizeHistN; n++) {
               hist.histNNSubXi2pcfthreadp[n] =
-                        ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
+                        smooth_pivot_count*hist.histNNSubXi2pcfthreadp[n];
               hist.histNNSubXi2pcfthreadtotal[n] +=
                         hist.histNNSubXi2pcfthreadp[n];
 // Check if these lines are needed!!! they are in a BALLS4SCANLEV domain
@@ -1771,7 +2043,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           for (n = 1; n <= cmd->sizeHistN; n++)
               // Check if these lines are needed!!!
               hist.histNNSubthread[n] =
-                        ((real)NbRmin(p))*hist.histNNSubthread[n];
+                        smooth_pivot_count*hist.histNNSubthread[n];
 #endif
 
           computeBodyProperties_sincos_ggg(cmd, gd, (bodyptr)p,
@@ -1788,13 +2060,15 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           ip = i+1;
 #endif
 #ifdef SMOOTHPIVOT
-          icountNbRminthread += NbRmin(p);
-          icountNbRminOverlapthread += NbRminOverlap(p);
+          if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
+              icountNbRminthread += NbRmin(p);
+              icountNbRminOverlapthread += NbRminOverlap(p);
 #ifdef DEBUG
-          fprintf(outpivots,"%ld \t%ld \t%ld \t\t%g \t\t%g\n",
-                  ip, NbRmin(p), NbRminOverlap(p),
-                  KappaRmin(p)/NbRmin(p), WeightRmin(p)/NbRmin(p));
+              fprintf(outpivots,"%ld \t%ld \t%ld \t\t%g \t\t%g\n",
+                      ip, NbRmin(p), NbRminOverlap(p),
+                      KappaRmin(p)/NbRmin(p), WeightRmin(p)/NbRmin(p));
 #endif
+          }
 #endif
           if (ip%gd->stepState == 0)
           verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, ".");
@@ -1841,15 +2115,17 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
                          hist.histZetaMthreadcossin[m], cmd->sizeHistN);
             }
 #ifdef NMultipoles
-            for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
-                ADDM_ext(gdlN.histZetaMcos[m], gdlN.histZetaMcos[m],
-                         histN.histZetaMthreadcos[m], cmd->sizeHistN);
-                ADDM_ext(gdlN.histZetaMsin[m], gdlN.histZetaMsin[m],
-                         histN.histZetaMthreadsin[m], cmd->sizeHistN);
-                ADDM_ext(gdlN.histZetaMsincos[m], gdlN.histZetaMsincos[m],
-                         histN.histZetaMthreadsincos[m], cmd->sizeHistN);
-                ADDM_ext(gdlN.histZetaMcossin[m], gdlN.histZetaMcossin[m],
-                         histN.histZetaMthreadcossin[m], cmd->sizeHistN);
+            if (need_histn_multipoles) {
+                for (m = 1; m <= GGG_WINDOW_ORDERS(cmd); m++) {
+                    ADDM_ext(gdlN.histZetaMcos[m], gdlN.histZetaMcos[m],
+                             histN.histZetaMthreadcos[m], cmd->sizeHistN);
+                    ADDM_ext(gdlN.histZetaMsin[m], gdlN.histZetaMsin[m],
+                             histN.histZetaMthreadsin[m], cmd->sizeHistN);
+                    ADDM_ext(gdlN.histZetaMsincos[m], gdlN.histZetaMsincos[m],
+                             histN.histZetaMthreadsincos[m], cmd->sizeHistN);
+                    ADDM_ext(gdlN.histZetaMcossin[m], gdlN.histZetaMcossin[m],
+                             histN.histZetaMthreadcossin[m], cmd->sizeHistN);
+                }
             }
 #endif
             }
@@ -1874,7 +2150,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
           verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
 
 #ifdef NMultipoles
-    if (run_threepcf && hist_n_ready)
+    if (need_histn_multipoles && hist_n_ready)
         search_free_sincos_omp_ggg_N(cmd, gd, &histN);  // free memory
 #endif
     if (hist_ready)
@@ -1884,13 +2160,18 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
     if (profile) {
         int window_orders = 0;
 #ifdef NMultipoles
-        if (run_threepcf) window_orders = GGG_WINDOW_ORDERS(cmd);
+        if (need_histn_multipoles) window_orders = GGG_WINDOW_ORDERS(cmd);
 #endif
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "GGG profile: window_orders=%d work=%.6f wait=%.6f "
             "merge=%.6f wall=%.6f seconds (worker sums except wall)\n",
             window_orders, profile_work, profile_wait, profile_merge,
             omp_get_wtime() - profile_start);
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "GGG frontier: tasks=%" INTEGER_FMT " active=%" INTEGER_FMT
+            " pivots=%" INTEGER_FMT " target_active=%" INTEGER_FMT "\n",
+            frontier.count, frontier.active_count, frontier.task_count,
+            frontier.target_active);
     }
 
 #ifdef OCTREEGGGMPI
@@ -1915,10 +2196,11 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
         fclose(outpivots);
 #endif
 #ifdef NMultipoles
-        if (run_threepcf)
+        if (need_histn_multipoles)
             search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
         search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+        ggg_task_frontier_free(&frontier);
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: OpenMP histogram allocation failed", routineName);
         return FAILURE;
@@ -1929,7 +2211,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
         if (reduce_octree_ggg_histograms(
                 cmd, gd, &gdl, run_threepcf,
 #ifdef NMultipoles
-                &gdlN,
+                need_histn_multipoles, &gdlN,
 #endif
                 &ipmask,
 #ifdef SMOOTHPIVOT
@@ -1939,22 +2221,26 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 #endif
                 ) == FAILURE) {
 #ifdef NMultipoles
-            if (run_threepcf)
+            if (need_histn_multipoles)
                 search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
             search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+            ggg_task_frontier_free(&frontier);
             return FAILURE;
         }
         if (!fcfc_octree_ggg_mpi_is_root()) {
 #ifdef NMultipoles
-            if (run_threepcf)
+            if (need_histn_multipoles)
                 search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
             search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
+            ggg_task_frontier_free(&frontier);
             return SUCCESS;
         }
     }
 #endif
+
+    ggg_task_frontier_free(&frontier);
 
     //B end of completed pivot
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n\n");
@@ -1996,7 +2282,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 
 #ifdef THREEPCFCONVERGENCE
 #ifdef NMultipoles
-        if (run_threepcf) {
+        if (need_histn_multipoles) {
         for (mm=1; mm<=GGG_WINDOW_ORDERS(cmd); mm++) {
             MULMS_ext(gdlN.histZetaMcos[mm],
                       gdlN.histZetaMcos[mm],xi,cmd->sizeHistN);
@@ -2131,7 +2417,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 //B Saving histograms section: case GGGCORRELATION:
 // ===============================================
 
-      if (gd->rootDirFlag == TRUE) {
+      if (gd->rootDirFlag == TRUE && !cballs_opt_no_out_hist(cmd)) {
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "\n\t%s: printing %s method...\n\n",
             routineName, cmd->searchMethod);
@@ -2156,7 +2442,8 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
         PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd, &gdl));
 #endif // ! NONORMHIST
 
-          PRINT_OR_FAIL(PrintHistZetaM_sincos_N(cmd, gd, &gdlN));
+          if (need_histn_multipoles)
+              PRINT_OR_FAIL(PrintHistZetaM_sincos_N(cmd, gd, &gdlN));
 
 #else // ! NMultipoles
     PRINT_OR_FAIL(PrintHistZetaM_sincos(cmd, gd, &gdl));
@@ -2174,7 +2461,8 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
             PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd, &gdl));
 #endif // ! NONORMHIST
 
-            PRINT_OR_FAIL(PrintHistZetaMm_sincos_N(cmd, gd, &gdlN));
+            if (need_histn_multipoles)
+                PRINT_OR_FAIL(PrintHistZetaMm_sincos_N(cmd, gd, &gdlN));
 
 #else // ! NMultipoles
             PRINT_OR_FAIL(PrintHistZetaMm_sincos(cmd, gd, &gdl));
@@ -2275,7 +2563,7 @@ local int searchcalc_octree_ggg_driver(struct cmdline_data* cmd,
 
 //B free memory
 #ifdef NMultipoles
-    if (run_threepcf)
+    if (need_histn_multipoles)
         search_free_gd_sincos_omp_ggg_N(cmd, gd, &gdlN);
 #endif
     search_free_gd_sincos_omp_ggg(cmd, gd, &gdl);
@@ -2663,14 +2951,14 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
     xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi = Nb(p)*KappaRmin(p)/NbRmin(p);
     }
 #endif
 #else
     xi = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi = KappaRmin(p)/NbRmin(p);
     }
 #endif
@@ -2681,7 +2969,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = KappaRmin(p);
     }
 #endif
@@ -2689,7 +2977,7 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = KappaRmin(p);
     }
 #endif
@@ -2700,13 +2988,15 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 
 #ifdef BALLS4SCANLEV
     xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;    // equiv to Nb*(Weight/Nb)*Kappa
-#ifdef SMOOTHPIVOT                            // not working inside BALLS4SCANLEV
-    xi = KappaRmin(p)/nbody;
+#ifdef SMOOTHPIVOT
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
+        xi = KappaRmin(p)/nbody;
+    }
 #endif
 #else // ! BALLS4SCANLEV
     xi = Weight(p)*Kappa(p)/nbody;
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
     //B works if added a line for WeightRmin at the begining of
     //      sumnode_sincos above (first SMOOTHPIVOT segment)
     xi = WeightRmin(p)*KappaRmin(p)/nbody;
@@ -2720,14 +3010,16 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
     wi = Weight(p);
     xi_2p = (Weight(p)/Nb(p))*Kappa(p);
-#ifdef SMOOTHPIVOT                            // not working inside BALLS4SCANLEV
+#ifdef SMOOTHPIVOT
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = KappaRmin(p);
+    }
 #endif
 #else
     wi = Weight(p);
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = (KappaRmin(p));
     }
 #endif
@@ -2746,13 +3038,13 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     xi = Weight(p)*Kappa(p);                    // equiv to Nb*(Weight/Nb)*Kappa
 #ifdef BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi = Nb(p)*Weight(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
     }
 #endif
 #else // ! BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
     // check this line thoroughly... Weight must be smoothed also...
     xi = (WeightRmin(p)/NbRmin(p))*KappaRmin(p)/NbRmin(p);
     }
@@ -2765,14 +3057,14 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     // check this line thoroughly against treeload.c
     xi_2p = (Weight(p)/Nb(p))*(Kappa(p)/Nb(p));
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = Nb(p)*Weight(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
     }
 #endif
 #else // ! BALLS4SCANLEV
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = (WeightRmin(p)/NbRmin(p))*KappaRmin(p)/NbRmin(p);
     }
 #endif
@@ -2784,14 +3076,14 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
 #ifdef BALLS4SCANLEV
     xi = (Weight(p)/Nb(p))*Kappa(p)/nbody;      // equiv to Nb*(Weight/Nb)*Kappa
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi = KappaRmin(p)/NbRmin(p)/nbody;
     }
 #endif
 #else // ! BALLS4SCANLEV
     xi = Weight(p)*Kappa(p)/nbody;
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi = (WeightRmin(p)/NbRmin(p))*(KappaRmin(p)/NbRmin(p))/nbody;
     }
 #endif
@@ -2803,14 +3095,14 @@ local int computeBodyProperties_sincos_ggg(struct  cmdline_data* cmd,
     //B check if Weight and Kappa are averaged or not in treeload.c
     xi_2p = (Weight(p)/Nb(p))*Kappa(p)/Nb(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
         xi_2p = WeightRmin(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
     }
 #endif
 #else // ! BALLS4SCANLEV
     xi_2p = Weight(p)*Kappa(p);
 #ifdef SMOOTHPIVOT
-    if (cballs_opt_smooth_pivot(cmd)) {
+    if (ggg_uses_smooth_body_pivot(cmd, (nodeptr)p)) {
     //B divide by Nb(p)
         xi_2p = WeightRmin(p)*KappaRmin(p)/NbRmin(p)/NbRmin(p);
     }
@@ -2993,7 +3285,8 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
-                histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.;
+                if (histN != NULL)
+                    histN->histNNSubthread[n] += 1.0;
 
                 xi = Weight(q)*Kappa(q);
                 xiN = Weight(q);
@@ -3039,7 +3332,8 @@ local void sumnode_sincos_N(struct  cmdline_data* cmd,
 #endif
 
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
-                histN->histNNSubthread[n] = histN->histNNSubthread[n] + 1.;
+                if (histN != NULL)
+                    histN->histNNSubthread[n] += 1.0;
 
                 xi = Weight(q)*Kappa(q);
                 xiN = Weight(q);
@@ -3119,7 +3413,8 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 
                 //B 3pcf convergence
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + Nb(q);
-                histN->histNNSubthread[n] = histN->histNNSubthread[n] + Nb(q);
+                if (histN != NULL)
+                    histN->histNNSubthread[n] += Nb(q);
                 //E
 
 #ifndef NOWKAvg
@@ -3173,7 +3468,8 @@ local void sumnode_sincos_cell_N(struct  cmdline_data* cmd,
 
                 //B 3pcf convergence
                 hist->histNNSubthread[n] = hist->histNNSubthread[n] + Nb(q);
-                histN->histNNSubthread[n] = histN->histNNSubthread[n] + Nb(q);
+                if (histN != NULL)
+                    histN->histNNSubthread[n] += Nb(q);
                 //E
 
 #ifndef NOWKAvg
@@ -4229,11 +4525,10 @@ local int print_info(struct cmdline_data* cmd,
     if (cballs_opt_no_one_ball(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option no-one-ball... \n");
-#ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option smooth-pivot... rsmooth=%g\n",
                             gd->rsmooth[0]);
-#endif
     if (cballs_opt_default_rsmooth(cmd))
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "with option default-rsmooth... \n");

@@ -49,7 +49,7 @@ def radial_bin(radius):
     return index if 0 <= index < NBINS else None
 
 
-def direct_oracle(los_ids=None):
+def direct_oracle(los_ids=None, all_distinct=False):
     xi_num = [0.0] * NBINS
     xi_den = [0.0] * NBINS
     zeta_num = [[[0.0] * NBINS for _ in range(NBINS)]
@@ -86,6 +86,9 @@ def direct_oracle(los_ids=None):
                     for first in neighbors[first_bin]:
                         for second in neighbors[second_bin]:
                             if first[0] == second[0]:
+                                continue
+                            if (all_distinct and los_ids is not None
+                                    and los_ids[first[0]] == los_ids[second[0]]):
                                 continue
                             cosine = sum(a * b for a, b in zip(first[3], second[3]))
                             cosine = min(1.0, max(-1.0, cosine))
@@ -148,8 +151,10 @@ def assert_close(actual, expected, label, tolerance=3.0e-6):
         raise AssertionError(f"{label}: {actual:.17g} != {expected:.17g}")
 
 
-def check_oracle(root):
-    xi_num, xi_den, zeta_num, zeta_den = direct_oracle()
+def check_oracle(root, los_ids=None, all_distinct=False):
+    xi_num, xi_den, zeta_num, zeta_den = direct_oracle(
+        los_ids, all_distinct=all_distinct
+    )
     xi_rows = read_rows(root / "histXi2pcf_3d.txt")
     zeta_rows = read_rows(root / "histZetaM_3d.txt")
     if len(xi_rows) != NBINS:
@@ -210,16 +215,10 @@ def check_fits_los(executable, tmp):
     root = tmp / "fits-los"
     run_case(
         executable, catalog, root,
-        "with-weight,exclude-same-los,only-2pcf-3d", 2,
+        "with-weight,exclude-all-same-los,compute-2pcf-3d,compute-3pcf-3d", 2,
         infile_format="fits", columns="1,2,3,4,5,6",
     )
-    expected_num, expected_den, _, _ = direct_oracle(los_ids)
-    for row in read_rows(root / "histXi2pcf_3d.txt"):
-        bin_index = int(row[0]) - 1
-        assert_close(row[3], expected_num[bin_index],
-                     f"FITS LOS xi numerator bin {bin_index}")
-        assert_close(row[4], expected_den[bin_index],
-                     f"FITS LOS xi denominator bin {bin_index}")
+    check_oracle(root, los_ids, all_distinct=True)
 
 
 def main():

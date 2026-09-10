@@ -1,7 +1,7 @@
 #ifndef _fcfc_octree_ggg_mpi_h
 #define _fcfc_octree_ggg_mpi_h
 
-#ifdef OCTREEGGGMPI
+#if defined(OCTREEGGGMPI) || defined(OCTREE2BALLS_GGG_MPI_COMPAT)
 
 #include <mpi.h>
 #include <stdint.h>
@@ -34,6 +34,6 @@ int fcfc_octree_ggg_mpi_scheduler_destroy(
 int fcfc_octree_ggg_mpi_reduce_reals(struct cmdline_data *, real *, size_t);
 int fcfc_octree_ggg_mpi_reduce_integers(struct cmdline_data *, INTEGER *, size_t);
 
-#endif /* OCTREEGGGMPI */
+#endif /* OCTREEGGGMPI || OCTREE2BALLS_GGG_MPI_COMPAT */
 
 #endif /* !_fcfc_octree_ggg_mpi_h */

@@ -4,7 +4,7 @@
 global int searchcalc_balltree_omp(struct cmdline_data *,
                                    struct global_data *, bodyptr *,
                                    INTEGER *, INTEGER, INTEGER *, int, int);
-#ifdef BALLTREEMPI
+#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
 global int searchcalc_balltree_mpi(struct cmdline_data *,
                                    struct global_data *, bodyptr *,
                                    INTEGER *, INTEGER, INTEGER *, int, int);

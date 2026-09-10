@@ -4,7 +4,7 @@
  Modified version of some routines from cute_box by David Alonso
  See also Rapaport, The art of molecular dynamics simulations, 2nd edition (2004)
  Starting date:    april 2023
- Purpose: 2/3-point correlation functions computation
+ Purpose: periodic pair counts and density correlation function computation
  Language: C
  Use: kd = searchcalc_neighbor_boxes_omp(cmd, gd, btab, nbody,
                                     ipmin, ipmax, cat1, cat2);
@@ -55,6 +55,9 @@ local int _catalog_to_boxes(struct cmdline_data *cmd,
                             struct global_data *gd,
                             int n_box_side,
                             NeighborBox **boxes_out);
+
+local double _neighbor_wrap_coordinate(double coordinate);
+local int _neighbor_box_axis_index(double coordinate, int nside);
 
 local int make_CF(struct cmdline_data *cmd,
                   struct global_data *gd,
@@ -202,21 +205,9 @@ local int _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
     }
 #endif // ! LOGBINCBON
 
-    //B cBalls structure...
-    bodyptr p;
-    int k;
-    int ii;
-
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "%s: Box: %g %g %g\n",
                            routineName, gd->Box[0], gd->Box[1], gd->Box[2]);
-    if (cballs_opt_cute_box_fmt(cmd))
-    for(ii=0;ii<gd->nbodyTable[cat1];ii++) {
-        p = bodytable[cat1]+ii;
-        DO_COORD(k)
-            Pos(p)[k] += 0.5*gd->Box[k];
-    }
-    //E
 
     nside=_optimal_nside(lbox,1./I_R_MAX_,gd->nbodyTable[cat1]);
     if (_catalog_to_boxes(cmd, gd, nside, &boxes) == FAILURE)
@@ -319,7 +310,7 @@ local int _corr_mono_box_neighbors(struct  cmdline_data* cmd,
                            "\n%s: rsmooth = %e\n",
                            routineName, gd->rsmooth[0]);
 #else
-#ifdef BALLS4SCANLEV
+#ifdef NEIGHBORBOXES_BALLS4SCANLEV
     int ifile=0;
     bodyptr p;
     DO_BODY(p,bodytable[ifile],bodytable[ifile]+gd->nbodyTable[ifile])
@@ -327,18 +318,10 @@ local int _corr_mono_box_neighbors(struct  cmdline_data* cmd,
     if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile)
         == FAILURE)
         return FAILURE;
-    int k;
-    int cat1=0;
-    if (cballs_opt_cute_box_fmt(cmd))
-    for(int ii=0;ii<gd->nbodyTable[cat1];ii++) {
-        p = bodytable[cat1]+ii;
-        DO_COORD(k)
-            Pos(p)[k] += 0.5*gd->Box[k];
-    }
 #endif
 #endif // ! SMOOTHPIVOT
 
-#ifndef BALLS4SCANLEV
+#ifndef NEIGHBORBOXES_BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
 #pragma omp parallel default(none)                  \
 shared(index_max,nside,boxes,hh,lbox,np,            \
@@ -350,7 +333,7 @@ ipfalse)
   shared(index_max,nside,boxes,hh,lbox,np,main_thread_id, \
     agrid,NB_R_,R2_MAX,I_DR,LOG_R_MAX_,bodytable,cmd,gd)
 #endif
-#else // ! BALLS4SCANLEV
+#else // ! NEIGHBORBOXES_BALLS4SCANLEV
 #ifdef SMOOTHPIVOT
 #pragma omp parallel default(none)                  \
 shared(index_max,nside,boxes,hh,lbox,np,            \
@@ -363,7 +346,7 @@ ipfalse)
     agrid,NB_R_,R2_MAX,I_DR,LOG_R_MAX_,bodytable,   \
     cmd,gd,nodetablescanlevB4,main_thread_id)
 #endif
-#endif // ! BALLS4SCANLEV
+#endif // ! NEIGHBORBOXES_BALLS4SCANLEV
   {
       INTEGER ii;
       INTEGER ip;
@@ -372,7 +355,7 @@ ipfalse)
 
       pthread_t current_thread_id = pthread_self();
 
-#ifndef BALLS4SCANLEV
+#ifndef NEIGHBORBOXES_BALLS4SCANLEV
       bodyptr p;
 #else
       nodeptr p;
@@ -393,7 +376,7 @@ ipfalse)
 
 #pragma omp for nowait schedule(static,1)
 #ifndef ORIGINALCB
-#ifndef BALLS4SCANLEV
+#ifndef NEIGHBORBOXES_BALLS4SCANLEV
       for (p = bodytable[cat1]; p < bodytable[cat1] + np; p++) {
           ii = p - bodytable[cat1];
 #else
@@ -415,13 +398,13 @@ ipfalse)
           }
 #endif
 
-          x0=Pos(p)[0];
-          y0=Pos(p)[1];
-          z0=Pos(p)[2];
+          x0=_neighbor_wrap_coordinate(Pos(p)[0]);
+          y0=_neighbor_wrap_coordinate(Pos(p)[1]);
+          z0=_neighbor_wrap_coordinate(Pos(p)[2]);
 
-          ix0=(int)(x0/lbox*nside);
-          iy0=(int)(y0/lbox*nside);
-          iz0=(int)(z0/lbox*nside);
+          ix0=_neighbor_box_axis_index(x0, nside);
+          iy0=_neighbor_box_axis_index(y0, nside);
+          iz0=_neighbor_box_axis_index(z0, nside);
 
           for(idz=-index_max;idz<=index_max;idz++) {
               int idy,idz_dist2;
@@ -511,7 +494,7 @@ ipfalse)
               } // ! idy=-index_max;idy<=index_max
           } // ! idz=-index_max;idz<=index_max
 
-#ifndef BALLS4SCANLEV
+#ifndef NEIGHBORBOXES_BALLS4SCANLEV
           ip = p - bodytable[cat1] + 1;
 #else
           ip = ii+1;
@@ -553,7 +536,7 @@ ipfalse)
     
 #ifdef SMOOTHPIVOT
     real den, num;
-#ifdef BALLS4SCANLEV
+#ifdef NEIGHBORBOXES_BALLS4SCANLEV
     num = (real)gd->nnodescanlevTableB4[cat1];
     den = (real)(gd->nnodescanlevTableB4[cat1]-ipfalse);
 #else
@@ -654,9 +637,11 @@ local int _neighbor_box_index_for_body(struct cmdline_data *cmd,
                                     bodyptr p,
                                     INTEGER ibody,
                                     int nside,
-                                    int *index_out)
+                                    int *index_out,
+                                    double wrapped[NDIM])
 {
     int ix, iy, iz;
+    double coordinate[NDIM];
 
     if (index_out == NULL) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -671,19 +656,21 @@ local int _neighbor_box_index_for_body(struct cmdline_data *cmd,
         return FAILURE;
     }
 
-    if (Pos(p)[0] < 0.0 || Pos(p)[0] >= lbox ||
-        Pos(p)[1] < 0.0 || Pos(p)[1] >= lbox ||
-        Pos(p)[2] < 0.0 || Pos(p)[2] >= lbox) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                "%s: body %ld position outside [0,lbox): %g %g %g lbox=%g",
-                routineName, (long)ibody,
-                Pos(p)[0], Pos(p)[1], Pos(p)[2], lbox);
-        return FAILURE;
+    DO_COORD(ix) {
+        if (!isfinite(Pos(p)[ix])) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                    "%s: body %ld has non-finite coordinate %d: %g",
+                    routineName, (long)ibody, ix, Pos(p)[ix]);
+            return FAILURE;
+        }
+        coordinate[ix] = _neighbor_wrap_coordinate(Pos(p)[ix]);
+        if (wrapped != NULL)
+            wrapped[ix] = coordinate[ix];
     }
 
-    ix = (int)(Pos(p)[0] / lbox * nside);
-    iy = (int)(Pos(p)[1] / lbox * nside);
-    iz = (int)(Pos(p)[2] / lbox * nside);
+    ix = _neighbor_box_axis_index(coordinate[0], nside);
+    iy = _neighbor_box_axis_index(coordinate[1], nside);
+    iz = _neighbor_box_axis_index(coordinate[2], nside);
 
     if (ix < 0 || ix >= nside || iy < 0 || iy >= nside || iz < 0 || iz >= nside) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -694,6 +681,30 @@ local int _neighbor_box_index_for_body(struct cmdline_data *cmd,
 
     *index_out = ix + nside * (iy + nside * iz);
     return SUCCESS;
+}
+
+local double _neighbor_wrap_coordinate(double coordinate)
+{
+    double wrapped = fmod(coordinate, (double)lbox);
+
+    if (wrapped < 0.0)
+        wrapped += (double)lbox;
+    if (wrapped >= (double)lbox)
+        wrapped = 0.0;
+
+    return wrapped;
+}
+
+local int _neighbor_box_axis_index(double coordinate, int nside)
+{
+    int index = (int)(coordinate / ((double)lbox / (double)nside));
+
+    if (index < 0)
+        return 0;
+    if (index >= nside)
+        return nside - 1;
+
+    return index;
 }
 //E
 
@@ -745,7 +756,8 @@ local int _catalog_to_boxes(struct cmdline_data *cmd,
         int index;
         p = bodytable[0]+ii;
 
-        if (_neighbor_box_index_for_body(cmd, routineName, p, ii, nside, &index) == FAILURE)
+        if (_neighbor_box_index_for_body(cmd, routineName, p, ii, nside,
+                                         &index, NULL) == FAILURE)
             goto fail;
 
         boxes[index].np++;
@@ -768,16 +780,18 @@ local int _catalog_to_boxes(struct cmdline_data *cmd,
     
     for(ii=0;ii<gd->nbodyTable[0];ii++) {
         int index, offset;
+        double wrapped[NDIM];
         p = bodytable[0] + ii;
 
         if (_neighbor_box_index_for_body(cmd, routineName,
-                                         p, ii, nside, &index) == FAILURE)
+                                         p, ii, nside, &index,
+                                         wrapped) == FAILURE)
             goto fail;
 
         offset = 3 * boxes[index].np;
-        boxes[index].pos[offset] = Pos(p)[0];
-        boxes[index].pos[offset + 1] = Pos(p)[1];
-        boxes[index].pos[offset + 2] = Pos(p)[2];
+        boxes[index].pos[offset] = wrapped[0];
+        boxes[index].pos[offset + 1] = wrapped[1];
+        boxes[index].pos[offset + 2] = wrapped[2];
         boxes[index].np++;
   }
 
@@ -1079,9 +1093,8 @@ local int print_info(struct cmdline_data* cmd,
 #ifdef _LOGBIN_
     verb_print(cmd->verbose, "activated radial logscale... \n");
 #endif
-#ifdef SMOOTHPIVOT
-    verb_print(cmd->verbose, "activated SMOOTHPIVOT... \n");
-#endif
+    if (cballs_opt_smooth_pivot(cmd))
+        verb_print(cmd->verbose, "activated SMOOTHPIVOT... \n");
 #ifdef ORIGINALCB
     verb_print(cmd->verbose, "activated ORIGINALCB... \n");
 #endif

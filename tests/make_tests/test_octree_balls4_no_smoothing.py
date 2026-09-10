@@ -43,6 +43,11 @@ EXACT_OPTIONS = (
 ACCELERATED_OPTIONS = (
     "no-out-Hist,no-normalize-HistZeta,KKKCorrelation,compute-HistN,and-CF"
 )
+ONLY_2PCF_OPTIONS = EXACT_OPTIONS + ",only-2pcf"
+ONLY_3PCF_OPTIONS = EXACT_OPTIONS + ",only-3pcf"
+SHARED_PAIR_OPTIONS = (
+    "no-out-Hist,compute-HistN,and-CF,only-2pcf,dual-node-bin-slop"
+)
 
 
 def parameters(root_dir, threads, search_method="octree-balls4-omp",
@@ -129,6 +134,33 @@ def run_executable(executable, catalog, root_dir):
         values = np.loadtxt(output)
         if values.shape != (8, 2) or not np.all(np.isfinite(values)):
             raise AssertionError(f"invalid standalone 2PCF output in {output}")
+
+    only_two_root = root_dir.parent / f"{root_dir.name}-only-2pcf"
+    only_two_command = [
+        (f"rootDir={only_two_root}" if arg.startswith("rootDir=") else
+         arg + ",only-2pcf" if arg.startswith("options=") else arg)
+        for arg in command
+    ]
+    completed = subprocess.run(
+        only_two_command, check=False, capture_output=True, text=True,
+        timeout=120,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            "standalone BALLS4 only-2pcf failed:\n"
+            + completed.stdout + completed.stderr
+        )
+    for filename in ("histNN.txt", "histCF.txt", "histXi2pcf.txt"):
+        output = only_two_root / filename
+        if not output.is_file():
+            raise AssertionError(
+                f"standalone only-2pcf output is missing {output}"
+            )
+        values = np.loadtxt(output)
+        if values.shape != (8, 2) or not np.all(np.isfinite(values)):
+            raise AssertionError(
+                f"invalid standalone only-2pcf output in {output}"
+            )
     for rejected_name, options in (
         ("octree-balls4-omp", "KKKCorrelation,smooth-pivot"),
         ("octree-kkk-balls4-omp", "KKKCorrelation"),
@@ -185,6 +217,15 @@ def assert_2pcf_matches_pairs(positions, kappa, weights, candidate, mask=None):
     np.testing.assert_allclose(candidate["histXi2pcf"], xi, rtol=2e-13, atol=2e-13)
 
 
+def assert_same_pair_kernel(reference, candidate):
+    # BALLS4 deliberately retains its historical CF density convention.
+    for name in ("histNN", "histXi2pcf"):
+        np.testing.assert_array_equal(
+            candidate[name], reference[name],
+            err_msg=f"shared native-octree pair kernel {name}",
+        )
+
+
 def test_no_smoothing_profile_runs_c_and_cython():
     executable = os.environ.get("CBALLS", str(ROOT / "cballs"))
     assert search_method_id("octree-balls4-omp") == 69
@@ -204,17 +245,55 @@ def test_no_smoothing_profile_runs_c_and_cython():
         )
         assert_results(one_thread, three_threads)
         assert_2pcf_matches_pairs(positions, kappa, weights, one_thread)
-        # GGG's SMOOTHPIVOT build uses a different weighted estimator.
-        # Keep that reference exact and unweighted; check weights directly above.
+        only_two_one = run_cython(
+            positions, kappa, weights, str(root / "cy-only-2pcf-one"), 1,
+            options=ONLY_2PCF_OPTIONS,
+        )
+        only_two_three = run_cython(
+            positions, kappa, weights, str(root / "cy-only-2pcf-three"), 3,
+            options=ONLY_2PCF_OPTIONS,
+        )
+        for candidate in (only_two_one, only_two_three):
+            assert_2pcf_matches_pairs(positions, kappa, weights, candidate)
+            assert_2pcf_matches_ggg(one_thread, candidate)
+            for name, values in candidate.items():
+                if name.startswith("zeta["):
+                    np.testing.assert_array_equal(values, 0.0, err_msg=name)
+        only_three_one = run_cython(
+            positions, kappa, weights, str(root / "cy-only-3pcf-one"), 1,
+            options=ONLY_3PCF_OPTIONS,
+        )
+        only_three_three = run_cython(
+            positions, kappa, weights, str(root / "cy-only-3pcf-three"), 3,
+            options=ONLY_3PCF_OPTIONS,
+        )
+        for candidate in (only_three_one, only_three_three):
+            for name in ("histNN", "histCF", "histXi2pcf"):
+                np.testing.assert_array_equal(candidate[name], 0.0, err_msg=name)
+            for name, values in one_thread.items():
+                if name.startswith("zeta["):
+                    np.testing.assert_allclose(
+                        candidate[name], values, rtol=2.0e-13, atol=2.0e-13,
+                        err_msg=name,
+                    )
+        # The direct pair oracle above is the exact contract. The shared compact
+        # kernel below checks that the optimized BALLS4 2PCF dispatch is identical
+        # to octree-2balls without coupling this regression to GGG's estimator.
         unit_weights = np.ones_like(weights)
-        unweighted = run_cython(
-            positions, kappa, unit_weights, str(root / "cy-unweighted"), 1
+        shared_balls4_one = run_cython(
+            positions, kappa, unit_weights, str(root / "shared-balls4-one"), 1,
+            options=SHARED_PAIR_OPTIONS,
         )
-        ggg = run_cython(
-            positions, kappa, unit_weights, str(root / "cy-ggg"), 1,
-            "octree-ggg-omp", rsmooth=0.0,
+        shared_balls4_three = run_cython(
+            positions, kappa, unit_weights, str(root / "shared-balls4-three"), 3,
+            options=SHARED_PAIR_OPTIONS,
         )
-        assert_2pcf_matches_ggg(ggg, unweighted)
+        shared_2balls = run_cython(
+            positions, kappa, unit_weights, str(root / "shared-2balls"), 3,
+            search_method="octree-2balls-omp", options=SHARED_PAIR_OPTIONS,
+        )
+        assert_same_pair_kernel(shared_balls4_one, shared_balls4_three)
+        assert_same_pair_kernel(shared_2balls, shared_balls4_three)
         accelerated_one = run_cython(
             positions, kappa, weights, str(root / "cy-accelerated-one"), 1,
             options=ACCELERATED_OPTIONS,
@@ -259,7 +338,7 @@ def test_smooth_pivot_rejection_is_recoverable():
             balls.clear_catalogs()
 
 
-def test_masked_b4_partition_matches_octree_ggg():
+def test_masked_b4_partition_matches_pair_oracle():
     positions, kappa, weights = unit_sphere_catalog(256)
     mask = positions[:, 2] > -0.15
     options = EXACT_OPTIONS + ",read-mask"
@@ -267,11 +346,6 @@ def test_masked_b4_partition_matches_octree_ggg():
     with tempfile.TemporaryDirectory(prefix="ctreeballs-balls4-mask-") as tmp:
         root = Path(tmp)
         unit_weights = np.ones_like(weights)
-        ggg = run_cython(
-            positions, kappa, unit_weights, str(root / "ggg"), 2,
-            search_method="octree-ggg-omp", options=options, mask=mask,
-            rsmooth=0.0,
-        )
         unweighted = run_cython(
             positions, kappa, unit_weights, str(root / "unweighted"), 2,
             options=options, mask=mask,
@@ -281,7 +355,9 @@ def test_masked_b4_partition_matches_octree_ggg():
             options=options, mask=mask,
         )
 
-    assert_2pcf_matches_ggg(ggg, unweighted, check_cf=False)
+    assert_2pcf_matches_pairs(
+        positions, kappa, unit_weights, unweighted, mask=mask
+    )
     assert_2pcf_matches_pairs(positions, kappa, weights, balls4, mask=mask)
     # BALLS4 density normalization uses the selected population, not the full map.
     delta = np.log10(1.5/0.05)/8
@@ -296,9 +372,10 @@ def test_masked_b4_partition_matches_octree_ggg():
 
 if __name__ == "__main__":
     test_no_smoothing_profile_runs_c_and_cython()
-    test_masked_b4_partition_matches_octree_ggg()
+    test_masked_b4_partition_matches_pair_oracle()
     test_smooth_pivot_rejection_is_recoverable()
     print(
         "PASS: octree-balls4-omp C/Cython smoke, exact and masked 2PCF oracles, "
-        "2PCF/3PCF thread comparisons, and smooth-pivot rejection"
+        "shared pair-kernel identity, only-2pcf/only-3pcf isolation, 2PCF/3PCF thread "
+        "comparisons, and smooth-pivot rejection"
     )

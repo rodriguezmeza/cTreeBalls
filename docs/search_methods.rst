@@ -1,119 +1,122 @@
 Search Methods
 ==============
 
-Start with the field and geometry, then choose an enabled engine. This guide
-covers the maintained families; the executable is the authority for a particular
-build::
+The executable is the authority for the current build profile::
 
    ./cballs options=make-info
    ./cballs options=print-options
    ./cballs options=print-search-methods
 
-The first command reports compiled settings, the second registered options,
-and the third method names, availability, and usage. A source directory alone
-does not make a method available. See :doc:`build_profiles` before changing flags.
+The current maintained profile exposes the core method and only the enabled
+addon methods below. An addon source directory does not make it available
+unless its Makefile switch is 1.
 
-Scalar Angular Engines
+Scalar Angular Methods
 ----------------------
 
-These measure counts/convergence using scalar Fourier multipoles, not shear
-or the physical-3D Legendre estimator. In 3D preserve the observer origin and
-use chord separations. See :doc:`3pcf` for the precise raw estimator.
+``octree-sincos-omp`` is the core octree method. It computes scalar 2PCF and
+sine/cosine 3PCF multipoles with OpenMP and is not controlled by an addon
+switch.
 
 .. list-table::
    :header-rows: 1
-   :widths: 27 30 43
+   :widths: 28 30 42
 
    * - Runtime name
      - Build switch
-     - Search and controls
-   * - ``octree-ggg-omp`` / ``octree-ggg-mpi``
-     - ``OCTREEGGGOMPON`` / ``OCTREEGGGMPION``
-     - Pivot-neighbor octree moments; log bins; ``no-one-ball`` for exact neighbors.
-   * - ``kdtree-omp``
-     - ``KDTREEOMPON``
-     - KD-tree; exact by default, ``behavior-ball`` enables aggregation with log bins.
-   * - ``balltree-omp`` / ``balltree-mpi``
-     - ``BALLTREEOMPON`` / ``BALLTREEMPION``
-     - FCFC-style ball tree; exact by default; ``behavior-ball`` enables aggregation with log bins.
-   * - ``octree-balls4-omp`` / ``octree-balls4-mpi``
-     - ``OCTREEBALLS4OMPON`` / ``OCTREEBALLS4MPION``
-     - Native B4 partition; 3D, nonperiodic, log bins; raw mode uses distinct body-pivot moments.
+     - Contract
+   * - ``kdtree-2balls-omp`` / ``kdtree-2balls-mpi``
+     - ``KDTREE2BALLSOMPON`` / ``KDTREE2BALLSMPION``
+     - Median KD-tree dual-node 2PCF and body-pivot LogMultipole 3PCF.
    * - ``balltree-2balls-omp`` / ``balltree-2balls-mpi``
      - ``BALLTREE2BALLSOMPON`` / ``BALLTREE2BALLSMPION``
-     - Dual-node 2PCF and explicit triple-node 3PCF; exact triples can have cubic cost.
+     - PCA ball-tree dual-node 2PCF and body-pivot LogMultipole 3PCF.
    * - ``octree-2balls-omp`` / ``octree-2balls-mpi``
      - ``OCTREE2BALLSOMPON`` / ``OCTREE2BALLSMPION``
-     - Native-octree view; dual-node pairs and production LogMultipole 3PCF.
-   * - ``balltree-2balls-omp_3pcf`` / ``balltree-2balls-mpi_3pcf``
-     - ``BALLTREE2BALLSOMP3PCFON`` / ``BALLTREE2BALLSMPI3PCFON``
-     - 3PCF-only LogMultipole scans with inherited coarse-pivot moments.
+     - Native-octree dual-node 2PCF and LogMultipole 3PCF.
 
-Set the relevant switch to ``1``. ``TWOPCFON`` and ``TPCFON`` control compiled
-correlation orders. Where supported, ``only-2pcf`` and ``only-3pcf`` select
-runtime work; they are not universal options for every historical engine.
-The ``_3pcf`` addons do not provide 2PCF. Use ``no-two-balls`` for the exact
-two-ball reference and reduce ``theta`` to check convergence of aggregation.
+For the addon methods, ``TWOPCFON`` and ``TPCFON`` compile the two correlation orders.
+``only-2pcf`` and ``only-3pcf`` select work at runtime. The default dual-node
+acceptance requires the complete pair-distance interval to remain inside one
+radial bin. ``dual-node-bin-slop`` enables the less conservative Log/Linear
+bin-position policy, and ``no-two-balls`` requests exact body pairs.
 
-``nsmooth`` generally sets leaf capacity in KD/ball trees; it does not imply
-pivot smoothing. ``SMOOTHPIVOTON=1`` only compiles support. Supported engines
-require an explicit ``smooth-pivot`` option. Raw KD/legacy balltree multipoles
-reject smoothing, and BALLS4 rejects it in every mode.
+All six methods accept masks and complex scalar 3PCF edge correction. Use::
 
-Masks and Windows
-`````````````````
+   options=read-mask,edge-corrections,no-normalize-HistZeta
 
-GGG, octree two-ball, and BALLS4 OpenMP/MPI engines support ``read-mask``.
-Masking removes invalid pivots and neighbors; it does not perform edge correction.
+``weights-norm`` applies catalog weights to signal and window moments. Empty or
+singular correction systems publish finite zero. The KD and PCA ball-tree
+methods support the compiled smooth-pivot default; ``no-smooth-pivot`` disables
+it. Native octree dual-node mode does not use smooth pivots.
 
-Complex scalar edge corrections are available in GGG, BALLS4, and all listed
-two-ball engines. Use ``edge-corrections,no-normalize-HistZeta``;
-``weights-norm`` selects statistical weights. GGG also needs
-``NMultipolesON=1`` and ``NONORMHISTON=1``. The two-ball and BALLS4 correction
-paths do not need these extra switches. Windows extend through twice the
-signal multipole order. Empty or singular correction systems return zero.
+The option ``legacy-one-ball`` dispatches from an active two-ball method to its
+privately linked compatibility kernel. The old public method names remain
+disabled in the maintained profile.
 
-The ``python/kappa_corr_all_engines.py`` driver filters engine groups by
-compiled availability, masks, and edge support. Explicit incompatible requests
-fail. It is an angular scalar driver, not a generic frontend for every family.
-
-Other Field Families
---------------------
+Full-Sky Shear Methods
+----------------------
 
 .. list-table::
    :header-rows: 1
 
-   * - Family
-     - Build switches
-     - Guide
-   * - ``octree-shear-omp``
-     - ``OCTREESHEAROMPON=1``
-     - :doc:`shear`: flat-sky spin-2 natural components and window correction.
-   * - Seven ``lya-...-omp`` and seven ``lya-...-mpi`` modes
-     - ``LYAFORESTOMPON=1`` / ``LYAFORESTMPION=1``
-     - :doc:`lyman_alpha`: forest IDs, radial-only and anisotropic 3D estimators.
-   * - ``octree-3pcf-3d-omp`` / ``octree-3pcf-3d-mpi``
-     - ``OCTREE3PCF3DOMPON=1`` / ``OCTREE3PCF3DMPION=1``
-     - :doc:`scalar_3d`: physical 3D scalar and data/random survey estimators.
-   * - Box and historical scalar engines
-     - Profile-dependent
-     - Use executable help and the corresponding addon README; do not infer angular contracts.
+   * - Runtime name
+     - Build switch
+     - Tree
+   * - ``octree-shear-sphere-2balls-omp``
+     - ``OCTREESHEARSPHERE2BALLSOMPON``
+     - Native octree
+   * - ``kdtree-shear-sphere-2balls-omp``
+     - ``KDTREESHEARSPHERE2BALLSOMPON``
+     - Median KD tree
+   * - ``balltree-shear-sphere-2balls-omp``
+     - ``BALLTREESHEARSPHERE2BALLSOMPON``
+     - PCA ball tree
 
-Aliases ``octree-ggg-3d-omp`` and ``octree-ggg-3d-mpi`` select the physical
-3D family, not the angular GGG engines.
+These consume observer-centered three-dimensional vectors and
+``gamma1+i*gamma2`` in each point's local east/north basis. They normalize
+positions to the unit sphere, bin chord distance, parallel transport spin-2
+fields along great circles, and compute xi+/xi- plus natural 3PCF multipoles.
+See :doc:`shear`.
+
+Lyman-alpha Forest Methods
+--------------------------
+
+``LYAFORESTOMPON=1`` enables nine OpenMP names. ``LYAFORESTMPION=1`` enables
+the eight MPI counterparts; the same-LOS 2PCF is OpenMP only.
+
+The families are:
+
+* ``lya-2pcf-*``, ``lya-3pcf-*``, and ``lya-2pcf-3pcf-*`` for anisotropic 3D
+  forest statistics;
+* ``lya-1d-2pcf-*``, ``lya-1d-3pcf-*``, and
+  ``lya-1d-2pcf-3pcf-*`` for radial scans;
+* ``lya-1d-tree-2pcf-*`` and ``lya-1d-tree-3pcf-*`` for interval-tree radial
+  scans;
+* ``lya-1d-tree-same-los-2pcf-omp`` for an equal-forest average of within-LOS
+  pairs.
+
+Input is ``x y z delta weight forest_id`` or an in-memory
+``set_forest_catalog`` call. General forest pairs exclude equal IDs and forest
+triplets require three distinct IDs. See :doc:`lyman_alpha`.
+
+Physical 3D and Box Methods
+---------------------------
+
+``octree-3pcf-3d-omp`` and ``octree-3pcf-3d-mpi`` are enabled by
+``OCTREE3PCF3DOMPON`` and ``OCTREE3PCF3DMPION``. They provide physical-3D
+Legendre multipoles and the data/random survey-window estimator described in
+:doc:`scalar_3d`.
+
+``kdtree-box-omp`` and ``neighbor-boxes-omp`` are enabled for periodic
+Cartesian 2PCF workloads. They are not angular convergence or forest
+estimators.
 
 MPI Rules
 ---------
 
-MPI engines require an MPI compiler/runtime and OpenMP support. Thread count
-is **per rank**. Catalogs and trees are generally replicated, so MPI does not
-automatically reduce per-rank memory requirements. Only rank 0 publishes output.
-
-Every Python rank must enter the same run and cleanup stages. Import
-``mpi4py.MPI`` first and use the same MPI implementation as the native build.
-The all-engines drivers broadcast catalogs; calling ``set_catalog`` directly
-requires complete input on every rank. Do not read rank-0-only getters elsewhere.
-
-Fixed task reductions support repeatability, but not every family promises
-bitwise equality when changing MPI rank count. Compare numerical tolerances,
-record rank/thread counts, and follow the addon-specific parallel contract.
+MPI engines require one MPI implementation shared by the compiler wrappers,
+runtime launcher, C extension, and ``mpi4py``. ``numberThreads`` is per rank.
+Every rank enters the same run and cleanup sequence; rank 0 publishes output.
+The all-engines drivers under ``tests/python`` load a catalog once on rank 0,
+broadcast it, and register one retained copy per rank.

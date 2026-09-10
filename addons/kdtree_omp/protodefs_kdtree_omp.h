@@ -7,6 +7,8 @@
 #ifndef _protodefs_kdtree_omp_h
 #define _protodefs_kdtree_omp_h
 
+#define KDTREEOMPMETHOD 59
+
 global int searchcalc_kdtree_omp(struct cmdline_data* cmd,
                                  struct  global_data* gd,
                                  bodyptr *btable,

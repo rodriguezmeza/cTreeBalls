@@ -62,7 +62,7 @@ def residual_percent(y, yref, eps=1e-30):
 
 def main():
     ap = argparse.ArgumentParser(description="Compare 2 curves (convergence Xi2pcf) with residuals and metrics.")
-    ap.add_argument("--file-a", required=True, help="TXT A (p.ej. DES TreeCorr)")
+    ap.add_argument("--file-a", required=True, help="TXT A (p.ej. DES dual-node)")
     ap.add_argument("--file-b", default=None, help="TXT B (p.ej. DES Corrfunc)")
     ap.add_argument("--label-a", default="cBalls_a")
     ap.add_argument("--label-b", default="cBalls_b")

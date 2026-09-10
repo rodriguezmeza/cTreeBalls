@@ -160,14 +160,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libopenmpi-dev openmpi-bin libgsl-dev zlib1g-dev
-          python -m pip install numpy Cython setuptools wheel pytest treecorr mpi4py
+          python -m pip install numpy Cython setuptools wheel pytest dual_node mpi4py
       - name: Check C/Cython, masks, threads, and rejected smoothing
         run: make -j2 test-octree-balls4-no-smoothing
       - name: Check registered method and help
         run: make test-search-methods
       - name: Check masked complex windows, Cython, and two-rank MPI
         run: make test-octree-balls4-edge test-octree-balls4-mpi
-      - name: Check scalar oracle, rotations, smoothing opt-in, and TreeCorr
+      - name: Check scalar oracle, rotations, smoothing opt-in, and DualNode
         run: python -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
       - name: Check scalar numerical contracts with two MPI ranks
         run: |
@@ -215,7 +215,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libopenmpi-dev openmpi-bin zlib1g-dev
-          python -m pip install numpy Cython setuptools wheel pytest treecorr
+          python -m pip install numpy Cython setuptools wheel pytest dual_node
       - name: Build the selected C profile
         run: make -j2 cballs cyballs-static-lib
       - name: Check windows, correction, masks, MPI, and deterministic reduction
@@ -223,11 +223,11 @@ jobs:
           python tests/make_tests/test_two_ball_edge_corrections.py \
             --cballs ./cballs --dimension "$DEFDIMENSION" \
             --mpi-command 'mpiexec --oversubscribe -n 2'
-      - name: Compare flat-sky multipoles to TreeCorr
+      - name: Compare flat-sky multipoles to DualNode
         if: matrix.dimension == 2
         run: |
           python tests/make_tests/test_two_ball_edge_corrections.py \
-            --cballs ./cballs --dimension 2 --treecorr \
+            --cballs ./cballs --dimension 2 --dual_node \
             --mpi-command 'mpiexec --oversubscribe -n 2'
       - name: Build Cython and check in-memory edge corrections
         if: matrix.dimension == 3

@@ -1,0 +1,20 @@
+# ----- shared compact native-octree 2PCF traversal -----
+
+NATIVEOCTREEPAIR = $(MDIR)/addons/native_octree_pair/
+NATIVEOCTREEPAIRTREE = $(MDIR)/addons/octree_2balls_omp/
+vpath %.c $(NATIVEOCTREEPAIR):$(NATIVEOCTREEPAIRTREE)
+INCLUDES += -I$(NATIVEOCTREEPAIR) \
+            -I$(NATIVEOCTREEPAIRTREE) \
+            -I$(MDIR)/addons/balltree_omp
+HEADERFILES += $(wildcard $(NATIVEOCTREEPAIR)/*.h) \
+               $(wildcard $(NATIVEOCTREEPAIRTREE)/*.h)
+EXTERNAL += native_octree_pair.o octree_2balls_tree.o
+
+native_octree_pair.o: \
+	$(NATIVEOCTREEPAIR)/native_octree_pair.c \
+	$(NATIVEOCTREEPAIR)/native_octree_pair.h \
+	$(NATIVEOCTREEPAIRTREE)/octree_2balls_tree.h
+
+octree_2balls_tree.o: \
+	$(NATIVEOCTREEPAIRTREE)/octree_2balls_tree.c \
+	$(NATIVEOCTREEPAIRTREE)/octree_2balls_tree.h

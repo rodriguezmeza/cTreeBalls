@@ -33,6 +33,10 @@ has_balltree_reference=false
 if grep -q -- '-DBALLTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env"; then
     has_balltree_reference=true
 fi
+has_ggg_reference=false
+if grep -q -- '-DOCTREEGGGOMP\([[:space:]]\|$\)' <<<"$build_env"; then
+    has_ggg_reference=true
+fi
 
 run_case()
 {
@@ -42,6 +46,7 @@ run_case()
     local nbody=$4
     local theta=$5
     local options=$6
+    local use_log=${7:-false}
     local output="$TMP_ROOT/$name"
 
     mkdir -p "$output"
@@ -53,7 +58,7 @@ run_case()
         rootDir="$output" \
         numberThreads="$threads" \
         usePeriodic=false \
-        useLogHist=false \
+        useLogHist="$use_log" \
         rangeN=2.0 \
         rminHist=0.005 \
         sizeHistN=4 \
@@ -66,6 +71,38 @@ run_case()
         verbose_log=0 \
         options="$options" >"$output/run.log" 2>&1 \
         || fail_with_log "$name failed" "$output/run.log"
+}
+
+reject_smooth_pivot()
+{
+    local output="$TMP_ROOT/reject-smooth-pivot"
+
+    mkdir -p "$output"
+    if "$CBALLS" \
+        search=octree-2balls-omp \
+        testmodel=simple-cubic-random \
+        nbody=32 \
+        lengthBox=2 \
+        rootDir="$output" \
+        numberThreads=1 \
+        usePeriodic=false \
+        useLogHist=false \
+        rangeN=2.0 \
+        rminHist=0.005 \
+        sizeHistN=4 \
+        mChebyshev=2 \
+        nsmooth=8 \
+        theta=1 \
+        seed=123 \
+        verbose=0 \
+        verbose_log=0 \
+        options=smooth-pivot >"$output/run.log" 2>&1; then
+        fail_with_log "octree-2balls-omp accepted options=smooth-pivot" \
+                      "$output/run.log"
+    fi
+    grep -q "does not support options=smooth-pivot" "$output/run.log" \
+        || fail_with_log "octree-2balls-omp returned the wrong smooth-pivot error" \
+                         "$output/run.log"
 }
 
 run_cross_case()
@@ -149,9 +186,112 @@ for path in files:
 PY
 }
 
+reject_smooth_pivot
+
+reject_ggg_compat_option()
+{
+    local name=$1
+    local options=$2
+    local expected=$3
+    local output="$TMP_ROOT/$name"
+
+    mkdir -p "$output"
+    if "$CBALLS" \
+        search=octree-2balls-omp \
+        testmodel=simple-cubic-random \
+        nbody=32 \
+        lengthBox=2 \
+        rootDir="$output" \
+        numberThreads=1 \
+        usePeriodic=false \
+        useLogHist=true \
+        rangeN=2.0 \
+        rminHist=0.005 \
+        sizeHistN=4 \
+        mChebyshev=2 \
+        nsmooth=8 \
+        theta=1 \
+        seed=123 \
+        verbose=0 \
+        verbose_log=0 \
+        options="$options" >"$output/run.log" 2>&1; then
+        fail_with_log "$name was accepted" "$output/run.log"
+    fi
+    grep -q "$expected" "$output/run.log" \
+        || fail_with_log "$name returned the wrong error" "$output/run.log"
+}
+
+reject_ggg_compat_option compat-reject-two-ball \
+    legacy-one-ball,no-two-balls \
+    'legacy-one-ball cannot be combined'
+reject_ggg_compat_option compat-reject-only-three \
+    legacy-one-ball,only-3pcf \
+    'does not support the only-3pcf work shortcut'
+
+if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
+    compat_raw=KKKCorrelation,compute-HistN,no-one-ball,no-smooth-pivot,no-normalize-HistZeta,out-m-HistZeta
+    run_case compat-one octree-2balls-omp 1 256 1 \
+             "$compat_raw,legacy-one-ball" true
+    run_case compat-many octree-2balls-omp "$MULTI_THREADS" 256 1 \
+             "$compat_raw,legacy-one-ball" true
+    compare_outputs "$TMP_ROOT/compat-one" \
+                    "$TMP_ROOT/compat-many" 'hist*.txt'
+    grep -q 'dispatching to the octree-GGG compatibility kernel' \
+        "$TMP_ROOT/compat-one/run.log" \
+        || fail_with_log "legacy-one-ball did not dispatch to octree-GGG" \
+                         "$TMP_ROOT/compat-one/run.log"
+    if grep -q 'compact-octree fast path' "$TMP_ROOT/compat-one/run.log"; then
+        fail_with_log "GGG compatibility used the compact tree" \
+                      "$TMP_ROOT/compat-one/run.log"
+    fi
+    if $has_ggg_reference; then
+        run_case compat-ggg-reference octree-ggg-omp 1 256 1 \
+                 "$compat_raw" true
+        compare_outputs "$TMP_ROOT/compat-ggg-reference" \
+                        "$TMP_ROOT/compat-one" 'hist*.txt'
+    fi
+
+    if grep -q -- '-DSMOOTHPIVOT\([[:space:]]\|$\)' <<<"$build_env"; then
+        compat_smooth=KKKCorrelation,compute-HistN,no-normalize-HistZeta,out-m-HistZeta
+        run_case compat-smooth-one octree-2balls-omp 1 256 1 \
+                 "$compat_smooth,legacy-one-ball" true
+        run_case compat-smooth-many octree-2balls-omp "$MULTI_THREADS" \
+                 256 1 "$compat_smooth,legacy-one-ball" true
+        compare_outputs "$TMP_ROOT/compat-smooth-one" \
+                        "$TMP_ROOT/compat-smooth-many" 'hist*.txt'
+        grep -q 'with option smooth-pivot' \
+            "$TMP_ROOT/compat-smooth-one/run.log" \
+            || fail_with_log "GGG compatibility did not enable default smoothing" \
+                             "$TMP_ROOT/compat-smooth-one/run.log"
+        if $has_ggg_reference; then
+            run_case compat-smooth-reference octree-ggg-omp 1 256 1 \
+                     "$compat_smooth" true
+            compare_outputs "$TMP_ROOT/compat-smooth-reference" \
+                            "$TMP_ROOT/compat-smooth-one" 'hist*.txt'
+        fi
+    fi
+fi
+
 if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
-    exact_2pcf=compute-HistN,only-2pcf,no-two-balls
+    compat_pair=compute-HistN,only-2pcf,no-one-ball,no-smooth-pivot
+    run_case compat-pair-one octree-2balls-omp 1 256 1 \
+             "$compat_pair,legacy-one-ball" true
+    run_case compat-pair-many octree-2balls-omp "$MULTI_THREADS" 256 1 \
+             "$compat_pair,legacy-one-ball" true
+    compare_outputs "$TMP_ROOT/compat-pair-one" \
+                    "$TMP_ROOT/compat-pair-many" 'hist*.txt'
+    if $has_ggg_reference; then
+        run_case compat-pair-reference octree-ggg-omp 1 256 1 \
+                 "$compat_pair" true
+        compare_outputs "$TMP_ROOT/compat-pair-reference" \
+                        "$TMP_ROOT/compat-pair-one" 'hist*.txt'
+    fi
+fi
+
+if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
+    exact_2pcf=compute-HistN,only-2pcf,no-two-balls,no-smooth-pivot
     aggregate_2pcf=compute-HistN,only-2pcf
+    slop_2pcf=compute-HistN,only-2pcf,dual-node-bin-slop
 
     run_case pair-exact-one octree-2balls-omp 1 512 1 "$exact_2pcf"
     run_case pair-exact-many octree-2balls-omp "$MULTI_THREADS" 512 1 \
@@ -185,7 +325,7 @@ for path, rows in zip(map(pathlib.Path, sys.argv[1:]), (left, right)):
         encoding="ascii",
     )
 PY
-        cross_exact=pos-and-convergence-weight,weights-norm,compute-HistN,only-2pcf,no-two-balls
+        cross_exact=pos-and-convergence-weight,weights-norm,compute-HistN,only-2pcf,no-two-balls,no-smooth-pivot
         run_cross_case cross-reference balltree-2balls-omp 1 "$cross_exact"
         run_cross_case cross-exact-one octree-2balls-omp 1 "$cross_exact"
         run_cross_case cross-exact-many octree-2balls-omp \
@@ -211,12 +351,18 @@ PY
     [ "${pair_cells:-0}" -gt 0 ] \
         || fail_with_log "the two-ball scan did not accept a node pair" \
                          "$TMP_ROOT/pair-aggregate-many/run.log"
+
+    run_case pair-slop-one octree-2balls-omp 1 512 1 "$slop_2pcf"
+    run_case pair-slop-many octree-2balls-omp "$MULTI_THREADS" 512 1 \
+             "$slop_2pcf"
+    compare_outputs "$TMP_ROOT/pair-slop-one" \
+                    "$TMP_ROOT/pair-slop-many" 'hist*.txt'
 else
     echo "SKIP: octree-2balls-omp 2PCF is disabled (TWOPCFON=0)"
 fi
 
 if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
-    exact_3pcf=KKKCorrelation,only-3pcf,no-two-balls,no-normalize-HistZeta,out-m-HistZeta
+    exact_3pcf=KKKCorrelation,only-3pcf,no-two-balls,no-smooth-pivot,no-normalize-HistZeta,out-m-HistZeta
     aggregate_3pcf=KKKCorrelation,only-3pcf,no-normalize-HistZeta,out-m-HistZeta
     normalized_3pcf=KKKCorrelation,only-3pcf,no-two-balls,out-m-HistZeta
 
@@ -228,7 +374,7 @@ if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
         || fail_with_log "the default 3PCF did not use LogMultipole" \
                          "$TMP_ROOT/triple-exact-one/run.log"
     run_case triple-direct octree-2balls-omp 1 24 1 \
-             "$exact_3pcf,treecorr-direct-triples"
+             "$exact_3pcf,dual-node-direct-triples"
     grep -q -- 'with direct triple-node 3PCF' \
         "$TMP_ROOT/triple-direct/run.log" \
         || fail_with_log "the direct validation traversal was not selected" \
@@ -244,7 +390,7 @@ if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
     run_case triple-normalized-log octree-2balls-omp 1 24 1 \
              "$normalized_3pcf"
     run_case triple-normalized-direct octree-2balls-omp 1 24 1 \
-             "$normalized_3pcf,treecorr-direct-triples"
+             "$normalized_3pcf,dual-node-direct-triples"
     compare_numeric_outputs "$TMP_ROOT/triple-normalized-log" \
                             "$TMP_ROOT/triple-normalized-direct" \
                             'histZetaM_*.txt'
@@ -263,7 +409,7 @@ if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
                  "$exact_2pcf"
         run_case combined-log octree-2balls-omp 1 24 1 "$combined_exact"
         run_case combined-direct octree-2balls-omp 1 24 1 \
-                 "$combined_exact,treecorr-direct-triples"
+                 "$combined_exact,dual-node-direct-triples"
         for combined in combined-log combined-direct; do
             compare_outputs "$TMP_ROOT/combined-pair-reference" \
                             "$TMP_ROOT/$combined" 'histNN.txt'
@@ -298,4 +444,4 @@ if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env" \
     "${PYTHON:-python3}" ./make_tests/test_octree_2balls_mask.py --cballs "$CBALLS"
 fi
 
-echo "PASS: octree-2balls-omp exactness, aggregation, and OpenMP determinism"
+echo "PASS: octree-2balls-omp exactness, GGG compatibility, aggregation, and OpenMP determinism"

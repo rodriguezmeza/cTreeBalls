@@ -29,7 +29,10 @@ On hosts requiring explicit MPI placement, add `--map-by slot --bind-to none`.
 The scalar path takes `x y z delta weight` and computes an auto-correlation.
 ASCII input uses `multi-columns-ascii`, `columns=1,2,3,4,5`, and
 `options=pos-and-convergence-weight`. FITS input, per-pixel masks, and
-pivot-neighbor LOS exclusions follow the OpenMP sibling's conventions.
+LOS exclusions follow the OpenMP sibling's conventions. For Lyman-alpha
+multipoles, `exclude-all-same-los` (alias `lya-distinct-forests`) requires the
+pivot and both neighbors to have three distinct forest IDs. Raw shell powers
+and the exact same-forest correction are reduced before normalization.
 The exact physical cutoff remains `rangeN`, including with `Rcut/theta`.
 
 By default only the 3PCF is computed. Select `only-2pcf-3d`,

@@ -1112,7 +1112,9 @@ local int cb3d_cfitsio_exclude_same_los_option(struct cmdline_data* cmd)
 {
     return scanopt(cmd->options, "exclude-same-los")
         || scanopt(cmd->options, "exclude-los")
-        || scanopt(cmd->options, "exclude-pivot-los");
+        || scanopt(cmd->options, "exclude-pivot-los")
+        || scanopt(cmd->options, "exclude-all-same-los")
+        || scanopt(cmd->options, "lya-distinct-forests");
 }
 #endif
 

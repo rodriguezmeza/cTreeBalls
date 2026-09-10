@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT), str(ROOT / "python")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests" / "python")]
 import lya_corr_all_engines as driver
 
 
@@ -105,16 +105,38 @@ def test_catalog_validation(mutation):
 
 def test_engine_contracts():
     available = list(driver.LYA_ENGINES)
-    assert len(available) == 14
-    assert len(driver.resolve_engines(["all"], available, "both")) == 14
-    assert len(driver.resolve_engines(["all-omp"], available, "2pcf")) == 3
-    assert len(driver.resolve_engines(["all-mpi"], available, "3pcf")) == 2
-    with pytest.raises(ValueError, match="same-quasar"):
-        driver.resolve_engines(["octree-3pcf-3d-omp"], available)
+    assert len(available) == 19
+    assert len(driver.resolve_engines(["all"], available, "both")) == 19
+    assert len(driver.resolve_engines(["all-omp"], available, "2pcf")) == 4
+    assert len(driver.resolve_engines(["all-mpi"], available, "3pcf")) == 4
+    assert driver.resolve_engines(["all-multipole"], available, "3pcf") == (
+        "octree-3pcf-3d-omp", "octree-3pcf-3d-mpi",
+    )
+    assert driver.resolve_engines(["all-tree"], available, "both") == (
+        "lya-1d-tree-2pcf-omp", "lya-1d-tree-3pcf-omp",
+        "lya-1d-tree-2pcf-mpi", "lya-1d-tree-3pcf-mpi",
+        "lya-1d-tree-same-los-2pcf-omp",
+    )
+    assert driver.resolve_engines(
+        ["octree-3pcf-3d-omp", "octree-3pcf-3d-mpi"], available, "3pcf"
+    ) == ("octree-3pcf-3d-omp", "octree-3pcf-3d-mpi")
     with pytest.raises(ValueError, match="--statistics"):
         driver.resolve_engines(["lya-2pcf-3pcf-omp"], available)
-    with pytest.raises(ValueError, match="not compiled"):
+    with pytest.raises(ValueError, match="unavailable"):
         driver.resolve_engines(["lya-2pcf-omp"], [])
+    for name in driver.INCOMPATIBLE_ENGINE_REASONS:
+        with pytest.raises(ValueError, match="shear_corr_all_engines.py"):
+            driver.resolve_engines([name], [name])
+
+
+@pytest.mark.parametrize("engine", [
+    "lya-2pcf-omp", "lya-1d-tree-3pcf-mpi", "octree-3pcf-3d-omp",
+])
+def test_native_forest_parameters_disable_shared_smooth_default(engine, tmp_path):
+    config = driver.RunConfig((engine,), tmp_path)
+    options = driver.engine_parameters(config, engine, tmp_path / engine)["options"].split(",")
+    assert options.count("no-smooth-pivot") == 1
+    assert "smooth-pivot" not in options
 
 
 def test_memory_budget_guard(tmp_path):
@@ -141,6 +163,23 @@ def test_projection_sums_raw_weights(tmp_path):
     assert np.isnan(projected[1, 1])
 
 
+def test_lya_plots_include_flattened_3pcf_view(tmp_path):
+    pytest.importorskip("matplotlib")
+    table = np.array([
+        [0, 0, -0.5, -0.5, 0.0, 2.0, 1.0],
+        [0, 1, -0.5, 0.5, 0.0, -1.0, 1.0],
+        [1, 0, 0.5, -0.5, 0.0, 0.5, 1.0],
+        [1, 1, 0.5, 0.5, 0.0, 1.0, 1.0],
+    ])
+    config = driver.RunConfig(
+        ("lya-1d-3pcf-omp",), tmp_path, r3_bins=1,
+        plots=True, flatten_plots=True,
+    )
+    results = {"lya-1d-3pcf-omp": {"products": {"1d_3pcf": table}}}
+    paths = {Path(path).name for path in driver.make_plots(results, config)}
+    assert paths == {"1d_3pcf.png", "1d_3pcf_flattened.png"}
+
+
 def _cyballs():
     cyballs = pytest.importorskip("cyballs")
     if not hasattr(cyballs.cballs, "set_forest_catalog"):
@@ -162,13 +201,72 @@ def test_memory_api_rejects_bad_ids_and_recovers():
         balls.clear_catalogs()
 
 
+def test_octree_multipoles_use_memory_forest_ids(tmp_path):
+    cyballs = _cyballs()
+    if cyballs.search_method_id("octree-3pcf-3d-omp") < 0:
+        pytest.skip("octree-3pcf-3d-omp not compiled")
+    import test_octree_3pcf_3d_omp as oracle
+
+    values = np.asarray(oracle.CATALOG, dtype=np.float64)
+    positions = values[:, :3] + np.array([10.0, 0.0, 0.0])
+    forest_ids = np.array([10, 10, 20, 20, 30, 30], dtype=np.int64)
+    catalog = driver.ForestCatalog(
+        positions, values[:, 3], values[:, 4], forest_ids
+    )
+    cfg = driver.RunConfig(
+        ("octree-3pcf-3d-omp",), tmp_path / "multipoles",
+        threads=2, plots=False, r3_max=oracle.RMAX, r3_bins=oracle.NBINS,
+        multipole_rmin=oracle.RMIN, multipole_lmax=oracle.LMAX,
+    )
+    driver.run_engine_suite(catalog, cfg)
+
+    rows = oracle.read_rows(
+        cfg.output_dir / "octree-3pcf-3d-omp" / "histZetaM_3d.txt"
+    )
+    _, _, numerator, denominator = oracle.direct_oracle(
+        forest_ids, all_distinct=True
+    )
+    assert len(rows) == (oracle.LMAX + 1) * oracle.NBINS * oracle.NBINS
+    for row in rows:
+        ell, b1, b2 = int(row[0]), int(row[1]) - 1, int(row[2]) - 1
+        np.testing.assert_allclose(row[6], numerator[ell][b1][b2],
+                                   rtol=3e-6, atol=3e-6)
+        np.testing.assert_allclose(row[7], denominator[ell][b1][b2],
+                                   rtol=3e-6, atol=3e-6)
+
+
+def test_same_los_tree_driver_contract(tmp_path):
+    cyballs = _cyballs()
+    method = "lya-1d-tree-same-los-2pcf-omp"
+    if cyballs.search_method_id(method) < 0:
+        pytest.skip(f"{method} not compiled")
+    import test_lya_forest_1d_omp as radial
+
+    points = radial.WIDE_ANGLE
+    catalog = driver.ForestCatalog(
+        points[:, :3], points[:, 3], points[:, 4], points[:, 5].astype(np.int64)
+    )
+    cfg = driver.RunConfig(
+        (method,), tmp_path / "same-los", threads=2, plots=False,
+        rp_max=radial.RP_MAX, rp_bins=radial.RP_BINS,
+    )
+    result = driver.run_engine_suite(catalog, cfg)
+    table = result[method]["products"]["1d_same_los_2pcf"]
+    actual = {int(row[0]): (row[3], row[4])
+              for row in table if row[4] != 0}
+    radial.assert_histogram_close(
+        actual, radial.oracle_same_los_2pcf(), "same-LOS driver"
+    )
+
+
 @pytest.mark.parametrize("radial", [False, True])
 def test_production_memory_oracles(tmp_path, radial):
     cyballs = _cyballs()
     import test_lya_forest_omp as three
     import test_lya_forest_1d_omp as one
     engines = tuple(n for n, s in driver.LYA_ENGINES.items()
-                    if not s.mpi and s.radial == radial and cyballs.search_method_id(n) >= 0)
+                    if (not s.mpi and s.family == "lya"
+                        and s.radial == radial and cyballs.search_method_id(n) >= 0))
     if not engines:
         pytest.skip("OpenMP forest sibling not compiled")
     points = one.WIDE_ANGLE if radial else three.POINTS
@@ -201,13 +299,15 @@ def test_production_memory_oracles(tmp_path, radial):
                                              three.oracle_3pcf(), name)
     summary = json.loads((cfg.output_dir / "summary.json").read_text())
     assert summary["catalog_registrations_per_rank"] == 1
+    assert all(row["smooth_pivot"] == "unsupported"
+               for row in summary["engines"].values())
     assert all(m["max_abs_correlation"] < 1e-12 for m in summary["comparisons"].values())
     with pytest.raises(RuntimeError, match="results already exist"):
         driver.run_engine_suite(cat, cfg)
 
 
 def test_cli_help():
-    p = subprocess.run([sys.executable, str(ROOT/"python/lya_corr_all_engines.py"), "--help"],
+    p = subprocess.run([sys.executable, str(ROOT/"tests/python/lya_corr_all_engines.py"), "--help"],
                        capture_output=True, text=True, timeout=30)
     assert p.returncode == 0, p.stderr
     assert "--mpi-ranks" in p.stdout and "--fits" in p.stdout
@@ -218,8 +318,8 @@ def test_cli_help():
 def test_mpi_multi_engine_driver(tmp_path):
     output = tmp_path / "mpi-results"
     command = shlex.split(os.environ["LYA_DRIVER_MPI_COMMAND"]) + [
-        sys.executable, str(ROOT/"python/lya_corr_all_engines.py"),
-        "--engine", "all", "--statistics", "both", "--threads", "2",
+        sys.executable, str(ROOT/"tests/python/lya_corr_all_engines.py"),
+        "--engine", "all-omp", "all-mpi", "--statistics", "both", "--threads", "2",
         "--synthetic-forests", "8", "--synthetic-pixels", "36", "--rp-max", "30",
         "--rt-max", "80", "--no-plots", "--output", str(output)]
     log_path = tmp_path / "mpi.log"
@@ -234,7 +334,7 @@ def test_mpi_multi_engine_driver(tmp_path):
             pytest.fail("MPI driver timeout: " + log_path.read_text()[-4000:])
     assert status == 0, log_path.read_text()[-4000:]
     summary = json.loads((output/"summary.json").read_text())
-    assert sum(name.endswith("-mpi") for name in summary["engines"]) == 7
+    assert sum(name.endswith("-mpi") for name in summary["engines"]) == 8
     assert summary["catalog"]["pixels"] == 288
     assert summary["comparisons"]
     assert all(m["max_abs_correlation"] < 2e-12

@@ -149,6 +149,41 @@ def get_pkg_config(package, flag):
         return ""
 #E
 
+
+def mpi_wrapper_flags(wrapper):
+    """Return compile and link flags advertised by an MPI C wrapper."""
+    command = shlex.split(wrapper)
+    if not command:
+        raise RuntimeError("MPI support is enabled but MPICC is empty")
+
+    def query(arguments):
+        try:
+            output = subprocess.check_output(
+                command + arguments,
+                text=True,
+                stderr=subprocess.STDOUT,
+            ).strip()
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            return None
+        return shlex.split(output)
+
+    compile_flags = query(["--showme:compile"])
+    link_flags = query(["--showme:link"])
+    if compile_flags is not None and link_flags is not None:
+        return compile_flags, link_flags
+
+    # MPICH-family wrappers commonly expose one combined command with -show.
+    combined = query(["-show"])
+    if combined:
+        if not combined[0].startswith("-"):
+            combined = combined[1:]
+        return combined, combined
+
+    raise RuntimeError(
+        "MPI support is enabled, but could not query compiler/linker flags "
+        f"from MPICC={wrapper!r}"
+    )
+
 # generator function
 def indent_block(text, spaces=8):
     prefix = " " * spaces
@@ -269,6 +304,13 @@ CFITSIOON = "1" if cppflag_has_macro(make_cppflags, "CFITSIO") else "0"
 CFITSIOLIBON = "1" if cppflag_has_macro(make_cppflags, "CFITSIOLIB") else "0"
 USEGSL = "1" if cppflag_has_macro(make_cppflags, "USEGSL") else "0"
 BALLTREEMPION = "1" if cppflag_has_macro(make_cppflags, "BALLTREEMPI") else "0"
+KDTREEMPION = "1" if cppflag_has_macro(make_cppflags, "KDTREEMPI") else "0"
+KDTREE2BALLSOMPON = (
+    "1" if cppflag_has_macro(make_cppflags, "KDTREE2BALLSOMP") else "0"
+)
+KDTREE2BALLSMPION = (
+    "1" if cppflag_has_macro(make_cppflags, "KDTREE2BALLSMPI") else "0"
+)
 BALLTREE2BALLSMPION = (
     "1" if cppflag_has_macro(make_cppflags, "BALLTREE2BALLSMPI") else "0"
 )
@@ -291,6 +333,25 @@ LYAFORESTMPION = "1" if cppflag_has_macro(make_cppflags, "LYAFORESTMPI") else "0
 OCTREE3PCF3DOMPON = "1" if cppflag_has_macro(make_cppflags, "OCTREE3PCF3DOMP") else "0"
 OCTREE3PCF3DMPION = "1" if cppflag_has_macro(make_cppflags, "OCTREE3PCF3DMPI") else "0"
 OCTREESHEAROMPON = "1" if cppflag_has_macro(make_cppflags, "OCTREESHEAROMP") else "0"
+OCTREESHEARSPHEREOMPON = (
+    "1" if cppflag_has_macro(make_cppflags, "OCTREESHEARSPHEREOMP") else "0"
+)
+OCTREESHEARSPHERE2BALLSOMPON = (
+    "1"
+    if cppflag_has_macro(make_cppflags, "OCTREESHEARSPHERE2BALLSOMP")
+    else "0"
+)
+KDTREESHEARSPHERE2BALLSOMPON = (
+    "1"
+    if cppflag_has_macro(make_cppflags, "KDTREESHEARSPHERE2BALLSOMP")
+    else "0"
+)
+BALLTREESHEARSPHERE2BALLSOMPON = (
+    "1"
+    if cppflag_has_macro(make_cppflags, "BALLTREESHEARSPHERE2BALLSOMP")
+    else "0"
+)
+MPI_ENABLED = cppflag_has_macro(make_cppflags, "CBALLS_MPI_ENABLED")
 
 GSLINTERNAL = make_env.get("__CBALLS_GSLINTERNAL__", "1")
 OPENMPMACHINE = make_env.get("__CBALLS_OPENMPMACHINE__", "0")
@@ -323,6 +384,8 @@ if PXDON == "1":
 # additional
 openmp_compile_args = []
 openmp_link_args = []
+mpi_compile_args = []
+mpi_link_args = []
 macos_compile_args = []
 macos_link_args = []
 
@@ -334,6 +397,15 @@ if sys.platform == "darwin" and macos_deployment_target:
 if OPENMPMACHINE == "1":
     openmp_compile_args += ["-fopenmp"]
     openmp_link_args += ["-fopenmp", "-lgomp"]
+
+if MPI_ENABLED:
+    mpi_wrapper = (
+        os.environ.get("MPICC")
+        or make_env.get("__CBALLS_MPICC__")
+        or make_env.get("__CBALLS_CC__")
+        or "mpicc"
+    )
+    mpi_compile_args, mpi_link_args = mpi_wrapper_flags(mpi_wrapper)
 
 #B
 if GSLINTERNAL == "1":
@@ -553,9 +625,9 @@ cyballs_ext = Extension(
         *gsl_library_dirs,
         *cfitsio_library_dirs,
     ],
-    extra_link_args=(openmp_link_args + macos_link_args
+    extra_link_args=(openmp_link_args + mpi_link_args + macos_link_args
                      + ['-lz'] + cfitsio_rpath_args),
-    extra_compile_args=(openmp_compile_args + macos_compile_args
+    extra_compile_args=(openmp_compile_args + mpi_compile_args + macos_compile_args
                         + make_cppflags),
 )
 
@@ -579,6 +651,9 @@ class build_ext(cython_build_ext):
                 "GSLINTERNAL": GSLINTERNAL,
                 "OPENMPMACHINE": OPENMPMACHINE,
                 "SINGLEPON": SINGLEPON,
+                "KDTREEMPION": KDTREEMPION,
+                "KDTREE2BALLSOMPON": KDTREE2BALLSOMPON,
+                "KDTREE2BALLSMPION": KDTREE2BALLSMPION,
                 "BALLTREE2BALLSMPION": BALLTREE2BALLSMPION,
                 "BALLTREE2BALLSOMP3PCFON": BALLTREE2BALLSOMP3PCFON,
                 "BALLTREE2BALLSMPI3PCFON": BALLTREE2BALLSMPI3PCFON,
@@ -592,6 +667,13 @@ class build_ext(cython_build_ext):
                 "OCTREE3PCF3DOMPON": OCTREE3PCF3DOMPON,
                 "OCTREE3PCF3DMPION": OCTREE3PCF3DMPION,
                 "OCTREESHEAROMPON": OCTREESHEAROMPON,
+                "OCTREESHEARSPHEREOMPON": OCTREESHEARSPHEREOMPON,
+                "OCTREESHEARSPHERE2BALLSOMPON":
+                    OCTREESHEARSPHERE2BALLSOMPON,
+                "KDTREESHEARSPHERE2BALLSOMPON":
+                    KDTREESHEARSPHERE2BALLSOMPON,
+                "BALLTREESHEARSPHERE2BALLSOMPON":
+                    BALLTREESHEARSPHERE2BALLSOMPON,
             }
             make_command = ["make"] + [
                 f"{key}={value}" for key, value in make_profile.items()

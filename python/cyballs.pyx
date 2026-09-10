@@ -245,11 +245,8 @@ cdef class cballs:
         safe_copy_cstr(self.fc.filename, 30, b"NOFILE", "fc.filename")
         self.ncp = set()
         if default: self.set_default()
-        try:
-          import importlib.resources
-          resource_path = abspath(importlib.resources.files('cyballs'))
-        except ImportError as ie:
-          resource_path = dirname(abspath(__file__))
+        # cyballs is a top-level extension module, not a Python package.
+        resource_path = dirname(abspath(__file__))
         path_to_this_as_bytes = resource_path.encode()
         safe_copy_cstr(self.path_to_this, sizeof(self.path_to_this),
                path_to_this_as_bytes, "path_to_this")
@@ -704,6 +701,7 @@ cdef class cballs:
 
         """
         cdef ErrorMsg errmsg
+        cdef bint resume
 
         # Append to the list level all the modules necessary to compute.
         level = self._check_task_dependency(level)
@@ -717,24 +715,32 @@ cdef class cballs:
 
         self._activate_runtime()
 
+        # A later level may continue a live, successfully initialized run.
+        # This is useful for separating catalog/startup work from MainLoop
+        # timing without copying the in-memory catalog a second time.
+        resume = (self.allocated and self.computed
+                  and self.ncp.issubset(level))
+
         # Check if already allocated to prevent memory leaks
-        if self.allocated:
+        if self.allocated and not resume:
             self.struct_cleanup()
 
-        # Otherwise, proceed with the normal computation.
+        # Otherwise, proceed with the normal computation. A resumed run keeps
+        # its parsed file_content, C-owned catalogs, and startup allocations.
         self.computed = False
 
-        # Equivalent of writing a parameter file
-        self._fillparfile()
+        if not resume:
+            # Equivalent of writing a parameter file
+            self._fillparfile()
 
-        # self.ncp will contain the list of computed modules (under the form of
-        # a set, instead of a python list)
-        self.ncp=set()
+            # self.ncp will contain the list of computed modules (under the form of
+            # a set, instead of a python list)
+            self.ncp=set()
 
 #B correction
-        # Up until the empty set, all modules are allocated
-        # (And then we successively keep track of the ones we allocate additionally)
-        self.allocated = True
+            # Up until the empty set, all modules are allocated
+            # (And then we successively keep track of the ones we allocate additionally)
+            self.allocated = True
 
         try:
             # --------------------------------------------------------------------
@@ -744,7 +750,7 @@ cdef class cballs:
             # The input module should raise a CosmoSevereError, because
             # non-understood parameters asked to the wrapper is a problematic
             # situation.
-            if "input" in level:
+            if "input" in level and "input" not in self.ncp:
                 if input_read_from_file_guarded(&self.cmd, &self.gd, &self.fc, errmsg) == FAILURE:
                     raise CosmoSevereError(errmsg)
                 self.ncp.add("input")
@@ -768,25 +774,30 @@ cdef class cballs:
             # The following list of computation is straightforward. If the "_init"
             # methods fail, call `struct_cleanup` and raise a CosmoComputationError
             # with the error message from the faulty module of CLASS.
-            if "StartRun_Common" in level:
+            if "StartRun_Common" in level and "StartRun_Common" not in self.ncp:
                 if cballs_start_run_common_guarded(&(self.cmd), &(self.gd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("StartRun_Common")
 
             # keep the rest of the C stages here too
 
-            if "PrintParameterFile" in level:
+            if "PrintParameterFile" in level and "PrintParameterFile" not in self.ncp:
                 if cballs_print_parameter_file_guarded(&(self.cmd), &(self.gd), "cyballs_param.txt") == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("PrintParameterFile")
 
-            if "SetNumberThreads" in level:
+            if "SetNumberThreads" in level and "SetNumberThreads" not in self.ncp:
                 if cballs_set_number_threads_guarded(&(self.cmd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("SetNumberThreads")
                 self.nthreads=self.getNThreads()
 
-            if "MainLoop" in level:
+            # Initial is retained as an explicit dependency marker even though
+            # cballs_start_run_common_guarded() performs its C-side setup.
+            if "Initial" in level and "Initial" not in self.ncp:
+                self.ncp.add("Initial")
+
+            if "MainLoop" in level and "MainLoop" not in self.ncp:
                 start_wall_time_p = time.process_time()
                 if cballs_main_loop_guarded(&(self.cmd), &(self.gd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
@@ -794,7 +805,7 @@ cdef class cballs:
                 end_wall_time_p = time.process_time()
                 self.cputime = (end_wall_time_p - start_wall_time_p)/self.nthreads
 
-            if "EndRun" in level:
+            if "EndRun" in level and "EndRun" not in self.ncp:
                 if cballs_end_run_guarded(&(self.cmd), &(self.gd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("EndRun")
@@ -1010,15 +1021,24 @@ cdef class cballs:
             'C histogram arrays are not allocated; call Run(level=["MainLoop"]) before histogram getters.'
             )
 
-    cdef void _require_shear_results(self) except *:
+    cdef void _require_shear_2pcf_results(self) except *:
         self._require_live_histograms()
 
         if (self.gd.histShearXiPlusRe == NULL or
                 self.gd.histShearXiPlusIm == NULL or
                 self.gd.histShearXiMinusRe == NULL or
                 self.gd.histShearXiMinusIm == NULL or
-                self.gd.histShearXiWeight == NULL or
-                self.gd.histShearGammaNumeratorRe == NULL or
+                self.gd.histShearXiWeight == NULL):
+            raise CosmoSevereError(
+                'Shear 2PCF results are unavailable; remove options="only-3pcf" and run octree-shear-omp first.'
+            )
+        if self.cmd.sizeHistN <= 0:
+            raise CosmoSevereError('Shear 2PCF result dimensions are inconsistent.')
+
+    cdef void _require_shear_results(self) except *:
+        self._require_live_histograms()
+
+        if (self.gd.histShearGammaNumeratorRe == NULL or
                 self.gd.histShearGammaNumeratorIm == NULL or
                 self.gd.histShearGammaMultipoleRe == NULL or
                 self.gd.histShearGammaMultipoleIm == NULL or
@@ -1027,7 +1047,7 @@ cdef class cballs:
                 self.gd.histShearGammaRe == NULL or
                 self.gd.histShearGammaIm == NULL):
             raise CosmoSevereError(
-                'Shear results are unavailable; run searchMethod="octree-shear-omp" first.'
+                'Shear 3PCF results are unavailable; remove options="only-2pcf" and run octree-shear-omp first.'
             )
 
         if (self.cmd.sizeHistN <= 0 or self.gd.shearMultipoleMax < 0 or
@@ -1159,7 +1179,7 @@ cdef class cballs:
         cdef np.ndarray[np.float64_t, ndim=1] real_part
         cdef np.ndarray[np.float64_t, ndim=1] imag_part
 
-        self._require_shear_results()
+        self._require_shear_2pcf_results()
         bins = self.cmd.sizeHistN
         real_part = np.empty(bins, dtype=np.float64)
         imag_part = np.empty(bins, dtype=np.float64)
@@ -1175,7 +1195,7 @@ cdef class cballs:
         cdef np.ndarray[np.float64_t, ndim=1] real_part
         cdef np.ndarray[np.float64_t, ndim=1] imag_part
 
-        self._require_shear_results()
+        self._require_shear_2pcf_results()
         bins = self.cmd.sizeHistN
         real_part = np.empty(bins, dtype=np.float64)
         imag_part = np.empty(bins, dtype=np.float64)
@@ -1190,7 +1210,7 @@ cdef class cballs:
         cdef int index
         cdef np.ndarray[np.float64_t, ndim=1] result
 
-        self._require_shear_results()
+        self._require_shear_2pcf_results()
         bins = self.cmd.sizeHistN
         result = np.empty(bins, dtype=np.float64)
         for index in range(bins):

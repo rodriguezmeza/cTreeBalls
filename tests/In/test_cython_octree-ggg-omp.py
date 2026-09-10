@@ -22,7 +22,7 @@ import numpy as np
 from cyballs import cballs
 #from cballys import *
 Balls = cballs()
-Balls.set({'searchMethod':'octree-ggg-omp'})
+Balls.set({'searchMethod':'octree-2balls-omp'})
 Balls.set({'infile':'./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin'})
 Balls.set({'infileformat':'binary'})
 #
@@ -33,7 +33,7 @@ Balls.set({'rangeN':0.0633205,'rminHist':0.00313811,'sizeHistN':20,'numberThread
 #
 Balls.set({'verbose':2,'verbose_log':2})
 Balls.set({'rootDir':'Output'})
-Balls.set({'options':'compute-HistN,and-CF,out-m-HistZeta'})
+Balls.set({'options':'compute-HistN,and-CF,out-m-HistZeta,legacy-one-ball'})
 #
 
 print('cBalls version = ', Balls.getVersion())

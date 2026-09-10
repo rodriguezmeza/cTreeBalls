@@ -4,6 +4,8 @@
 #ifndef _protodefs_octree_ggg_omp_h
 #define _protodefs_octree_ggg_omp_h
 
+#define OCTREEGGGOMPMETHOD 66
+
 global int searchcalc_octree_ggg_omp(struct cmdline_data* cmd,
                                      struct  global_data* gd,
                                      bodyptr *btable, INTEGER *nbody,

@@ -23,8 +23,8 @@ static real octree_2balls_field(bodyptr p)
 #endif
 }
 
-static real octree_2balls_distance(const cballs_storage_real *a,
-                                   const cballs_storage_real *b)
+static real octree_2balls_distance_squared(const cballs_storage_real *a,
+                                           const cballs_storage_real *b)
 {
     real distance2 = 0.0;
     int k;
@@ -33,7 +33,7 @@ static real octree_2balls_distance(const cballs_storage_real *a,
         const real difference = (real)a[k] - (real)b[k];
         distance2 += difference * difference;
     }
-    return rsqrt(distance2);
+    return distance2;
 }
 
 static INTEGER octree_2balls_native_count(struct cmdline_data *cmd,
@@ -72,10 +72,9 @@ static void octree_2balls_finish_parent(struct cmdline_data *cmd,
     const fcfc_ballnode *right = &tree->nodes[right_index];
     const INTEGER left_count = left->last - left->first + 1;
     const INTEGER right_count = right->last - right->first + 1;
-    const real count = (real)left_count + (real)right_count;
     const real mass = left->weight + right->weight;
-    real radius = 0.0;
-    real aggregate_radius = 0.0;
+    real radius_squared = 0.0;
+    INTEGER point;
     int k;
 
     parent->first = left->first;
@@ -83,28 +82,26 @@ static void octree_2balls_finish_parent(struct cmdline_data *cmd,
     parent->left = left_index;
     parent->right = right_index;
     DO_COORD(k) {
-        parent->center[k] = (cballs_storage_real)
-            (((real)left->center[k] * (real)left_count
-              + (real)right->center[k] * (real)right_count) / count);
         parent->cmpos[k] = mass > 0.0
             ? (cballs_storage_real)
                 (((real)left->cmpos[k] * left->weight
                   + (real)right->cmpos[k] * right->weight) / mass)
-            : parent->center[k];
+            : (cballs_storage_real)
+                (((real)left->cmpos[k] * (real)left_count
+                  + (real)right->cmpos[k] * (real)right_count)
+                 / ((real)left_count + (real)right_count));
+        parent->center[k] = parent->cmpos[k];
     }
 
-    radius = MAX(octree_2balls_distance(parent->center, left->center)
-                     + (real)left->radius,
-                 octree_2balls_distance(parent->center, right->center)
-                     + (real)right->radius);
-    aggregate_radius = MAX(
-        octree_2balls_distance(parent->cmpos, left->center)
-            + (real)left->radius,
-        octree_2balls_distance(parent->cmpos, right->center)
-            + (real)right->radius);
-    parent->radius = cballs_store_search_bound(radius);
+    /* Match dual-node's cell geometry: aggregate at the centroid and measure
+     * the exact maximum point displacement from the stored centroid. */
+    for (point = parent->first; point <= parent->last; point++)
+        radius_squared = MAX(radius_squared,
+            octree_2balls_distance_squared(
+                parent->center, Pos(tree->bptr[point])));
+    parent->radius = cballs_store_search_bound(rsqrt(radius_squared));
     parent->aggregate_radius = cmd->theta > 0.0
-        ? cballs_store_search_bound(aggregate_radius / cmd->theta)
+        ? cballs_store_search_bound(rsqrt(radius_squared) / cmd->theta)
         : cballs_store_upper_bound(MAX_REAL_NUMBER);
     parent->weight = mass;
     parent->kappa_sum = left->kappa_sum + right->kappa_sum;
@@ -117,17 +114,55 @@ static void octree_2balls_finish_parent(struct cmdline_data *cmd,
         left->weighted_kappa_sum + right->weighted_kappa_sum;
     parent->weighted_kappa_sq_sum =
         left->weighted_kappa_sq_sum + right->weighted_kappa_sq_sum;
-    parent->kappa = parent->kappa_sum / count;
+    parent->kappa = parent->kappa_sum
+        / ((real)left_count + (real)right_count);
 }
 
 static int octree_2balls_build_native(struct cmdline_data *,
-                                      fcfc_balltreeptr, nodeptr, int,
+                                      fcfc_balltreeptr, nodeptr, int, int,
                                       INTEGER *);
+
+static void octree_2balls_sort_children(octree_2balls_child *children,
+                                        int child_count)
+{
+    real minimum[NDIM];
+    real maximum[NDIM];
+    real largest_span = -1.0;
+    int axis = 0;
+    int i;
+    int k;
+
+    DO_COORD(k) {
+        minimum[k] = maximum[k] = (real)Pos(children[0].node)[k];
+        for (i = 1; i < child_count; i++) {
+            minimum[k] = MIN(minimum[k], (real)Pos(children[i].node)[k]);
+            maximum[k] = MAX(maximum[k], (real)Pos(children[i].node)[k]);
+        }
+        if (maximum[k] - minimum[k] > largest_span) {
+            largest_span = maximum[k] - minimum[k];
+            axis = k;
+        }
+    }
+
+    for (i = 1; i < child_count; i++) {
+        const octree_2balls_child value = children[i];
+        int j = i;
+
+        while (j > 0
+               && (real)Pos(children[j - 1].node)[axis]
+                    > (real)Pos(value.node)[axis]) {
+            children[j] = children[j - 1];
+            j--;
+        }
+        children[j] = value;
+    }
+}
 
 static int octree_2balls_build_group(struct cmdline_data *cmd,
                                      fcfc_balltreeptr tree,
                                      const octree_2balls_child *children,
                                      int first, int last, int depth,
+                                     int leaf_capacity,
                                      INTEGER *result)
 {
     INTEGER parent_index;
@@ -141,7 +176,7 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
 
     if (first == last)
         return octree_2balls_build_native(
-            cmd, tree, children[first].node, depth, result);
+            cmd, tree, children[first].node, depth, leaf_capacity, result);
     if (octree_2balls_reserve_node(cmd, tree, &parent_index) == FAILURE)
         return FAILURE;
     if (depth > tree->max_depth) tree->max_depth = depth;
@@ -160,9 +195,11 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
     }
 
     if (octree_2balls_build_group(cmd, tree, children, first, split,
-                                  depth + 1, &left_index) == FAILURE
+                                  depth + 1, leaf_capacity,
+                                  &left_index) == FAILURE
         || octree_2balls_build_group(cmd, tree, children, split + 1, last,
-                                     depth + 1, &right_index) == FAILURE)
+                                     depth + 1, leaf_capacity,
+                                     &right_index) == FAILURE)
         return FAILURE;
     octree_2balls_finish_parent(
         cmd, tree, parent_index, left_index, right_index);
@@ -170,65 +207,138 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
     return SUCCESS;
 }
 
-static int octree_2balls_build_leaf(struct cmdline_data *cmd,
-                                    fcfc_balltreeptr tree, bodyptr body,
-                                    int depth, INTEGER *result)
+static int octree_2balls_collect_bodies(struct cmdline_data *cmd,
+                                        fcfc_balltreeptr tree,
+                                        nodeptr source)
 {
+    int i;
+
+    if (source == NULL) return SUCCESS;
+    if (cballs_opt_read_mask(cmd) && Mask(source) == MASK_NODE_MASKED)
+        return SUCCESS;
+    if (Type(source) == BODY || Type(source) == BODY3) {
+        if (cballs_opt_read_mask(cmd) && Mask(source) != MASK_NODE_VALID) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "octree-2balls: non-valid body reached the binary tree");
+            return FAILURE;
+        }
+        if (tree->npoint >= tree->capacity / 2) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "octree-2balls-omp: point capacity exceeded");
+            return FAILURE;
+        }
+        tree->bptr[tree->npoint++] = (bodyptr)source;
+        return SUCCESS;
+    }
+    if (Type(source) != CELL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls-omp: unsupported native node type %d",
+                 (int)Type(source));
+        return FAILURE;
+    }
+    for (i = 0; i < NSUB; i++)
+        if (octree_2balls_collect_bodies(
+                cmd, tree, Subp(source)[i]) == FAILURE)
+            return FAILURE;
+    return SUCCESS;
+}
+
+static int octree_2balls_build_leaf(struct cmdline_data *cmd,
+                                    fcfc_balltreeptr tree, nodeptr source,
+                                    INTEGER expected_count, int depth,
+                                    INTEGER *result)
+{
+    compute_vector cmpos_sum;
+    compute_vector geometric_center;
     fcfc_ballnode *target;
     INTEGER index;
-    const real field = octree_2balls_field(body);
-    const real field_weight = cballs_opt_weights_norm(cmd) ? Weight(body) : 0.0;
+    INTEGER i;
+    real farthest2;
     int k;
 
-    if (cballs_opt_read_mask(cmd) && Mask(body) != MASK_NODE_VALID) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "octree-2balls: masked body reached the binary search tree");
-        return FAILURE;
-    }
-    if (tree->npoint >= tree->capacity / 2) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "octree-2balls-omp: point capacity exceeded");
-        return FAILURE;
-    }
     if (octree_2balls_reserve_node(cmd, tree, &index) == FAILURE)
         return FAILURE;
     target = &tree->nodes[index];
     target->first = tree->npoint;
-    target->last = tree->npoint;
+    if (octree_2balls_collect_bodies(cmd, tree, source) == FAILURE)
+        return FAILURE;
+    target->last = tree->npoint - 1;
+    if (target->last - target->first + 1 != expected_count) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls-omp: native/body count mismatch");
+        return FAILURE;
+    }
     target->left = -1;
     target->right = -1;
-    tree->bptr[tree->npoint++] = body;
     if (depth > tree->max_depth) tree->max_depth = depth;
-    DO_COORD(k) {
-        target->center[k] = Pos(body)[k];
-        target->cmpos[k] = Pos(body)[k];
+
+    CLRV(cmpos_sum);
+    CLRV(geometric_center);
+    target->weight = 0.0;
+    target->kappa_sum = 0.0;
+    target->kappa_sq_sum = 0.0;
+    target->field_weight_sum = 0.0;
+    target->field_weight_sq_sum = 0.0;
+    target->weighted_kappa_sum = 0.0;
+    target->weighted_kappa_sq_sum = 0.0;
+    for (i = target->first; i <= target->last; i++) {
+        bodyptr body = tree->bptr[i];
+        const real mass = Mass(body);
+        const real field = octree_2balls_field(body);
+        const real field_weight = Weight(body);
+
+        DO_COORD(k) {
+            cmpos_sum[k] += mass * (real)Pos(body)[k];
+            geometric_center[k] += (real)Pos(body)[k];
+        }
+        target->weight += mass;
+        target->kappa_sum += field;
+        target->kappa_sq_sum += field * field;
+        target->field_weight_sum += field_weight;
+        target->field_weight_sq_sum += field_weight * field_weight;
+        target->weighted_kappa_sum += field_weight * field;
+        target->weighted_kappa_sq_sum +=
+            (field_weight * field) * (field_weight * field);
     }
-    target->radius = 0.0;
-    target->aggregate_radius = 0.0;
-    target->weight = Mass(body);
-    target->kappa = field;
-    target->kappa_sum = field;
-    target->kappa_sq_sum = field * field;
-    target->field_weight_sum = field_weight;
-    target->field_weight_sq_sum = field_weight * field_weight;
-    target->weighted_kappa_sum = field_weight * field;
-    target->weighted_kappa_sq_sum =
-        (field_weight * field) * (field_weight * field);
+    DO_COORD(k)
+        target->cmpos[k] = (cballs_storage_real)
+            (target->weight > 0.0
+             ? cmpos_sum[k] / target->weight
+             : geometric_center[k] / (real)expected_count);
+    target->kappa = target->kappa_sum / (real)expected_count;
+
+    SETV(target->center, target->cmpos);
+    farthest2 = 0.0;
+    for (i = target->first; i <= target->last; i++)
+        farthest2 = MAX(farthest2, octree_2balls_distance_squared(
+            target->center, Pos(tree->bptr[i])));
+    target->radius = cballs_store_search_bound(rsqrt(farthest2));
+    target->aggregate_radius = cmd->theta > 0.0
+        ? cballs_store_search_bound(rsqrt(farthest2) / cmd->theta)
+        : cballs_store_upper_bound(MAX_REAL_NUMBER);
     *result = index;
     return SUCCESS;
 }
 
 static int octree_2balls_build_native(struct cmdline_data *cmd,
                                       fcfc_balltreeptr tree, nodeptr source,
-                                      int depth, INTEGER *result)
+                                      int depth, int leaf_capacity,
+                                      INTEGER *result)
 {
     octree_2balls_child children[NSUB];
+    const INTEGER source_count = octree_2balls_native_count(cmd, source);
     int child_count = 0;
     int i;
 
-    if (Type(source) == BODY || Type(source) == BODY3)
+    if (source_count <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls-omp: empty node reached the binary tree");
+        return FAILURE;
+    }
+    if (Type(source) == BODY || Type(source) == BODY3
+        || source_count <= leaf_capacity)
         return octree_2balls_build_leaf(
-            cmd, tree, (bodyptr)source, depth, result);
+            cmd, tree, source, source_count, depth, result);
     if (Type(source) != CELL) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: unsupported native node type %d",
@@ -248,8 +358,10 @@ static int octree_2balls_build_native(struct cmdline_data *cmd,
                  "octree-2balls-omp: native octree contains an empty live cell");
         return FAILURE;
     }
+    octree_2balls_sort_children(children, child_count);
     return octree_2balls_build_group(
-        cmd, tree, children, 0, child_count - 1, depth, result);
+        cmd, tree, children, 0, child_count - 1, depth,
+        leaf_capacity, result);
 }
 
 int octree_2balls_tree_build(struct cmdline_data *cmd,
@@ -263,12 +375,12 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
     int catalog = -1;
     int i;
 
-    (void)leaf_capacity;
     if (result == NULL || btab == NULL || nbody <= 0) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: invalid tree dimensions");
         return FAILURE;
     }
+    if (leaf_capacity < 1) leaf_capacity = 1;
     *result = NULL;
     for (i = 0; i < gd->ninfiles; i++) {
         if (bodytable[i] == btab) {
@@ -298,9 +410,7 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
 #endif
         || (uintmax_t)live_count > (uintmax_t)SIZE_MAX / (2 * sizeof(fcfc_ballnode))
         || (uintmax_t)live_count > (uintmax_t)SIZE_MAX / sizeof(bodyptr)
-#ifdef SINGLEP
         || (uintmax_t)live_count > (uintmax_t)SIZE_MAX / sizeof(fcfc_ballpoint)
-#endif
         ) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: tree allocation size overflow");
@@ -314,7 +424,7 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
     if (tree->bptr == NULL || tree->nodes == NULL) goto allocation_failure;
     if (octree_2balls_build_native(cmd, tree, (nodeptr)roottable[catalog],
-                                   0, &root) == FAILURE)
+                                   0, leaf_capacity, &root) == FAILURE)
         goto failure;
     if (root != OCTREE_2BALLS_ROOT || tree->npoint != live_count) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -322,28 +432,33 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
         goto failure;
     }
 
-#ifdef SINGLEP
     tree->packed_points = malloc(
         (size_t)tree->npoint * sizeof(*tree->packed_points));
     if (tree->packed_points == NULL) goto allocation_failure;
     for (INTEGER point = 0; point < tree->npoint; point++) {
+        const real field = octree_2balls_field(tree->bptr[point]);
+        const real weight = Weight(tree->bptr[point]);
         SETV(tree->packed_points[point].pos, Pos(tree->bptr[point]));
-        tree->packed_points[point].kappa = Kappa(tree->bptr[point]);
+        tree->packed_points[point].kappa = field;
+        tree->packed_points[point].weight = weight;
+        tree->packed_points[point].weighted_kappa = weight * field;
+        tree->packed_points[point].source = tree->bptr[point];
     }
-#endif
 
     gd->bytes_tot += sizeof(*tree)
         + (size_t)live_count * sizeof(*tree->bptr)
         + (size_t)tree->capacity * sizeof(*tree->nodes)
-#ifdef SINGLEP
         + (size_t)tree->npoint * sizeof(*tree->packed_points)
-#endif
         ;
     if (cballs_opt_read_mask(cmd))
         verb_print(cmd->verbose,
                    "octree-2balls: catalog %d mask keeps %" INTEGER_FMT
                    " of %" INTEGER_FMT " bodies; binary capacity=%" INTEGER_FMT
                    " nodes\n", catalog + 1, live_count, nbody, tree->capacity);
+    verb_print(cmd->verbose >= 2,
+               "octree-2balls: compact binary view has %" INTEGER_FMT
+               " nodes for %" INTEGER_FMT " bodies (leaf capacity %d)\n",
+               tree->nnode, tree->npoint, leaf_capacity);
     *result = tree;
     return SUCCESS;
 
@@ -420,9 +535,7 @@ int octree_2balls_tree_frontier(struct cmdline_data *cmd,
 void octree_2balls_tree_free(fcfc_balltreeptr tree)
 {
     if (tree == NULL) return;
-#ifdef SINGLEP
     free(tree->packed_points);
-#endif
     free(tree->nodes);
     free(tree->bptr);
     free(tree);

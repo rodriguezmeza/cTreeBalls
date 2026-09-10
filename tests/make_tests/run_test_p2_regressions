@@ -30,7 +30,7 @@ expect_failure()
     mkdir -p "$output_dir"
 
     if "$CBALLS" \
-        search=octree-ggg-omp \
+        search=octree-2balls-omp \
         testmodel=simple-cubic \
         nbody=8 \
         rootDir="$output_dir" \
@@ -81,7 +81,7 @@ cubic_dir="$TMP_ROOT/cubic-grid-too-small"
 cubic_log="$cubic_dir/run.log"
 mkdir -p "$cubic_dir"
 if "$CBALLS" \
-    search=octree-ggg-omp \
+    search=octree-2balls-omp \
     testmodel=simple-cubic \
     nbody=3 \
     rootDir="$cubic_dir" \
@@ -117,8 +117,8 @@ run_zero_divisor_regression()
                          "$logfile"
 }
 
-run_zero_divisor_regression octree-ggg-omp
-run_zero_divisor_regression kdtree-omp
+run_zero_divisor_regression octree-2balls-omp
+run_zero_divisor_regression kdtree-2balls-omp
 run_zero_divisor_regression kdtree-box-omp
 
 normalization_dir="$TMP_ROOT/zero-denominator"
@@ -126,7 +126,7 @@ normalization_log="$normalization_dir/run.log"
 mkdir -p "$normalization_dir"
 
 "$CBALLS" \
-    search=octree-ggg-omp \
+    search=octree-2balls-omp \
     testmodel=simple-cubic \
     nbody=8 \
     rootDir="$normalization_dir" \

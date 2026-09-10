@@ -1,10 +1,12 @@
-/* Exact radial Lyman-alpha 2PCF using a balanced one-dimensional tree.
+/* Exact radial Lyman-alpha 2PCFs using balanced one-dimensional trees.
  *
  * The tree aggregates a node pair only when the complete separation interval
  * belongs to one histogram bin.  Same-forest pairs are accumulated separately
  * and subtracted in long-double precision, leaving the required cross-forest
- * estimator.  Fixed task blocks and ordered commits make the result independent
- * of the OpenMP thread count.
+ * estimator for lya-1d-tree-2pcf-omp.  The same-LOS method instead builds one
+ * tree per forest, normalizes each forest histogram, and averages the occupied
+ * forests in deterministic order.  Fixed tasks and ordered commits make both
+ * results independent of the OpenMP thread count.
  */
 
 #include "globaldefs.h"
@@ -69,6 +71,12 @@ typedef struct {
     size_t pivot_first;
     size_t pivot_end;
 } lya1d_forest_task;
+
+typedef struct {
+    size_t first;
+    size_t end;
+    size_t root;
+} lya1d_same_los_forest;
 
 typedef struct {
     long double *num;
@@ -511,6 +519,39 @@ local void lya1d_tree_worker_commit(lya1d_tree_worker *worker,
     worker->touched_count = 0;
 }
 
+local int lya1d_tree_worker_commit_same_los(
+                                    lya1d_tree_worker *worker,
+                                    long double *correlation_sum,
+                                    uint64_t *contributing_los,
+                                    uint64_t *pairs)
+{
+    size_t i;
+
+    for (i = 0; i < worker->touched_count; i++) {
+        size_t bin = worker->touched[i];
+
+        if (UINT64_MAX - pairs[bin] < worker->pairs[bin]) {
+            worker->failed = TRUE;
+            return FAILURE;
+        }
+        pairs[bin] += worker->pairs[bin];
+        if (worker->den[bin] > 0.0L) {
+            if (contributing_los[bin] == UINT64_MAX) {
+                worker->failed = TRUE;
+                return FAILURE;
+            }
+            correlation_sum[bin] += worker->num[bin] / worker->den[bin];
+            contributing_los[bin]++;
+        }
+        worker->num[bin] = 0.0L;
+        worker->den[bin] = 0.0L;
+        worker->pairs[bin] = 0;
+        worker->marked[bin] = 0;
+    }
+    worker->touched_count = 0;
+    return SUCCESS;
+}
+
 local int lya1d_tree_add_forest_task(const lya1d_forest_task *task,
                                      bodyptr *forest_order, REAL maximum,
                                      int bins, lya1d_tree_worker *worker)
@@ -581,6 +622,60 @@ local int lya1d_tree_write_2pcf(struct cmdline_data *cmd,
     if (write_failed) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "failed writing radial tree 2PCF output '%s'", path);
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+local int lya1d_tree_write_same_los_2pcf(
+                                struct cmdline_data *cmd,
+                                struct global_data *gd,
+                                const long double *correlation_sum,
+                                const uint64_t *contributing_los,
+                                uint64_t pair_count, size_t forest_count)
+{
+    char path[MAXLENGTHOFFILES];
+    FILE *stream;
+    int bin;
+    int write_failed;
+
+    if (format_checked(path, sizeof(path), "same-LOS radial tree 2PCF path",
+                       "%s_lya1d_same_los%s",
+                       gd->fpfnamehistXi2pcfFileName, EXTFILES) != 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "same-LOS radial tree 2PCF output path is too long");
+        return FAILURE;
+    }
+    stream = fopen(path, "w");
+    if (stream == NULL) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "cannot open same-LOS radial tree 2PCF output '%s': %s",
+                 path, strerror(errno));
+        return FAILURE;
+    }
+
+    fprintf(stream, "# Exact within-LOS radial Lyman-alpha 2PCF, interval tree\n");
+    fprintf(stream, "# forests: %zu  within-LOS unordered pairs: %" PRIu64 "\n",
+            forest_count, pair_count);
+    fprintf(stream, "# xi is the equal-LOS mean over forests occupied in each bin\n");
+    fprintf(stream, "# transverse separation is ignored\n");
+    fprintf(stream, "# columns: bin radial_separation xi sum_xi contributing_los\n");
+    for (bin = 0; bin < cmd->lya2RpBins; bin++) {
+        long double numerator = correlation_sum[bin];
+        long double denominator = (long double)contributing_los[bin];
+        long double correlation = denominator == 0.0L
+                                ? 0.0L : numerator / denominator;
+        REAL separation = ((REAL)bin + 0.5) * cmd->lya2RpMax
+                        / (REAL)cmd->lya2RpBins;
+
+        fprintf(stream, "%d %.17g %.17g %.17g %.17g\n", bin, separation,
+                (double)correlation, (double)numerator, (double)denominator);
+    }
+    write_failed = ferror(stream);
+    if (fclose(stream) != 0) write_failed = TRUE;
+    if (write_failed) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "failed writing same-LOS radial tree 2PCF output '%s'", path);
         return FAILURE;
     }
     return SUCCESS;
@@ -1036,5 +1131,269 @@ cleanup:
     free(all_pairs);
     free(same_pairs);
     free(cross_pairs);
+    return status;
+}
+
+global int searchcalc_lya_forest_1d_tree_same_los_omp(
+                                             struct cmdline_data *cmd,
+                                             struct global_data *gd,
+                                             bodyptr table, INTEGER nbody)
+{
+    bodyptr *forest_order = NULL;
+    lya1d_tree_node *nodes = NULL;
+    lya1d_same_los_forest *forests = NULL;
+    long double *correlation_sum = NULL;
+    uint64_t *contributing_los = NULL;
+    uint64_t *pairs = NULL;
+    size_t count = (size_t)nbody;
+    size_t active_count = 0;
+    size_t forest_count = 0;
+    size_t node_capacity = 0;
+    size_t nodes_used = 0;
+    size_t i;
+    uint64_t pair_count = 0;
+    uint64_t node_visits = 0;
+    uint64_t bulk_pairs = 0;
+    int allocation_failed = FALSE;
+    int runtime_failed = FALSE;
+    ErrorMsg worker_error = "";
+    int status = FAILURE;
+    double cpustart = CPUTIME;
+
+#if NDIM != 3
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "same-LOS radial tree correlations require 3D catalog storage");
+    return FAILURE;
+#endif
+#ifndef OPENMPCODE
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "same-LOS radial tree addon requires OPENMPMACHINE=1");
+    return FAILURE;
+#endif
+
+    if (nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "same-LOS radial tree search received an empty catalog");
+        return FAILURE;
+    }
+    if (cballs_calloc_checked((void **)&forest_order, count,
+                              sizeof(*forest_order),
+                              "same-LOS radial sorted index",
+                              cmd->error_message,
+                              sizeof(cmd->error_message)) == FAILURE)
+        goto setup_done;
+
+    for (i = 0; i < count; i++) {
+        bodyptr body = table + i;
+
+        if (Update(body) == FALSE || Mask(body) != MASK_NODE_VALID) continue;
+        forest_order[active_count++] = body;
+    }
+    if (cballs_calloc_checked((void **)&correlation_sum,
+                              (size_t)cmd->lya2RpBins,
+                              sizeof(*correlation_sum),
+                              "same-LOS correlation sums", cmd->error_message,
+                              sizeof(cmd->error_message)) == FAILURE
+        || cballs_calloc_checked((void **)&contributing_los,
+                                 (size_t)cmd->lya2RpBins,
+                                 sizeof(*contributing_los),
+                                 "same-LOS contributing forest counts",
+                                 cmd->error_message,
+                                 sizeof(cmd->error_message)) == FAILURE
+        || cballs_calloc_checked((void **)&pairs,
+                                 (size_t)cmd->lya2RpBins, sizeof(*pairs),
+                                 "same-LOS pair counts", cmd->error_message,
+                                 sizeof(cmd->error_message)) == FAILURE)
+        goto setup_done;
+    if (active_count == 0) goto setup_ready;
+
+    qsort(forest_order, active_count, sizeof(*forest_order),
+          lya1d_tree_forest_order);
+    for (i = 0; i < active_count;) {
+        size_t forest_end = i + 1;
+        size_t forest_nodes;
+
+        while (forest_end < active_count
+               && LyaForestId(forest_order[forest_end])
+                  == LyaForestId(forest_order[i]))
+            forest_end++;
+        if (lya1d_tree_node_count(forest_end - i, &forest_nodes) == FAILURE
+            || node_capacity > SIZE_MAX - forest_nodes
+            || forest_count == SIZE_MAX) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "same-LOS radial tree size overflows size_t");
+            goto setup_done;
+        }
+        node_capacity += forest_nodes;
+        forest_count++;
+        i = forest_end;
+    }
+    if (cballs_calloc_checked((void **)&forests, forest_count,
+                              sizeof(*forests), "same-LOS forest ranges",
+                              cmd->error_message,
+                              sizeof(cmd->error_message)) == FAILURE
+        || cballs_calloc_checked((void **)&nodes, node_capacity,
+                                 sizeof(*nodes), "same-LOS interval trees",
+                                 cmd->error_message,
+                                 sizeof(cmd->error_message)) == FAILURE)
+        goto setup_done;
+    {
+        size_t forest_index = 0;
+        size_t forest_first = 0;
+
+        while (forest_first < active_count) {
+            size_t forest_end = forest_first + 1;
+
+            while (forest_end < active_count
+                   && LyaForestId(forest_order[forest_end])
+                      == LyaForestId(forest_order[forest_first]))
+                forest_end++;
+            forests[forest_index].first = forest_first;
+            forests[forest_index].end = forest_end;
+            forests[forest_index].root = lya1d_tree_build(
+                nodes, &nodes_used, forest_order, forest_first, forest_end);
+            forest_index++;
+            forest_first = forest_end;
+        }
+        if (forest_index != forest_count || nodes_used != node_capacity) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "same-LOS radial tree construction is inconsistent");
+            goto setup_done;
+        }
+    }
+
+setup_ready:
+    status = SUCCESS;
+setup_done:
+    status = lya_parallel_consensus(cmd, status,
+                                    "same-LOS interval-tree setup");
+    if (status == FAILURE) goto cleanup;
+    if (active_count == 0) goto postprocess;
+
+    ThreadCount(cmd, gd, (INTEGER)active_count, 0);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+        "\n%s: exact per-LOS 1D interval trees; pixels=%zu forests=%zu "
+        "nodes=%zu\n", cmd->searchMethod, active_count, forest_count,
+        nodes_used);
+
+#pragma omp parallel shared(allocation_failed,runtime_failed,worker_error,correlation_sum,contributing_los,pairs,node_visits,bulk_pairs)
+    {
+        lya1d_tree_worker worker;
+        ErrorMsg local_error = "";
+        int worker_ready = lya1d_tree_worker_init(
+            &worker, (size_t)cmd->lya2RpBins, local_error) == SUCCESS;
+        size_t forest_index;
+
+        if (!worker_ready) {
+#pragma omp critical(lya1d_same_los_failure)
+            {
+                if (!allocation_failed)
+                    snprintf(worker_error, sizeof(worker_error), "%s",
+                             local_error);
+                allocation_failed = TRUE;
+            }
+        }
+
+#pragma omp barrier
+#pragma omp for schedule(dynamic,1) ordered
+        for (forest_index = 0; forest_index < forest_count; forest_index++) {
+            uint64_t forest_visits = 0;
+            uint64_t forest_bulk_pairs = 0;
+
+            if (worker_ready && !allocation_failed && !worker.failed) {
+                worker.node_visits = 0;
+                worker.bulk_pairs = 0;
+                if (lya1d_tree_walk(nodes, forest_order,
+                                    forests[forest_index].root,
+                                    forests[forest_index].root,
+                                    cmd->lya2RpMax, cmd->lya2RpBins,
+                                    &worker) == FAILURE) {
+#pragma omp critical(lya1d_same_los_runtime_failure)
+                    {
+                        if (!runtime_failed)
+                            snprintf(worker_error, sizeof(worker_error),
+                                     "same-LOS radial tree pair counter overflow");
+                        runtime_failed = TRUE;
+                    }
+                }
+                forest_visits = worker.node_visits;
+                forest_bulk_pairs = worker.bulk_pairs;
+            }
+
+#pragma omp ordered
+            {
+                if (worker_ready && !allocation_failed && !worker.failed) {
+                    if (lya1d_tree_worker_commit_same_los(
+                            &worker, correlation_sum, contributing_los,
+                            pairs) == FAILURE) {
+                        if (!runtime_failed)
+                            snprintf(worker_error, sizeof(worker_error),
+                                     "same-LOS output counter overflow");
+                        runtime_failed = TRUE;
+                    }
+                    node_visits += forest_visits;
+                    bulk_pairs += forest_bulk_pairs;
+                }
+            }
+        }
+        if (worker_ready) lya1d_tree_worker_free(&worker);
+    }
+
+postprocess:
+    if (allocation_failed || runtime_failed) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "same-LOS radial tree worker failed: %.2000s",
+                 worker_error[0] != '\0' ? worker_error : "unknown error");
+    }
+    status = lya_parallel_consensus(
+        cmd, allocation_failed || runtime_failed ? FAILURE : SUCCESS,
+        "same-LOS interval-tree workers");
+    if (status == FAILURE) goto cleanup;
+
+    status = FAILURE;
+    for (i = 0; i < (size_t)cmd->lya2RpBins; i++) {
+        if (UINT64_MAX - pair_count < pairs[i]) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "same-LOS total pair count overflows uint64_t");
+            goto publication;
+        }
+        pair_count += pairs[i];
+    }
+#ifdef LONGINT
+    if (pair_count > (uint64_t)LONG_MAX
+        || gd->nbbcalc > LONG_MAX - (INTEGER)pair_count) {
+#else
+    if (pair_count > (uint64_t)INT_MAX
+        || gd->nbbcalc > INT_MAX - (INTEGER)pair_count) {
+#endif
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "same-LOS pair count exceeds the build INTEGER range");
+        goto publication;
+    }
+    gd->nbbcalc += (INTEGER)pair_count;
+    if (!cballs_opt_no_out_hist(cmd)
+        && lya1d_tree_write_same_los_2pcf(
+            cmd, gd, correlation_sum, contributing_los,
+            pair_count, forest_count) == FAILURE)
+        goto publication;
+
+    gd->cpusearch = CPUTIME - cpustart;
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+        "%s: within-LOS pairs=%" PRIu64 " node_visits=%" PRIu64
+        " bulk_pairs=%" PRIu64 " CPU=%g\n",
+        cmd->searchMethod, pair_count, node_visits, bulk_pairs, gd->cpusearch);
+    status = SUCCESS;
+
+publication:
+    status = lya_parallel_consensus(cmd, status,
+                                    "same-LOS interval-tree output");
+cleanup:
+    gd->cpusearch = CPUTIME - cpustart;
+    free(forest_order);
+    free(nodes);
+    free(forests);
+    free(correlation_sum);
+    free(contributing_los);
+    free(pairs);
     return status;
 }

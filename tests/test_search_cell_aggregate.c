@@ -49,6 +49,12 @@ int main(void)
     Weight(&second) = 3.0;
     Kappa(&first) = 10.0;
     Kappa(&second) = 20.0;
+#ifdef THREEPCFSHEAR
+    Gamma1(&first) = 1.0;
+    Gamma2(&first) = 2.0;
+    Gamma1(&second) = -2.0;
+    Gamma2(&second) = 0.5;
+#endif
     Selected(&second) = TRUE;
     Update(&first) = TRUE;
     set_position((nodeptr)&first, 1.0, 0.0, 0.0);
@@ -65,6 +71,15 @@ int main(void)
     assert(Nb(&parent) == 2);
     assert(fabs(Weight(&parent) - 5.0) < 1.0e-12);
     assert(fabs(Kappa(&parent) - 16.0) < 1.0e-12);
+#ifdef THREEPCFSHEAR
+    assert(fabs(ShearWeightSum(&parent) - 5.0) < 1.0e-12);
+    assert(fabs(Gamma1(&parent) + 0.8) < 1.0e-12);
+    assert(fabs(Gamma2(&parent) - 1.1) < 1.0e-12);
+    assert(fabs(ShearWeight2(&parent) - 13.0) < 1.0e-12);
+    assert(fabs(ShearGamma2Re(&parent) - 21.75) < 1.0e-12);
+    assert(fabs(ShearGamma2Im(&parent) + 2.0) < 1.0e-12);
+    assert(fabs(ShearGammaAbs2(&parent) - 58.25) < 1.0e-12);
+#endif
     assert(fabs(Mass(&parent) - 4.0) < 1.0e-12);
     assert(fabs(center_of_mass_sum[0] - 10.0) < 1.0e-12);
     assert(Selected(&parent));

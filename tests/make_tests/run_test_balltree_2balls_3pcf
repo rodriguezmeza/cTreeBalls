@@ -115,9 +115,9 @@ normalized_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,out
 aggregate_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-normalize-HistZeta,out-m-HistZeta
 run_auto exact-one 1 "$exact_options"
 run_auto exact-many "$MULTI_THREADS" "$exact_options"
-run_auto exact-direct 1 "$exact_options,treecorr-direct-triples"
+run_auto exact-direct 1 "$exact_options,dual-node-direct-triples"
 run_auto exact-normalized 1 "$normalized_options"
-run_auto exact-normalized-direct 1 "$normalized_options,treecorr-direct-triples"
+run_auto exact-normalized-direct 1 "$normalized_options,dual-node-direct-triples"
 run_auto theta-limit 1 "$aggregate_options" "$TMP_ROOT/auto.txt" 2 1e-12
 
 for component in cos sin sincos cossin; do
@@ -448,6 +448,13 @@ PY
 run_auto aggregate-one 1 "$aggregate_options" "$TMP_ROOT/aggregate.txt" 8 4
 run_auto aggregate-many "$MULTI_THREADS" "$aggregate_options" \
          "$TMP_ROOT/aggregate.txt" 8 4
+if grep -q -- '-DBALLS4SCANLEV\([[:space:]]\|$\)' <<<"$build_env" \
+    && [[ "$ENGINE" == balltree-* ]]; then
+    grep -q 'balanced scan-level task frontier enabled by BALLS4SCANLEV' \
+        "$TMP_ROOT/aggregate-many/run.log" \
+        || fail_with_log "BALLS4 LogMultipole frontier was not activated" \
+                         "$TMP_ROOT/aggregate-many/run.log"
+fi
 for component in cos sin sincos cossin; do
     for order in 1 2 3 4; do
         name="histZetaM_${component}_${order}.txt"

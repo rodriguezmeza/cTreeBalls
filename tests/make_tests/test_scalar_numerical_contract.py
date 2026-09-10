@@ -64,14 +64,15 @@ def oracle(positions, field, weights):
 
 
 def run(method, positions, field, weights, threads=1, rsmooth=None,
-        exact=True, theta=1.0):
+        exact=True, theta=1.0, extra_options=()):
     root = tempfile.mkdtemp(prefix="scalar-contract-") if COMM is None or COMM.rank == 0 else None
     if COMM is not None:
         root = COMM.bcast(root, root=0)
     options = ["compute-HistN", "no-out-Hist", "KKKCorrelation",
-               "weights-norm", "no-normalize-HistZeta"]
+               "weights-norm", "no-normalize-HistZeta", "no-smooth-pivot"]
     if exact:
         options += ["no-one-ball", "no-two-balls"]
+    options += list(extra_options)
     params = dict(searchMethod=method, rangeN=EDGES[-1], rminHist=EDGES[0],
                   sizeHistN=4, mChebyshev=3, lengthBox=2.0, numberThreads=threads,
                   useLogHist=True, usePeriodic=False, theta=theta,
@@ -132,7 +133,7 @@ def test_scalar_contract():
             check_close(run(method, positions, field, weights, rsmooth=0), expected,
                         method+" explicit zero smoothing")
             check_close(run(method, positions, field, weights, rsmooth=20), expected,
-                        method+" radius without opt-in")
+                        method+" disabled smoothing ignores radius")
             # Aggregation must converge to the same estimator at small theta.
             check_close(run(method, positions, field, weights, exact=False, theta=1e-6),
                         expected, method+" converged aggregation")
@@ -154,22 +155,32 @@ def test_undefined_bearings():
                         method+" undefined bearings retain ordinary pairs")
 
 
-def test_treecorr_reference():
-    if MPI_MODE:
+def test_kdtree_2balls_legacy_compatibility():
+    if MPI_MODE or search_method_id("kdtree-omp") < 0 \
+            or search_method_id("kdtree-2balls-omp") < 0:
         return
-    try:
-        import treecorr
-    except ImportError:
-        import pytest
-        pytest.skip("TreeCorr is not installed")
     positions, field, weights = catalog(True)
-    expected = oracle(positions, field, weights)[1]
-    corr = treecorr.KKKCorrelation(min_sep=EDGES[0], max_sep=EDGES[-1], nbins=4,
-        max_n=3, bin_type="LogMultipole", bin_slop=0, angle_slop=0, brute=True)
-    corr.process(treecorr.Catalog(x=positions[:, 0], y=positions[:, 1], z=positions[:, 2],
-                                 k=field, w=weights), num_threads=1)
-    np.testing.assert_allclose(np.moveaxis(corr.zeta[:, :, 3:], -1, 0), expected,
-                               rtol=2e-6, atol=2e-6)
+    reference = run("kdtree-omp", positions, field, weights, threads=3,
+                    exact=False)
+    compatibility = run("kdtree-2balls-omp", positions, field, weights,
+                        threads=3, exact=False,
+                        extra_options=("legacy-one-ball",))
+    np.testing.assert_array_equal(compatibility[0], reference[0])
+    np.testing.assert_array_equal(compatibility[1], reference[1])
+
+
+def test_balltree_2balls_legacy_compatibility():
+    if MPI_MODE or search_method_id("balltree-omp") < 0 \
+            or search_method_id("balltree-2balls-omp") < 0:
+        return
+    positions, field, weights = catalog(True)
+    reference = run("balltree-omp", positions, field, weights, threads=3,
+                    exact=False)
+    compatibility = run("balltree-2balls-omp", positions, field, weights,
+                        threads=3, exact=False,
+                        extra_options=("legacy-one-ball",))
+    np.testing.assert_array_equal(compatibility[0], reference[0])
+    np.testing.assert_array_equal(compatibility[1], reference[1])
 
 
 def test_c_executable():
@@ -195,7 +206,8 @@ def test_c_executable():
                     "mChebyshev=3", "lengthBox=2", "nthreads=2", "useLogHist=true",
                     "usePeriodic=false", "verb=0", "verblog=0",
                     "options=pos-and-convergence,compute-HistN,no-normalize-HistZeta,"
-                    "no-one-ball,no-two-balls,KKKCorrelation,weights-norm,out-m-HistZeta"],
+                    "no-one-ball,no-two-balls,no-smooth-pivot,KKKCorrelation,"
+                    "weights-norm,out-m-HistZeta"],
                     check=True, capture_output=True, text=True, timeout=60)
                 if not method.endswith("_3pcf"):
                     np.testing.assert_array_equal(
@@ -212,6 +224,8 @@ def test_c_executable():
 if __name__ == "__main__":
     test_scalar_contract()
     test_undefined_bearings()
+    test_kdtree_2balls_legacy_compatibility()
+    test_balltree_2balls_legacy_compatibility()
     if not MPI_MODE:
         test_c_executable()
     if COMM is None or COMM.rank == 0:

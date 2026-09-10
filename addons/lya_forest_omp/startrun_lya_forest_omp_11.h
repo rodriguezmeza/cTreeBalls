@@ -12,5 +12,9 @@ if (strcmp(method_str, "lya-1d-2pcf-3pcf-omp") == 0)
     *method_int = LYAFOREST1D2PCF3PCFMETHOD;
 if (strcmp(method_str, "lya-1d-tree-2pcf-omp") == 0)
     *method_int = LYAFOREST1DTREE2PCFMETHOD;
+if (strcmp(method_str, "lya-1d-tree-3pcf-omp") == 0)
+    *method_int = LYAFOREST1DTREE3PCFMETHOD;
+if (strcmp(method_str, "lya-1d-tree-same-los-2pcf-omp") == 0)
+    *method_int = LYAFOREST1DTREESAMELOS2PCFMETHOD;
 
 #endif

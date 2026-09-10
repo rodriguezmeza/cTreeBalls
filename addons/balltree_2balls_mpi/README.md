@@ -1,7 +1,7 @@
 # balltree-2balls-mpi
 
 This addon is the deterministic MPI+OpenMP counterpart of
-`balltree-2balls-omp`. It uses the same FCFC PCA ball tree, TreeCorr-style
+`balltree-2balls-omp`. It uses the same FCFC PCA ball tree, dual-node-style
 dual-node 2PCF traversal, and genuine `process3`/`process21`/`process111`
 triple-node 3PCF traversal.
 
@@ -14,6 +14,10 @@ Every rank builds the same fixed tree frontier. Frontier slot `i` belongs to
 rank `i % nranks`, OpenMP processes the owned slots, and task-indexed
 histograms are reduced to rank 0. Rank 0 publishes tasks in the same order as
 the OpenMP method and is the only rank that writes output files.
+
+`options=legacy-one-ball` selects the privately linked distributed FCFC
+ball-tree compatibility kernel. This replaces the default-profile need for the
+removed standalone one-ball search while retaining its runtime controls.
 
 Build and run with:
 

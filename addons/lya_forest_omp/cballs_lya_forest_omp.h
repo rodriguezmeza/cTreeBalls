@@ -63,4 +63,38 @@ case LYAFOREST1DTREE2PCFMETHOD:
         return FAILURE;
     break;
 
+case LYAFOREST1DTREESAMELOS2PCFMETHOD:
+    if (gd->ninfiles != 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s requires exactly one flattened Lyman-alpha catalog",
+                 cmd->searchMethod);
+        return FAILURE;
+    }
+    ifile = gd->iCatalogs[0];
+    DO_BODY(p, bodytable[ifile],
+            bodytable[ifile] + gd->nbodyTable[ifile]) {
+        Update(p) = TRUE;
+    }
+    if (searchcalc_lya_forest_1d_tree_same_los_omp(
+            cmd, gd, bodytable[ifile], gd->nbodyTable[ifile]) == FAILURE)
+        return FAILURE;
+    break;
+
+case LYAFOREST1DTREE3PCFMETHOD:
+    if (gd->ninfiles != 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s requires exactly one flattened Lyman-alpha catalog",
+                 cmd->searchMethod);
+        return FAILURE;
+    }
+    ifile = gd->iCatalogs[0];
+    DO_BODY(p, bodytable[ifile],
+            bodytable[ifile] + gd->nbodyTable[ifile]) {
+        Update(p) = TRUE;
+    }
+    if (searchcalc_lya_forest_1d_tree_3pcf_omp(
+            cmd, gd, bodytable[ifile], gd->nbodyTable[ifile]) == FAILURE)
+        return FAILURE;
+    break;
+
 #endif

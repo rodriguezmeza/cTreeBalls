@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "python"))
+sys.path.insert(0, str(ROOT / "tests" / "python"))
 from cyballs import cballs, search_method_id
 from kappa_corr_all_engines import KappaCatalog, RunConfig, engine_parameters, run_engine_suite
 from test_two_ball_edge_corrections import ENGINES, MMAX, BINS, RMIN, RMAX, catalog, brute_force, edge_solution
@@ -38,7 +38,13 @@ def test_edge_getters_and_recoverable_failures(engine):
                       usePeriodic=False, verbose=0, verbose_log=0,
                       rootDir=tmp, nsmooth=2,
                       options="KKKCorrelation,weights-norm,only-3pcf,"
-                              "edge-corrections,no-normalize-HistZeta,no-two-balls,no-out-Hist")
+                              "edge-corrections,no-normalize-HistZeta,no-out-Hist,"
+                              + ("no-one-ball,no-smooth-pivot"
+                                 if engine in {"kdtree-omp", "kdtree-mpi"}
+                                 else ("no-two-balls,no-smooth-pivot"
+                                       if engine.startswith(("kdtree-2balls-",
+                                                             "balltree-2balls-"))
+                                       else "no-two-balls")))
         try:
             for _ in range(2):
                 balls.set(params)
@@ -102,11 +108,60 @@ def test_sparse_mask_windows_and_driver():
                                           result["zeta_edge_complex_2"])
 
 
+def test_octree_two_ball_ggg_compatibility_with_mask_and_edge():
+    engines = ("octree-ggg-omp", "octree-2balls-omp")
+    if any(search_method_id(engine) < 0 for engine in engines):
+        pytest.skip("octree GGG compatibility engines are not both registered")
+    data = list(catalog())
+    data[3][8::3] = 0
+    options = (
+        "KKKCorrelation,weights-norm,read-mask,edge-corrections,"
+        "no-normalize-HistZeta,no-one-ball,no-smooth-pivot,no-out-Hist"
+    )
+
+    def run(engine, root):
+        balls = cballs()
+        balls.set_catalog(data[0], kappa=data[1], weights=data[2], mask=data[3])
+        if engine == "octree-2balls-omp":
+            engine_options = options + ",legacy-one-ball"
+        else:
+            engine_options = options
+        balls.set(dict(searchMethod=engine, rangeN=RMAX, rminHist=RMIN,
+                       sizeHistN=BINS, mChebyshev=MMAX, sizeHistPhi=8,
+                       lengthBox=2, numberThreads=2, useLogHist=False,
+                       usePeriodic=False, verbose=0, verbose_log=0,
+                       rootDir=str(root), nsmooth=2, options=engine_options))
+        try:
+            balls.Run(level=["MainLoop"])
+            result = {
+                "nn": balls.getHistNN().copy(),
+                "xi": balls.getHistXi2pcf().copy(),
+            }
+            for order in range(1, MMAX + 2):
+                result[f"edge-{order}"] = (
+                    balls.getHistZetaM_EE_complex(order).copy())
+                for component in range(1, 5):
+                    result[f"zeta-{order}-{component}"] = (
+                        balls.getHistZetaMsincos(order, component).copy())
+            return result
+        finally:
+            balls.struct_cleanup()
+            balls.clear_catalogs()
+
+    with tempfile.TemporaryDirectory(prefix="octree-ggg-compat-cython-") as tmp:
+        reference = run(engines[0], Path(tmp) / "ggg")
+        compatible = run(engines[1], Path(tmp) / "compat")
+    assert reference.keys() == compatible.keys()
+    for name in reference:
+        np.testing.assert_array_equal(reference[name], compatible[name],
+                                      err_msg=name)
+
+
 def test_driver_rejects_unsupported_edge_requests():
-    config = RunConfig(engines=("kdtree-omp",), output_dir=Path("unused"),
+    config = RunConfig(engines=("balltree-omp",), output_dir=Path("unused"),
                        result_type="edge_effects")
     with pytest.raises(ValueError, match="does not support"):
-        engine_parameters(config, "kdtree-omp", False)
+        engine_parameters(config, "balltree-omp", False)
     config.options = ("only-2pcf",)
     with pytest.raises(ValueError, match="require 3PCF"):
         engine_parameters(config, "octree-2balls-mpi", True)

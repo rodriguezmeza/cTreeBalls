@@ -61,7 +61,8 @@ from this table:
      - Double storage/computation; ``1`` selects mixed storage with double arithmetic.
    * - ``SMOOTHPIVOTON``
      - ``0``
-     - Capability only; when compiled, ``smooth-pivot`` remains runtime opt-in.
+     - Enable smoothing by default on supported engines; use
+       ``options=no-smooth-pivot`` for an unsmoothed run.
 
 For MPI addons, the build selects the configured ``MPICC`` wrapper.
 The runtime must provide ``MPI_THREAD_FUNNELED`` or stronger support.

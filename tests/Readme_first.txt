@@ -9,8 +9,9 @@ With matching C and Cython binaries, run from the repository root:
     python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
 
 Repeat scalar numerical tests with both SMOOTHPIVOTON build settings.
-That switch compiles capability; it does not activate smoothing without
-options=smooth-pivot. Preserve your own build setting after testing.
+The enabled build smooths supported engines by default; include
+options=no-smooth-pivot when testing the unsmoothed contract. Preserve your own
+build setting after testing.
 
 Historical catalog/plot workflow
 
@@ -39,15 +40,15 @@ You will get several pdf plots showing horizontal lines indicating comparisons v
 
 Or test individual cases:
 
-$ time ../cballs ./In/parameters_to-test_nside256_octree-ggg-omp
+$ time ../cballs ./In/parameters_to-test_nside256_octree-2balls-omp
 
 to plot results (vs reference results):
 
-$ python python/compare_xi2pcf_curves.py --scale loglog --xscale radian --plot-mul-theta --ref b --file-a Output/histXi2pcf.txt --file-b Outputs_to_compare_with/Output_nside256_octree-ggg-omp/histXi2pcf.txt --outdir ./
+$ python python/compare_xi2pcf_curves.py --scale loglog --xscale radian --plot-mul-theta --ref b --file-a Output/histXi2pcf.txt --file-b Outputs_to_compare_with/Output_nside256_octree-2balls-omp/histXi2pcf.txt --outdir ./
 
 and for 3pcf
 
-$ python python/compare_xi3pcf_flatten_curves.py --file-a Output/ --file-b Outputs_to_compare_with/Output_nside256_octree-ggg-omp/ --ref b --bin-min 40 --bin-max 150
+$ python python/compare_xi3pcf_flatten_curves.py --file-a Output/ --file-b Outputs_to_compare_with/Output_nside256_octree-2balls-omp/ --ref b --bin-min 40 --bin-max 150
 
 2. To test vs cute_box:
 

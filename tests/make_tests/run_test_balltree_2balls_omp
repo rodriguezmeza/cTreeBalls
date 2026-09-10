@@ -26,8 +26,12 @@ if ! grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
     echo "SKIP: balltree-2balls-omp 2PCF is disabled (TWOPCFON=0)"
     exit 0
 fi
-grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env" \
-    || fail_with_log "the KDTREEOMP reference engine is not enabled"
+grep -q -- '-DKDTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the KDTREE2BALLSOMP exact reference engine is not enabled"
+has_public_legacy=false
+if grep -q -- '-DBALLTREEOMP\([[:space:]]\|$\)' <<<"$build_env"; then
+    has_public_legacy=true
+fi
 
 run_case()
 {
@@ -36,6 +40,7 @@ run_case()
     local threads=$3
     local options=$4
     local use_log=${5:-true}
+    local rsmooth=${6:-0}
     local output="$TMP_ROOT/$name"
 
     mkdir -p "$output"
@@ -53,6 +58,7 @@ run_case()
         sizeHistN=6 \
         mChebyshev=2 \
         nsmooth=8 \
+        rsmooth="$rsmooth" \
         theta=1 \
         seed=123 \
         stepState=1000000 \
@@ -60,6 +66,29 @@ run_case()
         verbose_log=0 \
         options="$options,only-2pcf" >"$output/run.log" 2>&1 \
         || fail_with_log "$name failed" "$output/run.log"
+}
+
+run_rejected()
+{
+    local name=$1 options=$2 expected=$3
+    local output="$TMP_ROOT/$name"
+    local status
+
+    mkdir -p "$output"
+    set +e
+    "$CBALLS" search=balltree-2balls-omp testmodel=simple-cubic-random \
+        nbody=64 lengthBox=2 rootDir="$output" numberThreads=1 \
+        usePeriodic=false useLogHist=true rangeN=0.5 rminHist=0.005 \
+        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0 theta=1 seed=123 \
+        stepState=1000000 verbose=2 verbose_log=0 options="$options" \
+        >"$output/run.log" 2>&1
+    status=$?
+    set -e
+    [ "$status" -ne 0 ] \
+        || fail_with_log "$name unexpectedly succeeded" "$output/run.log"
+    grep -Fq -- "$expected" "$output/run.log" \
+        || fail_with_log "$name did not report the expected error" \
+                         "$output/run.log"
 }
 
 compare_files_numeric()
@@ -88,8 +117,51 @@ for name in ("histNN.txt", "histXi2pcf.txt"):
 PY
 }
 
-exact_options=compute-HistN,no-two-balls
-run_case kdtree-reference kdtree-omp 1 compute-HistN,no-one-ball
+legacy_options=compute-HistN,no-smooth-pivot
+run_case legacy-compat-one balltree-2balls-omp 1 \
+    "$legacy_options,legacy-one-ball"
+run_case legacy-compat-many balltree-2balls-omp "$MULTI_THREADS" \
+    "$legacy_options,legacy-one-ball"
+compare_files_numeric "$TMP_ROOT/legacy-compat-one" \
+                      "$TMP_ROOT/legacy-compat-many" \
+    || fail_with_log "legacy-one-ball is not thread deterministic" \
+                     "$TMP_ROOT/legacy-compat-many/run.log"
+grep -Fq -- 'dispatching to the balltree-omp legacy kernel' \
+    "$TMP_ROOT/legacy-compat-one/run.log" \
+    || fail_with_log "legacy-one-ball did not take the ball-tree dispatch" \
+                     "$TMP_ROOT/legacy-compat-one/run.log"
+if $has_public_legacy; then
+    run_case legacy-reference balltree-omp 1 "$legacy_options"
+    compare_files_numeric "$TMP_ROOT/legacy-reference" \
+                          "$TMP_ROOT/legacy-compat-one" \
+        || fail_with_log "legacy-one-ball differs from balltree-omp" \
+                         "$TMP_ROOT/legacy-compat-one/run.log"
+fi
+
+run_case legacy-cell-one balltree-2balls-omp 1 \
+    "$legacy_options,behavior-ball,legacy-one-ball"
+run_case legacy-cell-many balltree-2balls-omp "$MULTI_THREADS" \
+    "$legacy_options,behavior-ball,legacy-one-ball"
+compare_files_numeric "$TMP_ROOT/legacy-cell-one" \
+                      "$TMP_ROOT/legacy-cell-many" \
+    || fail_with_log "legacy behavior-ball is not thread deterministic" \
+                     "$TMP_ROOT/legacy-cell-many/run.log"
+if $has_public_legacy; then
+    run_case legacy-cell-reference balltree-omp 1 \
+        "$legacy_options,behavior-ball"
+    compare_files_numeric "$TMP_ROOT/legacy-cell-reference" \
+                          "$TMP_ROOT/legacy-cell-one" \
+        || fail_with_log "legacy-one-ball did not preserve behavior-ball" \
+                         "$TMP_ROOT/legacy-cell-one/run.log"
+fi
+
+run_rejected legacy-conflict \
+    'only-2pcf,no-smooth-pivot,legacy-one-ball,no-two-balls' \
+    'legacy-one-ball cannot be combined with'
+
+exact_options=compute-HistN,no-two-balls,no-smooth-pivot
+run_case kdtree-reference kdtree-2balls-omp 1 \
+    compute-HistN,no-two-balls,no-smooth-pivot
 run_case exact-one balltree-2balls-omp 1 "$exact_options"
 run_case exact-many balltree-2balls-omp "$MULTI_THREADS" "$exact_options"
 
@@ -104,8 +176,9 @@ for file in "$TMP_ROOT/exact-one"/*.txt; do
             "$TMP_ROOT/exact-many/run.log"
 done
 
-run_case aggregate-one balltree-2balls-omp 1 compute-HistN
-run_case aggregate-many balltree-2balls-omp "$MULTI_THREADS" compute-HistN
+run_case aggregate-one balltree-2balls-omp 1 compute-HistN,no-smooth-pivot
+run_case aggregate-many balltree-2balls-omp "$MULTI_THREADS" \
+    compute-HistN,no-smooth-pivot
 compare_files_numeric "$TMP_ROOT/exact-one" "$TMP_ROOT/aggregate-one" \
     || fail_with_log "two-ball aggregation changed the exact 2PCF" \
                      "$TMP_ROOT/aggregate-one/run.log"
@@ -121,15 +194,31 @@ nbccalc=$(sed -n \
     's/.*balltree-2balls-omp: nbbcalc = [0-9][0-9]*, nbccalc = \([0-9][0-9]*\).*/\1/p' \
     "$TMP_ROOT/aggregate-many/run.log" | tail -1)
 [ "${nbccalc:-0}" -gt 0 ] \
-    || fail_with_log "the TreeCorr scan did not aggregate a node pair" \
+    || fail_with_log "the dual-node scan did not aggregate a node pair" \
                      "$TMP_ROOT/aggregate-many/run.log"
 
-# Linear bins exercise TreeCorr's separation-independent split threshold.
+if grep -q -- '-DBALLS4SCANLEV\([[:space:]]\|$\)' <<<"$build_env"; then
+    grep -q 'balanced scan-level task frontier enabled by BALLS4SCANLEV' \
+        "$TMP_ROOT/aggregate-many/run.log" \
+        || fail_with_log "BALLS4 two-ball frontier was not activated" \
+                         "$TMP_ROOT/aggregate-many/run.log"
+fi
+
+# Linear bins exercise dual-node's separation-independent split threshold.
 run_case linear-exact balltree-2balls-omp 1 "$exact_options" false
-run_case linear-aggregate balltree-2balls-omp "$MULTI_THREADS" compute-HistN false
+run_case linear-aggregate balltree-2balls-omp "$MULTI_THREADS" \
+    compute-HistN,no-smooth-pivot false
 compare_files_numeric "$TMP_ROOT/linear-exact" "$TMP_ROOT/linear-aggregate" \
     || fail_with_log "linear-bin two-ball aggregation changed the exact 2PCF" \
                      "$TMP_ROOT/linear-aggregate/run.log"
+
+# The default smooth-pivot path must retain the KD two-ball estimator contract.
+smooth_options=compute-HistN,no-two-balls
+run_case smooth-kdtree kdtree-2balls-omp 3 "$smooth_options" true 0.04
+run_case smooth-balltree balltree-2balls-omp 3 "$smooth_options" true 0.04
+compare_files_numeric "$TMP_ROOT/smooth-kdtree" "$TMP_ROOT/smooth-balltree" \
+    || fail_with_log "smooth PCA and KD two-ball estimators differ" \
+                     "$TMP_ROOT/smooth-balltree/run.log"
 
 # An offset, weighted cross-catalog case protects the shared coordinate frame
 # and verifies both pair counting and scalar normalization against brute force.
@@ -189,11 +278,11 @@ run_cross_case()
         || fail_with_log "$name failed" "$output/run.log"
 }
 
-cross_options=pos-and-convergence-weight,weights-norm,compute-HistN,no-two-balls
+cross_options=pos-and-convergence-weight,weights-norm,compute-HistN,no-two-balls,no-smooth-pivot
 run_cross_case cross-exact-one 1 "$cross_options"
 run_cross_case cross-exact-many "$MULTI_THREADS" "$cross_options"
 run_cross_case cross-aggregate-many "$MULTI_THREADS" \
-    pos-and-convergence-weight,weights-norm,compute-HistN
+    pos-and-convergence-weight,weights-norm,compute-HistN,no-smooth-pivot
 
 for file in "$TMP_ROOT/cross-exact-one"/*.txt; do
     name=${file##*/}
@@ -261,4 +350,4 @@ for label, actual, expected in (
                 f"{label} bin {index}: {got:.17g} != {want:.17g}")
 PY
 
-echo "PASS: balltree-2balls-omp auto/cross 2PCF, aggregation, and determinism"
+echo "PASS: balltree-2balls-omp parity, compatibility, masks-ready roles, and determinism"

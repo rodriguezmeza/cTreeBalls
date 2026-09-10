@@ -121,14 +121,14 @@ run_repeatability_regression()
         mkdir -p "$output_dir"
 
         "$CBALLS" \
-            search=octree-ggg-omp \
+            search=octree-2balls-omp \
             in="$CATALOG" \
             infmt=binary \
             rootDir="$output_dir" \
             numberThreads="$THREADS" \
             verbose=0 \
             verbose_log=0 \
-            options=compute-HistN,and-CF,out-m-HistZeta \
+            options=compute-HistN,and-CF,out-m-HistZeta,legacy-one-ball \
             >"$output_dir/run.log" 2>&1 \
             || fail_with_log "smooth-pivot repeatability run $run failed" \
                              "$output_dir/run.log"

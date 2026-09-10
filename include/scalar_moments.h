@@ -4,9 +4,12 @@
 static inline bool cballs_raw_legacy_multipoles(const struct cmdline_data *cmd)
 {
     return cballs_opt_no_normalize_histzeta(cmd)
-        && (!strcmp(cmd->searchMethod, "kdtree-omp")
+        && (!strncmp(cmd->searchMethod, "kdtree-", 7)
             || !strcmp(cmd->searchMethod, "balltree-omp")
-            || !strcmp(cmd->searchMethod, "balltree-mpi"));
+            || !strcmp(cmd->searchMethod, "balltree-mpi")
+            || ((!strcmp(cmd->searchMethod, "balltree-2balls-omp")
+                 || !strcmp(cmd->searchMethod, "balltree-2balls-mpi"))
+                && cballs_opt_legacy_one_ball(cmd)));
 }
 
 /* Subtract each neighbor's second moment before the pivot outer product.
@@ -16,7 +19,12 @@ static inline void cballs_accumulate_raw_moments(struct cmdline_data *cmd,
         real field, real field2, real cosine, real sine)
 {
 #ifdef TPCF
-    const real pivot_field = Weight(pivot)*Kappa(pivot);
+    real pivot_field = Weight(pivot)*Kappa(pivot);
+#ifdef SMOOTHPIVOT
+    if (cballs_opt_smooth_pivot(cmd)
+        && !strncmp(cmd->searchMethod, "kdtree-", 7))
+        pivot_field = KappaRmin(pivot)/MAX((real)NbRmin(pivot), 1.0);
+#endif
     real cm = 1.0, sm = 0.0;
     for (int m = 1; m <= cmd->mChebyshev+1; m++) {
         hist->histXithreadcos[m][bin] += field*cm;

@@ -72,10 +72,11 @@ The numerical test in :doc:`benchmarks` checks both input paths independently.
 Smoothing Changed an Unsmoothed Run
 -----------------------------------
 
-With current code, ``SMOOTHPIVOTON=1`` only compiles capability;
-``options=smooth-pivot`` must be explicitly requested. ``rsmooth`` alone
-does not activate smoothing. Rebuild both interfaces if old behavior persists.
-Raw KD/legacy balltree multipoles reject smoothing; BALLS4 has no smooth-pivot mode.
+With current code, ``SMOOTHPIVOTON=1`` enables smoothing by default on
+supported engines. Add ``options=no-smooth-pivot`` to reproduce an unsmoothed
+run, then rebuild both interfaces and restart Python after changing the build
+flag. Raw KD/legacy balltree multipoles require that opt-out; BALLS4 and the
+compact two-ball engines have no smooth-pivot mode.
 
 Zero or Unexpected Results
 --------------------------

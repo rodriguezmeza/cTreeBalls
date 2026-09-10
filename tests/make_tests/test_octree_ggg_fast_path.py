@@ -25,10 +25,13 @@ def make_catalog(count):
 
 
 def run_case(catalog, threads=1, mmax=7, full_window=False,
-             raw=False, exact=False, write_windows=False, profile=False):
+             raw=False, exact=False, write_windows=False, profile=False,
+             compute_histn=True):
     with tempfile.TemporaryDirectory(prefix="ctreeballs-ggg-fast-") as tmp:
         root = Path(tmp)
-        options = ["read-mask", "compute-HistN", "and-CF", "KKKCorrelation"]
+        options = ["read-mask", "KKKCorrelation"]
+        if compute_histn:
+            options.extend(("compute-HistN", "and-CF"))
         if full_window:
             options.append("ggg-full-window")
         if raw:
@@ -89,6 +92,17 @@ def run_case(catalog, threads=1, mmax=7, full_window=False,
                     ("window_orders", "work", "wait", "merge", "wall"),
                     map(float, match.groups()),
                 ))
+                frontier_match = re.search(
+                    r"GGG frontier: tasks=(\d+) active=(\d+) "
+                    r"pivots=(\d+) target_active=(\d+)",
+                    log.read_text(),
+                )
+                if frontier_match:
+                    stats.update(dict(zip(
+                        ("frontier_tasks", "frontier_active",
+                         "frontier_pivots", "frontier_target_active"),
+                        map(int, frontier_match.groups()),
+                    )))
         return result, windows, elapsed, stats
 
 
@@ -96,6 +110,18 @@ def assert_identical(reference, candidate):
     assert reference.keys() == candidate.keys()
     for name in reference:
         np.testing.assert_array_equal(reference[name], candidate[name], err_msg=name)
+
+
+def assert_signal_identical(reference, candidate):
+    signal_names = [
+        name for name in reference
+        if name == "KK" or name.startswith("KKK_")
+    ]
+    assert signal_names
+    for name in signal_names:
+        np.testing.assert_array_equal(
+            reference[name], candidate[name], err_msg=name
+        )
 
 
 def test_window_policy_preserves_histograms():
@@ -128,7 +154,36 @@ def test_masked_chunk_determinism():
         assert_identical(reference, candidate)
         assert stats is not None
         assert stats["window_orders"] == 4
+        assert stats["frontier_tasks"] > 4
+        assert 0 < stats["frontier_active"] < stats["frontier_pivots"]
         assert all(np.isfinite(value) and value >= 0 for value in stats.values())
+
+
+def test_unused_window_multipoles_are_skipped():
+    catalog = make_catalog(1025)
+    skipped, skipped_windows, _, skipped_stats = run_case(
+        catalog, threads=3, mmax=3, raw=True, write_windows=False,
+        profile=True, compute_histn=False,
+    )
+    requested, requested_windows, _, requested_stats = run_case(
+        catalog, threads=3, mmax=3, raw=True, write_windows=False,
+        profile=True, compute_histn=False, full_window=True,
+    )
+    assert_identical(skipped, requested)
+    assert not skipped_windows
+    assert not requested_windows
+    assert skipped_stats["window_orders"] == 0
+    assert requested_stats["window_orders"] == 7
+
+    counted, counted_windows, _, counted_stats = run_case(
+        catalog, threads=3, mmax=3, raw=True, write_windows=True,
+        profile=True, compute_histn=True,
+    )
+    # compute-HistN changes the public pair-count normalization, but it must
+    # not change the scalar 2PCF or any signal 3PCF multipole.
+    assert_signal_identical(skipped, counted)
+    assert len(counted_windows) == 4 * (3 + 1)
+    assert counted_stats["window_orders"] == 4
 
 
 def benchmark(args):
@@ -167,4 +222,6 @@ if __name__ == "__main__":
     else:
         test_window_policy_preserves_histograms()
         test_masked_chunk_determinism()
-        print("PASS: GGG fast/full window equivalence and masked OpenMP determinism")
+        test_unused_window_multipoles_are_skipped()
+        print("PASS: adaptive GGG frontier, optional window multipoles, "
+              "fast/full window equivalence, and OpenMP determinism")

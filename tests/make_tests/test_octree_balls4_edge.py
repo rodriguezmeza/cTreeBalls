@@ -60,7 +60,8 @@ def cli_tests(executable, mpi_command=()):
 
         def run(engine, threads=1, *, edge=True, exact=True, output=None,
                 failure=False, input_name="input.txt", cross=False,
-                require_cells=False, theta=1.0):
+                require_cells=False, theta=1.0, only_2pcf=False,
+                only_3pcf=False):
             nonlocal serial
             serial += 1
             output = root/str(serial) if output is None else output
@@ -69,6 +70,10 @@ def cli_tests(executable, mpi_command=()):
                        "no-normalize-HistZeta", "compute-HistN", "and-CF"]
             if edge:
                 options += ["edge-corrections"]
+            if only_2pcf:
+                options += ["only-2pcf"]
+            if only_3pcf:
+                options += ["only-3pcf"]
             if exact:
                 options += ["no-one-ball", "no-two-balls"]
             command = [str(executable), f"search={engine}",
@@ -95,8 +100,16 @@ def cli_tests(executable, mpi_command=()):
             if require_cells:
                 accepted = re.findall(r"nbccalc\s*=\s*(\d+)", proc.stdout)
                 assert accepted and max(map(int, accepted)) > 0, proc.stdout
-            pair = tuple(np.loadtxt(output/f"{name}.txt") for name in
-                         ("histNN", "histCF", "histXi2pcf"))
+            pair_paths = tuple(output/f"{name}.txt" for name in
+                               ("histNN", "histCF", "histXi2pcf"))
+            if only_3pcf:
+                assert not any(path.exists() for path in pair_paths)
+                pair = ()
+            else:
+                pair = tuple(np.loadtxt(path) for path in pair_paths)
+            if only_2pcf:
+                assert not list(output.glob("histZetaM_*.txt"))
+                return (), pair
             if edge:
                 return load_results(output), pair
             def read(component, m):
@@ -107,6 +120,12 @@ def cli_tests(executable, mpi_command=()):
 
         base, pairs = run("octree-balls4-omp")
         assert_histograms(base, expected)
+        edge_only_three, edge_only_three_pairs = run(
+            "octree-balls4-omp", 3, only_3pcf=True
+        )
+        assert not edge_only_three_pairs
+        for full, triple_only in zip(base, edge_only_three):
+            np.testing.assert_array_equal(full, triple_only)
         for theta in (0.0, 3.0):
             bounded, _ = run("octree-balls4-omp", theta=theta)
             assert_histograms(bounded, expected)
@@ -118,14 +137,42 @@ def cli_tests(executable, mpi_command=()):
                                    rtol=2e-9, atol=2e-8)
         # Normal (non-edge) masked traversal is preserved in the MPI addon.
         normal, normal_pairs = run("octree-balls4-omp", 3, edge=False)
+        normal_only_three, normal_only_three_pairs = run(
+            "octree-balls4-omp", 3, edge=False, only_3pcf=True
+        )
+        assert not normal_only_three_pairs
+        for full, triple_only in zip(normal, normal_only_three):
+            np.testing.assert_allclose(full, triple_only, rtol=3e-9, atol=5e-10)
+        _, only_pair = run(
+            "octree-balls4-omp", 3, edge=False, only_2pcf=True
+        )
+        for full, pair_only in zip(normal_pairs, only_pair):
+            np.testing.assert_allclose(full, pair_only, rtol=3e-9, atol=5e-10)
         if mpi_command:
             for threads in (1, 3):
                 distributed, distributed_pairs = run("octree-balls4-mpi", threads)
                 for a, b in zip((*base, *pairs), (*distributed, *distributed_pairs)):
                     np.testing.assert_array_equal(a, b)
+            mpi_edge_only_three, mpi_edge_only_three_pairs = run(
+                "octree-balls4-mpi", 3, only_3pcf=True
+            )
+            assert not mpi_edge_only_three_pairs
+            for omp, mpi in zip(edge_only_three, mpi_edge_only_three):
+                np.testing.assert_array_equal(omp, mpi)
             distributed, distributed_pairs = run("octree-balls4-mpi", 3, edge=False)
             for a, b in zip((*normal, *normal_pairs), (*distributed, *distributed_pairs)):
                 np.testing.assert_allclose(a, b, rtol=2e-8, atol=2e-8)
+            mpi_only_three, mpi_only_three_pairs = run(
+                "octree-balls4-mpi", 3, edge=False, only_3pcf=True
+            )
+            assert not mpi_only_three_pairs
+            for omp, mpi in zip(normal_only_three, mpi_only_three):
+                np.testing.assert_allclose(omp, mpi, rtol=2e-8, atol=2e-8)
+            _, mpi_only_pair = run(
+                "octree-balls4-mpi", 3, edge=False, only_2pcf=True
+            )
+            for omp, mpi in zip(only_pair, mpi_only_pair):
+                np.testing.assert_allclose(omp, mpi, rtol=2e-8, atol=2e-8)
             other, _ = run("octree-balls4-mpi", 3, exact=False)
             for a, b in zip(approximate, other):
                 np.testing.assert_array_equal(a, b)

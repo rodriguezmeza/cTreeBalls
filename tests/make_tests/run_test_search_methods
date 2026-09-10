@@ -6,124 +6,144 @@ root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cballs=${CBALLS:-"${root_dir}/cballs"}
 methods_output=$(mktemp "${TMPDIR:-/tmp}/ctreeballs-search-methods.XXXXXX")
 options_output=$(mktemp "${TMPDIR:-/tmp}/ctreeballs-options.XXXXXX")
-trap 'rm -f "${methods_output}" "${options_output}"' EXIT
+make_output=$(mktemp "${TMPDIR:-/tmp}/ctreeballs-make-info.XXXXXX")
+trap 'rm -f "${methods_output}" "${options_output}" "${make_output}"' EXIT
 
-set +e
-"${cballs}" options=print-search-methods >"${methods_output}" 2>&1
-methods_status=$?
-"${cballs}" options=print-options >"${options_output}" 2>&1
-options_status=$?
-set -e
+run_help() {
+    local argument=$1
+    local output=$2
+    local status
+    set +e
+    "${cballs}" "options=${argument}" >"${output}" 2>&1
+    status=$?
+    set -e
+    if (( status > 1 )); then
+        printf 'FAIL: options=%s returned status %s\n' "${argument}" "${status}" >&2
+        exit 1
+    fi
+}
 
-# Startup information commands currently stop through the regular status-1 path.
-if (( methods_status > 1 || options_status > 1 )); then
-    printf 'FAIL: startup help command returned an unexpected status\n' >&2
-    exit 1
-fi
+run_help print-search-methods "${methods_output}"
+run_help print-options "${options_output}"
+run_help make-info "${make_output}"
 
 for expected in \
     'Searching methods registered in this executable' \
+    'Only methods enabled by this executable' \
     'Select one with search=<name>' \
-    'Common controls:' \
-    '- octree-sincos-omp (id=' \
-    'geometry:' \
-    'computes:' \
-    'use:'; do
-    if ! grep -Fq -- "${expected}" "${methods_output}"; then
+    'tests/python/kappa_corr_all_engines.py reuses one in-memory catalog' \
+    'tests/python/shear_corr_all_engines.py' \
+    'tests/python/lya_corr_all_engines.py'; do
+    grep -Fq -- "${expected}" "${methods_output}" || {
         printf 'FAIL: search-method help is missing: %s\n' "${expected}" >&2
+        exit 1
+    }
+done
+
+active_methods=(
+    octree-sincos-omp
+    kdtree-2balls-omp kdtree-2balls-mpi
+    balltree-2balls-omp balltree-2balls-mpi
+    octree-2balls-omp octree-2balls-mpi
+    octree-shear-sphere-2balls-omp
+    kdtree-shear-sphere-2balls-omp
+    balltree-shear-sphere-2balls-omp
+    kdtree-box-omp neighbor-boxes-omp
+    octree-3pcf-3d-omp octree-3pcf-3d-mpi
+    lya-2pcf-omp lya-3pcf-omp lya-2pcf-3pcf-omp
+    lya-1d-2pcf-omp lya-1d-3pcf-omp lya-1d-2pcf-3pcf-omp
+    lya-1d-tree-2pcf-omp lya-1d-tree-same-los-2pcf-omp
+    lya-1d-tree-3pcf-omp
+    lya-2pcf-mpi lya-3pcf-mpi lya-2pcf-3pcf-mpi
+    lya-1d-2pcf-mpi lya-1d-3pcf-mpi lya-1d-2pcf-3pcf-mpi
+    lya-1d-tree-2pcf-mpi lya-1d-tree-3pcf-mpi
+)
+
+for method in "${active_methods[@]}"; do
+    grep -Fq -- "- ${method} (id=" "${methods_output}" || {
+        printf 'FAIL: active method is missing: %s\n' "${method}" >&2
+        exit 1
+    }
+done
+
+inactive_methods=(
+    balls-omp kdtree-omp kdtree-mpi
+    balltree-omp balltree-mpi octree-ggg-omp octree-ggg-mpi
+    octree-balls4-omp octree-balls4-mpi octree-shear-omp
+    octree-shear-sphere-omp balltree-2balls-omp_3pcf
+    balltree-2balls-mpi_3pcf
+)
+for method in "${inactive_methods[@]}"; do
+    if grep -Fq -- "- ${method} (id=" "${methods_output}"; then
+        printf 'FAIL: disabled public method was advertised: %s\n' "${method}" >&2
         exit 1
     fi
 done
 
 method_names=$(sed -nE 's/^- ([^ ]+) \(id=[0-9]+\)$/\1/p' "${methods_output}")
-if [[ -z "${method_names}" ]]; then
-    printf 'FAIL: search-method help did not emit any parseable methods\n' >&2
+if [[ $(printf '%s\n' "${method_names}" | sed '/^$/d' | wc -l | tr -d ' ') \
+      != ${#active_methods[@]} ]]; then
+    printf 'FAIL: registered method count does not match the active profile\n' >&2
     exit 1
 fi
 if [[ $(printf '%s\n' "${method_names}" | sort | uniq -d | wc -l | tr -d ' ') != 0 ]]; then
-    printf 'FAIL: search-method help contains duplicate method names\n' >&2
+    printf 'FAIL: duplicate search methods were printed\n' >&2
     exit 1
 fi
 
-check_method_help() {
-    local method=$1
-    local expected=$2
+smooth_count=$(grep -c '^  smooth-pivot:' "${methods_output}" || true)
+if [[ "${smooth_count}" != ${#active_methods[@]} ]]; then
+    printf 'FAIL: each active method needs one smooth-pivot policy\n' >&2
+    exit 1
+fi
 
-    if grep -Fq -- "- ${method} (id=" "${methods_output}" \
-        && ! grep -Fq -- "${expected}" "${methods_output}"; then
-        printf 'FAIL: %s help is missing: %s\n' "${method}" "${expected}" >&2
+option_names=$(sed -nE 's/^- ([^ ]+) \[[^]]+\]:.*/\1/p' "${options_output}")
+if [[ -z "${option_names}" ]]; then
+    printf 'FAIL: print-options emitted no parseable options\n' >&2
+    exit 1
+fi
+if [[ $(printf '%s\n' "${option_names}" | sort | uniq -d | wc -l | tr -d ' ') != 0 ]]; then
+    printf 'FAIL: print-options contains duplicate names\n' >&2
+    exit 1
+fi
+
+for option in print-search-methods make-info smooth-pivot no-smooth-pivot \
+    legacy-one-ball read-mask edge-corrections only-2pcf only-3pcf \
+    compute-2pcf-3d compute-3pcf-3d survey-estimator-3d \
+    exclude-same-los exclude-all-same-los dual-node-bin-slop \
+    dual-node-direct-triples dual-node-bucket-leaves weights-norm; do
+    grep -Fq -- "- ${option} [" "${options_output}" || {
+        printf 'FAIL: active option is missing: %s\n' "${option}" >&2
         exit 1
-    fi
-}
+    }
+done
 
-check_method_help 'kdtree-omp' \
-    'Add behavior-ball for aggregate-node acceptance'
-check_method_help 'kdtree-omp' \
-    'no-one-ball disables it; aggregation requires useLogHist=true'
-check_method_help 'balltree-omp' \
-    'behavior-ball enables aggregate-node acceptance'
-check_method_help 'balltree-omp' \
-    'aggregation requires useLogHist=true'
-check_method_help 'balltree-2balls-omp' \
-    'TreeCorr-style cell aggregation is the default'
-check_method_help 'balltree-2balls-omp' \
-    'no-two-balls forces exact body pairs'
-check_method_help 'balltree-2balls-mpi' \
-    'deterministic MPI+OpenMP dual/triple-node scan'
-check_method_help 'balltree-2balls-mpi' \
-    'Runtime acceptance and normalization options match balltree-2balls-omp'
-check_method_help 'balltree-2balls-mpi' \
-    'The explicit triple-node 3PCF remains cubic even when distributed'
-check_method_help 'balltree-2balls-omp_3pcf' \
-    'accumulate radial field multipoles and form 3PCF bins from pair products'
-check_method_help 'balltree-2balls-omp_3pcf' \
-    'TreeCorr-style radial-bin slop and angular phase-error criteria'
-check_method_help 'balltree-2balls-omp_3pcf' \
-    'no-normalize-HistZeta returns raw sums'
-check_method_help 'balltree-2balls-omp_3pcf' \
-    'treecorr-direct-triples selects the slower validation traversal'
-check_method_help 'balltree-2balls-mpi_3pcf' \
-    'deterministic MPI+OpenMP LogMultipole frontier'
-check_method_help 'balltree-2balls-mpi_3pcf' \
-    'treecorr-direct-triples, which remains an OpenMP validation oracle'
-check_method_help 'octree-balls4-omp' \
-    'weighted convergence 2PCF and balls4 KKK 3PCF multipoles'
-check_method_help 'octree-balls4-omp' \
-    'Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF'
-check_method_help 'octree-balls4-omp' \
-    'compute-HistN,and-CF writes pair-count/CF files'
-check_method_help 'octree-balls4-omp' \
-    'Works with SMOOTHPIVOTON=0 or 1; options=smooth-pivot is not supported'
-check_method_help 'octree-balls4-omp' \
-    'window modes through 2*mChebyshev'
-check_method_help 'octree-balls4-mpi' \
-    'Enable OCTREEBALLS4MPION=1 and run with mpiexec'
-check_method_help 'lya-2pcf-mpi' 'Enable LYAFORESTMPION=1'
-check_method_help 'octree-3pcf-3d-mpi' 'Enable OCTREE3PCF3DMPION=1'
-check_method_help 'octree-3pcf-3d-mpi' 'data/random survey estimator and edge correction'
-check_method_help 'lya-1d-tree-2pcf-mpi' 'weighted radial-only 2PCF with same-forest subtraction'
-check_method_help 'lya-2pcf-omp' 'cyballs.set_forest_catalog'
-check_method_help 'lya-2pcf-mpi' 'python/lya_corr_all_engines.py'
-check_method_help 'octree-3pcf-3d-mpi' 'not the three-distinct-forest estimator'
-
-for option in compute-2pcf-3d compute-3pcf-3d survey-estimator-3d \
-    encore-survey-estimator survey-edge-correction survey-keep-top-multipole \
-    exclude-same-los exclude-los exclude-pivot-los treecorr-bucket-leaves; do
-    if ! grep -Fq -- "- ${option} [" "${options_output}"; then
-        printf 'FAIL: print-options is missing %s\n' "${option}" >&2
+for option in behavior-tree-omp compute-j-no-eq-i pivot-loop default-rsmooth \
+    fix-rsmooth edge-effects no-two-ball set-default-param set-Nb-noSel \
+    smooth smooth-min-cell dual-node-singleton-leaves; do
+    if grep -Fq -- "- ${option} [" "${options_output}"; then
+        printf 'FAIL: disabled-addon option was advertised: %s\n' "${option}" >&2
         exit 1
     fi
 done
 
-if ! grep -Fq -- '- print-search-methods [startup]:' "${options_output}"; then
-    printf 'FAIL: print-options does not advertise print-search-methods\n' >&2
-    exit 1
-fi
-if grep -Fq -- '- balltree-2balls-omp_3pcf (id=' "${methods_output}" \
-    && ! grep -Fq -- '- treecorr-singleton-leaves [balltree-2balls-omp_3pcf]:' \
-        "${options_output}"; then
-    printf 'FAIL: print-options does not advertise treecorr-singleton-leaves\n' >&2
-    exit 1
-fi
+for setting in KDTREE2BALLSOMPON KDTREE2BALLSMPION BALLTREE2BALLSOMPON \
+    BALLTREE2BALLSMPION OCTREE2BALLSOMPON OCTREE2BALLSMPION LYAFORESTOMPON \
+    LYAFORESTMPION OCTREESHEARSPHERE2BALLSOMPON \
+    KDTREESHEARSPHERE2BALLSOMPON BALLTREESHEARSPHERE2BALLSOMPON \
+    KDTREEBOXOMPON NEIGHBORBOXESOMPON OCTREE3PCF3DOMPON OCTREE3PCF3DMPION; do
+    grep -Eq "^[[:space:]]+${setting}[[:space:]]+= 1$" "${make_output}" || {
+        printf 'FAIL: make-info is missing active setting: %s\n' "${setting}" >&2
+        exit 1
+    }
+done
 
-printf 'PASS: search-method help lists the registered runtime methods.\n'
+for setting in KDTREEOMPON KDTREEMPION BALLTREEOMPON BALLTREEMPION \
+    OCTREEGGGOMPON OCTREEGGGMPION OCTREEBALLS4OMPON OCTREEBALLS4MPION; do
+    if grep -Eq "^[[:space:]]+${setting}[[:space:]]+=" "${make_output}"; then
+        printf 'FAIL: make-info advertised disabled addon: %s\n' "${setting}" >&2
+        exit 1
+    fi
+done
+
+printf 'PASS: runtime help matches the active addon profile.\n'

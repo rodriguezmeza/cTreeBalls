@@ -1,0 +1,7 @@
+#ifndef CTREEBALLS_STARTRUN_KDTREE_SHEAR_SPHERE_2BALLS_OMP_11_H
+#define CTREEBALLS_STARTRUN_KDTREE_SHEAR_SPHERE_2BALLS_OMP_11_H
+
+if (strcmp(method_str, "kdtree-shear-sphere-2balls-omp") == 0)
+    *method_int = KDTREESHEARSPHERE2BALLSOMPMETHOD;
+
+#endif

@@ -165,8 +165,21 @@ global int MakeTree(struct  cmdline_data* cmd,
 #ifdef OCTREESHEAROMP
     preserve_catalog_frame |= gd->searchMethod_int == OCTREESHEARMETHOD;
 #endif
+#ifdef OCTREESHEARSPHEREOMP
+    preserve_catalog_frame |=
+        gd->searchMethod_int == OCTREESHEARSPHEREMETHOD;
+#endif
+#ifdef OCTREESHEARSPHERE2BALLSOMP
+    preserve_catalog_frame |=
+        gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD;
+#endif
 #ifdef OCTREE2BALLSOMP
-    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD;
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD
+        && !cballs_opt_legacy_one_ball(cmd);
+#endif
+#ifdef OCTREE2BALLSMPI
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMPIMETHOD
+        && !cballs_opt_legacy_one_ball(cmd);
 #endif
     if (!preserve_catalog_frame
         && centerBodies(btab, nbody, ifile, roottable[ifile]) == FAILURE)
@@ -234,6 +247,28 @@ global int MakeTree(struct  cmdline_data* cmd,
     verb_log_print(cmd->verbose_log,gd->outlog,"\n");
 //E
 
+    /* Native pair engines build their contiguous binary traversal view directly
+     * from Subp(), Nb(), Mask(), and the moments finalized by hackcellprop().
+     * The threaded walk, scan-level arrays, and pruning pass below are legacy
+     * products for the normal octree searches and are not part of that view. */
+    if (cballs_run_uses_compact_native_pair(cmd, gd->searchMethod_int)) {
+        tree_is_threaded[ifile] = FALSE;
+        gd->bytes_tot += gd->bytes_tot_cells;
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                    "\nAllocated %g MByte for (%d) native cells storage.\n",
+                    gd->bytes_tot_cells*INMB, gd->ncellTable[ifile]);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                    "\n%s: root number of bodies = %ld\n",
+                    routineName, Nb(roottable[ifile]));
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                    "%s: compact-octree fast path skips threaded/scan/pruning products\n",
+                    routineName);
+#ifdef DEBUG
+        fclose(outcells);
+#endif
+        goto compact_tree_ready;
+    }
+
 //B socket:
 #ifdef ADDONS
 #include "treeload_include_01.h"
@@ -299,7 +334,7 @@ global int MakeTree(struct  cmdline_data* cmd,
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
 
 #ifdef CBALLS_NEEDS_BALLS4_SCAN
-    if (cballs_method_needs_balls4_scan(gd->searchMethod_int)) {
+    if (cballs_run_needs_balls4_scan(cmd, gd->searchMethod_int)) {
         cpustartMiddle = CPUTIME;
         if (scanLevelB4(cmd, gd, ifile) == FAILURE)
             return FAILURE;
@@ -390,6 +425,7 @@ global int MakeTree(struct  cmdline_data* cmd,
     fclose(outtreeinfo);
 #endif
 
+compact_tree_ready:
     gd->cputree = CPUTIME - cpustart;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\tdone with the tree.\nmaking tree CPU time : %lf %s\n\n",
@@ -451,10 +487,10 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 // 1 rad = 3437.74677 arcmin
 // 1 degree = 60 arcmin = 60*0.000290888208666 rad = 0.004072434921324 rad
 //
-// rsmooth must be given in radians.
-// plots will be given in arcmin.
-//E
-// For unit sphere rsmooth are given in arcmin. Here we transform to radians
+// Explicit unit-sphere rsmooth values are given in arcmin. Spherical shear
+// uses unit-vector chord distances internally; other spherical methods retain
+// their historical radian convention. Automatically derived radii already
+// use tree-coordinate units and need no conversion.
 #ifdef SMOOTHPIVOT
 #define ARCMINTORAD   0.000290888208666
         if (!cballs_opt_smooth_pivot(cmd)) {
@@ -491,8 +527,29 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                 }
             }
         } else {
+            double rsmooth_arcmin;
+
             // For Takahasi Nside 4096, rsmooth = 3 arcmin is still a good value
-            gd->rsmooth[0] *= ARCMINTORAD;
+            if (parse_double_checked(cmd->rsmooth, &rsmooth_arcmin,
+                                     cmd->error_message, _ERRORMSGSIZE_,
+                                     "rsmooth") == FAILURE)
+                return FAILURE;
+#if defined(OCTREESHEARSPHEREOMP) || defined(OCTREESHEARSPHERE2BALLSOMP)
+            if (
+#ifdef OCTREESHEARSPHEREOMP
+                gd->searchMethod_int == OCTREESHEARSPHEREMETHOD
+#else
+                FALSE
+#endif
+#ifdef OCTREESHEARSPHERE2BALLSOMP
+                || gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD
+#endif
+               )
+                gd->rsmooth[0] = 2.0*rsin(
+                    0.5*(real)rsmooth_arcmin*ARCMINTORAD);
+            else
+#endif
+                gd->rsmooth[0] = (real)rsmooth_arcmin*ARCMINTORAD;
             if (gd->rsmooth[0]>0.05*cmd->rangeN) {
                 verb_print(cmd->verbose,
             "Warning! rsmooth is greatear than 0.05*rangeN (%g %g)... fixing\n",
@@ -505,9 +562,6 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                            "\trsmooth is set to: %g\n", gd->rsmooth[0]);
             }
         }
-//B added 2025-12-30
-        gd->rsmooth[0] *= THETA;
-//E
 #undef ARCMINTORAD
 #else
         gd->rsmooth[0] = 0;                         // setting a safe value
@@ -934,6 +988,16 @@ local int hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
     Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
+#ifdef THREEPCFSHEAR
+    Gamma1(p) = 0.0;
+    Gamma2(p) = 0.0;
+    ShearWeightSum(p) = 0.0;
+    ShearWeight2(p) = 0.0;
+    ShearGamma2Re(p) = 0.0;
+    ShearGamma2Im(p) = 0.0;
+    ShearGammaAbs2(p) = 0.0;
+    ShearTransportError(p) = 0.0;
+#endif
     Selected(p) = FALSE;
     Update(p) = FALSE;
     CLRV(cmpos);

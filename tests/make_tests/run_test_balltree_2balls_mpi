@@ -33,7 +33,8 @@ fail_with_log()
 
 build_env=$(cd .. && make --no-print-directory -s \
     BALLTREE2BALLSMPION=1 TWOPCFON=1 TPCFON=1 print-cyballs-build-env)
-for macro in BALLTREE2BALLSMPI BALLTREE2BALLSOMP TWOPCF THREEPCFCONVERGENCE; do
+for macro in BALLTREE2BALLSMPI BALLTREE2BALLS_LEGACY_MPI_COMPAT \
+             BALLTREE2BALLSOMP TWOPCF THREEPCFCONVERGENCE; do
     grep -q -- "-D${macro}\\([[:space:]]\\|$\\)" <<<"$build_env" \
         || fail_with_log "the active build does not enable $macro"
 done
@@ -125,6 +126,9 @@ run_auto()
             theta=4
             nsmooth=8
             range_n=1.4
+            ;;
+        legacy)
+            options+=",legacy-one-ball,no-smooth-pivot"
             ;;
         *) fail_with_log "unknown acceptance profile: $acceptance" ;;
     esac
@@ -269,6 +273,9 @@ run_auto omp-and-cf balltree-2balls-omp 1 1 only-2pcf exact raw and-CF
 run_auto mpi-and-cf balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" only-2pcf exact raw and-CF
 run_cross omp-cross balltree-2balls-omp 1 1
 run_cross mpi-cross balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS"
+run_auto legacy-omp balltree-2balls-omp 1 1 combined legacy raw
+run_auto legacy-mpi-singleton balltree-2balls-mpi 1 "$MPI_THREADS" combined legacy raw
+run_auto legacy-mpi balltree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" combined legacy raw
 
 grep -q "balltree-2balls-mpi: $MPI_RANKS ranks" \
     "$TMP_ROOT/mpi-hybrid/run.log" \
@@ -295,6 +302,15 @@ for profile in pair-aggregate triple-aggregate 2pcf 3pcf normalized and-cf cross
         || fail_with_log "$profile MPI output differs from OpenMP" \
                          "$TMP_ROOT/mpi-$profile/run.log"
 done
+for candidate in legacy-mpi-singleton legacy-mpi; do
+    compare_numeric_outputs "$TMP_ROOT/legacy-omp" "$TMP_ROOT/$candidate" \
+        || fail_with_log "$candidate differs from OpenMP legacy compatibility" \
+                         "$TMP_ROOT/$candidate/run.log"
+done
+grep -q 'dispatching to the distributed balltree legacy kernel' \
+    "$TMP_ROOT/legacy-mpi/run.log" \
+    || fail_with_log "legacy-one-ball did not use the distributed compatibility kernel" \
+                     "$TMP_ROOT/legacy-mpi/run.log"
 
 pair_cells=$(sed -n \
     's/.*balltree-2balls-mpi: nbbcalc = [0-9][0-9]*, nbccalc = \([0-9][0-9]*\).*/\1/p' \
@@ -309,4 +325,4 @@ triple_cells=$(sed -n \
     || fail_with_log "the MPI aggregate run accepted no triple cells" \
                      "$TMP_ROOT/mpi-triple-aggregate/run.log"
 
-echo "PASS: BALLTREE2BALLSMPI 2PCF/3PCF equivalence, cross catalogs, aggregation, normalization, and rank determinism"
+echo "PASS: BALLTREE2BALLSMPI 2PCF/3PCF equivalence, legacy compatibility, cross catalogs, aggregation, normalization, and rank determinism"

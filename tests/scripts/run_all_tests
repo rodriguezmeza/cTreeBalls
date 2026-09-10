@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# set SMOOTHPIVOTON = 0 in addons/Makefile_addons_settings and then make "make clean; make all"
+# For the unsmoothed contract, build with SMOOTHPIVOTON=0 or pass options=no-smooth-pivot.
 #
 # If you want CFITSIO to remain optional, also move the FITS test out of run_all_tests.
 #
@@ -90,5 +90,4 @@ echo "===================="
 /bin/rm -rf ./Output/*
 time $CBALLS $InDir/parameters_to-test_nside256_fits_octree-ggg-omp || exit
 $PYTHON $scriptsDir/mZetaM_test_kkk_fits_octree-ggg-omp.py || exit
-
 

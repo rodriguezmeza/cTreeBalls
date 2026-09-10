@@ -7,6 +7,9 @@
 #define LYAFOREST1D3PCFMETHOD 181
 #define LYAFOREST1D2PCF3PCFMETHOD 182
 #define LYAFOREST1DTREE2PCFMETHOD 183
+#define LYAFOREST1DTREE3PCFMETHOD 193
+#define LYAFOREST1DTREE3PCFMPIMETHOD 194
+#define LYAFOREST1DTREESAMELOS2PCFMETHOD 195
 
 global int inputdata_lya_ascii(struct cmdline_data *cmd,
                                struct global_data *gd,
@@ -25,5 +28,13 @@ global int searchcalc_lya_forest_1d_omp(struct cmdline_data *cmd,
 global int searchcalc_lya_forest_1d_tree_omp(struct cmdline_data *cmd,
                                              struct global_data *gd,
                                              bodyptr table, INTEGER nbody);
+global int searchcalc_lya_forest_1d_tree_same_los_omp(
+                                             struct cmdline_data *cmd,
+                                             struct global_data *gd,
+                                             bodyptr table, INTEGER nbody);
+global int searchcalc_lya_forest_1d_tree_3pcf_omp(struct cmdline_data *cmd,
+                                                  struct global_data *gd,
+                                                  bodyptr table,
+                                                  INTEGER nbody);
 
 #endif

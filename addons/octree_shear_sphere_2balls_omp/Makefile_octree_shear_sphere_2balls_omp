@@ -1,0 +1,22 @@
+# dual-node-style two-cell full-sky weak-lensing shear estimator.
+
+ifeq ($(OCTREESHEARSPHERE2BALLSOMPON),1)
+OPT2 += -DOCTREESHEARSPHERE2BALLSOMP -DTHREEPCFSHEAR -DTWOPCF \
+	-DSHEAR_OMP_PIVOT_BLOCK_SIZE=$(SHEAR_OMP_PIVOT_BLOCK_SIZE)
+OCTREESHEARSPHERE2BALLSOMP = $(MDIR)/addons/octree_shear_sphere_2balls_omp/
+vpath %.c $(OCTREESHEARSPHERE2BALLSOMP)
+INCLUDES += -I$(OCTREESHEARSPHERE2BALLSOMP) \
+	-I$(MDIR)/addons/octree_shear_sphere_omp \
+	-I$(MDIR)/addons/octree_shear_omp
+HEADERFILES += $(wildcard $(OCTREESHEARSPHERE2BALLSOMP)/*.h)
+EXTERNAL += search_octree_shear_sphere_2balls_omp.o
+ifneq ($(OCTREESHEARSPHEREOMPON),1)
+vpath %.c $(MDIR)/addons/octree_shear_sphere_omp
+EXTERNAL += search_octree_shear_sphere_omp.o
+endif
+search_octree_shear_sphere_2balls_omp.o: \
+	$(OCTREESHEARSPHERE2BALLSOMP)/search_octree_shear_sphere_2balls_omp.c \
+	$(MDIR)/addons/octree_shear_omp/search_octree_shear_omp.c \
+	$(MDIR)/addons/octree_shear_sphere_omp/shear_sphere_dual_tree.h \
+	$(MDIR)/addons/octree_shear_sphere_omp/protodefs_octree_shear_sphere_omp.h
+endif

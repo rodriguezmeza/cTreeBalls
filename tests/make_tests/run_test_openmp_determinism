@@ -113,7 +113,7 @@ run_box_method()
         stepState=1000000 \
         verbose=0 \
         verbose_log=0 \
-        options=compute-HistN,and-CF,cute-box-fmt \
+        options=compute-HistN,and-CF \
         >"$output_dir/run.log" 2>&1 \
         || fail_with_log "$method failed with $threads threads" \
                          "$output_dir/run.log"
@@ -146,6 +146,7 @@ profile_has KDTREEOMP && run_pair kdtree-omp sky
 profile_has BALLTREEOMP && run_pair balltree-omp sky
 profile_has KDTREEBOXOMP && run_pair kdtree-box-omp box
 profile_has NEIGHBORBOXESOMP && run_pair neighbor-boxes-omp box
+profile_has NEIGHBORBOXESOMP && "$PYTHON" ./make_tests/test_neighbor_boxes_periodic.py
 profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_openmp_internal_determinism.py
 profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_only_2pcf.py
 profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_fast_path.py

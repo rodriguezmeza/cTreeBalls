@@ -28,17 +28,20 @@ make test-make-info
 make test-search-methods
 make test-openmp-determinism
 make test-scalar-numerical-contract
+make test-shear-sphere-2balls
+make test-shear-sphere-kdtree-2balls
+make test-shear-sphere-balltree-2balls
 make test-lya-forest-mpi
 make test-lya-corr-all-engines
 make test-octree-3pcf-3d-mpi
 ```
 
-MPI launchers require an MPI-enabled build and `mpiexec`. Optional-profile
-tests may rebuild cTreeBalls with the corresponding Make setting.
+MPI launchers require an MPI-enabled build and `mpiexec`. Runtime registry
+tests verify that disabled standalone methods are not exposed.
 
 `test_scalar_numerical_contract.py` checks raw weighted scalar multipoles
 against an independent oracle, rotations, inactive smoothing, degenerate
 bearings, and C file input. With matching C/Cython binaries, run it through
-pytest to include the optional TreeCorr reference. Set `CBALLS_TEST_MPI=1`
+pytest to include the optional dual-node reference. Set `CBALLS_TEST_MPI=1`
 and launch it with `mpiexec -n 2` to check the MPI sibling engines. CI repeats
 these checks with `SMOOTHPIVOTON=0` and `SMOOTHPIVOTON=1`.

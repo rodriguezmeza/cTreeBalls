@@ -59,10 +59,10 @@ def compare(left, right, exact=False):
             assert counts(a[name]) == counts(b[name])
 
 
-def check_scalar(root, los_ids=None):
+def check_scalar(root, los_ids=None, all_distinct=False):
     if los_ids is None:
         scalar.check_oracle(root)
-    xn, xd, zn, zd = scalar.direct_oracle(los_ids)
+    xn, xd, zn, zd = scalar.direct_oracle(los_ids, all_distinct=all_distinct)
     xi = np.loadtxt(root/"histXi2pcf_3d.txt")
     zeta = np.loadtxt(root/"histZetaM_3d.txt")
     for actual, expected in ((xi[:, 3], xn), (xi[:, 4], xd),
@@ -166,9 +166,9 @@ def c_tests(binary, mpi, mpi_only, fits=False):
             fits_io.BinTableHDU(table).writeto(root/"los.fits")
             out = run(extra={"infile": str(root/"los.fits"), "infileformat": "fits",
                              "columns": "1,2,3,4,5,6",
-                             "options": BOTH+",with-weight,exclude-same-los"})
-            check_scalar(out, los_ids)
-            print("PASS: MPI FITS 2PCF/3PCF and LOS exclusion oracle", flush=True)
+                             "options": BOTH+",with-weight,exclude-all-same-los"})
+            check_scalar(out, los_ids, all_distinct=True)
+            print("PASS: MPI FITS 2PCF/3PCF and strict LOS exclusion oracle", flush=True)
 
         # Enough pivot blocks to put real work on every rank in the two-rank test.
         rng = np.random.default_rng(90211)

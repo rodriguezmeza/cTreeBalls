@@ -50,6 +50,7 @@ if (lya_forest_method_kind(cmd->searchMethod) >= 3) {
                     routineName, cmd->searchMethod);
 
     if (lya_forest_method_kind(cmd->searchMethod) != 4
+        && lya_forest_method_kind(cmd->searchMethod) != 7
         && (!isfinite(cmd->lya2RpMax) || cmd->lya2RpMax <= 0.0
             || cmd->lya2RpBins < 1))
         cBALLS_FAIL(cmd, "%s: invalid radial Ly-alpha 2PCF domain or bin count",
@@ -57,6 +58,7 @@ if (lya_forest_method_kind(cmd->searchMethod) >= 3) {
 
     if (lya_forest_method_kind(cmd->searchMethod) != 3
         && lya_forest_method_kind(cmd->searchMethod) != 6
+        && lya_forest_method_kind(cmd->searchMethod) != 8
         && (!isfinite(cmd->lya3RMax) || cmd->lya3RMax <= 0.0
             || cmd->lya3RBins < 1 || cmd->lya3RBins > INT_MAX / 2))
         cBALLS_FAIL(cmd, "%s: invalid radial Ly-alpha 3PCF domain or bin count",

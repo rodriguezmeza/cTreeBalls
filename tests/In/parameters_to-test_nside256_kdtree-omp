@@ -15,11 +15,11 @@
 # -------------------------
 # -------------------------
 #
-searchMethod =                       kdtree-omp
+searchMethod =                       kdtree-2balls-omp
 #
 nsmooth =                            8
 #
-options =                            compute-HistN,and-CF,out-m-HistZeta
+options =                            compute-HistN,and-CF,out-m-HistZeta,legacy-one-ball
 #
 infile =                            ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
 infileformat =                       binary

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/../.."
+
+build_env=$(make --no-print-directory -s KDTREESHEARSPHERE2BALLSOMPON=1 \
+    print-cyballs-build-env)
+if ! grep -q -- '-DKDTREESHEARSPHERE2BALLSOMP\([[:space:]]\|$\)' \
+        <<<"$build_env"; then
+    echo "ERROR: active profile does not enable KDTREESHEARSPHERE2BALLSOMP" >&2
+    exit 2
+fi
+
+CBALLS_SHEAR_SPHERE_ENGINE=kdtree-shear-sphere-2balls-omp \
+PYTHONDONTWRITEBYTECODE=1 \
+    python3 tests/make_tests/test_shear_sphere_octree_omp.py

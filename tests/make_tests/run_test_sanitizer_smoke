@@ -34,15 +34,15 @@ run_valid()
 }
 
 run_valid octree-sincos-omp 0
-run_valid octree-ggg-omp 0
-run_valid kdtree-omp 0
-run_valid balltree-omp 0
+run_valid octree-2balls-omp 0
+run_valid kdtree-2balls-omp 0
+run_valid balltree-2balls-omp 0
 run_valid kdtree-box-omp 0
 
 invalid_dir="$TMP_ROOT/invalid-domain"
 mkdir -p "$invalid_dir"
 if "$CBALLS" \
-    search=octree-ggg-omp \
+    search=octree-2balls-omp \
     testmodel=simple-cubic \
     nbody=8 \
     rootDir="$invalid_dir" \

@@ -38,6 +38,10 @@ def write_ascii_catalog(path, positions, kappa):
 
 def collect(balls):
     balls.Run(level=["MainLoop"])
+    return collect_live(balls)
+
+
+def collect_live(balls):
     result = {
         "rBins": balls.getrBins().copy(),
         "histNN": balls.getHistNN().copy(),
@@ -50,6 +54,14 @@ def collect(balls):
                 balls.getHistZetaMsincos(m, component).copy()
             )
     return result
+
+
+def collect_staged(balls):
+    balls.Run(level=["SetNumberThreads"])
+    if not balls._runtime_bodytable_address():
+        raise AssertionError("staged startup did not retain the C-owned catalog")
+    balls.Run(level=["MainLoop"])
+    return collect_live(balls)
 
 
 def assert_same(reference, candidate):
@@ -102,6 +114,15 @@ def test_in_memory_catalog_matches_file_reader_and_reloads_cleanly():
         second = collect(memory_balls)
         assert_same(first, second)
         memory_balls.struct_cleanup()
+
+        staged_balls = cballs()
+        staged_balls.set(parameters(str(root)))
+        staged_balls.set_catalog(positions, kappa=kappa)
+        staged = collect_staged(staged_balls)
+        assert_same(first, staged)
+        staged_balls.Run(level=["MainLoop"])
+        assert_same(staged, collect_live(staged_balls))
+        staged_balls.struct_cleanup()
 
 
 def test_in_memory_catalog_validation_is_recoverable():

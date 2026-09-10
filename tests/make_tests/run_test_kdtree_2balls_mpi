@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+CBALLS=${CBALLS:-../cballs}
+PYTHON=${PYTHON:-python3}
+MPIEXEC=${MPIEXEC:-mpiexec}
+MPIEXEC_ARGS=${MPIEXEC_ARGS:-}
+MPI_RANKS=${MPI_RANKS:-2}
+MPI_THREADS=${MPI_THREADS:-2}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-kdtree-2balls-mpi.XXXXXX")
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+mpi_command=("$MPIEXEC")
+if [ -n "$MPIEXEC_ARGS" ]; then
+    read -r -a mpi_extra_args <<<"$MPIEXEC_ARGS"
+    mpi_command+=("${mpi_extra_args[@]}")
+elif "$MPIEXEC" --version 2>&1 | grep -qi 'Open MPI'; then
+    mpi_command+=(--oversubscribe --map-by slot)
+fi
+
+fail_with_log()
+{
+    echo "ERROR: $1" >&2
+    [ ! -f "${2:-/dev/null}" ] || cat "$2" >&2
+    exit 1
+}
+
+build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
+grep -q -- '-DKDTREE2BALLSMPI\([[:space:]]\|$\)' <<<"$build_env" \
+    || fail_with_log "the active build does not enable KDTREE2BALLSMPI"
+
+run_case()
+{
+    local name=$1 method=$2 ranks=$3 threads=$4 options=$5
+    local nbody=${6:-512}
+    local output="$TMP_ROOT/$name"
+    local -a command
+
+    mkdir -p "$output"
+    command=("$CBALLS" search="$method" testmodel=simple-cubic-random
+        "nbody=$nbody" lengthBox=2 rootDir="$output" numberThreads="$threads"
+        usePeriodic=false useLogHist=false rangeN=0.5 rminHist=0.005
+        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0.08 theta=1 seed=123
+        stepState=1000000 verbose=2 verbose_log=0 "options=$options")
+    if [ "$ranks" -gt 1 ]; then
+        "${mpi_command[@]}" -n "$ranks" "${command[@]}" \
+            >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    else
+        "${command[@]}" >"$output/run.log" 2>&1 \
+            || fail_with_log "$name failed" "$output/run.log"
+    fi
+}
+
+compare_numeric()
+{
+    "$PYTHON" - "$1" "$2" <<'PY'
+from pathlib import Path
+import math
+import sys
+
+left, right = map(Path, sys.argv[1:])
+names = sorted(path.name for path in left.glob("*.txt"))
+if not names or names != sorted(path.name for path in right.glob("*.txt")):
+    raise SystemExit("output file sets differ")
+for name in names:
+    def values(path):
+        out = []
+        for line in path.read_text(encoding="ascii").splitlines():
+            out.extend(line.split("#", 1)[0].split())
+        return [float(value) for value in out]
+    a, b = values(left / name), values(right / name)
+    if len(a) != len(b):
+        raise SystemExit(f"{name}: output lengths differ")
+    for index, (x, y) in enumerate(zip(a, b)):
+        if not math.isclose(x, y, rel_tol=5e-11, abs_tol=5e-12):
+            raise SystemExit(f"{name}:{index}: {x:.17g} != {y:.17g}")
+PY
+}
+
+for mode in both only-2pcf only-3pcf; do
+    options=KKKCorrelation,compute-HistN,out-m-HistZeta,no-two-balls,no-smooth-pivot
+    [ "$mode" = both ] || options+=",$mode"
+    run_case "omp-$mode" kdtree-2balls-omp 1 1 "$options"
+    run_case "mpi-$mode" kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" "$options"
+    compare_numeric "$TMP_ROOT/omp-$mode" "$TMP_ROOT/mpi-$mode" \
+        || fail_with_log "MPI $mode differs from OpenMP" "$TMP_ROOT/mpi-$mode/run.log"
+done
+
+legacy=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot
+run_case legacy-omp kdtree-2balls-omp 1 1 \
+    "$legacy,legacy-one-ball"
+run_case legacy-mpi kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" \
+    "$legacy,legacy-one-ball"
+compare_numeric "$TMP_ROOT/legacy-omp" "$TMP_ROOT/legacy-mpi" \
+    || fail_with_log "distributed legacy mode differs from OpenMP compatibility" \
+                     "$TMP_ROOT/legacy-mpi/run.log"
+grep -q 'dispatching to the distributed kdtree legacy kernel' \
+    "$TMP_ROOT/legacy-mpi/run.log" \
+    || fail_with_log "legacy-one-ball did not use the distributed legacy kernel" \
+                     "$TMP_ROOT/legacy-mpi/run.log"
+if grep -q -- '-DKDTREEMPI\([[:space:]]\|$\)' <<<"$build_env"; then
+    run_case legacy-reference kdtree-mpi "$MPI_RANKS" "$MPI_THREADS" \
+        "$legacy"
+    compare_numeric "$TMP_ROOT/legacy-reference" "$TMP_ROOT/legacy-mpi" \
+        || fail_with_log "distributed legacy mode differs from kdtree-mpi" \
+                         "$TMP_ROOT/legacy-mpi/run.log"
+fi
+
+direct=KKKCorrelation,compute-HistN,out-m-HistZeta,only-3pcf,no-two-balls,no-smooth-pivot,dual-node-direct-triples
+run_case direct-omp kdtree-2balls-omp 1 1 "$direct" 24
+run_case direct-mpi kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" "$direct" 24
+run_case direct-repeat kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" "$direct" 24
+compare_numeric "$TMP_ROOT/direct-omp" "$TMP_ROOT/direct-mpi" \
+    || fail_with_log "distributed direct triples differ from OpenMP" \
+                     "$TMP_ROOT/direct-mpi/run.log"
+compare_numeric "$TMP_ROOT/direct-mpi" "$TMP_ROOT/direct-repeat" \
+    || fail_with_log "distributed direct triples are not repeatable" \
+                     "$TMP_ROOT/direct-repeat/run.log"
+for file in "$TMP_ROOT/direct-mpi"/*.txt; do
+    cmp -s "$file" "$TMP_ROOT/direct-repeat/${file##*/}" \
+        || fail_with_log \
+            "distributed direct-triple output is not byte deterministic: ${file##*/}" \
+            "$TMP_ROOT/direct-repeat/run.log"
+done
+grep -q 'with direct triple-node 3PCF' "$TMP_ROOT/direct-mpi/run.log" \
+    || fail_with_log "dual-node-direct-triples did not select the direct oracle" \
+                     "$TMP_ROOT/direct-mpi/run.log"
+
+run_case mpi-repeat kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" \
+    KKKCorrelation,compute-HistN,out-m-HistZeta,no-two-balls,no-smooth-pivot
+for file in "$TMP_ROOT/mpi-both"/*.txt; do
+    cmp -s "$file" "$TMP_ROOT/mpi-repeat/${file##*/}" \
+        || fail_with_log "MPI output is not repeatable: ${file##*/}" \
+                         "$TMP_ROOT/mpi-repeat/run.log"
+done
+grep -q "kdtree-2balls-mpi: $MPI_RANKS ranks" "$TMP_ROOT/mpi-both/run.log" \
+    || fail_with_log "the requested MPI rank count was not used" \
+                     "$TMP_ROOT/mpi-both/run.log"
+
+if grep -q -- '-DSMOOTHPIVOT\([[:space:]]\|$\)' <<<"$build_env"; then
+    smooth=KKKCorrelation,compute-HistN,out-m-HistZeta,no-two-balls
+    run_case omp-smooth kdtree-2balls-omp 1 1 "$smooth"
+    run_case mpi-smooth kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" "$smooth"
+    compare_numeric "$TMP_ROOT/omp-smooth" "$TMP_ROOT/mpi-smooth" \
+        || fail_with_log "smooth MPI output differs from OpenMP" \
+                         "$TMP_ROOT/mpi-smooth/run.log"
+fi
+
+echo "PASS: KDTREE2BALLSMPI modes, legacy dispatch, direct triples, smoothing, reductions, and repeatability"

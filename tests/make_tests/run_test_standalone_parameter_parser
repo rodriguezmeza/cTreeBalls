@@ -41,7 +41,7 @@ expect_failure()
 seed_dir="$TMP_ROOT/seed"
 mkdir -p "$seed_dir"
 "$CBALLS" \
-    search=octree-ggg-omp \
+    search=octree-2balls-omp \
     testmodel=simple-cubic \
     nbody=8 \
     rootDir="$seed_dir" \

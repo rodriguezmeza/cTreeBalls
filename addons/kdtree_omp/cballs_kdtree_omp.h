@@ -6,7 +6,7 @@
 
 //#define KDTREEOMP         59
 
-    case 59:
+    case KDTREEOMPMETHOD:
         verb_print(cmd->verbose,
                    "\n\tevalHist: with kdtree-omp method\n\n");
 if (searchcalc_kdtree_omp(cmd, gd,

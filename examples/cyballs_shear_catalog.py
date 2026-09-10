@@ -21,7 +21,7 @@ def main():
     model = cballs()
     model.set(
         {
-            "searchMethod": "octree-shear-omp",
+            "searchMethod": "octree-shear-sphere-2balls-omp",
             "iCatalogs": "1",
             "usePeriodic": "false",
             "useLogHist": "false",

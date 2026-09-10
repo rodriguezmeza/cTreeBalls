@@ -47,7 +47,7 @@
     X(RBIN_ARCMIN, rbin_arcmin, "rbin-arcmin", 36) \
     X(RBIN_DEGREE, rbin_degree, "rbin-degree", 37) \
     X(READ_MASK, read_mask, "read-mask", 38) \
-    X(SMOOTH_PIVOT, smooth_pivot, "smooth-pivot", 39) \
+    X(SMOOTH_PIVOT, smooth_pivot_requested, "smooth-pivot", 39) \
     X(SW94, sw94, "sw94", 40) \
     X(WEIGHTS_NORM, weights_norm, "weights-norm", 41) \
     X(ARFKEN, arfken, "arfken", 42) \
@@ -65,7 +65,10 @@
       "no-check-two-bodies-eq-pos", 53) \
     X(ONLY_2PCF, only_2pcf, "only-2pcf", 54) \
     X(GGG_FULL_WINDOW, ggg_full_window, "ggg-full-window", 55) \
-    X(GGG_PROFILE, ggg_profile, "ggg-profile", 56)
+    X(GGG_PROFILE, ggg_profile, "ggg-profile", 56) \
+    X(NO_SMOOTH_PIVOT, no_smooth_pivot, "no-smooth-pivot", 57) \
+    X(ONLY_3PCF, only_3pcf, "only-3pcf", 58) \
+    X(LEGACY_ONE_BALL, legacy_one_ball, "legacy-one-ball", 59)
 
 #define CBALLS_OPTION_ENUM(symbol, accessor, text, bit) \
     CBALLS_OPTF_##symbol = 1ULL << (bit),
@@ -109,5 +112,57 @@ static inline void cballs_refresh_option_cache(struct cmdline_data *cmd)
 CBALLS_CACHED_OPTION_TABLE(CBALLS_OPTION_ACCESSOR)
 #undef CBALLS_OPTION_ACCESSOR
 #undef CBALLS_CACHED_OPTION_TABLE
+
+/* Keep this list restricted to engines, or explicit compatibility modes,
+ * using prepare_smooth_pivots().  That helper publishes private pivot state
+ * before workers start and is the thread-safe ownership contract. */
+static inline bool cballs_method_supports_smooth_pivot(const char *method)
+{
+    if (method == NULL || method[0] == '\0')
+        return FALSE;
+    return strcmp(method, "octree-sincos-omp") == 0
+        || strcmp(method, "kdtree-omp") == 0
+        || strcmp(method, "kdtree-mpi") == 0
+        || strcmp(method, "kdtree-2balls-omp") == 0
+        || strcmp(method, "kdtree-2balls-mpi") == 0
+        || strcmp(method, "balltree-omp") == 0
+        || strcmp(method, "balltree-mpi") == 0
+        || strcmp(method, "balltree-2balls-omp") == 0
+        || strcmp(method, "balltree-2balls-mpi") == 0
+        || strcmp(method, "octree-2balls-omp") == 0
+        || strcmp(method, "octree-2balls-mpi") == 0
+        || strcmp(method, "octree-ggg-omp") == 0
+        || strcmp(method, "octree-ggg-mpi") == 0
+        || strcmp(method, "octree-shear-omp") == 0
+        || strcmp(method, "octree-shear-sphere-omp") == 0
+        || strcmp(method, "octree-shear-sphere-2balls-omp") == 0
+        || strcmp(method, "kdtree-shear-sphere-2balls-omp") == 0
+        || strcmp(method, "balltree-shear-sphere-2balls-omp") == 0
+        || strcmp(method, "neighbor-boxes-omp") == 0;
+}
+
+static inline bool cballs_run_supports_smooth_pivot(
+        const struct cmdline_data *cmd)
+{
+    if (cmd == NULL)
+        return FALSE;
+    if (cmd->searchMethod != NULL
+        && (strcmp(cmd->searchMethod, "octree-2balls-omp") == 0
+            || strcmp(cmd->searchMethod, "octree-2balls-mpi") == 0))
+        return cballs_opt_legacy_one_ball(cmd);
+    return cballs_method_supports_smooth_pivot(cmd->searchMethod);
+}
+
+static inline bool cballs_opt_smooth_pivot(const struct cmdline_data *cmd)
+{
+#ifdef SMOOTHPIVOT
+    return cmd != NULL
+        && cballs_run_supports_smooth_pivot(cmd)
+        && !cballs_opt_no_smooth_pivot(cmd);
+#else
+    (void)cmd;
+    return FALSE;
+#endif
+}
 
 #endif

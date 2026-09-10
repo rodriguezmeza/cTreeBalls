@@ -3,99 +3,88 @@ Benchmarks and Numerical Comparisons
 
 A timing comparison is meaningful only when geometry, input selection,
 weights, bins, estimator, normalization, approximation, and computed orders
-match. The :doc:`search_methods` families deliberately measure different
-quantities. See :doc:`performance` for tuning after validating correctness.
+match. Validate a reduced catalog before timing a production one.
 
-Correctness Before Timing
+Driver Benchmarks
+-----------------
+
+The maintained convergence, shear, and forest drivers are in
+``tests/python``. They read a catalog once, retain it for all selected native
+engines, report wall and process CPU time, and save relative differences::
+
+   python3 tests/python/kappa_corr_all_engines.py --list-engines
+   python3 tests/python/shear_corr_all_engines.py --list-engines
+   python3 tests/python/lya_corr_all_engines.py --list-engines
+
+For a scalar full-sky comparison::
+
+   python3 tests/python/kappa_corr_all_engines.py \
+      --fits catalogs/map.fits --engine all-omp --statistics both \
+      --threads 16 --outdir results/kappa
+
+Use ``--statistics 2pcf`` to keep pair timings free of compiled 3PCF work.
+``--max-points`` performs deterministic input thinning for scaling tests; zero
+retains every selected point.
+
+Masks and Edge Correction
 -------------------------
 
-For the scalar angular family, use
-``no-normalize-HistZeta,weights-norm`` and the distinct-triplet contract in
-:doc:`3pcf`. All listed raw kernels remove repeated neighbors internally,
-including KD-tree, legacy balltree, and BALLS4. Do not subtract them again in
-Python. Reconstruct complex modes before comparing; separate sine/cosine
-component matrices depend on the pivot tangent basis.
+All six active scalar angular engines support masks and complex 3PCF edge
+correction::
 
-On a reduced catalog, compare ``no-one-ball,no-two-balls`` with decreasing
-``theta`` and record errors per multipole/bin. Exact numerical tests cover
-rotations, nonuniform weights, partial skies, undefined bearings, file versus
-memory input, and OpenMP/MPI execution::
+   python3 tests/python/kappa_corr_all_engines.py \
+      --fits catalogs/map.fits --mask catalogs/mask.fits \
+      --engine octree-2balls-omp,kdtree-2balls-omp \
+      --edge-corrections --threads 16 --outdir results/masked
 
-   python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
-   CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/make_tests/test_scalar_numerical_contract.py
-
-Use matching C/Cython builds, with both ``SMOOTHPIVOTON=0`` and
-``SMOOTHPIVOTON=1`` tested without runtime smoothing. TreeCorr is an optional
-reference dependency for the pytest run. CI repeats these contracts; passing
-small catalogs does not certify full-resolution performance.
+The full input and active count are recorded separately. Masking selects
+bodies; edge correction solves the angular window system and requires 3PCF.
 
 General CPU Suite
 -----------------
 
 The optional local workspace ``addons/python_env/cputime_comparison`` contains
-``benchmark_kappa_corr.py``, focused ENCORE scripts, and environment tools.
-It may be absent from a published checkout or sdist; it is not a runtime
-dependency. This directory is separate from the older script of the same
-name under ``tests/python``.
+the broader ``benchmark_kappa_corr.py`` runner. It compares active cTreeBalls
+methods with compatible Corrfunc, FCFC, and lya2pcf workloads. This directory
+is deliberately excluded from publication branches and source distributions.
 
-When that workspace and the external source snapshots are present, run from
-its directory::
+From a configured local workspace::
 
    ./create_benchmark_environment
    conda activate ctreeballs-bench
-   ./verify_benchmark_environment.py
    python3 benchmark_kappa_corr.py --help
 
-The environment bootstrap installs/builds local TreeCorr, Corrfunc, FCFC,
-lya2pcf, ENCORE, and cTreeBalls sources, and registers the
-``Python (cTreeBalls benchmarks)`` Jupyter kernel. It rebuilds native code:
-review its README and source-path overrides before running it.
-ENCORE and FCFC are native executables, not Python packages.
-
-A bounded scalar comparison, from that directory::
+Example scalar run::
 
    python3 benchmark_kappa_corr.py \
-       --scenarios sphere-counts,sphere-3pcf-convergence \
-       --backends ctreeballs,treecorr \
-       --sphere-methods octree-ggg-omp,kdtree-omp,balltree-omp \
-       --sphere-3pcf-methods octree-ggg-omp,kdtree-omp,balltree-omp,octree-balls4-omp \
-       --sizes 32,96 --threads 1,3 --nbins 4 \
-       --theta-min 1 --theta-max 120 --warmups 0 --repeats 1 \
-       --no-plots --fail-on-mismatch --outdir results/scalar-check
+      --scenarios sphere-counts,sphere-convergence \
+      --backends ctreeballs,corrfunc \
+      --sphere-methods kdtree-2balls-omp,balltree-2balls-omp,octree-2balls-omp \
+      --sizes 1000,10000 --threads 1,8 --repeats 5 \
+      --outdir results/scalar
 
-These benchmark angles are degrees and are converted to chord distances.
-The shared contract is ``scalar-3pcf-logmultipole-distinct``. The historical
-``--keep-repeated-neighbors`` option does not restore repeated neighbors in
-the current distinct-only kernels.
+Corrfunc provides selected pair-count workloads, FCFC provides periodic
+isotropic pair counts, and lya2pcf provides a forest 2PCF reference. Unsupported
+combinations are written to ``skipped.csv`` instead of being compared as if
+their estimators matched.
 
-Use ``--help`` for scenarios/method controls and the native executable's
-``options=print-search-methods`` for compiled methods.
-The parent benchmark launches selected MPI workers; do not launch the parent
-under ``mpiexec``. Use ``--mpi-ranks`` and the same MPI runtime as cyballs.
+MPI Timing
+----------
 
-Outputs and Interpretation
---------------------------
+The parent benchmark launches MPI workers; do not launch the parent itself
+under ``mpiexec``. Use ``--mpi-ranks`` and repeated ``--mpi-extra-arg`` values.
+The C extension, ``mpi4py``, compiler wrapper, and launcher must use the same
+MPI implementation. Record ranks and threads per rank because catalog/tree
+memory is generally replicated.
 
-* ``metadata.json`` records command, software paths, build information, and timing policy.
-* ``values.csv`` records bins and real/imaginary multipoles.
-* ``comparisons.csv`` records zero-safe symmetric relative differences.
-* ``speedups.csv`` groups compatible ``work_contract`` values.
+Outputs
+-------
 
-Time comparable work: a combined 2PCF/3PCF engine is not a pure-2PCF baseline.
-MPI timings can include launch and collective costs; inspect the recorded
-timing scope. Repeat measurements and record hardware, affinity, ranks,
-threads, warmups, and approximation settings. Failed numerical comparisons
-must not be promoted to speedup claims.
+``summary.json`` and ``timing_report.txt`` are produced by the field drivers.
+The general suite writes ``timings.csv``, ``summary.csv``, ``speedups.csv``,
+``comparisons.csv``, ``values.csv``, ``skipped.csv``, and ``metadata.json``.
+Three-point plots include per-mode matrices and flattened radial-bin views.
 
-Other References
-----------------
-
-TreeCorr supports matched scalar/shear reference workflows. Corrfunc and FCFC
-serve selected 2PCF/counting scenarios, not every 3PCF or field.
-lya2pcf is a CPU 2PCF reference; it is not an independent 3PCF reference.
-ENCORE has separate periodic scalar and nonperiodic data/random survey
-benchmarks. Use the matching estimator and executable.
-
-For catalog workflows and plots outside the optional timing workspace, use
-the kappa and forest all-engines drivers and the examples under ``examples/``.
-See :doc:`user/python`, :doc:`lyman_alpha`, and :doc:`scalar_3d`.
+Report hardware, affinity, compile flags, smoothing, approximation controls,
+warmups, repeats, and timing scope with any performance claim. A faster result
+with a different normalization or triplet policy is not a valid speedup.

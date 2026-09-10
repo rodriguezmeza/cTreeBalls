@@ -157,8 +157,9 @@ The returned arrays are NumPy copies, not views of freed C storage.
 Shear Getters
 ~~~~~~~~~~~~~
 
-The following getters require an ``OCTREESHEAROMP`` build and a successful
-``octree-shear-omp`` run:
+The following getters require a shear addon build and a successful flat-sky
+or full-sky shear run, including the octree, KD-tree, and ball-tree spherical
+two-ball variants:
 
 ``getShearXiPlus()``, ``getShearXiMinus()``, and ``getShearXiWeight()``
     Return complex 2PCFs and their real pair-weight denominator, each with

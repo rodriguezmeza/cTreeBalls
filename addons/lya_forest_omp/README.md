@@ -14,26 +14,30 @@ The available search methods are:
 - `lya-2pcf-3pcf-omp`: both estimators in one tree traversal.
 - `lya-1d-2pcf-omp`: weighted radial-only 2PCF.
 - `lya-1d-tree-2pcf-omp`: exact interval-tree radial-only 2PCF.
+- `lya-1d-tree-same-los-2pcf-omp`: equal-LOS average of exact within-forest
+  radial 2PCFs.
+- `lya-1d-tree-3pcf-omp`: exact interval-tree radial-only 3PCF.
 - `lya-1d-3pcf-omp`: weighted radial-only 3PCF.
 - `lya-1d-2pcf-3pcf-omp`: both radial estimators in one scan.
 
 All methods require `DEFDIMENSION=3`, OpenMP, `usePeriodic=false`, exactly one
 input file, and `infileformat=lya-ascii`.
 
-Set `LYAFORESTMPION=1` for an MPI+OpenMP counterpart of every method above,
-replacing the final `-omp` with `-mpi`. See
+Set `LYAFORESTMPION=1` for an MPI+OpenMP counterpart of every method above
+except `lya-1d-tree-same-los-2pcf-omp`, replacing the final `-omp` with `-mpi`.
+See
 [`addons/lya_forest_mpi/README.md`](../lya_forest_mpi/README.md) for the
 replicated-catalog contract, example parameters, and rank-comparison tests.
 
 ## Input
 
-The multi-engine driver `python/lya_corr_all_engines.py` reads DESI DR1 delta
+The multi-engine driver `tests/python/lya_corr_all_engines.py` reads DESI DR1 delta
 FITS, NPZ, or this ASCII format once and retains the catalog across engines.
 Use `cyballs.cballs.set_forest_catalog(positions, delta, weights, forest_ids)`
 for direct NumPy input. Equal integer IDs identify the same quasar; observer
 distances and sightlines are initialized before tree construction. The driver
 broadcasts the retained arrays once for MPI. See
-[`python/README_lya_corr_all_engines.md`](../../python/README_lya_corr_all_engines.md)
+[`tests/python/README_lya_corr_all_engines.md`](../../tests/python/README_lya_corr_all_engines.md)
 for a small public DESI download and run examples.
 
 The ASCII interchange format has six columns:
@@ -43,8 +47,9 @@ x y z delta weight forest_id
 ```
 
 Coordinates are observer-centered comoving Cartesian coordinates. `forest_id`
-identifies the quasar sightline. Pairs and triplets containing two pixels from
-the same forest are excluded.
+identifies the quasar sightline. The standard forest estimators exclude pairs
+and triplets containing two pixels from the same forest. The explicitly named
+`same-los` method is the exception: it accepts only pairs with equal IDs.
 
 Convert one or more lya2pcf `data*.npy` files with:
 
@@ -89,6 +94,12 @@ compile-time block size with `LYA1D_OMP_PIVOT_BLOCK_SIZE` in
 more parallel tasks for small or strongly imbalanced catalogs, while larger
 values reduce merge synchronization for inexpensive 2PCF workloads.
 
+The radial 3PCF tree leaf capacity is configured independently with
+`LYA1D_TREE3_LEAF_SIZE` in the same file; the default is 8. Smaller leaves
+increase traversal depth and exact-node resolution, while larger leaves reduce
+tree overhead but leave more work to the leaf kernel. Both values appear in
+`cballs options=make-info` so benchmark profiles are reproducible.
+
 `lya-1d-tree-2pcf-omp` is an independent, exact alternative for dense radial
 2PCF workloads. It builds a balanced binary interval tree over the same radial
 ordering. A node pair is accumulated in bulk only when its minimum and maximum
@@ -101,6 +112,26 @@ so output is byte-identical across OpenMP thread counts. The ordinary
 `lya-1d-2pcf-omp` range scan remains the preferred baseline for sparse catalogs
 or very narrow radial windows.
 
+`lya-1d-tree-same-los-2pcf-omp` builds an independent balanced interval tree
+for every `forest_id` and traverses only `(tree_f, tree_f)`. It therefore never
+forms a cross-forest pair. For each radial bin and forest it computes
+`xi_f = sum(w_i delta_i w_j delta_j) / sum(w_i w_j)`, then publishes the
+unweighted mean of `xi_f` over forests whose denominator is nonzero in that
+bin. This gives each occupied sightline equal weight rather than weighting the
+answer by its pixel-pair count. Forests are committed in sorted ID order, so
+the output is byte-identical across OpenMP thread counts.
+
+`lya-1d-tree-3pcf-omp` computes the same signed-lag matrix as
+`lya-1d-3pcf-omp`, but avoids its quadratic neighbor-pair loop. For each pivot,
+the interval tree bulk-accumulates weight and weighted-delta moments only when
+a complete node lies in one signed lag bin. Their outer products represent all
+ordered neighbor pairs. The kernel then removes the pivot forest, self-pairs,
+and all pairs whose two neighbors share a forest ID. The latter correction uses
+a sparse per-worker forest/bin table, so memory does not scale as the full
+number of forests times the number of bins. Fixed pivot blocks make output
+byte-identical across OpenMP thread counts. This method is usually preferable
+to the range-scan 3PCF when radial windows contain many pixels.
+
 Outputs are `<histXi2pcfFileName>_lya.txt` and
 `<histZetaFileName>M_lya5d.txt`. The 3PCF output is sparse by default; add
 `lya-output-empty-bins` to `options` to include zero-weight bins. Both
@@ -109,6 +140,10 @@ estimators define a zero-denominator bin to have correlation zero.
 Radial outputs are `<histXi2pcfFileName>_lya1d.txt` and
 `<histZetaFileName>M_lya1d.txt`. They use the same zero-denominator and sparse
 3PCF policies.
+
+The same-LOS output is `<histXi2pcfFileName>_lya1d_same_los.txt`. Its five
+columns are `bin radial_separation xi sum_xi contributing_los`; consequently
+`xi = sum_xi / contributing_los`, with zero used when no LOS contributes.
 
 ## Tests
 
@@ -119,10 +154,11 @@ OpenMP determinism:
 make LYAFORESTOMPON=1 test-lya-forest-omp
 ```
 
-The radial regression additionally checks a direct Python oracle, the scan and
-tree implementations against one another, same-quasar subtraction, invariance
-under arbitrary changes to transverse coordinates, and one-thread versus
-multi-thread byte-for-byte repeatability:
+The radial regression additionally checks direct Python 2PCF and 3PCF oracles,
+the scan and tree implementations against one another, same-quasar subtraction,
+the same-LOS equal-forest estimator, invariance under arbitrary changes to
+transverse coordinates, and one-thread versus multi-thread byte-for-byte
+repeatability:
 
 ```bash
 make LYAFORESTOMPON=1 test-lya-forest-1d-omp

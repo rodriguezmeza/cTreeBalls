@@ -1,21 +1,14 @@
+cTreeBalls scalar 3PCF notes
+===========================
 
-In addons/Makefile_addons_settings do:
+Build the active profile with ``TPCFON=1`` and run, from the checkout root:
 
-SMOOTHPIVOTON = 1
-TPCFON = 1
-PRUNEON = 1
-THETA = 1.25
+    python3 tests/python/kappa_corr_all_engines.py \
+        --fits tests/catalogs/allskymap_nres12r081_zs9_mag.fits \
+        --engine octree-2balls-omp,kdtree-2balls-omp,balltree-2balls-omp \
+        --statistics 3pcf --threads 16 --outdir Output_3pcf
 
-and in cTreeBalls directory:
-
-$ make clean; make all
-
-Then in directory "tests"
-
-$ time python python/kappa_corr.py --fits catalogs/Takahashi/allskymap_nres12r081_zs9_mag.fits --threads 16
-
-$ python python/compare_xi2pcf_curves.py --outdir ./ --scale loglog --xscale arcmin --plot-mul-theta --file-a Output/histXi2pcf.txt --file-b Outputs_to_compare_with/Output_nside4096_octree-ggg-omp_NMultipoles_NONORMHIST/histXi2pcf.txt --ref b
-
-$ python python/compare_xi3pcf_flatten_curves.py --file-a Output --bin-min 100 --bin-max 400 --scale semilogy --file-b Outputs_to_compare_with/Output_nside4096_octree-ggg-omp_NMultipoles_NONORMHIST/ --ref b
-
-
+The driver uses the same in-memory catalog for every selected engine and
+writes radial-bin and flattened 3PCF comparison plots. For a strict numerical
+check, use exact body traversal on a small catalog before enabling approximate
+dual-node acceptance.

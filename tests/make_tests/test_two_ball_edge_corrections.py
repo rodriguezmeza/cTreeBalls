@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent complex-window oracle for the six TreeCorr-style addons."""
+"""Independent complex-window oracle for dual-node-style and KD-tree addons."""
 
 import argparse
 import itertools
@@ -15,6 +15,8 @@ ENGINES = (
     "balltree-2balls-omp", "balltree-2balls-mpi",
     "balltree-2balls-omp_3pcf", "balltree-2balls-mpi_3pcf",
     "octree-2balls-omp", "octree-2balls-mpi",
+    "kdtree-omp", "kdtree-mpi",
+    "kdtree-2balls-omp", "kdtree-2balls-mpi",
 )
 MMAX, BINS, RMIN, RMAX = 2, 4, 0.02, 1.5
 
@@ -138,10 +140,18 @@ def cli_tests(executable, engines, dimension, mpi_command):
             output.mkdir(exist_ok=True)
             options = ["KKKCorrelation", "only-3pcf",
                        "edge-corrections", "no-normalize-HistZeta", *extra]
+            if (engine.startswith("kdtree-")
+                    or engine in {"balltree-2balls-omp",
+                                  "balltree-2balls-mpi"}):
+                options.append("no-smooth-pivot")
             if weighted:
                 options.append("weights-norm")
             if exact:
-                options.append("no-two-balls")
+                options.append(
+                    "no-one-ball"
+                    if engine in {"kdtree-omp", "kdtree-mpi"}
+                    else "no-two-balls"
+                )
             files = datafile if isinstance(datafile, tuple) else (datafile,)
             command = [str(executable), f"search={engine}",
                        "in=" + ",".join(str(root / name) for name in files),
@@ -185,9 +195,11 @@ def cli_tests(executable, engines, dimension, mpi_command):
             # Test the solver with the actual approximated signal/window too.
             np.testing.assert_allclose(aggregate[2], edge_solution(*aggregate[:2]),
                                        rtol=2e-7, atol=2e-8)
-            if "-mpi" not in engine and engine != "balltree-2balls-omp":
-                assert_results(run(engine, extra=("treecorr-direct-triples",)), reference)
-            if engine.startswith("octree"):
+            if "-mpi" not in engine and engine.startswith("octree-"):
+                assert_results(run(engine, extra=("dual-node-direct-triples",)), reference)
+            if (engine.startswith(("octree", "kdtree"))
+                    or engine in {"balltree-2balls-omp",
+                                  "balltree-2balls-mpi"}):
                 masked = tuple(array.copy() for array in data)
                 masked[3][2**dimension::2] = 0
                 masked[1][masked[3] == 0] = 1e6
@@ -221,54 +233,12 @@ def cli_tests(executable, engines, dimension, mpi_command):
             print(f"PASS: {engine}: raw/window/edge oracle, determinism, failures", flush=True)
 
 
-def treecorr_tests(executable, engines, mpi_command):
-    import treecorr
-
-    data = catalog(dimension=2)
-    positions, kappa, weights, _ = data
-    # TreeCorr stores leaf w and w*k as float. Dyadic fields and weights isolate
-    # the estimator comparison from that different input-storage precision.
-    kappa[:] = np.rint(8 * kappa) / 8
-    weights[:] = np.rint(8 * weights) / 8
-    reference = treecorr.KKKCorrelation(
-        min_sep=RMIN, max_sep=RMAX, nbins=BINS, max_n=2 * MMAX,
-        bin_type="LogMultipole", brute=True, bin_slop=0, angle_slop=0, verbose=0)
-    reference.process(treecorr.Catalog(x=positions[:, 0], y=positions[:, 1],
-                                      k=kappa, w=weights), num_threads=1)
-    center = 2 * MMAX
-    signal = np.moveaxis(reference.zeta[:, :, center:center + MMAX + 1], -1, 0)
-    window = np.moveaxis(reference.weight[:, :, center:], -1, 0)
-    expected = signal, window, edge_solution(signal, window)
-    with tempfile.TemporaryDirectory(prefix="ctreeballs-two-ball-treecorr-") as tmp:
-        root = Path(tmp)
-        write_catalog(root / "input.txt", data)
-        for engine in engines:
-            output = root / engine
-            output.mkdir()
-            command = [str(executable), f"search={engine}",
-                       f"in={root / 'input.txt'}", "infmt=columns-ascii-all",
-                       "iCatalogs=1", f"rootDir={output}", "numberThreads=2",
-                       "useLogHist=true", "usePeriodic=false", f"rangeN={RMAX}",
-                       f"rminHist={RMIN}", f"sizeHistN={BINS}", f"mChebyshev={MMAX}",
-                       "sizeHistPhi=8", "nsmooth=2", "verbose=0", "verbose_log=0",
-                       "options=KKKCorrelation,weights-norm,only-3pcf,"
-                       "edge-corrections,no-normalize-HistZeta,no-two-balls"]
-            if "-mpi" in engine and mpi_command:
-                command = [*mpi_command, *command]
-            proc = subprocess.run(command, text=True, capture_output=True, timeout=120)
-            assert proc.returncode == 0, proc.stdout + proc.stderr
-            actual = load_results(output)
-            assert_results(actual, expected)
-            print(f"PASS: {engine}: TreeCorr {treecorr.__version__} raw/window/edge", flush=True)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cballs", type=Path, required=True)
     parser.add_argument("--engine", action="append", choices=ENGINES)
     parser.add_argument("--dimension", type=int, choices=(2, 3), default=3)
     parser.add_argument("--mpi-command", default="")
-    parser.add_argument("--treecorr", action="store_true", help="compare a 2D build to TreeCorr")
     args = parser.parse_args()
     executable = args.cballs.resolve()
     available = subprocess.run([str(executable), "options=print-search-methods"],
@@ -276,12 +246,7 @@ def main():
     engines = args.engine or [engine for engine in ENGINES if f"- {engine} (id=" in available]
     if not engines:
         raise SystemExit("no two-ball engines selected; pass --engine explicitly")
-    if args.treecorr:
-        if args.dimension != 2:
-            parser.error("--treecorr requires --dimension 2 and a 2D executable")
-        treecorr_tests(executable, engines, shlex.split(args.mpi_command))
-    else:
-        cli_tests(executable, engines, args.dimension, shlex.split(args.mpi_command))
+    cli_tests(executable, engines, args.dimension, shlex.split(args.mpi_command))
 
 
 if __name__ == "__main__":

@@ -76,6 +76,33 @@ def oracle_2pcf() -> dict[int, tuple[float, float]]:
     return {key: tuple(value) for key, value in result.items()}
 
 
+def oracle_same_los_2pcf(
+    radii=RADII, delta=DELTA, weight=WEIGHT, forest=FOREST
+) -> dict[int, tuple[float, float]]:
+    per_los: dict[int, dict[int, list[float]]] = {}
+    for i, j in itertools.combinations(range(len(radii)), 2):
+        if forest[i] != forest[j]:
+            continue
+        bin_index = positive_bin(abs(radii[j] - radii[i]), RP_MAX, RP_BINS)
+        if bin_index is None:
+            continue
+        cell = per_los.setdefault(int(forest[i]), {}).setdefault(
+            bin_index, [0.0, 0.0]
+        )
+        cell[0] += delta[i] * weight[i] * delta[j] * weight[j]
+        cell[1] += weight[i] * weight[j]
+
+    result: dict[int, list[float]] = {}
+    for histogram in per_los.values():
+        for bin_index, (numerator, denominator) in histogram.items():
+            if denominator <= 0:
+                continue
+            cell = result.setdefault(bin_index, [0.0, 0.0])
+            cell[0] += numerator / denominator
+            cell[1] += 1.0
+    return {key: tuple(value) for key, value in result.items()}
+
+
 def oracle_3pcf() -> dict[tuple[int, int], tuple[float, float]]:
     result: dict[tuple[int, int], list[float]] = {}
     for pivot in range(RADII.size):
@@ -243,6 +270,14 @@ def main() -> None:
         tree_block_one = root / "tree_block_one"
         tree_block_many = root / "tree_block_many"
         tree_one_forest = root / "tree_one_forest"
+        same_los_one = root / "same_los_one"
+        same_los_many = root / "same_los_many"
+        same_los_transverse = root / "same_los_transverse"
+        same_los_one_forest = root / "same_los_one_forest"
+        tree_three_one = root / "tree_three_one"
+        tree_three_many = root / "tree_three_many"
+        tree_three_transverse = root / "tree_three_transverse"
+        tree_three_one_forest = root / "tree_three_one_forest"
         run(binary, collinear_input, one, 1)
         run(binary, collinear_input, many, min(4, os.cpu_count() or 1))
         run(binary, wide_angle_input, transverse, 1)
@@ -279,13 +314,45 @@ def main() -> None:
             min(4, os.cpu_count() or 1),
             "lya-1d-tree-2pcf-omp",
         )
+        run(binary, collinear_input, same_los_one, 1,
+            "lya-1d-tree-same-los-2pcf-omp")
+        run(binary, collinear_input, same_los_many,
+            min(4, os.cpu_count() or 1),
+            "lya-1d-tree-same-los-2pcf-omp")
+        run(binary, wide_angle_input, same_los_transverse, 1,
+            "lya-1d-tree-same-los-2pcf-omp")
+        run(binary, one_forest_input, same_los_one_forest,
+            min(4, os.cpu_count() or 1),
+            "lya-1d-tree-same-los-2pcf-omp")
+        run(binary, collinear_input, tree_three_one, 1,
+            "lya-1d-tree-3pcf-omp")
+        run(
+            binary,
+            collinear_input,
+            tree_three_many,
+            min(4, os.cpu_count() or 1),
+            "lya-1d-tree-3pcf-omp",
+        )
+        run(binary, wide_angle_input, tree_three_transverse, 1,
+            "lya-1d-tree-3pcf-omp")
+        run(
+            binary,
+            one_forest_input,
+            tree_three_one_forest,
+            min(4, os.cpu_count() or 1),
+            "lya-1d-tree-3pcf-omp",
+        )
 
         output2 = "histXi2pcf_lya1d.txt"
+        output2_same_los = "histXi2pcf_lya1d_same_los.txt"
         output3 = "histZetaM_lya1d.txt"
         assert_histogram_close(read_2pcf(one / output2), oracle_2pcf(), "1D 2PCF")
         assert_histogram_close(read_3pcf(one / output3), oracle_3pcf(), "1D 3PCF")
         assert_histogram_close(
             read_2pcf(tree_one / output2), oracle_2pcf(), "1D tree 2PCF"
+        )
+        assert_histogram_close(
+            read_3pcf(tree_three_one / output3), oracle_3pcf(), "1D tree 3PCF"
         )
         for name in (output2, output3):
             baseline = (one / name).read_bytes()
@@ -314,10 +381,49 @@ def main() -> None:
         )
         if read_2pcf(tree_one_forest / output2):
             raise AssertionError("same-forest subtraction left nonzero 2PCF bins")
+        assert_histogram_close(
+            read_2pcf(same_los_one / output2_same_los),
+            oracle_same_los_2pcf(), "same-LOS equal-forest mean 2PCF",
+        )
+        if (same_los_one / output2_same_los).read_bytes() != (
+            same_los_many / output2_same_los
+        ).read_bytes():
+            raise AssertionError("same-LOS radial tree 2PCF is not deterministic")
+        if (same_los_one / output2_same_los).read_bytes() != (
+            same_los_transverse / output2_same_los
+        ).read_bytes():
+            raise AssertionError("transverse coordinates changed same-LOS 2PCF")
+        assert_histogram_close(
+            read_2pcf(same_los_one_forest / output2_same_los),
+            oracle_same_los_2pcf(
+                one_forest_catalog[:, 0], one_forest_catalog[:, 3],
+                one_forest_catalog[:, 4], one_forest_catalog[:, 5].astype(int),
+            ),
+            "single-LOS interval-tree 2PCF",
+        )
+        if (same_los_one / output2).exists():
+            raise AssertionError("same-LOS engine overwrote the cross-LOS output")
         if (tree_one / output3).exists():
             raise AssertionError("radial tree 2PCF emitted a disabled 3PCF product")
+        if (tree_three_one / output3).read_bytes() != (
+            tree_three_many / output3
+        ).read_bytes():
+            raise AssertionError("radial tree 3PCF is not deterministic")
+        assert_histogram_close(
+            read_3pcf(tree_three_one / output3),
+            read_3pcf(three_only / output3),
+            "tree versus range-scan 3PCF",
+        )
+        if (tree_three_one / output3).read_bytes() != (
+            tree_three_transverse / output3
+        ).read_bytes():
+            raise AssertionError("transverse coordinates changed radial tree 3PCF")
+        if read_3pcf(tree_three_one_forest / output3):
+            raise AssertionError("same-forest subtraction left nonzero 3PCF bins")
+        if (tree_three_one / output2).exists():
+            raise AssertionError("radial tree 3PCF emitted a disabled 2PCF product")
 
-    print("PASS: radial Ly-alpha scan/tree oracles, forest exclusion, and deterministic OpenMP reductions")
+    print("PASS: radial Ly-alpha scan/tree and same-LOS oracles, forest contracts, and deterministic OpenMP reductions")
 
 
 if __name__ == "__main__":

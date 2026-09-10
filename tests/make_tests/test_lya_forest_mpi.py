@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent Ly-alpha oracles and OpenMP/MPI comparisons for all seven modes."""
+"""Independent Ly-alpha oracles and OpenMP/MPI comparisons for all eight modes."""
 import argparse
 import json
 import os
@@ -15,7 +15,9 @@ import test_lya_forest_omp as three
 import test_lya_forest_1d_omp as radial
 
 METHODS = ("lya-2pcf", "lya-3pcf", "lya-2pcf-3pcf", "lya-1d-2pcf",
-           "lya-1d-3pcf", "lya-1d-2pcf-3pcf", "lya-1d-tree-2pcf")
+           "lya-1d-3pcf", "lya-1d-2pcf-3pcf", "lya-1d-tree-2pcf",
+           "lya-1d-tree-3pcf")
+METHOD_IDS = (185, 186, 187, 188, 189, 190, 191, 194)
 
 
 def params(kind, catalog, output, threads=1):
@@ -39,7 +41,7 @@ def products(kind):
         (kind in (0, 2), "histXi2pcf_lya.txt"),
         (kind in (1, 2), "histZetaM_lya5d.txt"),
         (kind in (3, 5, 6), "histXi2pcf_lya1d.txt"),
-        (kind in (4, 5), "histZetaM_lya1d.txt")) if condition)
+        (kind in (4, 5, 7), "histZetaM_lya1d.txt")) if condition)
 
 
 def check_oracle(kind, output):
@@ -52,7 +54,7 @@ def check_oracle(kind, output):
     if kind in (3, 5, 6):
         radial.assert_histogram_close(radial.read_2pcf(output/"histXi2pcf_lya1d.txt"),
                                       radial.oracle_2pcf(), "radial 2PCF")
-    if kind in (4, 5):
+    if kind in (4, 5, 7):
         radial.assert_histogram_close(radial.read_3pcf(output/"histZetaM_lya1d.txt"),
                                       radial.oracle_3pcf(), "radial 3PCF")
     for name in products(kind):
@@ -117,7 +119,7 @@ def c_tests(binary, mpi, mpi_only):
             if not mpi_only:
                 omp = run(kind, suffix="omp", threads=3)
                 compare(kind, omp, one)
-            for extra in (dict(lya2RpMax=0) if kind not in (1, 4) else dict(lya3RMax=0),
+            for extra in (dict(lya2RpMax=0) if kind not in (1, 4, 7) else dict(lya3RMax=0),
                           dict(usePeriodic=True)):
                 run(kind, extra=extra, fail=True)
             if kind < 3:
@@ -148,20 +150,28 @@ def c_tests(binary, mpi, mpi_only):
             compare(kind, one, many, exact=True)
             if not mpi_only:
                 compare(kind, one, run(kind, suffix="omp", catalog=triple_file, threads=3))
+        tree_three = run(7, catalog=triple_file, threads=3)
+        compare(7, tree_three, run(4, catalog=triple_file, threads=1))
+        if not mpi_only:
+            compare(7, tree_three,
+                    run(7, suffix="omp", catalog=triple_file, threads=3))
         one_forest = large[:64].copy()
         one_forest[:, 5] = 0
         write_catalog(root/"same.txt", one_forest)
-        for kind in (2, 5, 6):
+        for kind in (2, 5, 6, 7):
             empty = run(kind, catalog=root/"same.txt", extra={"options": "lya-output-empty-bins"})
             for name in products(kind):
                 np.testing.assert_array_equal(np.atleast_2d(np.loadtxt(empty/name))[:, -3:], 0)
 
-        for kind in (2, 5, 6):
+        for kind in (2, 5, 6, 7):
             nonroot = root/f"nonroot-{kind}"
             run(kind, overrides={"1": {"rootDir": str(nonroot)}})
             assert not nonroot.exists(), "non-root rank wrote output"
             run(kind, extra={"options": "no-out-Hist"})
-            run(kind, fail=True, overrides={"1": {"lya2RpMax": "0"}})
+            invalid_domain = {"lya3RMax": "0"} if kind == 7 else {
+                "lya2RpMax": "0"
+            }
+            run(kind, fail=True, overrides={"1": invalid_domain})
             # Only rank 1 fails input. Other ranks must return, not wait in a later reduction.
             message = run(kind, fail=True, overrides={"1": {"infile": str(root/"missing.txt")}})
             assert "Ly-alpha catalog input" in message or "lya-ascii" in message
@@ -180,7 +190,7 @@ def cython_worker(root):
     root = Path(root)
     b = cyballs.cballs()
     for kind, name in enumerate(METHODS):
-        assert cyballs.search_method_id(name+"-mpi") == 185+kind
+        assert cyballs.search_method_id(name+"-mpi") == METHOD_IDS[kind]
         out = root/f"py-{kind}"
         p = params(kind, root/("three.txt" if kind < 3 else "radial.txt"), out, threads=2)
         p["searchMethod"] = name+"-mpi"
@@ -211,7 +221,7 @@ def cython_worker(root):
     b.struct_cleanup()
     if rank == 0:
         check_oracle(2, root/"py-recovered")
-        print("PASS: all seven Cython MPI methods and repeated failure recovery", flush=True)
+        print("PASS: all eight Cython MPI methods and repeated failure recovery", flush=True)
     comm.Barrier()
     MPI.Finalize()
     try:

@@ -96,20 +96,35 @@ endif
 
 # KDTREEOMP
 # For computing 3pcf using kdtree-omp method
-ifeq ($(KDTREEOMPON),1)
+ifneq ($(filter 1,$(KDTREEOMPON) $(KDTREEMPION)),)
 include $(MACHINES_DIR)/addons/kdtree_omp/Makefile_kdtree_omp
+endif
+
+ifeq ($(KDTREEMPION),1)
+include $(MACHINES_DIR)/addons/kdtree_mpi/Makefile_kdtree_mpi
 endif
 #
 
-# BALLTREEOMP / TreeCorr-style addons shared ball-tree builder
+# KDTREE2BALLSOMP / KDTREE2BALLSMPI
+# dual-node-style dual-node and LogMultipole scans over a median KD tree.
+ifneq ($(filter 1,$(KDTREE2BALLSOMPON) $(KDTREE2BALLSMPION)),)
+include $(MACHINES_DIR)/addons/kdtree_2balls_omp/Makefile_kdtree_2balls_omp
+endif
+
+ifeq ($(KDTREE2BALLSMPION),1)
+include $(MACHINES_DIR)/addons/kdtree_2balls_mpi/Makefile_kdtree_2balls_mpi
+endif
+#
+
+# BALLTREEOMP / dual-node-style addons shared ball-tree builder
 # FCFC-style PCA ball tree for the pivot and dual-node searches
-ifneq ($(filter 1,$(BALLTREEOMPON) $(BALLTREEMPION) $(BALLTREE2BALLSOMPON) $(BALLTREE2BALLSMPION) $(BALLTREE2BALLSOMP3PCFON) $(BALLTREE2BALLSMPI3PCFON)),)
+ifneq ($(filter 1,$(BALLTREEOMPON) $(BALLTREEMPION) $(BALLTREE2BALLSOMPON) $(BALLTREE2BALLSMPION) $(BALLTREE2BALLSOMP3PCFON) $(BALLTREE2BALLSMPI3PCFON) $(BALLTREESHEARSPHERE2BALLSOMPON)),)
 include $(MACHINES_DIR)/addons/balltree_omp/Makefile_balltree_omp
 endif
 #
 
 # BALLTREE2BALLSOMP
-# TreeCorr-style dual-ball 2PCF and triple-node 3PCF scans
+# dual-node-style dual-ball 2PCF and triple-node 3PCF scans
 ifeq ($(BALLTREE2BALLSOMPON),1)
 include $(MACHINES_DIR)/addons/balltree_2balls_omp/Makefile_balltree_2balls_omp
 endif
@@ -123,7 +138,11 @@ endif
 #
 
 # OCTREE2BALLSOMP
-# TreeCorr-style dual/triple-node scan over the native octree
+# dual-node-style dual/triple-node scan over the native octree
+ifneq ($(filter 1,$(OCTREE2BALLSOMPON) $(OCTREE2BALLSMPION) $(OCTREEBALLS4OMPON) $(OCTREEBALLS4MPION)),)
+include $(MACHINES_DIR)/addons/native_octree_pair/Makefile_native_octree_pair
+endif
+
 ifeq ($(OCTREE2BALLSOMPON),1)
 include $(MACHINES_DIR)/addons/octree_2balls_omp/Makefile_octree_2balls_omp
 endif
@@ -137,7 +156,7 @@ endif
 #
 
 # BALLTREE2BALLSOMP3PCF
-# TreeCorr-style triple-node task-frontier 3PCF scan
+# dual-node-style triple-node task-frontier 3PCF scan
 ifeq ($(BALLTREE2BALLSOMP3PCFON),1)
 include $(MACHINES_DIR)/addons/balltree_2balls_omp_3pcf/Makefile_balltree_2balls_omp_3pcf
 endif
@@ -164,6 +183,34 @@ endif
 # Flat-sky weak-lensing shear 2PCF and natural 3PCF multipoles.
 ifeq ($(OCTREESHEAROMPON),1)
 include $(MACHINES_DIR)/addons/octree_shear_omp/Makefile_octree_shear_omp
+endif
+#
+
+# OCTREESHEARSPHEREOMP
+# Full-sky weak-lensing shear with great-circle parallel transport.
+ifeq ($(OCTREESHEARSPHEREOMPON),1)
+include $(MACHINES_DIR)/addons/octree_shear_sphere_omp/Makefile_octree_shear_sphere_omp
+endif
+#
+
+# OCTREESHEARSPHERE2BALLSOMP
+# dual-node-style two-cell full-sky weak-lensing shear estimator.
+ifeq ($(OCTREESHEARSPHERE2BALLSOMPON),1)
+include $(MACHINES_DIR)/addons/octree_shear_sphere_2balls_omp/Makefile_octree_shear_sphere_2balls_omp
+endif
+#
+
+# KDTREESHEARSPHERE2BALLSOMP
+# dual-node-style full-sky weak-lensing shear over a median KD tree.
+ifeq ($(KDTREESHEARSPHERE2BALLSOMPON),1)
+include $(MACHINES_DIR)/addons/kdtree_shear_sphere_2balls_omp/Makefile_kdtree_shear_sphere_2balls_omp
+endif
+#
+
+# BALLTREESHEARSPHERE2BALLSOMP
+# dual-node-style full-sky weak-lensing shear over an FCFC PCA ball tree.
+ifeq ($(BALLTREESHEARSPHERE2BALLSOMPON),1)
+include $(MACHINES_DIR)/addons/balltree_shear_sphere_2balls_omp/Makefile_balltree_shear_sphere_2balls_omp
 endif
 #
 

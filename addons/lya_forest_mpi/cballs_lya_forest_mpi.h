@@ -4,7 +4,8 @@ case 187:
 case 188:
 case 189:
 case 190:
-case 191: {
+case 191:
+case LYAFOREST1DTREE3PCFMPIMETHOD: {
     int lya_status = SUCCESS;
     const int kind = lya_forest_method_kind(cmd->searchMethod);
     if (gd->ninfiles != 1) {
@@ -26,9 +27,12 @@ case 191: {
     } else if (kind < 6) {
         lya_status = searchcalc_lya_forest_1d_omp(cmd, gd, bodytable[ifile],
                             gd->nbodyTable[ifile], kind != 4, kind != 3);
-    } else {
+    } else if (kind == 6) {
         lya_status = searchcalc_lya_forest_1d_tree_omp(cmd, gd, bodytable[ifile],
                                                     gd->nbodyTable[ifile]);
+    } else {
+        lya_status = searchcalc_lya_forest_1d_tree_3pcf_omp(
+            cmd, gd, bodytable[ifile], gd->nbodyTable[ifile]);
     }
     if (lya_status == FAILURE) return FAILURE;
     break;

@@ -32,10 +32,11 @@ def test_allocation_failures_raise_and_recover():
     with tempfile.TemporaryDirectory(prefix="ctreeballs-p2-allocation-") as root_dir:
         balls = cballs()
         parameters = {
+            "searchMethod": "octree-2balls-omp",
             "testmodel": "simple-cubic",
             "nbody": 8,
             "rootDir": root_dir,
-            "options": "no-out-Hist",
+            "options": "no-out-Hist,legacy-one-ball",
             "numberThreads": 2,
             "verbose": 0,
             "verbose_log": 0,
@@ -103,18 +104,21 @@ def test_openmp_allocation_failures_raise_and_recover():
 
     with tempfile.TemporaryDirectory(prefix="ctreeballs-p2-openmp-allocation-") as root_dir:
         parameters = {
-            "searchMethod": "octree-ggg-omp",
             "testmodel": "simple-cubic",
             "nbody": 8,
             "rootDir": root_dir,
-            "options": "no-out-Hist",
             "numberThreads": 2,
             "verbose": 0,
             "verbose_log": 0,
         }
 
-        for method in ("octree-ggg-omp", "kdtree-omp", "kdtree-box-omp"):
+        for method, options in (
+            ("octree-2balls-omp", "no-out-Hist,legacy-one-ball"),
+            ("kdtree-2balls-omp", "no-out-Hist,legacy-one-ball"),
+            ("kdtree-box-omp", "no-out-Hist"),
+        ):
             parameters["searchMethod"] = method
+            parameters["options"] = options
             for failure_point in range(sweep_limit):
                 balls = cballs()
                 balls.set_default(**parameters)
@@ -151,7 +155,7 @@ def test_degenerate_histogram_domain_is_recoverable():
         balls = cballs()
         balls.set(
             {
-                "searchMethod": "octree-ggg-omp",
+                "searchMethod": "octree-2balls-omp",
                 "testmodel": "simple-cubic",
                 "nbody": 8,
                 "rootDir": root_dir,
@@ -181,7 +185,7 @@ def test_nonfinite_theta_is_recoverable():
         balls = cballs()
         balls.set(
             {
-                "searchMethod": "kdtree-omp",
+                "searchMethod": "kdtree-2balls-omp",
                 "testmodel": "simple-cubic",
                 "nbody": 8,
                 "rootDir": root_dir,
@@ -211,7 +215,7 @@ def test_small_cubic_lattice_is_recoverable():
         balls = cballs()
         balls.set(
             {
-                "searchMethod": "octree-ggg-omp",
+                "searchMethod": "octree-2balls-omp",
                 "testmodel": "simple-cubic",
                 "nbody": 3,
                 "rootDir": root_dir,
@@ -234,7 +238,9 @@ def test_small_cubic_lattice_is_recoverable():
 
 
 def test_exact_theta_and_short_progress_interval_run():
-    for method in ("octree-ggg-omp", "kdtree-omp", "kdtree-box-omp"):
+    for method in (
+        "octree-2balls-omp", "kdtree-2balls-omp", "kdtree-box-omp"
+    ):
         with tempfile.TemporaryDirectory(prefix="ctreeballs-p2-exact-") as root_dir:
             balls = cballs()
             balls.set(

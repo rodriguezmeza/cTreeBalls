@@ -61,7 +61,7 @@ Specifically, `cBalls` can calculate:
 There are existing software packages that use different decomposition of the three-point clustering statistics or that
 use different tree schemes, for instance:
 
-- `TreeCorr` [@Jarvis:2004] computes (2,3)-point correlation function for counts, convergence and shear weak lensing fields. It uses a ball-tree scheme.
+- `dual-node` [@Jarvis:2004] computes (2,3)-point correlation function for counts, convergence and shear weak lensing fields. It uses a ball-tree scheme.
 
  
  

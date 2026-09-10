@@ -2,9 +2,11 @@ Lyman-alpha Forests
 ===================
 
 The forest addons use pixel positions, flux contrast ``delta``, statistical
-weights, and integer forest/quasar IDs. They exclude same-forest pairs and
-require three different forests for triplets. They do not use scalar-kappa
-Fourier multipoles.
+weights, and integer forest/quasar IDs. Standard estimators exclude same-forest
+pairs and require three different forests for triplets. A separately named
+same-LOS estimator deliberately measures within-forest pairs. The dedicated
+addons produce anisotropic or radial estimators; the all-engines driver can
+additionally run the active scalar Legendre-multipole octree paths.
 
 Choose a Method
 ---------------
@@ -16,12 +18,21 @@ replace ``omp`` with ``mpi`` for its distributed sibling:
   anisotropic physical-3D estimators.
 * ``lya-1d-2pcf-omp``, ``lya-1d-3pcf-omp``, ``lya-1d-2pcf-3pcf-omp``:
   signed radial-lag estimators ignoring transverse distance.
-* ``lya-1d-tree-2pcf-omp``: exact interval-tree radial 2PCF with same-forest subtraction.
+* ``lya-1d-tree-2pcf-omp`` and ``lya-1d-tree-3pcf-omp``: exact interval-tree
+  radial estimators with same-forest subtraction.
+* ``lya-1d-tree-same-los-2pcf-omp``: one exact interval tree per forest;
+  within-forest radial 2PCFs are normalized separately and averaged with equal
+  LOS weight in each occupied bin. This method currently has no MPI sibling.
+* ``octree-3pcf-3d-omp`` and ``octree-3pcf-3d-mpi``: scalar Legendre 3PCF
+  multipoles with ``exclude-all-same-los`` enforcing three distinct forests.
 
 All modes still require ``DEFDIMENSION=3`` and ``usePeriodic=false``.
 "1D" describes the search coordinate, not the body-storage dimension.
 Smooth-pivot is unsupported. Radial and 3D outputs measure different statistics
 and should not be treated as interchangeable reference values.
+``LYA1D_OMP_PIVOT_BLOCK_SIZE`` controls deterministic radial work blocks and
+``LYA1D_TREE3_LEAF_SIZE`` controls the exact 3PCF interval-tree leaf capacity;
+both are reported by ``options=make-info``.
 
 Inputs and Bins
 ---------------
@@ -39,6 +50,12 @@ range/bins; radial triples have two signed-lag axes with ``2*lya3RBins`` bins
 per axis. Weighted numerators and denominators are reduced before division;
 zero-denominator bins return zero.
 
+The same-LOS method is a distinct statistical family. Its output is
+``histXi2pcf_lya1d_same_los.txt`` with columns ``bin radial_separation xi
+sum_xi contributing_los``. Thus the published value is the equal-LOS mean
+``sum_xi / contributing_los`` in each bin, rather than the pair-weighted
+cross-forest correlation produced by the other radial 2PCF methods.
+
 Examples
 --------
 
@@ -49,18 +66,25 @@ From a checkout with the MPI addon enabled::
 The all-engines driver reads DESI delta FITS, NPZ, or six-column ASCII once,
 broadcasts arrays once for MPI, and retains registered catalogs between engines::
 
-   python3 python/lya_corr_all_engines.py --list-engines
+   python3 tests/python/lya_corr_all_engines.py --list-engines
    bash examples/download_desi_lya_example.sh /tmp/desi-lya
-   python3 python/lya_corr_all_engines.py \
+   python3 tests/python/lya_corr_all_engines.py \
        --fits /tmp/desi-lya/delta-1019.fits.gz --max-forests 6 \
        --pixel-stride 30 --engine all-omp --threads 2
+
+Use ``--engine all-tree --statistics both`` to select only the radial
+interval-tree 2PCF and 3PCF engines (OpenMP and MPI variants when available),
+including the OpenMP same-LOS estimator.
+Use ``--engine all-multipole --statistics 3pcf`` for the octree OpenMP/MPI
+estimators. Multipole and five-dimensional products are reported as
+different families and are never compared bin by bin.
 
 The default driver statistic is 2PCF. Add ``--statistics both`` for 3PCF
 and ``--engine all --mpi-ranks 2`` for an MPI-inclusive suite. Subsampling,
 distance cosmology, and DESI blinding metadata matter scientifically; these
 commands are examples, not a production DESI analysis.
 
-See :download:`driver README <../python/README_lya_corr_all_engines.md>`,
+See :download:`driver README <../tests/python/README_lya_corr_all_engines.md>`,
 :download:`MPI addon README <../addons/lya_forest_mpi/README.md>`,
 and ``examples/lya_corr_all_engines.ipynb``.
 The script/notebook ``examples/compare_lya_1d_3d`` compares radial and 3D
@@ -74,4 +98,5 @@ Run ``make test-lya-forest-omp test-lya-forest-1d-omp`` and
 The MPI implementation replicates input/tree memory and partitions pivot or
 task blocks. Thread-count changes are deterministic at fixed rank count;
 changing ranks may change rounding. Native and Cython tests cover independent
-oracles, scan/tree agreement, exclusions, and recoverable failures.
+oracles, scan/tree agreement, exclusions, strict in-memory multipoles, and
+recoverable failures.

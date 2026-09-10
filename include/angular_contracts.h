@@ -12,7 +12,7 @@ static inline bool cballs_observer_frame(const struct cmdline_data *cmd)
             || !strncmp(method, "octree-ggg-", 11)
             || !strncmp(method, "octree-balls4-", 14)
             || !strncmp(method, "octree-2balls-", 14)
-            || !strcmp(method, "kdtree-omp")
+            || !strncmp(method, "kdtree-", 7)
             || !strncmp(method, "balltree-", 9));
 #else
     (void)cmd;
@@ -40,7 +40,7 @@ static inline bool cballs_angular_basis(const cballs_storage_real *pivot,
 }
 #endif
 
-/* dr = pivot - neighbor. The handedness matches TreeCorr's positive spherical
+/* dr = pivot - neighbor. The handedness matches dual-node's positive spherical
  * LogMultipole modes; basis orientation cancels between the two legs. */
 static inline bool cballs_angular_phase(const cballs_storage_real *pivot,
                                          const compute_vector dr,

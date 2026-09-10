@@ -13,6 +13,8 @@
 #ifndef _kdtree_h
 #define _kdtree_h
 
+#include <stdint.h>
+
 // Structure representing the bounds of a kd node
 typedef struct {
     vector minb;                                    // min pos of bounding box
@@ -20,6 +22,7 @@ typedef struct {
     vector width;                                   // width of bounding box
     vector center;                                  // center of bounding box
     cballs_storage_real radius;                     // conservative radius
+    cballs_storage_real geometric_radius;           // true enclosing radius
 } bound;
 
 //  Structure representing a node of a ball-tree
@@ -33,6 +36,11 @@ typedef struct {
     real weighted_kappa_sum;
     real weighted_kappa_sq_sum;
     real weight;                                    // point weight
+    real kappa_sum;
+    real kappa_sq_sum;
+    real weight_sum;
+    real weight_sq_sum;
+    INTEGER valid_count;
     vector cmpos;                                   // center of mass pos
     matrix Ixy;                                     // inertia tensor
     real etaxy;                                     // deformation factor xy
@@ -67,7 +75,9 @@ typedef struct {
 // Structure to represent context of KD tree
 typedef struct {
     INTEGER npoint;
+    bodyptr body_base;
     bodyptr *bptr;
+    INTEGER *body_order;                           // source index -> tree order
     bound bnd;
     int nnode;
     int nsplit;
@@ -84,5 +94,25 @@ int build_kdtree(struct cmdline_data* cmd,
                  struct  global_data* gd,
                  ballxptr, int);
 void finish_kdtree(ballxptr);
+int kdtree_edge_search(struct cmdline_data *, struct global_data *,
+                       bodyptr *, INTEGER *, INTEGER, INTEGER *,
+                       int, int, ballxptr);
+
+static inline bool kdtree_node_contains_body(const ballxptr kd,
+                                              const ballnode *node,
+                                              const bodyptr body)
+{
+    if (kd == NULL || node == NULL || body == NULL || kd->body_base == NULL)
+        return FALSE;
+    const uintptr_t address = (uintptr_t)body;
+    const uintptr_t first = (uintptr_t)kd->body_base;
+    const uintptr_t bytes = (uintptr_t)kd->npoint * sizeof(*kd->body_base);
+    if (address < first || address >= first + bytes
+        || (address - first) % sizeof(*kd->body_base) != 0)
+        return FALSE;
+    const INTEGER source = (INTEGER)((address - first) / sizeof(*kd->body_base));
+    const INTEGER order = kd->body_order[source];
+    return order >= node->first && order <= node->last;
+}
 
 #endif  /* ! _kdtree_h */

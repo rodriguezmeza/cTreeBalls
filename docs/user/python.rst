@@ -22,7 +22,7 @@ Run from the checkout root with the GGG, 2PCF, and 3PCF features enabled:
 
    model = cballs()
    try:
-       model.set(searchMethod="octree-ggg-omp", rootDir="Output_memory",
+       model.set(searchMethod="octree-2balls-omp", rootDir="Output_memory",
                  rminHist=0.05, rangeN=1.0, sizeHistN=6, mChebyshev=3,
                  useLogHist=True, usePeriodic=False, numberThreads=2,
                  options="no-normalize-HistZeta,weights-norm,no-one-ball")
@@ -71,20 +71,47 @@ contiguous slots. C ``iCatalogs="1,2"`` is one-based.
 All-engines Drivers
 -------------------
 
-``python/kappa_corr_all_engines.py`` reads scalar FITS/NPZ input once, filters
-available engines by mask/edge capabilities, and retains the catalog across
-runs. For example::
+``tests/python/kappa_corr_all_engines.py`` reads scalar FITS/NPZ input once,
+filters active native engines by mask/edge capabilities, and retains the
+catalog across runs. For example::
 
-   python3 python/kappa_corr_all_engines.py --list-engines
-   python3 python/kappa_corr_all_engines.py --fits map.fits --mask mask.fits \
+   python3 tests/python/kappa_corr_all_engines.py --list-engines
+   python3 tests/python/kappa_corr_all_engines.py --fits map.fits --mask mask.fits \
        --engine all-omp --edge-corrections --threads 4 --outdir Output_kappa
+   python3 tests/python/kappa_corr_all_engines.py --fits map.fits \
+       --engine octree-2balls-omp,kdtree-2balls-omp \
+       --threads 4 --outdir Output_compare
+
+The driver finds the executable independently of the current directory. An
+explicit ``--cballs`` argument has priority, followed by
+``CTREEBALLS_CBALLS``/``CBALLS``, the source-tree executable, and ``cballs`` on
+``PATH``. This avoids hard-coded ``DEFAULT_CBALLS`` edits in external scripts.
+
+Normal plots include 2PCF curves and one radial-bin heat map per complex 3PCF
+mode. Flattened plots place each radial-bin matrix on one row-major bin index,
+with one panel per mode; use ``--no-flatten-plots`` or ``--no-plots`` to disable
+them.
 
 These are angular scalar products, not shear or physical-3D survey products.
-Read the :download:`kappa driver README <../../python/README_kappa_corr_all_engines.md>`
+Read the :download:`kappa driver README <../../tests/python/README_kappa_corr_all_engines.md>`
 for current angle controls, normalization, MPI, and output formats.
+For large native-resolution HEALPix comparisons, add ``--statistics 2pcf`` to
+avoid hidden 3PCF work and ``--max-points N`` for deterministic bottom-hash
+sampling. Map and mask columns are scanned in bounded chunks, and masked-out
+pixels are discarded before the Cartesian catalog is built. A thinned run
+measures the sampled catalog; use ``--max-points 0`` for the full retained map.
+All compared arrays use the native cTreeBalls normalization contract.
+``no-normalize-HistZeta,weights-norm`` selects weighted raw sums. With
+``--edge-corrections``, active scalar engines build window modes through order
+``2M`` and apply the per-bin scalar mode-coupling solve.
+
+Both all-engine drivers write ``timing_report.txt`` and structured
+``summary.json["timings"]`` entries with setup, compute, and total wall/process
+CPU seconds. Process CPU can exceed wall time under OpenMP; MPI native CPU
+figures describe rank 0 only.
 
 For forests, use ``set_forest_catalog(positions, delta, weights, forest_ids)``
-or ``python/lya_corr_all_engines.py``. Forest IDs must remain integer arrays.
+or ``tests/python/lya_corr_all_engines.py``. Forest IDs must remain integer arrays.
 See :doc:`../lyman_alpha`. For shear and physical-3D catalogs see
 :doc:`../shear` and :doc:`../scalar_3d`.
 

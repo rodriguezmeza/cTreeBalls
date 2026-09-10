@@ -53,7 +53,7 @@ Run and Plot
 
    ./cballs parameters_map.txt
 
-The current multi-engine driver is ``python/kappa_corr_all_engines.py``;
+The current multi-engine driver is ``tests/python/kappa_corr_all_engines.py``;
 see :doc:`../user/python` and its README for masks, edge corrections, input
 reuse, and angle controls. ``tests/python`` also contains historical plotting
 examples. Use each script's ``--help`` before applying it to new data.

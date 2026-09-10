@@ -5,3 +5,5 @@ if (strcmp(method_str, "lya-1d-2pcf-mpi") == 0) *method_int = 188;
 if (strcmp(method_str, "lya-1d-3pcf-mpi") == 0) *method_int = 189;
 if (strcmp(method_str, "lya-1d-2pcf-3pcf-mpi") == 0) *method_int = 190;
 if (strcmp(method_str, "lya-1d-tree-2pcf-mpi") == 0) *method_int = 191;
+if (strcmp(method_str, "lya-1d-tree-3pcf-mpi") == 0)
+    *method_int = LYAFOREST1DTREE3PCFMPIMETHOD;

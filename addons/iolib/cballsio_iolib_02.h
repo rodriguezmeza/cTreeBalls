@@ -24,6 +24,14 @@ local bool iolib_preserve_common_catalog_frame(
     preserve |= gd->searchMethod_int == BALLTREE2BALLSMPIMETHOD
         && gd->iCatalogs[0] != gd->iCatalogs[1];
 #endif
+#ifdef KDTREE2BALLSOMP
+    preserve |= gd->searchMethod_int == KDTREE2BALLSOMPMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
+#ifdef KDTREE2BALLSMPI
+    preserve |= gd->searchMethod_int == KDTREE2BALLSMPIMETHOD
+        && gd->iCatalogs[0] != gd->iCatalogs[1];
+#endif
 #ifdef OCTREE2BALLSOMP
     preserve |= gd->searchMethod_int == OCTREE2BALLSMETHOD
         && gd->iCatalogs[0] != gd->iCatalogs[1];

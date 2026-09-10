@@ -3,7 +3,7 @@
 
     case BALLTREE2BALLSMETHOD:
         verb_print(cmd->verbose,
-                   "\n\tevalHist: with TreeCorr-style dual/triple-node method\n\n");
+                   "\n\tevalHist: with balltree dual/triple-node method\n\n");
         if (searchcalc_balltree_2balls_omp(
                 cmd, gd, bodytable, gd->nbodyTable, 1, gd->nbodyTable,
                 gd->iCatalogs[0], gd->iCatalogs[1]) == FAILURE)

@@ -48,7 +48,7 @@ $ ./run_all_tests
 
 or test individual cases:
 
-$ time ../cballs ./In/parameters_to-test_nside256_balls-omp
+$ time ../cballs ./In/parameters_to-test_nside256_octree-2balls-omp
 
 to plot results (vs reference results):
 
@@ -57,7 +57,7 @@ $ python script/mZetaM_test_kkk_all.py
 
 3. SOME MORE ELABORATE EXAMPLES
 
-$ time ../cballs search=octree-ggg-omp infile=./catalogs/Takahasi/allskymap_nres08r081_zs9_mag.fits infmt=fits-healpix
+$ time ../cballs search=octree-2balls-omp infile=./catalogs/Takahasi/allskymap_nres08r081_zs9_mag.fits infmt=fits-healpix
 
 Plot the results with:
 
@@ -67,7 +67,7 @@ Now do (to use ud_grade, it is need to have installed Healpix, go to https://hea
 
 $ cp ../tests/in_ud_grade .
 $ cp ../tests/Xi3pcf_plot_flatten_EE.py .
-$ time ../cballs search=octree-ggg-omp infile=./allskymap_nres10r081_zs9_mag.fits infmt=fits-healpix \
+$ time ../cballs search=octree-2balls-omp infile=./allskymap_nres10r081_zs9_mag.fits infmt=fits-healpix \
 options=pre-processing,post-processing,no-normalize-HistZeta,edge-corrections,smooth-pivot \
 preScript="ud_grade < in_ud_grade" posScript="python Xi3pcf_plot_flatten_EE.py; rm -f allskymap_nres10r081_zs9_mag.fits"
 
@@ -120,7 +120,7 @@ $ ud_grade < in_ud_grade
 
 Then edit a parameter (parameters.txt) file to have the following lines:
 
-searchMethod = octree-ggg-omp
+searchMethod = octree-2balls-omp
 options = all-in-one,GGGCorrelation,no-normalize-HistZeta,edge-corrections,smooth-pivot
 infile = allskymap_nres09r081_zs8_mag.fits,allskymap_nres10r081_zs9_mag.fits,allskymap_nres09r081_zs10_mag.fits
 infileformat = fits-healpix,fits-healpix,fits-healpix
@@ -135,5 +135,4 @@ and plot results:
 $ python Xi3pcf_plot_flatten.py
 
 All these command lines process three Takahashi's realizations give them to cBalls, it reads them and creates a single bodies catalog with all of them and then do the neighours searching process and compute (2,3)-point correlation functions and save them as histograms in the default output directory. Results are plotted with the python scripts.
-
 

@@ -28,6 +28,14 @@ static int mpi_size = 1;
 static int mpi_owned = FALSE;
 static int mpi_finalized = FALSE;
 
+static bool fcfc_octree_2balls_native_mpi_selected(
+        const struct cmdline_data *cmd)
+{
+    return cmd != NULL && cmd->searchMethod != NULL
+        && strcmp(cmd->searchMethod, "octree-2balls-mpi") == 0
+        && !cballs_opt_legacy_one_ball(cmd);
+}
+
 static void finalize_at_exit(void)
 {
     int finalized = FALSE;
@@ -60,8 +68,7 @@ int fcfc_octree_2balls_mpi_prepare(struct cmdline_data *cmd,
     int provided = MPI_THREAD_SINGLE;
     int status;
 
-    if (cmd->searchMethod == NULL
-        || strcmp(cmd->searchMethod, "octree-2balls-mpi") != 0)
+    if (!fcfc_octree_2balls_native_mpi_selected(cmd))
         return SUCCESS;
     if (mpi_active) {
         if (mpi_rank != OCTREE_2BALLS_MPI_ROOT) {
@@ -140,8 +147,7 @@ int fcfc_octree_2balls_mpi_size(void) { return mpi_size; }
 
 int fcfc_octree_2balls_mpi_output_enabled(struct cmdline_data *cmd)
 {
-    return cmd->searchMethod == NULL
-        || strcmp(cmd->searchMethod, "octree-2balls-mpi") != 0
+    return !fcfc_octree_2balls_native_mpi_selected(cmd)
         || !mpi_active || mpi_rank == OCTREE_2BALLS_MPI_ROOT;
 }
 
@@ -153,8 +159,7 @@ int fcfc_octree_2balls_mpi_consensus(struct cmdline_data *cmd,
     int all_success = FALSE;
     int status;
 
-    if (!mpi_active || cmd->searchMethod == NULL
-        || strcmp(cmd->searchMethod, "octree-2balls-mpi") != 0)
+    if (!mpi_active || !fcfc_octree_2balls_native_mpi_selected(cmd))
         return local_status;
     status = MPI_Allreduce(&local_success, &all_success, 1, MPI_INT, MPI_MIN,
                            MPI_COMM_WORLD);

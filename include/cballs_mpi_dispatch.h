@@ -19,7 +19,15 @@ static inline int cballs_mpi_prepare(struct cmdline_data *cmd,
     status = fcfc_octree_balls4_mpi_prepare(cmd, gd);
     if (status == FAILURE) return FAILURE;
 #endif
-#ifdef BALLTREEMPI
+#ifdef KDTREEMPI
+    status = fcfc_kdtree_mpi_prepare(cmd, gd);
+    if (status == FAILURE) return FAILURE;
+#endif
+#ifdef KDTREE2BALLSMPI
+    status = fcfc_kdtree_2balls_mpi_prepare(cmd, gd);
+    if (status == FAILURE) return FAILURE;
+#endif
+#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
     status = fcfc_balltree_mpi_prepare(cmd, gd);
 #endif
 #ifdef BALLTREE2BALLSMPI
@@ -34,7 +42,7 @@ static inline int cballs_mpi_prepare(struct cmdline_data *cmd,
     if (status == SUCCESS)
         status = fcfc_balltree_2balls_mpi_3pcf_prepare(cmd, gd);
 #endif
-#ifdef OCTREEGGGMPI
+#if defined(OCTREEGGGMPI) || defined(OCTREE2BALLS_GGG_MPI_COMPAT)
     if (status == SUCCESS) status = fcfc_octree_ggg_mpi_prepare(cmd, gd);
 #endif
     return status;
@@ -52,7 +60,13 @@ static inline int cballs_mpi_finalize(struct cmdline_data *cmd)
 #ifdef OCTREEBALLS4MPI
     if (fcfc_octree_balls4_mpi_finalize(cmd) == FAILURE) status = FAILURE;
 #endif
-#ifdef BALLTREEMPI
+#ifdef KDTREEMPI
+    if (fcfc_kdtree_mpi_finalize(cmd) == FAILURE) status = FAILURE;
+#endif
+#ifdef KDTREE2BALLSMPI
+    if (fcfc_kdtree_2balls_mpi_finalize(cmd) == FAILURE) status = FAILURE;
+#endif
+#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
     if (fcfc_balltree_mpi_finalize(cmd) == FAILURE) status = FAILURE;
 #endif
 #ifdef BALLTREE2BALLSMPI
@@ -65,7 +79,7 @@ static inline int cballs_mpi_finalize(struct cmdline_data *cmd)
     if (fcfc_balltree_2balls_mpi_3pcf_finalize(cmd) == FAILURE)
         status = FAILURE;
 #endif
-#ifdef OCTREEGGGMPI
+#if defined(OCTREEGGGMPI) || defined(OCTREE2BALLS_GGG_MPI_COMPAT)
     if (fcfc_octree_ggg_mpi_finalize(cmd) == FAILURE) status = FAILURE;
 #endif
     return status;
@@ -83,7 +97,13 @@ static inline int cballs_mpi_output_enabled(struct cmdline_data *cmd)
 #ifdef OCTREEBALLS4MPI
     enabled = enabled && fcfc_octree_balls4_mpi_output_enabled(cmd);
 #endif
-#ifdef BALLTREEMPI
+#ifdef KDTREEMPI
+    enabled = enabled && fcfc_kdtree_mpi_output_enabled(cmd);
+#endif
+#ifdef KDTREE2BALLSMPI
+    enabled = enabled && fcfc_kdtree_2balls_mpi_output_enabled(cmd);
+#endif
+#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
     enabled = enabled && fcfc_balltree_mpi_output_enabled(cmd);
 #endif
 #ifdef BALLTREE2BALLSMPI
@@ -96,7 +116,7 @@ static inline int cballs_mpi_output_enabled(struct cmdline_data *cmd)
     enabled = enabled
         && fcfc_balltree_2balls_mpi_3pcf_output_enabled(cmd);
 #endif
-#ifdef OCTREEGGGMPI
+#if defined(OCTREEGGGMPI) || defined(OCTREE2BALLS_GGG_MPI_COMPAT)
     enabled = enabled && fcfc_octree_ggg_mpi_output_enabled(cmd);
 #endif
     return enabled;
@@ -116,7 +136,13 @@ static inline int cballs_mpi_consensus(struct cmdline_data *cmd,
 #ifdef OCTREEBALLS4MPI
     status = fcfc_octree_balls4_mpi_consensus(cmd, status, operation);
 #endif
-#ifdef BALLTREEMPI
+#ifdef KDTREEMPI
+    status = fcfc_kdtree_mpi_consensus(cmd, status, operation);
+#endif
+#ifdef KDTREE2BALLSMPI
+    status = fcfc_kdtree_2balls_mpi_consensus(cmd, status, operation);
+#endif
+#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
     status = fcfc_balltree_mpi_consensus(cmd, status, operation);
 #endif
 #ifdef BALLTREE2BALLSMPI
@@ -129,7 +155,7 @@ static inline int cballs_mpi_consensus(struct cmdline_data *cmd,
     status = fcfc_balltree_2balls_mpi_3pcf_consensus(
         cmd, status, operation);
 #endif
-#ifdef OCTREEGGGMPI
+#if defined(OCTREEGGGMPI) || defined(OCTREE2BALLS_GGG_MPI_COMPAT)
     status = fcfc_octree_ggg_mpi_consensus(cmd, status, operation);
 #endif
     return status;

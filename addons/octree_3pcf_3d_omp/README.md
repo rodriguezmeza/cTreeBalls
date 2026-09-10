@@ -113,9 +113,23 @@ columns = 1,2,3,4,5,6
 options = with-weight,exclude-same-los,KKKCorrelation
 ```
 
-The LOS rule removes `LOS_i=LOS_j` and `LOS_i=LOS_k` terms. It does not remove
-`LOS_j=LOS_k` terms within the harmonic product. Inputs without a LOS column
-receive unique IDs, so the exclusion is then a well-defined no-op.
+That legacy LOS rule removes `LOS_i=LOS_j` and `LOS_i=LOS_k` terms, but retains
+`LOS_j=LOS_k` terms within the harmonic product. For a Lyman-alpha forest
+estimator use the stronger option:
+
+```text
+columns = 1,2,3,4,5,6
+options = with-weight,exclude-all-same-los,only-3pcf-3d
+```
+
+`exclude-all-same-los` (alias `lya-distinct-forests`) requires all three LOS
+IDs in every triplet to differ. It subtracts exact same-forest shell powers
+and weight products from each pivot's harmonic product; it does not enumerate
+all neighbor pairs. The option implies the pivot-neighbor exclusion and works
+in both OpenMP and MPI. `cyballs.set_forest_catalog()` publishes its
+`forest_ids` to this estimator as well as to the dedicated Lyman-alpha addons.
+Inputs without a LOS column receive unique IDs, so either exclusion is then a
+well-defined no-op.
 
 ## Computation modes
 

@@ -10,6 +10,10 @@
  ==============================================================================*/
 //        1          2          3          4        ^ 5          6          7
 
+#if defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT) && !defined(BALLTREEMPI)
+#define BALLTREEMPI
+#endif
+
 #include <limits.h>
 
 #include "globaldefs.h"
@@ -17,6 +21,13 @@
 #include "fcfc_balltree.h"
 #ifdef BALLTREEMPI
 #include "fcfc_balltree_mpi.h"
+#endif
+
+#ifndef BALLTREE_OMP_PIVOT_BLOCK_SIZE
+#define BALLTREE_OMP_PIVOT_BLOCK_SIZE ((INTEGER)64)
+#endif
+#ifndef BALLTREE_SCAN_FRONTIER_TARGET
+#define BALLTREE_SCAN_FRONTIER_TARGET ((INTEGER)256)
 #endif
 
 static inline bool balltree_intersects(struct cmdline_data *cmd,
@@ -110,6 +121,70 @@ typedef struct {
 #endif
 } balltree_worker_stats;
 
+static void balltree_clear_worker_histograms(
+        const struct cmdline_data *cmd, gdhistptr_sincos_omp hist)
+{
+    for (int n = 1; n <= cmd->sizeHistN; n++) {
+        hist->histNthread[n] = 0.0;
+        hist->histNNSubthread[n] = 0.0;
+        hist->histNNSubXi2pcfthread[n] = 0.0;
+#ifdef SMOOTHPIVOT
+        hist->histNNSubXi2pcfthreadp[n] = 0.0;
+        hist->histNNSubXi2pcfthreadtotal[n] = 0.0;
+#endif
+        hist->histXi2pcfthread[n] = 0.0;
+        hist->histXi2pcfthreadsub[n] = 0.0;
+    }
+#ifdef TPCF
+    for (int m = 1; m <= cmd->mChebyshev + 1; m++) {
+        CLRM_ext(hist->histZetaMthreadcos[m], cmd->sizeHistN);
+        CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
+        CLRM_ext(hist->histZetaMthreadsincos[m], cmd->sizeHistN);
+        CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
+    }
+#endif
+}
+
+static void balltree_publish_worker_histograms(
+        const struct cmdline_data *cmd, struct global_data *gd,
+        gdhistptr_sincos_omp hist, const balltree_worker_stats *stats,
+        INTEGER *ipfalse, INTEGER *count_rmin, INTEGER *count_overlap)
+{
+    for (int n = 1; n <= cmd->sizeHistN; n++) {
+        gd->histNN[n] += hist->histNthread[n];
+        gd->histNNSub[n] += hist->histNNSubthread[n];
+        gd->histNNSubXi2pcf[n] += hist->histNNSubXi2pcfthread[n];
+#ifdef SMOOTHPIVOT
+        gd->histNNSubXi2pcftotal[n] +=
+            hist->histNNSubXi2pcfthreadtotal[n];
+#endif
+        gd->histXi2pcf[n] += hist->histXi2pcfthread[n];
+    }
+#ifdef TPCF
+    for (int m = 1; m <= cmd->mChebyshev + 1; m++) {
+        ADDM_ext(gd->histZetaMcos[m], gd->histZetaMcos[m],
+                 hist->histZetaMthreadcos[m], cmd->sizeHistN);
+        ADDM_ext(gd->histZetaMsin[m], gd->histZetaMsin[m],
+                 hist->histZetaMthreadsin[m], cmd->sizeHistN);
+        ADDM_ext(gd->histZetaMsincos[m], gd->histZetaMsincos[m],
+                 hist->histZetaMthreadsincos[m], cmd->sizeHistN);
+        ADDM_ext(gd->histZetaMcossin[m], gd->histZetaMcossin[m],
+                 hist->histZetaMthreadcossin[m], cmd->sizeHistN);
+    }
+#endif
+    gd->nbbcalc += stats->nbbcalc;
+    gd->nbccalc += stats->nbccalc;
+#ifdef SMOOTHPIVOT
+    if (ipfalse != NULL) *ipfalse += stats->ipfalse;
+    if (count_rmin != NULL) *count_rmin += stats->count_rmin;
+    if (count_overlap != NULL) *count_overlap += stats->count_overlap;
+#else
+    (void)ipfalse;
+    (void)count_rmin;
+    (void)count_overlap;
+#endif
+}
+
 static void process_balltree_pivot(struct cmdline_data *cmd,
                                    struct global_data *gd, bodyptr p,
                                    bodyptr pivot_base, INTEGER pivot_count,
@@ -120,7 +195,7 @@ static void process_balltree_pivot(struct cmdline_data *cmd,
     int n;
 
 #ifdef SMOOTHPIVOT
-    if (Update(p) == FALSE) {
+    if (cballs_opt_smooth_pivot(cmd) && Update(p) == FALSE) {
         stats->ipfalse++;
         return;
     }
@@ -158,13 +233,15 @@ static void process_balltree_pivot(struct cmdline_data *cmd,
                             &stats->nbccalc, hist);
 
 #ifdef SMOOTHPIVOT
-    for (n = 1; n <= cmd->sizeHistN; n++) {
-        hist->histNNSubXi2pcfthreadp[n] =
-            (real)NbRmin(p) * hist->histNNSubXi2pcfthreadp[n];
-        hist->histNNSubXi2pcfthreadtotal[n] +=
-            hist->histNNSubXi2pcfthreadp[n];
-        hist->histNNSubthread[n] =
-            (real)NbRmin(p) * hist->histNNSubthread[n];
+    if (cballs_opt_smooth_pivot(cmd)) {
+        for (n = 1; n <= cmd->sizeHistN; n++) {
+            hist->histNNSubXi2pcfthreadp[n] =
+                (real)NbRmin(p) * hist->histNNSubXi2pcfthreadp[n];
+            hist->histNNSubXi2pcfthreadtotal[n] +=
+                hist->histNNSubXi2pcfthreadp[n];
+            hist->histNNSubthread[n] =
+                (real)NbRmin(p) * hist->histNNSubthread[n];
+        }
     }
 #endif
 
@@ -331,10 +408,12 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
     int status = FAILURE;
     double cpustart = CPUTIME;
     fcfc_balltreeptr tree = NULL;
-#ifdef BALLTREEMPI
+#if defined(BALLTREEMPI) || defined(BALLS4SCANLEV)
     fcfc_balltreeptr pivot_tree = NULL;
     INTEGER *frontier = NULL;
     INTEGER frontier_count = 0;
+#endif
+#ifdef BALLTREEMPI
     INTEGER task_first = 0;
     INTEGER task_last = 0;
     int scheduler_status = SUCCESS;
@@ -346,6 +425,9 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
     const int nbucket = cmd->nsmooth;
     const bool use_one_ball = cballs_opt_behavior_ball(cmd)
         && !cballs_opt_no_one_ball(cmd);
+    const INTEGER pivot_count = ipmax[cat1] - ipmin + 1;
+    INTEGER pivot_block_count = pivot_count > 0
+        ? 1 + (pivot_count - 1) / BALLTREE_OMP_PIVOT_BLOCK_SIZE : 0;
     int allocation_failed = FALSE;
 #ifdef SMOOTHPIVOT
     INTEGER ipfalse = 0;
@@ -417,6 +499,10 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
             goto cleanup;
         uintmax_t target = (uintmax_t)fcfc_balltree_mpi_size()
             * (uintmax_t)thread_hint * 8U;
+#ifdef BALLS4SCANLEV
+        if (target < (uintmax_t)BALLTREE_SCAN_FRONTIER_TARGET)
+            target = (uintmax_t)BALLTREE_SCAN_FRONTIER_TARGET;
+#endif
 #ifdef LONGINT
         if (target > (uintmax_t)LONG_MAX) target = LONG_MAX;
 #else
@@ -435,10 +521,27 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
                    fcfc_balltree_mpi_size(), frontier_count);
     }
 #endif
+#ifdef BALLS4SCANLEV
+    if (!distributed) {
+        if (cat1 == cat2)
+            pivot_tree = tree;
+        else if (fcfc_balltree_build(cmd, gd, btab[cat1], nbody[cat1],
+                                     nbucket, &pivot_tree) == FAILURE)
+            goto cleanup;
+        if (fcfc_balltree_frontier(
+                cmd, pivot_tree, BALLTREE_SCAN_FRONTIER_TARGET,
+                &frontier, &frontier_count) == FAILURE)
+            goto cleanup;
+        pivot_block_count = frontier_count;
+        verb_print(cmd->verbose,
+                   "%s: BALLS4 scan-level frontier has %" INTEGER_FMT
+                   " spatial tasks\n",
+                   cmd->searchMethod, frontier_count);
+    }
+#endif
 
 #pragma omp parallel
     {
-        int hn;
         balltree_worker_stats stats;
         memset(&stats, 0, sizeof(stats));
         gdhist_sincos_omp hist;
@@ -486,15 +589,51 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
         } else
 #endif
         {
-#pragma omp for nowait schedule(static,1)
-            DO_BODY(p, btab[cat1] + ipmin - 1,
-                    btab[cat1] + ipmax[cat1]) {
-                if (!allocation_failed)
-                    process_balltree_pivot(cmd, gd, p, btab[cat1],
-                        nbody[cat1], tree, use_one_ball, &hist, &stats);
+#pragma omp for schedule(dynamic,1) ordered
+            for (INTEGER block = 0; block < pivot_block_count; block++) {
+                balltree_worker_stats block_stats;
+                memset(&block_stats, 0, sizeof(block_stats));
+                if (hist_ready && !allocation_failed) {
+#ifdef BALLS4SCANLEV
+                    const fcfc_ballnode *task =
+                        &pivot_tree->nodes[frontier[block]];
+                    balltree_clear_worker_histograms(cmd, &hist);
+                    for (INTEGER ip = task->first; ip <= task->last; ip++) {
+                        bodyptr pivot = pivot_tree->bptr[ip];
+                        const INTEGER original = pivot - btab[cat1] + 1;
+                        if (original >= ipmin && original <= ipmax[cat1])
+                            process_balltree_pivot(
+                                cmd, gd, pivot, btab[cat1], nbody[cat1],
+                                tree, use_one_ball, &hist, &block_stats);
+                    }
+#else
+                    const INTEGER first = ipmin - 1
+                        + block * BALLTREE_OMP_PIVOT_BLOCK_SIZE;
+                    const INTEGER end = MIN(
+                        first + BALLTREE_OMP_PIVOT_BLOCK_SIZE, ipmax[cat1]);
+                    balltree_clear_worker_histograms(cmd, &hist);
+                    for (INTEGER ip = first; ip < end; ip++)
+                        process_balltree_pivot(
+                            cmd, gd, btab[cat1] + ip, btab[cat1],
+                            nbody[cat1], tree, use_one_ball, &hist,
+                            &block_stats);
+#endif
+                }
+#pragma omp ordered
+                if (hist_ready && !allocation_failed)
+                    balltree_publish_worker_histograms(
+                        cmd, gd, &hist, &block_stats,
+#ifdef SMOOTHPIVOT
+                        &ipfalse, &icountNbRmin, &icountNbRminOverlap
+#else
+                        NULL, NULL, NULL
+#endif
+                    );
             }
         }
 
+#ifdef BALLTREEMPI
+        if (distributed) {
 #ifdef OPENMPCODE
         const int thread_id = omp_get_thread_num();
         const int thread_count = omp_get_num_threads();
@@ -504,39 +643,18 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
 #endif
         for (int thread_turn = 0; thread_turn < thread_count; thread_turn++) {
 #pragma omp barrier
-            if (thread_id == thread_turn && hist_ready && !allocation_failed) {
-                for (hn = 1; hn <= cmd->sizeHistN; hn++) {
-                    gd->histNN[hn] += hist.histNthread[hn];
-                    gd->histNNSub[hn] += hist.histNNSubthread[hn];
-                    gd->histNNSubXi2pcf[hn] +=
-                        hist.histNNSubXi2pcfthread[hn];
+            if (thread_id == thread_turn && hist_ready && !allocation_failed)
+                balltree_publish_worker_histograms(
+                    cmd, gd, &hist, &stats,
 #ifdef SMOOTHPIVOT
-                    gd->histNNSubXi2pcftotal[hn] +=
-                        hist.histNNSubXi2pcfthreadtotal[hn];
+                    &ipfalse, &icountNbRmin, &icountNbRminOverlap
+#else
+                    NULL, NULL, NULL
 #endif
-                    gd->histXi2pcf[hn] += hist.histXi2pcfthread[hn];
-                }
-#ifdef TPCF
-                for (int m = 1; m <= cmd->mChebyshev + 1; m++) {
-                    ADDM_ext(gd->histZetaMcos[m], gd->histZetaMcos[m],
-                             hist.histZetaMthreadcos[m], cmd->sizeHistN);
-                    ADDM_ext(gd->histZetaMsin[m], gd->histZetaMsin[m],
-                             hist.histZetaMthreadsin[m], cmd->sizeHistN);
-                    ADDM_ext(gd->histZetaMsincos[m], gd->histZetaMsincos[m],
-                             hist.histZetaMthreadsincos[m], cmd->sizeHistN);
-                    ADDM_ext(gd->histZetaMcossin[m], gd->histZetaMcossin[m],
-                             hist.histZetaMthreadcossin[m], cmd->sizeHistN);
-                }
-#endif
-                gd->nbbcalc += stats.nbbcalc;
-                gd->nbccalc += stats.nbccalc;
-#ifdef SMOOTHPIVOT
-                ipfalse += stats.ipfalse;
-                icountNbRmin += stats.count_rmin;
-                icountNbRminOverlap += stats.count_overlap;
-#endif
-            }
+                );
         }
+        }
+#endif
 #pragma omp barrier
         if (hist_ready) search_free_sincos_omp(cmd, gd, &hist);
     }
@@ -619,7 +737,12 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
                 gd->histNNSubXi2pcf[n] /= 2.0;
 #ifdef SMOOTHPIVOT
                 gd->histNNSubXi2pcftotal[n] /= 2.0;
-                    gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcftotal[n],1.0);
+                if (cballs_opt_smooth_pivot(cmd))
+                    gd->histXi2pcf[n] /=
+                        MAX(gd->histNNSubXi2pcftotal[n], 1.0);
+                else
+                    gd->histXi2pcf[n] /=
+                        MAX(gd->histNNSubXi2pcf[n], 1.0);
 #else
                     gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcf[n],1.0);
 #endif
@@ -637,7 +760,12 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
                        gd->histNNSubXi2pcf[n]);
 #endif
 #ifdef SMOOTHPIVOT
-                    gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcftotal[n],1.0);
+                if (cballs_opt_smooth_pivot(cmd))
+                    gd->histXi2pcf[n] /=
+                        MAX(gd->histNNSubXi2pcftotal[n], 1.0);
+                else
+                    gd->histXi2pcf[n] /=
+                        MAX(gd->histNNSubXi2pcf[n], 1.0);
 #else
                     gd->histXi2pcf[n] /= MAX(gd->histNNSubXi2pcf[n],1.0);
 #endif
@@ -698,6 +826,8 @@ cleanup:
     if (scheduler.ready
         && fcfc_balltree_mpi_scheduler_destroy(cmd, &scheduler) == FAILURE)
         status = FAILURE;
+#endif
+#if defined(BALLTREEMPI) || defined(BALLS4SCANLEV)
     free(frontier);
     if (pivot_tree != NULL && pivot_tree != tree)
         fcfc_balltree_free(pivot_tree);
@@ -866,9 +996,13 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                     n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
                     if (n<=cmd->sizeHistN && n>=1) {
                         hist->histNthread[n] = hist->histNthread[n] + 1.;
-                        hist->histNNSubXi2pcfthread[n] =
+                    hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] + 1.;
-                        hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
+#ifdef SMOOTHPIVOT
+                    hist->histNNSubXi2pcfthreadp[n] =
+                        hist->histNNSubXi2pcfthreadp[n] + 1.;
+#endif
+                    hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
 #ifdef SINGLEP
                         xi = cballs_raw_legacy_multipoles(cmd) ? q->weighted_kappa : q->kappa;
 #else

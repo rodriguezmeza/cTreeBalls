@@ -4,6 +4,9 @@
 #ifndef _protodefs_octree_3pcf_3d_omp_h
 #define _protodefs_octree_3pcf_3d_omp_h
 
+#define OCTREE3PCF3DOMPMETHOD 166
+#define OCTREE3PCF3DMPIMETHOD 192
+
 global int searchcalc_octree_3pcf_3d_omp(struct cmdline_data* cmd,
                                          struct global_data* gd,
                                          bodyptr *btable, INTEGER *nbody,

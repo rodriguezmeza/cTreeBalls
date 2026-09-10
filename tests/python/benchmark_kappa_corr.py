@@ -2,8 +2,9 @@
 """Compatibility entry point for the maintained multi-backend benchmark.
 
 Original convergence benchmark by Axel Romero Tisnado.
-The maintained runner preserves the common --kappa/--nsides/--threads options.
-Output now uses timings.csv, summary.csv, comparisons.csv and values.csv.
+The maintained runner preserves the common --kappa/--nsides/--threads options
+and adds --mask/--octant-mask plus complex --edge-corrections benchmarks.
+Output uses timings.csv, summary.csv, comparisons.csv and values.csv.
 """
 
 import os

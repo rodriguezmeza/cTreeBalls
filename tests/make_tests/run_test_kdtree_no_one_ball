@@ -18,9 +18,9 @@ fail_with_log()
     exit 1
 }
 
-build_env=$(cd .. && make --no-print-directory -s print-cyballs-build-env)
-grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env" \
-    || fail_with_log "the active build does not enable KDTREEOMP"
+make_info=$("$CBALLS" options=make-info 2>&1 || true)
+grep -q -- 'with KDTREE2BALLSOMP ' <<<"$make_info" \
+    || fail_with_log "the active build does not enable KDTREE2BALLSOMP"
 
 [ "$MULTI_THREADS" -gt 1 ] \
     || fail_with_log "MULTI_THREADS must be greater than one"
@@ -35,7 +35,7 @@ run_case()
 
     mkdir -p "$output_dir"
     "$CBALLS" \
-        search=kdtree-omp \
+        search=kdtree-2balls-omp \
         testmodel=simple-cubic \
         nbody=4096 \
         lengthBox=2 \
@@ -51,7 +51,7 @@ run_case()
         stepState=1000000 \
         verbose=2 \
         verbose_log=0 \
-        options="$options" >"$output_dir/run.log" 2>&1 \
+        options="$options,legacy-one-ball" >"$output_dir/run.log" 2>&1 \
         || fail_with_log "$name failed" "$output_dir/run.log"
 }
 
@@ -91,6 +91,7 @@ compare_histograms()
 exact_options=compute-HistN,out-m-HistZeta,no-one-ball
 precedence_options=$exact_options,behavior-ball
 one_ball_options=compute-HistN,out-m-HistZeta,behavior-ball
+default_options=compute-HistN,out-m-HistZeta
 
 run_case exact 1 false "$exact_options"
 run_case precedence 1 false "$precedence_options"
@@ -108,4 +109,42 @@ nbccalc=$(awk '$1 == "nbccalc" { value=$3 } END { print value+0 }' \
     || fail_with_log "one-ball traversal did not aggregate any KD cells" \
                      "$TMP_ROOT/one-ball-one/run.log"
 
-echo "PASS: KDTREEOMP no-one-ball fast path and one-ball traversal"
+run_case default-one-ball 1 true "$default_options"
+compare_histograms "default/explicit behavior-ball equivalence" \
+                   "$TMP_ROOT/one-ball-one" "$TMP_ROOT/default-one-ball"
+
+if grep -q -- 'with BALLS4SCANLEV:' <<<"$make_info"; then
+    grep -q -- 'KD scan-level frontier has' \
+        "$TMP_ROOT/default-one-ball/run.log" \
+        || fail_with_log "BALLS4SCANLEV did not enable the KD pivot frontier" \
+                         "$TMP_ROOT/default-one-ball/run.log"
+    ! grep -q -- 'scanLevelB4' "$TMP_ROOT/default-one-ball/run.log" \
+        || fail_with_log "KD search unexpectedly allocated the octree B4 table" \
+                         "$TMP_ROOT/default-one-ball/run.log"
+fi
+
+if grep -q -- 'smooth-pivot policy: compiled=yes' <<<"$make_info"; then
+    run_case explicit-smooth 1 true "$default_options,smooth-pivot"
+    compare_histograms "compiled-default/explicit smooth-pivot equivalence" \
+                       "$TMP_ROOT/default-one-ball" "$TMP_ROOT/explicit-smooth"
+fi
+
+run_case only-2pcf 1 false \
+    "compute-HistN,and-CF,only-2pcf,no-one-ball,no-smooth-pivot"
+[ -f "$TMP_ROOT/only-2pcf/histXi2pcf.txt" ] \
+    || fail_with_log "only-2pcf did not publish 2PCF" "$TMP_ROOT/only-2pcf/run.log"
+if find "$TMP_ROOT/only-2pcf" -maxdepth 1 -name 'histZetaM*' | grep -q .; then
+    fail_with_log "only-2pcf published 3PCF files" "$TMP_ROOT/only-2pcf/run.log"
+fi
+
+run_case only-3pcf 1 false \
+    "compute-HistN,KKKCorrelation,out-m-HistZeta,only-3pcf,no-one-ball,no-smooth-pivot"
+[ -f "$TMP_ROOT/only-3pcf/histZetaM_cos_1.txt" ] \
+    || fail_with_log "only-3pcf did not publish 3PCF" "$TMP_ROOT/only-3pcf/run.log"
+[ ! -e "$TMP_ROOT/only-3pcf/histXi2pcf.txt" ] \
+    || fail_with_log "only-3pcf published 2PCF" "$TMP_ROOT/only-3pcf/run.log"
+[ ! -e "$TMP_ROOT/only-3pcf/histNN.txt" ] \
+    || fail_with_log "only-3pcf published an unused pair-count table" \
+                     "$TMP_ROOT/only-3pcf/run.log"
+
+echo "PASS: KDTREE2BALLSOMP legacy compatibility, smoothing, order switches, and exact traversal"

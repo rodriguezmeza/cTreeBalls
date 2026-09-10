@@ -6,6 +6,7 @@
 #
 MACHINES_DIR = ./
 MPIEXEC ?= mpiexec
+.DEFAULT_GOAL := all
 # Machine definitions and code settings. Edit this file according to your needs
 include $(MACHINES_DIR)Makefile_settings
 
@@ -48,7 +49,7 @@ cballsio.o: $(wildcard $(MDIR)/addons/iolib/*.h) \
 search_balltree_2balls_omp.o search_balltree_2balls_mpi.o \
 search_balltree_2balls_omp_3pcf.o search_balltree_2balls_mpi_3pcf.o \
 search_octree_2balls_omp.o search_octree_2balls_mpi.o: \
-	$(MDIR)/addons/balltree_2balls_omp/treecorr_edge_correction.h
+	$(MDIR)/addons/balltree_2balls_omp/dual_node_edge_correction.h
 
 lib$(EXEC).a: $(OBJS) $(EXTERNAL)
 	$(AR)  $@ $(addprefix $(WRKDIR)/, $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
@@ -69,6 +70,7 @@ $(PROFILE_EXEC): $(OBJS) $(EXTERNAL) $(MAIN)
 .PHONY: print-cyballs-build-env
 print-cyballs-build-env:
 	@printf '__CBALLS_CC__=%s\n' '$(CC)'
+	@printf '__CBALLS_MPICC__=%s\n' '$(MPICC)'
 	@printf '__CBALLS_LIB__=%s\n' '$(EXEC)'
 	@printf '__CBALLS_CPPFLAGS__=%s\n' '$(OPT2) $(INCLUDES)'
 	@printf '__CBALLS_ADDONSON__=%s\n' '$(ADDONSON)'
@@ -79,6 +81,11 @@ print-cyballs-build-env:
 	@printf '__CBALLS_USEGSL__=%s\n' '$(USEGSL)'
 	@printf '__CBALLS_OPENMPMACHINE__=%s\n' '$(OPENMPMACHINE)'
 	@printf '__CBALLS_SINGLEPON__=%s\n' '$(SINGLEPON)'
+	@printf '__CBALLS_KDTREEMPION__=%s\n' '$(KDTREEMPION)'
+	@printf '__CBALLS_KDTREE2BALLSOMPON__=%s\n' '$(KDTREE2BALLSOMPON)'
+	@printf '__CBALLS_KDTREE2BALLSMPION__=%s\n' '$(KDTREE2BALLSMPION)'
+	@printf '__CBALLS_KDTREESHEARSPHERE2BALLSOMPON__=%s\n' '$(KDTREESHEARSPHERE2BALLSOMPON)'
+	@printf '__CBALLS_BALLTREESHEARSPHERE2BALLSOMPON__=%s\n' '$(BALLTREESHEARSPHERE2BALLSOMPON)'
 	@printf '__CBALLS_BALLTREE2BALLSOMP3PCFON__=%s\n' '$(BALLTREE2BALLSOMP3PCFON)'
 	@printf '__CBALLS_BALLTREE2BALLSMPI3PCFON__=%s\n' '$(BALLTREE2BALLSMPI3PCFON)'
 	@printf '__CBALLS_BALLTREE2BALLSMPION__=%s\n' '$(BALLTREE2BALLSMPION)'
@@ -102,6 +109,7 @@ print-cyballs-build-env:
 .PHONY: test-default test-balls test-p0-regressions test-p1-regressions \
 	test-p2-regressions test-p2-cython test-cell-production \
 	test-openmp-determinism test-octree-ggg-fast-path test-kdtree-no-one-ball \
+	test-kdtree-box-frontier \
 	test-balltree-omp test-balltree-2balls-omp test-balltree-2balls-mpi \
 	test-balltree-2balls-3pcf \
 	test-balltree-2balls-omp-3pcf test-balltree-2balls-mpi-3pcf \
@@ -251,7 +259,8 @@ test-singlep-search:
 test-scalar-numerical-contract: $(EXEC) cyballs
 	$(PYTHON) tests/make_tests/test_scalar_numerical_contract.py
 
-test-octree-ggg-fast-path: $(EXEC) cyballs
+test-octree-ggg-fast-path:
+	$(MAKE) -B OCTREEGGGOMPON=1 all
 	$(PYTHON) tests/make_tests/test_octree_ggg_fast_path.py
 	$(PYTHON) tests/make_tests/test_octree_ggg_only_2pcf.py
 	$(PYTHON) tests/make_tests/test_octree_ggg_edge_corrections.py
@@ -265,7 +274,12 @@ test-kdtree-no-one-ball: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./make_tests/run_test_kdtree_no_one_ball
 
-test-balltree-omp: $(EXEC)
+test-kdtree-box-frontier: $(EXEC)
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
+		bash ./make_tests/run_test_kdtree_box_frontier
+
+test-balltree-omp:
+	$(MAKE) -B BALLTREEOMPON=1 KDTREEOMPON=1 $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./make_tests/run_test_balltree_omp
 
@@ -306,6 +320,32 @@ test-octree-2balls-mask: $(EXEC)
 test-two-ball-edge: $(EXEC)
 	$(PYTHON) tests/make_tests/test_two_ball_edge_corrections.py \
 		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION)
+
+.PHONY: test-kdtree-edge test-kdtree-mpi
+test-kdtree-edge:
+	$(MAKE) -B KDTREEOMPON=1 $(EXEC)
+	$(PYTHON) tests/make_tests/test_two_ball_edge_corrections.py \
+		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION) \
+		--engine kdtree-omp
+
+test-kdtree-mpi:
+	$(MAKE) -B KDTREEMPION=1 TWOPCFON=1 TPCFON=1 cballs
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
+		bash ./make_tests/run_test_kdtree_mpi
+	$(PYTHON) tests/make_tests/test_two_ball_edge_corrections.py \
+		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION) \
+		--engine kdtree-mpi --mpi-command "$(MPIEXEC) -n 2"
+
+.PHONY: test-kdtree-2balls-omp test-kdtree-2balls-mpi
+test-kdtree-2balls-omp: $(EXEC)
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
+		bash ./make_tests/run_test_kdtree_2balls_omp
+
+test-kdtree-2balls-mpi:
+	$(MAKE) -B KDTREE2BALLSOMPON=1 KDTREE2BALLSMPION=1 \
+		TWOPCFON=1 TPCFON=1 cballs
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
+		bash ./make_tests/run_test_kdtree_2balls_mpi
 
 test-octree-2balls-mpi:
 	$(MAKE) -B OCTREE2BALLSMPION=1 cballs
@@ -384,6 +424,29 @@ test-p3-cython: cyballs
 test-shear: cyballs
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_octree_omp.py
 
+.PHONY: test-shear-sphere
+test-shear-sphere: cyballs
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
+
+.PHONY: test-shear-sphere-2balls
+test-shear-sphere-2balls: cyballs
+	CBALLS_SHEAR_SPHERE_ENGINE=octree-shear-sphere-2balls-omp \
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
+
+.PHONY: test-shear-sphere-kdtree-2balls
+test-shear-sphere-kdtree-2balls: cyballs
+	CBALLS_SHEAR_SPHERE_ENGINE=kdtree-shear-sphere-2balls-omp \
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
+
+.PHONY: test-shear-sphere-balltree-2balls
+test-shear-sphere-balltree-2balls: cyballs
+	CBALLS_SHEAR_SPHERE_ENGINE=balltree-shear-sphere-2balls-omp \
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
+
+.PHONY: test-shear-all-engines
+test-shear-all-engines: cyballs
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_corr_all_engines.py
+
 test-sanitizer-smoke: $(EXEC) test-cell-production
 	cd tests && bash ./make_tests/run_test_sanitizer_smoke
 #
@@ -420,6 +483,7 @@ clean: .base
 	rm -f lib$(EXEC).a
 	rm -f $(MDIR)/python/ccyballs.pxd
 	rm -f $(MDIR)/python/cyballs.c
+	rm -f $(MDIR)/python/cyballs*.so $(MDIR)/python/cyballs*.pyd $(MDIR)/python/cyballs*.dylib
 	rm -f $(MDIR)/cyballs*.so $(MDIR)/cyballs*.pyd $(MDIR)/cyballs*.dylib
 	rm -rf $(MDIR)/python/build
 	rm -rf cyballs.egg-info

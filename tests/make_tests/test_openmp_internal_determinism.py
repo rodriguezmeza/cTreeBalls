@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 
 from cyballs import cballs
 

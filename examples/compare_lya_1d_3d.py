@@ -393,7 +393,7 @@ def write_2pcf_csv(
 
 def write_3pcf_csv(
     path: Path, config: ComparisonConfig, projected: Histogram,
-    radial: Histogram
+    scan: Histogram, tree: Histogram
 ) -> None:
     total_bins = 2 * config.r3_bins
     with path.open("w", newline="", encoding="utf-8") as stream:
@@ -401,12 +401,15 @@ def write_3pcf_csv(
         writer.writerow(
             [
                 "b1", "b2", "lag1_center", "lag2_center",
-                "zeta_3d_projected", "zeta_1d", "relative_1d_vs_3d",
+                "zeta_3d_projected", "zeta_1d_scan", "zeta_1d_tree",
+                "relative_scan_vs_3d", "relative_tree_vs_3d",
                 "numerator_3d_projected", "denominator_3d_projected",
-                "numerator_1d", "denominator_1d",
+                "numerator_1d_scan", "denominator_1d_scan",
+                "numerator_1d_tree", "denominator_1d_tree",
             ]
         )
-        relative = relative_difference(projected.value, radial.value)
+        scan_relative = relative_difference(projected.value, scan.value)
+        tree_relative = relative_difference(projected.value, tree.value)
         for b1 in range(total_bins):
             lag1 = -config.r3_max + (b1 + 0.5) * config.r3_max / config.r3_bins
             for b2 in range(total_bins):
@@ -417,9 +420,11 @@ def write_3pcf_csv(
                 writer.writerow(
                     [
                         b1, b2, lag1, lag2, projected.value[b1, b2],
-                        radial.value[b1, b2], relative[b1, b2],
+                        scan.value[b1, b2], tree.value[b1, b2],
+                        scan_relative[b1, b2], tree_relative[b1, b2],
                         projected.numerator[b1, b2], projected.denominator[b1, b2],
-                        radial.numerator[b1, b2], radial.denominator[b1, b2],
+                        scan.numerator[b1, b2], scan.denominator[b1, b2],
+                        tree.numerator[b1, b2], tree.denominator[b1, b2],
                     ]
                 )
 
@@ -429,6 +434,7 @@ def write_timings_csv(path: Path, timings: Dict[str, float]) -> None:
         "lya-1d-2pcf-omp": "lya-2pcf-omp",
         "lya-1d-tree-2pcf-omp": "lya-2pcf-omp",
         "lya-1d-3pcf-omp": "lya-3pcf-omp",
+        "lya-1d-tree-3pcf-omp": "lya-3pcf-omp",
         "lya-1d-2pcf-3pcf-omp": "lya-2pcf-3pcf-omp",
     }
     with path.open("w", newline="", encoding="utf-8") as stream:
@@ -445,7 +451,8 @@ def make_plot(
     path: Path, config: ComparisonConfig, projected2: Histogram,
     scan2: Histogram, tree2: Histogram, timings: Dict[str, float],
     projected3: Optional[Histogram] = None,
-    radial3: Optional[Histogram] = None,
+    scan3: Optional[Histogram] = None,
+    tree3: Optional[Histogram] = None,
 ) -> None:
     mpl_config = config.output_dir / ".matplotlib"
     mpl_config.mkdir(parents=True, exist_ok=True)
@@ -456,7 +463,7 @@ def make_plot(
         raise RuntimeError("plotting requires matplotlib") from exc
 
     centers = (np.arange(config.rp_bins) + 0.5) * config.rp_max / config.rp_bins
-    figure, axes = plt.subplots(2, 3, figsize=(15, 8), constrained_layout=True)
+    figure, axes = plt.subplots(2, 4, figsize=(20, 8), constrained_layout=True)
     axes[0, 0].plot(centers, projected2.value, "o-", label="3D projected")
     axes[0, 0].plot(centers, scan2.value, "s--", label="1D scan")
     axes[0, 0].plot(centers, tree2.value, "^:", label="1D tree")
@@ -479,13 +486,16 @@ def make_plot(
     )
     axes[1, 0].legend()
 
-    if projected3 is not None and radial3 is not None:
+    if projected3 is not None and scan3 is not None and tree3 is not None:
         extent = (-config.r3_max, config.r3_max, -config.r3_max, config.r3_max)
-        active3 = (projected3.denominator != 0.0) | (radial3.denominator != 0.0)
+        active3 = ((projected3.denominator != 0.0) |
+                   (scan3.denominator != 0.0) |
+                   (tree3.denominator != 0.0))
         if np.any(active3):
             amplitude = max(
                 float(np.max(np.abs(projected3.value[active3]))),
-                float(np.max(np.abs(radial3.value[active3]))),
+                float(np.max(np.abs(scan3.value[active3]))),
+                float(np.max(np.abs(tree3.value[active3]))),
                 1e-14,
             )
         else:
@@ -498,34 +508,45 @@ def make_plot(
         axes[0, 1].set(title="3D 3PCF projected", xlabel="lag 2", ylabel="lag 1")
         figure.colorbar(image1, ax=axes[0, 1], label=r"$\zeta$")
         image2 = axes[0, 2].imshow(
-            np.ma.masked_where(radial3.denominator == 0.0, radial3.value),
+            np.ma.masked_where(scan3.denominator == 0.0, scan3.value),
             origin="lower", extent=extent, cmap="coolwarm",
             vmin=-amplitude, vmax=amplitude, aspect="auto",
         )
-        axes[0, 2].set(title="Native 1D 3PCF", xlabel="lag 2", ylabel="lag 1")
+        axes[0, 2].set(title="Native 1D scan 3PCF", xlabel="lag 2", ylabel="lag 1")
         figure.colorbar(image2, ax=axes[0, 2], label=r"$\zeta$")
-        relative3 = relative_difference(projected3.value, radial3.value)
-        relative_image = np.ma.masked_where(
-            ~active3, np.log10(np.maximum(relative3, 1e-17))
+        image3 = axes[0, 3].imshow(
+            np.ma.masked_where(tree3.denominator == 0.0, tree3.value),
+            origin="lower", extent=extent, cmap="coolwarm",
+            vmin=-amplitude, vmax=amplitude, aspect="auto",
         )
-        image3 = axes[1, 1].imshow(
-            relative_image, origin="lower", extent=extent, cmap="viridis",
-            vmin=-17.0, vmax=0.0, aspect="auto",
-        )
-        axes[1, 1].set(
-            title="3PCF numerical agreement", xlabel="lag 2", ylabel="lag 1"
-        )
-        figure.colorbar(image3, ax=axes[1, 1], label="log10 relative difference")
+        axes[0, 3].set(title="Native 1D tree 3PCF", xlabel="lag 2", ylabel="lag 1")
+        figure.colorbar(image3, ax=axes[0, 3], label=r"$\zeta$")
+        for column, label, candidate in (
+            (1, "scan", scan3), (2, "tree", tree3)
+        ):
+            relative3 = relative_difference(projected3.value, candidate.value)
+            relative_image = np.ma.masked_where(
+                ~active3, np.log10(np.maximum(relative3, 1e-17))
+            )
+            relative_plot = axes[1, column].imshow(
+                relative_image, origin="lower", extent=extent, cmap="viridis",
+                vmin=-17.0, vmax=0.0, aspect="auto",
+            )
+            axes[1, column].set(
+                title=f"3PCF {label} agreement", xlabel="lag 2", ylabel="lag 1"
+            )
+            figure.colorbar(relative_plot, ax=axes[1, column],
+                            label="log10 relative difference")
     else:
-        for axis in (axes[0, 1], axes[0, 2], axes[1, 1]):
+        for axis in (*axes[0, 1:], *axes[1, 1:3]):
             axis.set_axis_off()
 
     labels = list(timings)
     values = [timings[label] for label in labels]
     short_labels = [label.replace("lya-", "").replace("-omp", "") for label in labels]
-    axes[1, 2].barh(short_labels, values, color="#4472a8")
-    axes[1, 2].invert_yaxis()
-    axes[1, 2].set(xlabel="wall time [s]", title=f"Runtime ({config.threads} threads)")
+    axes[1, 3].barh(short_labels, values, color="#4472a8")
+    axes[1, 3].invert_yaxis()
+    axes[1, 3].set(xlabel="wall time [s]", title=f"Runtime ({config.threads} threads)")
     figure.suptitle("cTreeBalls Ly-alpha: native 1D versus projected 3D")
     figure.savefig(path, dpi=170)
     plt.close(figure)
@@ -547,7 +568,8 @@ def run_comparison(config: ComparisonConfig) -> dict:
 
     methods = ["lya-2pcf-omp", "lya-1d-2pcf-omp", "lya-1d-tree-2pcf-omp"]
     if config.include_3pcf:
-        methods.extend(("lya-3pcf-omp", "lya-1d-3pcf-omp"))
+        methods.extend(("lya-3pcf-omp", "lya-1d-3pcf-omp",
+                        "lya-1d-tree-3pcf-omp"))
     if config.include_combined and config.include_3pcf:
         methods.extend(("lya-1d-2pcf-3pcf-omp", "lya-2pcf-3pcf-omp"))
 
@@ -576,6 +598,7 @@ def run_comparison(config: ComparisonConfig) -> dict:
 
     projected3 = None
     radial3 = None
+    tree3 = None
     if config.include_3pcf:
         projected3 = read_projected_3d_3pcf(
             roots["lya-3pcf-omp"] / "histZetaM_lya5d.txt",
@@ -587,9 +610,17 @@ def run_comparison(config: ComparisonConfig) -> dict:
             roots["lya-1d-3pcf-omp"] / "histZetaM_lya1d.txt",
             config.r3_bins,
         )
+        tree3 = read_1d_3pcf(
+            roots["lya-1d-tree-3pcf-omp"] / "histZetaM_lya1d.txt",
+            config.r3_bins,
+        )
         numerical["3pcf_1d_vs_projected_3d"] = comparison_metrics(
             projected3, radial3
         )
+        numerical["3pcf_tree_vs_projected_3d"] = comparison_metrics(
+            projected3, tree3
+        )
+        numerical["3pcf_tree_vs_scan"] = comparison_metrics(radial3, tree3)
 
     if config.include_combined and config.include_3pcf:
         combined1d2 = read_1d_2pcf(
@@ -631,18 +662,19 @@ def run_comparison(config: ComparisonConfig) -> dict:
         scan2,
         tree2,
     )
-    if projected3 is not None and radial3 is not None:
+    if projected3 is not None and radial3 is not None and tree3 is not None:
         write_3pcf_csv(
             config.output_dir / "comparison_3pcf.csv",
             config,
             projected3,
             radial3,
+            tree3,
         )
     write_timings_csv(config.output_dir / "timings.csv", timings)
     plot_path = config.output_dir / "lya_1d_vs_3d.png"
     make_plot(
         plot_path, config, projected2, scan2, tree2, timings,
-        projected3, radial3,
+        projected3, radial3, tree3,
     )
 
     summary = {

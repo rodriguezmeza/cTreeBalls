@@ -22,6 +22,22 @@
 #include "protodefs_octree_shear_omp.h"
 #endif
 
+#ifdef OCTREESHEARSPHEREOMP
+#include "protodefs_octree_shear_sphere_omp.h"
+#endif
+
+#ifdef OCTREESHEARSPHERE2BALLSOMP
+#include "protodefs_octree_shear_sphere_2balls_omp.h"
+#endif
+
+#ifdef KDTREESHEARSPHERE2BALLSOMP
+#include "protodefs_kdtree_shear_sphere_2balls_omp.h"
+#endif
+
+#ifdef BALLTREESHEARSPHERE2BALLSOMP
+#include "protodefs_balltree_shear_sphere_2balls_omp.h"
+#endif
+
 #ifdef OCTREEGGGCROSSOMP
 #include "protodefs_octree_ggg_cross_omp.h"
 #endif
@@ -29,8 +45,19 @@
 #ifdef KDTREEOMP
 #include "protodefs_kdtree_omp.h"
 #endif
+#ifdef KDTREEMPI
+#include "protodefs_kdtree_mpi.h"
+#endif
 
-#if defined(BALLTREEOMP) || defined(BALLTREEMPI)
+#ifdef KDTREE2BALLSOMP
+#include "protodefs_kdtree_2balls_omp.h"
+#endif
+#ifdef KDTREE2BALLSMPI
+#include "protodefs_kdtree_2balls_mpi.h"
+#endif
+
+#if defined(BALLTREEOMP) || defined(BALLTREEMPI) \
+    || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
 #include "protodefs_balltree_omp.h"
 #endif
 

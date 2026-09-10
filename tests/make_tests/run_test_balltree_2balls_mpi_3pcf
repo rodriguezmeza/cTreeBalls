@@ -242,12 +242,12 @@ if "${mpi_command[@]}" -n "$MPI_RANKS" "$CBALLS" \
         numberThreads="$MPI_THREADS" usePeriodic=false useLogHist=false \
         rangeN=1.4 rminHist=0.02 sizeHistN=5 mChebyshev=3 nsmooth=4 theta=1 \
         stepState=1000000 verbose=1 verbose_log=0 \
-        options=pos-and-convergence,KKKCorrelation,only-3pcf,treecorr-direct-triples \
+        options=pos-and-convergence,KKKCorrelation,only-3pcf,dual-node-direct-triples \
         >"$direct_output/run.log" 2>&1; then
     fail_with_log "MPI direct-triple validation was not rejected" \
                   "$direct_output/run.log"
 fi
-grep -q 'does not distribute treecorr-direct-triples' \
+grep -q 'does not distribute dual-node-direct-triples' \
     "$direct_output/run.log" \
     || fail_with_log "MPI direct-triple rejection lacked its diagnostic" \
                      "$direct_output/run.log"

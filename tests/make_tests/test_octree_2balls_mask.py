@@ -166,7 +166,7 @@ def cli_suite(executable, mpi_command=None):
                 assert_same(reference, masked)
                 assert_same(masked, run("poison", [*options, "read-mask"]), True)
                 assert_same(masked, run("masked", [*options, "read-mask"], 4), True)
-                direct = run("filtered", [*options, "treecorr-direct-triples"])
+                direct = run("filtered", [*options, "dual-node-direct-triples"])
                 assert_same(direct, masked)
                 counts, correlation = pair_oracle(data, weighted)
                 np.testing.assert_allclose(masked["histNN.txt"][:, -1], counts)

@@ -84,8 +84,8 @@ Module map
      - Octree construction, root-cell setup, body insertion, cell properties,
        tree threading, scan-level tables, and tree cleanup.
    * - ``source/search.c``
-     - The default ``octree-sincos-omp`` search. Owns the OpenMP pivot loop,
-       tree walk, node summation, and merging of thread-local histograms.
+     - The core one-node octree kernel used by compatibility paths. It owns the
+       OpenMP pivot loop, tree walk, node summation, and thread-local reduction.
    * - ``source/cballsutils.c``
      - Shared search utilities: histogram initialization, body property
        reduction, acceptance/rejection checks, periodic wrapping, coordinate
@@ -150,8 +150,8 @@ insertion, ``hackcellprop`` computes cell-level properties used by the search,
 ``threadtree`` links traversal order, and ``scanLevel`` prepares node tables
 for level-based operations.
 
-``searchcalc_normal_sincos`` in ``source/search.c`` is the default search path
-for ``searchMethod=tree-omp-sincos``/``octree-sincos-omp`` style runs. It:
+``searchcalc_normal_sincos`` in ``source/search.c`` is the core one-node
+octree path retained for compatible active methods. It:
 
 1. Initializes global and per-thread histogram workspaces.
 2. Runs an OpenMP loop over pivot bodies from the selected pivot catalog.

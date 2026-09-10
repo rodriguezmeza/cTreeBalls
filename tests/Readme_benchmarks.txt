@@ -6,15 +6,15 @@ field, geometry, binning, estimator, and normalization before comparing times.
 Current optional CPU suite:
     addons/python_env/cputime_comparison/benchmark_kappa_corr.py
 
-Its Readme.txt describes the Conda/Jupyter environment, external TreeCorr,
+Its Readme.txt describes the Conda/Jupyter environment, external dual-node,
 Corrfunc, FCFC, lya2pcf and ENCORE sources, MPI, timing scopes, and CSV outputs.
 addons/python_env is a local optional workspace and may not be distributed.
 Do not confuse its general suite with the older tests/python script of the
 same name, which has a different CLI and a narrower benchmark purpose.
 
 Current catalog drivers:
-    python/kappa_corr_all_engines.py
-    python/lya_corr_all_engines.py
+    tests/python/kappa_corr_all_engines.py
+    tests/python/lya_corr_all_engines.py
 
 Run each with --help and --list-engines. Read their READMEs for angle units,
 masking, normalization, and rank ownership. They retain in-memory input across
@@ -25,7 +25,9 @@ Before timing, from the root with matching C/Cython builds:
 
 Use no-normalize-HistZeta,weights-norm for shared raw scalar 3PCF comparisons.
 Native kernels now exclude repeated neighbors; do not subtract them again.
-SMOOTHPIVOTON=1 does not turn smoothing on without options=smooth-pivot.
+SMOOTHPIVOTON=1 turns smoothing on for supported engines. The benchmark driver
+adds no-smooth-pivot by default so cross-code comparisons use the unsmoothed
+estimator; pass --ctreeballs-smooth-pivot to benchmark smoothing explicitly.
 Rebuild both C and Cython after changing flags, then restart the notebook kernel.
 
 A compiled 3PCF capability does not mean every pair-only timing performs the

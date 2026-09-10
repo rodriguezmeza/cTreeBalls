@@ -72,8 +72,10 @@ Radians are only a small-angle approximation to chord distances.
 
 Preserve the observer origin for spherical Fourier multipoles. The current
 ASCII readers and startup/tree paths do not recenter these catalogs.
-Physical-3D scalar and forest modes use coordinate distances instead;
-flat-sky shear has its own planar convention.
+Physical-3D scalar and forest modes use coordinate distances instead.
+Flat-sky shear has its own planar convention; all ``*-shear-sphere-*`` engines
+normalize observer-centered vectors to the unit sphere and interpret
+``gamma1+i*gamma2`` in each sample's local east/north tangent basis.
 Record the estimator and units with the outputs. See :doc:`../search_methods`.
 
 In-memory input uses ``cyballs.set_catalog``, or ``set_forest_catalog`` when

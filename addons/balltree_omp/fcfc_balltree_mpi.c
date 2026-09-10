@@ -8,6 +8,10 @@
  * fcfc_balltree.c.
  */
 
+#if defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT) && !defined(BALLTREEMPI)
+#define BALLTREEMPI
+#endif
+
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -44,6 +48,18 @@ static int mpi_size = 1;
 static int mpi_owned = FALSE;
 static int mpi_finalized = FALSE;
 
+static bool fcfc_balltree_mpi_selected(const struct cmdline_data *cmd)
+{
+    if (cmd == NULL || cmd->searchMethod == NULL) return false;
+    if (strcmp(cmd->searchMethod, "balltree-mpi") == 0) return true;
+#ifdef BALLTREE2BALLSMPI
+    return strcmp(cmd->searchMethod, "balltree-2balls-mpi") == 0
+        && cballs_opt_legacy_one_ball(cmd);
+#else
+    return false;
+#endif
+}
+
 static void finalize_at_exit(void)
 {
     int finalized = FALSE;
@@ -77,8 +93,7 @@ int fcfc_balltree_mpi_prepare(struct cmdline_data *cmd,
     int provided = MPI_THREAD_SINGLE;
     int status;
 
-    if (cmd->searchMethod == NULL
-        || strcmp(cmd->searchMethod, "balltree-mpi") != 0)
+    if (!fcfc_balltree_mpi_selected(cmd))
         return SUCCESS;
     if (mpi_active) {
         if (mpi_rank != FCFC_MPI_ROOT) {
@@ -93,7 +108,7 @@ int fcfc_balltree_mpi_prepare(struct cmdline_data *cmd,
         return mpi_error(cmd, "MPI_Finalized", status);
     if (finalized) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "balltree-mpi cannot start after MPI_Finalize");
+                 "%s cannot start after MPI_Finalize", cmd->searchMethod);
         return FAILURE;
     }
     if ((status = MPI_Initialized(&initialized)) != MPI_SUCCESS)
@@ -105,7 +120,7 @@ int fcfc_balltree_mpi_prepare(struct cmdline_data *cmd,
         mpi_owned = TRUE;
         if (atexit(finalize_at_exit) != 0) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "balltree-mpi could not register MPI cleanup");
+                     "%s could not register MPI cleanup", cmd->searchMethod);
             finalize_at_exit();
             return FAILURE;
         }
@@ -115,7 +130,8 @@ int fcfc_balltree_mpi_prepare(struct cmdline_data *cmd,
     }
     if (provided < MPI_THREAD_FUNNELED) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "balltree-mpi requires MPI_THREAD_FUNNELED support");
+                 "%s requires MPI_THREAD_FUNNELED support",
+                 cmd->searchMethod);
         return FAILURE;
     }
     if ((status = MPI_Comm_set_errhandler(MPI_COMM_WORLD,
@@ -157,8 +173,7 @@ int fcfc_balltree_mpi_size(void) { return mpi_size; }
 
 int fcfc_balltree_mpi_output_enabled(struct cmdline_data *cmd)
 {
-    return cmd->searchMethod == NULL
-        || strcmp(cmd->searchMethod, "balltree-mpi") != 0
+    return !fcfc_balltree_mpi_selected(cmd)
         || !mpi_active || mpi_rank == FCFC_MPI_ROOT;
 }
 
@@ -169,8 +184,7 @@ int fcfc_balltree_mpi_consensus(struct cmdline_data *cmd, int local_status,
     int all_success = FALSE;
     int status;
 
-    if (!mpi_active || cmd->searchMethod == NULL
-        || strcmp(cmd->searchMethod, "balltree-mpi") != 0)
+    if (!mpi_active || !fcfc_balltree_mpi_selected(cmd))
         return local_status;
     status = MPI_Allreduce(&local_success, &all_success, 1, MPI_INT, MPI_MIN,
                            MPI_COMM_WORLD);

@@ -25,6 +25,16 @@
 #ifdef KDTREEOMP
 #include "startrun_kdtree_omp_11.h"                         // 59
 #endif
+#ifdef KDTREEMPI
+#include "startrun_kdtree_mpi_11.h"                         // 196
+#endif
+
+#ifdef KDTREE2BALLSOMP
+#include "startrun_kdtree_2balls_omp_11.h"                  // 197
+#endif
+#ifdef KDTREE2BALLSMPI
+#include "startrun_kdtree_2balls_mpi_11.h"                  // 198
+#endif
 
 #if defined(BALLTREEOMP) || defined(BALLTREEMPI)
 #include "startrun_balltree_omp_11.h"                       // 167
@@ -68,6 +78,22 @@
 
 #ifdef OCTREESHEAROMP
 #include "startrun_octree_shear_omp_11.h"                   // 173
+#endif
+
+#ifdef OCTREESHEARSPHEREOMP
+#include "startrun_octree_shear_sphere_omp_11.h"            // 199
+#endif
+
+#ifdef OCTREESHEARSPHERE2BALLSOMP
+#include "startrun_octree_shear_sphere_2balls_omp_11.h"     // 200
+#endif
+
+#ifdef KDTREESHEARSPHERE2BALLSOMP
+#include "startrun_kdtree_shear_sphere_2balls_omp_11.h"     // 201
+#endif
+
+#ifdef BALLTREESHEARSPHERE2BALLSOMP
+#include "startrun_balltree_shear_sphere_2balls_omp_11.h"   // 202
 #endif
 
 #ifdef OCTREESINCOSOMP

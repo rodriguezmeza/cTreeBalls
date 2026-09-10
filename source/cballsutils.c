@@ -479,6 +479,9 @@ global int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
             return FAILURE;
         }
         LyaForestId(p) = (INTEGER)forest_ids[i];
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
+        Octree3pcf3dLosId(p) = (INTEGER)forest_ids[i];
+#endif
         LyaDistance(p) = distance;
         for (k = 0; k < NDIM; k++) {
             LyaLOS(p)[k] = Pos(p)[k] / distance;
@@ -487,6 +490,9 @@ global int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
         }
     }
     for (k = 0; k < NDIM; k++) gd->Box[k] = maximum[k] - minimum[k];
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
+    gd->octree3pcf3d_los_ids[ifile] = TRUE;
+#endif
     gd->input_comment = "Python in-memory Lyman-alpha forest catalog";
     return SUCCESS;
 #else
@@ -777,14 +783,18 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
 #else // ! NOSTANDARNORMHIST
         xi = Kappa(p)/nbody;
 #ifdef BALLS4SCANLEV
-        xi_2p = (Weight(p)/Nb(p))*Kappa(p);
+        if (cballs_method_needs_balls4_scan(gd->searchMethod_int))
+            xi_2p = (Weight(p)/MAX((real)Nb(p), 1.0))*Kappa(p);
+        else
+            xi_2p = Weight(p)*Kappa(p);
 #else
         xi_2p = Weight(p)*Kappa(p);
 #endif
 #ifdef SMOOTHPIVOT
     if (cballs_opt_smooth_pivot(cmd)) {
 #ifdef BALLS4SCANLEV
-            xi_2p = KappaRmin(p);
+            if (cballs_method_needs_balls4_scan(gd->searchMethod_int))
+                xi_2p = KappaRmin(p);
 #endif
             xi = NbRmin(p)*xi_2p/nbody;
     }
@@ -801,6 +811,13 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
     if (raw_multipoles) {
         xi = Weight(p)*Kappa(p);
         xi_2p = xi;
+#ifdef SMOOTHPIVOT
+        if (cballs_opt_smooth_pivot(cmd)
+            && !strncmp(cmd->searchMethod, "kdtree-", 7)) {
+            xi = KappaRmin(p)/MAX((real)NbRmin(p), 1.0);
+            xi_2p = KappaRmin(p);
+        }
+#endif
     }
 
 #ifdef TPCF
@@ -1261,14 +1278,16 @@ local int smooth_neighbor_cells(INTEGER center, INTEGER periodic_cells,
     return count;
 }
 
-local void smooth_claim_cell(struct cmdline_data* cmd,
-                             struct global_data* gd,
-                             bodyptr p, bodyptr scan_table,
-                             const INTEGER target[NDIM],
-                             const INTEGER *body_cells,
-                             const INTEGER *bucket_heads,
-                             const INTEGER *bucket_next,
-                             size_t bucket_mask)
+local int smooth_claim_cell(struct cmdline_data* cmd,
+                            struct global_data* gd,
+                            bodyptr p, bodyptr scan_table,
+                            const INTEGER target[NDIM],
+                            const INTEGER *body_cells,
+                            const INTEGER *bucket_heads,
+                            const INTEGER *bucket_next,
+                            size_t bucket_mask,
+                            cballs_smooth_claim_accumulator accumulator,
+                            void *accumulator_context)
 {
     INTEGER iq;
     size_t bucket = smooth_hash_cell(target, bucket_mask);
@@ -1296,6 +1315,9 @@ local void smooth_claim_cell(struct cmdline_data* cmd,
             continue;
 
         if (Update(q) == TRUE) {
+            if (accumulator != NULL
+                && accumulator(cmd, gd, p, q, accumulator_context) == FAILURE)
+                return FAILURE;
             Update(q) = FALSE;
             NbRmin(p) += 1;
 #ifndef NOWKAvg
@@ -1304,21 +1326,32 @@ local void smooth_claim_cell(struct cmdline_data* cmd,
             KappaRmin(p) += Kappa(q);
 #endif
             WeightRmin(p) += Weight(q);
+#ifdef THREEPCFSHEAR
+            if (accumulator == NULL) {
+                Gamma1Rmin(p) += Weight(q)*Gamma1(q);
+                Gamma2Rmin(p) += Weight(q)*Gamma2(q);
+            }
+#endif
         } else {
             NbRminOverlap(p) += 1;
         }
     }
+
+    return SUCCESS;
 }
 
 /*
  * Build smoothing groups in stable pivot order before an OpenMP search starts.
  * Search workers may read the resulting body fields but must not mutate them.
  */
-global int prepare_smooth_pivots(struct cmdline_data* cmd,
+global int prepare_smooth_pivots_with_accumulator(
+                                 struct cmdline_data* cmd,
                                  struct global_data* gd,
                                  bodyptr *btable, INTEGER *nbody,
                                  INTEGER ipmin, INTEGER *ipmax,
-                                 int cat1, int cat2)
+                                 int cat1, int cat2,
+                                 cballs_smooth_claim_accumulator accumulator,
+                                 void *accumulator_context)
 {
     INTEGER first, last, npivot, nscan;
     INTEGER *body_cells = NULL;
@@ -1366,6 +1399,10 @@ global int prepare_smooth_pivots(struct cmdline_data* cmd,
             NbRminOverlap(p) = 0;
             KappaRmin(p) = Kappa(p);
             WeightRmin(p) = Weight(p);
+#ifdef THREEPCFSHEAR
+            Gamma1Rmin(p) = Weight(p)*Gamma1(p);
+            Gamma2Rmin(p) = Weight(p)*Gamma2(p);
+#endif
         }
         return SUCCESS;
     }
@@ -1445,6 +1482,10 @@ global int prepare_smooth_pivots(struct cmdline_data* cmd,
         NbRminOverlap(p) = 0;
         KappaRmin(p) = Kappa(p);
         WeightRmin(p) = Weight(p);
+#ifdef THREEPCFSHEAR
+        Gamma1Rmin(p) = Weight(p)*Gamma1(p);
+        Gamma2Rmin(p) = Weight(p)*Gamma2(p);
+#endif
     }
 
     DO_BODY(p, btable[cat1] + first, btable[cat1] + last) {
@@ -1452,7 +1493,8 @@ global int prepare_smooth_pivots(struct cmdline_data* cmd,
         INTEGER neighbors[NDIM][3];
         int neighbor_count[NDIM];
 
-        if (Update(p) == FALSE)
+        if ((cballs_opt_read_mask(cmd) && Mask(p) == MASK_NODE_MASKED)
+            || Update(p) == FALSE)
             continue;
         if (smooth_body_cell(cmd, gd, p, cell_width, periodic_cells, center)
             == FAILURE)
@@ -1470,9 +1512,11 @@ global int prepare_smooth_pivots(struct cmdline_data* cmd,
                     INTEGER target[NDIM] = {
                         neighbors[0][i0], neighbors[1][i1], neighbors[2][i2]
                     };
-                    smooth_claim_cell(cmd, gd, p, btable[cat2], target,
-                                      body_cells, bucket_heads, bucket_next,
-                                      bucket_mask);
+                    if (smooth_claim_cell(
+                            cmd, gd, p, btable[cat2], target,
+                            body_cells, bucket_heads, bucket_next, bucket_mask,
+                            accumulator, accumulator_context) == FAILURE)
+                        goto cleanup;
                 }
 #elif NDIM == 2
         for (int i0 = 0; i0 < neighbor_count[0]; i0++)
@@ -1480,9 +1524,11 @@ global int prepare_smooth_pivots(struct cmdline_data* cmd,
                 INTEGER target[NDIM] = {
                     neighbors[0][i0], neighbors[1][i1]
                 };
-                smooth_claim_cell(cmd, gd, p, btable[cat2], target,
-                                  body_cells, bucket_heads, bucket_next,
-                                  bucket_mask);
+                if (smooth_claim_cell(
+                        cmd, gd, p, btable[cat2], target,
+                        body_cells, bucket_heads, bucket_next, bucket_mask,
+                        accumulator, accumulator_context) == FAILURE)
+                    goto cleanup;
             }
 #else
 #error prepare_smooth_pivots supports only NDIM=2 or NDIM=3
@@ -1496,6 +1542,16 @@ cleanup:
     free(bucket_next);
     free(body_cells);
     return status;
+}
+
+global int prepare_smooth_pivots(struct cmdline_data* cmd,
+                                 struct global_data* gd,
+                                 bodyptr *btable, INTEGER *nbody,
+                                 INTEGER ipmin, INTEGER *ipmax,
+                                 int cat1, int cat2)
+{
+    return prepare_smooth_pivots_with_accumulator(
+        cmd, gd, btable, nbody, ipmin, ipmax, cat1, cat2, NULL, NULL);
 }
 #endif
 

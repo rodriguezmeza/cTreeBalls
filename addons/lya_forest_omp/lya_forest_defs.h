@@ -18,6 +18,8 @@ static inline int lya_forest_method_kind(const char *name)
     if (strcmp(name, "lya-1d-3pcf-omp") == 0 || strcmp(name, "lya-1d-3pcf-mpi") == 0) return 4;
     if (strcmp(name, "lya-1d-2pcf-3pcf-omp") == 0 || strcmp(name, "lya-1d-2pcf-3pcf-mpi") == 0) return 5;
     if (strcmp(name, "lya-1d-tree-2pcf-omp") == 0 || strcmp(name, "lya-1d-tree-2pcf-mpi") == 0) return 6;
+    if (strcmp(name, "lya-1d-tree-3pcf-omp") == 0 || strcmp(name, "lya-1d-tree-3pcf-mpi") == 0) return 7;
+    if (strcmp(name, "lya-1d-tree-same-los-2pcf-omp") == 0) return 8;
     return -1;
 }
 

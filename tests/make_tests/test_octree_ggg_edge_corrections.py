@@ -35,7 +35,7 @@ def run_ggg(positions, kappa, weights, mmax, theta=None):
             "rootDir": root,
             "options": (
                 "no-normalize-HistZeta,edge-corrections,"
-                "no-one-ball,no-out-Hist"
+                "no-one-ball,no-out-Hist,no-smooth-pivot"
             ),
         }
         if theta is not None:

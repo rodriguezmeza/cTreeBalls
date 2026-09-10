@@ -25,8 +25,12 @@
 #include "cballs_print_balls_omp_0357.h"
 #endif
 
-#ifdef KDTREEOMP
+#if defined(KDTREEOMP) || defined(KDTREEMPI)
 #include "cballs_print_kdtree_omp.h"
+#endif
+
+#if defined(KDTREE2BALLSOMP) || defined(KDTREE2BALLSMPI)
+#include "cballs_print_kdtree_2balls_omp.h"
 #endif
 
 #if defined(BALLTREEOMP) || defined(BALLTREEMPI)
@@ -47,6 +51,10 @@
 
 #ifdef OCTREE2BALLSMPI
 #include "cballs_print_octree_2balls_mpi.h"
+#endif
+
+#if defined(OCTREEBALLS4OMP) || defined(OCTREEBALLS4MPI)
+#include "cballs_print_octree_balls4_omp.h"
 #endif
 
 #ifdef BALLTREE2BALLSOMP3PCF
@@ -71,6 +79,22 @@
 
 #ifdef OCTREESHEAROMP
 #include "cballs_print_octree_shear_omp.h"
+#endif
+
+#ifdef OCTREESHEARSPHEREOMP
+#include "cballs_print_octree_shear_sphere_omp.h"
+#endif
+
+#ifdef OCTREESHEARSPHERE2BALLSOMP
+#include "cballs_print_octree_shear_sphere_2balls_omp.h"
+#endif
+
+#ifdef KDTREESHEARSPHERE2BALLSOMP
+#include "cballs_print_kdtree_shear_sphere_2balls_omp.h"
+#endif
+
+#ifdef BALLTREESHEARSPHERE2BALLSOMP
+#include "cballs_print_balltree_shear_sphere_2balls_omp.h"
 #endif
 
 #ifdef NEIGHBORBOXESOMP
