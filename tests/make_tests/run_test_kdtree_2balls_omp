@@ -21,47 +21,20 @@ grep -q -- '-DKDTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
     || fail_with_log "the active build does not enable KDTREE2BALLSOMP"
 grep -q -- '-DBALLTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
     || fail_with_log "the exact reference engine is not enabled"
-has_public_legacy=false
-if grep -q -- '-DKDTREEOMP\([[:space:]]\|$\)' <<<"$build_env"; then
-    has_public_legacy=true
-fi
-
 run_case()
 {
     local name=$1 method=$2 threads=$3 options=$4 use_log=${5:-false}
+    local nsmooth=${6:-4}
     local output="$TMP_ROOT/$name"
 
     mkdir -p "$output"
     "$CBALLS" search="$method" testmodel=simple-cubic-random \
         nbody=512 lengthBox=2 rootDir="$output" numberThreads="$threads" \
         usePeriodic=false useLogHist="$use_log" rangeN=0.5 rminHist=0.005 \
-        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0.08 theta=1 seed=123 \
+        sizeHistN=4 mChebyshev=2 nsmooth="$nsmooth" rsmooth=0.08 theta=1 seed=123 \
         stepState=1000000 verbose=2 verbose_log=0 options="$options" \
         >"$output/run.log" 2>&1 \
         || fail_with_log "$name failed" "$output/run.log"
-}
-
-run_rejected()
-{
-    local name=$1 options=$2 expected=$3
-    local output="$TMP_ROOT/$name"
-    local status
-
-    mkdir -p "$output"
-    set +e
-    "$CBALLS" search=kdtree-2balls-omp testmodel=simple-cubic-random \
-        nbody=64 lengthBox=2 rootDir="$output" numberThreads=1 \
-        usePeriodic=false useLogHist=true rangeN=0.5 rminHist=0.005 \
-        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0.08 theta=1 seed=123 \
-        stepState=1000000 verbose=2 verbose_log=0 options="$options" \
-        >"$output/run.log" 2>&1
-    status=$?
-    set -e
-    [ "$status" -ne 0 ] \
-        || fail_with_log "$name unexpectedly succeeded" "$output/run.log"
-    grep -Fq -- "$expected" "$output/run.log" \
-        || fail_with_log "$name did not report the expected error" \
-                         "$output/run.log"
 }
 
 compare_numeric()
@@ -90,48 +63,6 @@ for name in names:
 PY
 }
 
-legacy=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot
-run_case legacy-compat-one kdtree-2balls-omp 1 \
-    "$legacy,legacy-one-ball" true
-run_case legacy-compat-many kdtree-2balls-omp "$MULTI_THREADS" \
-    "$legacy,legacy-one-ball" true
-compare_numeric "$TMP_ROOT/legacy-compat-one" \
-                "$TMP_ROOT/legacy-compat-many" \
-    || fail_with_log "legacy-one-ball is not thread deterministic" \
-                     "$TMP_ROOT/legacy-compat-many/run.log"
-grep -Fq -- 'dispatching to the kdtree-omp legacy kernel' \
-    "$TMP_ROOT/legacy-compat-one/run.log" \
-    || fail_with_log "legacy-one-ball did not take the compatibility dispatch" \
-                     "$TMP_ROOT/legacy-compat-one/run.log"
-if $has_public_legacy; then
-    run_case legacy-reference kdtree-omp 1 "$legacy" true
-    compare_numeric "$TMP_ROOT/legacy-reference" \
-                    "$TMP_ROOT/legacy-compat-one" \
-        || fail_with_log "legacy-one-ball differs from kdtree-omp" \
-                         "$TMP_ROOT/legacy-compat-one/run.log"
-fi
-
-run_case legacy-exact-one kdtree-2balls-omp 1 \
-    "$legacy,legacy-one-ball,no-one-ball" true
-run_case legacy-exact-many kdtree-2balls-omp "$MULTI_THREADS" \
-    "$legacy,legacy-one-ball,no-one-ball" true
-compare_numeric "$TMP_ROOT/legacy-exact-one" \
-                "$TMP_ROOT/legacy-exact-many" \
-    || fail_with_log "legacy no-one-ball is not thread deterministic" \
-                     "$TMP_ROOT/legacy-exact-many/run.log"
-if $has_public_legacy; then
-    run_case legacy-exact-reference kdtree-omp 1 \
-        "$legacy,no-one-ball" true
-    compare_numeric "$TMP_ROOT/legacy-exact-reference" \
-                    "$TMP_ROOT/legacy-exact-one" \
-        || fail_with_log "legacy-one-ball did not preserve no-one-ball" \
-                         "$TMP_ROOT/legacy-exact-one/run.log"
-fi
-
-run_rejected legacy-conflict \
-    'only-2pcf,no-smooth-pivot,legacy-one-ball,no-two-balls' \
-    'legacy-one-ball cannot be combined with'
-
 exact=KKKCorrelation,compute-HistN,out-m-HistZeta,no-two-balls,no-smooth-pivot
 run_case reference balltree-2balls-omp 1 "$exact"
 run_case exact-one kdtree-2balls-omp 1 "$exact"
@@ -147,7 +78,8 @@ done
 
 aggregate=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot,dual-node-bin-slop
 run_case aggregate-one kdtree-2balls-omp 1 "$aggregate" true
-run_case aggregate-many kdtree-2balls-omp "$MULTI_THREADS" "$aggregate" true
+run_case aggregate-many kdtree-2balls-omp "$MULTI_THREADS" \
+    "$aggregate,dual-node-profile" true
 if grep -q -- '-DBALLS4SCANLEV\([[:space:]]\|$\)' <<<"$build_env"; then
     grep -q -- 'balanced scan-level task frontier enabled by BALLS4SCANLEV' \
         "$TMP_ROOT/aggregate-many/run.log" \
@@ -167,6 +99,20 @@ nbccalc=$(sed -n 's/.*nbccalc = \([0-9][0-9]*\).*/\1/p' \
 [ "${nbccalc:-0}" -gt 0 ] \
     || fail_with_log "the dual-node path accepted no KD node pairs" \
                      "$TMP_ROOT/aggregate-many/run.log"
+grep -Fq -- 'build_wall=' "$TMP_ROOT/aggregate-many/run.log" \
+    || fail_with_log "dual-node-profile emitted no native phase timers" \
+                     "$TMP_ROOT/aggregate-many/run.log"
+
+batch=compute-HistN,only-2pcf,no-two-balls,no-smooth-pivot,dual-node-bucket-leaves
+run_case batch-reference balltree-2balls-omp 1 "$batch" true 16
+run_case batch-one kdtree-2balls-omp 1 "$batch" true 16
+run_case batch-many kdtree-2balls-omp "$MULTI_THREADS" "$batch" true 16
+compare_numeric "$TMP_ROOT/batch-reference" "$TMP_ROOT/batch-one" \
+    || fail_with_log "batched KD leaf kernel differs from the exact oracle" \
+                     "$TMP_ROOT/batch-one/run.log"
+compare_numeric "$TMP_ROOT/batch-one" "$TMP_ROOT/batch-many" \
+    || fail_with_log "batched KD leaf kernel is not thread deterministic" \
+                     "$TMP_ROOT/batch-many/run.log"
 
 run_case only-two kdtree-2balls-omp 2 \
     compute-HistN,only-2pcf,no-two-balls,no-smooth-pivot
@@ -193,4 +139,4 @@ if grep -q -- '-DSMOOTHPIVOT\([[:space:]]\|$\)' <<<"$build_env"; then
     done
 fi
 
-echo "PASS: KDTREE2BALLSOMP compatibility, exactness, dual-node scan, modes, and determinism"
+echo "PASS: KDTREE2BALLSOMP exactness, dual-node scan, modes, and determinism"

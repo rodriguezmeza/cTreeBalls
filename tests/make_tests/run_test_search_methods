@@ -66,20 +66,6 @@ for method in "${active_methods[@]}"; do
     }
 done
 
-inactive_methods=(
-    balls-omp kdtree-omp kdtree-mpi
-    balltree-omp balltree-mpi octree-ggg-omp octree-ggg-mpi
-    octree-balls4-omp octree-balls4-mpi octree-shear-omp
-    octree-shear-sphere-omp balltree-2balls-omp_3pcf
-    balltree-2balls-mpi_3pcf
-)
-for method in "${inactive_methods[@]}"; do
-    if grep -Fq -- "- ${method} (id=" "${methods_output}"; then
-        printf 'FAIL: disabled public method was advertised: %s\n' "${method}" >&2
-        exit 1
-    fi
-done
-
 method_names=$(sed -nE 's/^- ([^ ]+) \(id=[0-9]+\)$/\1/p' "${methods_output}")
 if [[ $(printf '%s\n' "${method_names}" | sed '/^$/d' | wc -l | tr -d ' ') \
       != ${#active_methods[@]} ]]; then
@@ -108,24 +94,34 @@ if [[ $(printf '%s\n' "${option_names}" | sort | uniq -d | wc -l | tr -d ' ') !=
 fi
 
 for option in print-search-methods make-info smooth-pivot no-smooth-pivot \
-    legacy-one-ball read-mask edge-corrections only-2pcf only-3pcf \
+    read-mask edge-corrections only-2pcf only-3pcf \
     compute-2pcf-3d compute-3pcf-3d survey-estimator-3d \
     exclude-same-los exclude-all-same-los dual-node-bin-slop \
-    dual-node-direct-triples dual-node-bucket-leaves weights-norm; do
+    dual-node-direct-triples dual-node-bucket-leaves \
+    dual-node-singleton-leaves dual-node-profile no-balltree-tree-cache \
+    no-balltree-persistent-frontier no-balltree-parallel-build weights-norm \
+    default-rsmooth fix-rsmooth; do
     grep -Fq -- "- ${option} [" "${options_output}" || {
         printf 'FAIL: active option is missing: %s\n' "${option}" >&2
         exit 1
     }
 done
 
-for option in behavior-tree-omp compute-j-no-eq-i pivot-loop default-rsmooth \
-    fix-rsmooth edge-effects no-two-ball set-default-param set-Nb-noSel \
-    smooth smooth-min-cell dual-node-singleton-leaves; do
-    if grep -Fq -- "- ${option} [" "${options_output}"; then
-        printf 'FAIL: disabled-addon option was advertised: %s\n' "${option}" >&2
+for expected in \
+    'balltree-2balls-omp tree policy:' \
+    'two-entry content-keyed compact-tree cache' \
+    'bounded sparse unresolved-node frontier' \
+    'vector-log backend:'; do
+    grep -Fq -- "${expected}" "${make_output}" || {
+        printf 'FAIL: make-info is missing runtime policy: %s\n' "${expected}" >&2
         exit 1
-    fi
+    }
 done
+
+grep -Eq '^[[:space:]]+SLEEF_ENABLED[[:space:]]+= [01]$' "${make_output}" || {
+    printf 'FAIL: make-info is missing resolved SLEEF_ENABLED state\n' >&2
+    exit 1
+}
 
 for setting in KDTREE2BALLSOMPON KDTREE2BALLSMPION BALLTREE2BALLSOMPON \
     BALLTREE2BALLSMPION OCTREE2BALLSOMPON OCTREE2BALLSMPION LYAFORESTOMPON \
@@ -136,14 +132,6 @@ for setting in KDTREE2BALLSOMPON KDTREE2BALLSMPION BALLTREE2BALLSOMPON \
         printf 'FAIL: make-info is missing active setting: %s\n' "${setting}" >&2
         exit 1
     }
-done
-
-for setting in KDTREEOMPON KDTREEMPION BALLTREEOMPON BALLTREEMPION \
-    OCTREEGGGOMPON OCTREEGGGMPION OCTREEBALLS4OMPON OCTREEBALLS4MPION; do
-    if grep -Eq "^[[:space:]]+${setting}[[:space:]]+=" "${make_output}"; then
-        printf 'FAIL: make-info advertised disabled addon: %s\n' "${setting}" >&2
-        exit 1
-    fi
 done
 
 printf 'PASS: runtime help matches the active addon profile.\n'

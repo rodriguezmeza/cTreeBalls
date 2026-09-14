@@ -1,53 +1,6 @@
-// Use:
-//#include "protodefs_include.h"
-//
-//  it is included in (the socket):
-//      include/protodefs.h
-//      at the end of the file
-//
-
+/* Prototypes for the maintained active add-on profile. */
 #ifndef _protodefs_include_h
 #define _protodefs_include_h
-
-#ifdef OCTREEGGGOMP
-#include "protodefs_octree_ggg_omp.h"
-#endif
-
-#ifdef OCTREEGGGMPI
-#include "protodefs_octree_ggg_omp.h"
-#include "protodefs_octree_ggg_mpi.h"
-#endif
-
-#ifdef OCTREESHEAROMP
-#include "protodefs_octree_shear_omp.h"
-#endif
-
-#ifdef OCTREESHEARSPHEREOMP
-#include "protodefs_octree_shear_sphere_omp.h"
-#endif
-
-#ifdef OCTREESHEARSPHERE2BALLSOMP
-#include "protodefs_octree_shear_sphere_2balls_omp.h"
-#endif
-
-#ifdef KDTREESHEARSPHERE2BALLSOMP
-#include "protodefs_kdtree_shear_sphere_2balls_omp.h"
-#endif
-
-#ifdef BALLTREESHEARSPHERE2BALLSOMP
-#include "protodefs_balltree_shear_sphere_2balls_omp.h"
-#endif
-
-#ifdef OCTREEGGGCROSSOMP
-#include "protodefs_octree_ggg_cross_omp.h"
-#endif
-
-#ifdef KDTREEOMP
-#include "protodefs_kdtree_omp.h"
-#endif
-#ifdef KDTREEMPI
-#include "protodefs_kdtree_mpi.h"
-#endif
 
 #ifdef KDTREE2BALLSOMP
 #include "protodefs_kdtree_2balls_omp.h"
@@ -55,112 +8,43 @@
 #ifdef KDTREE2BALLSMPI
 #include "protodefs_kdtree_2balls_mpi.h"
 #endif
-
-#if defined(BALLTREEOMP) || defined(BALLTREEMPI) \
-    || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
-#include "protodefs_balltree_omp.h"
-#endif
-
 #ifdef BALLTREE2BALLSOMP
 #include "protodefs_balltree_2balls_omp.h"
 #endif
-
 #ifdef BALLTREE2BALLSMPI
 #include "protodefs_balltree_2balls_mpi.h"
 #endif
-
 #ifdef OCTREE2BALLSOMP
 #include "protodefs_octree_2balls_omp.h"
 #endif
-
 #ifdef OCTREE2BALLSMPI
 #include "protodefs_octree_2balls_mpi.h"
 #endif
 
-#ifdef BALLTREE2BALLSOMP3PCF
-#include "protodefs_balltree_2balls_omp_3pcf.h"
+#ifdef OCTREESHEARSPHERE2BALLSOMP
+#include "protodefs_octree_shear_sphere_2balls_omp.h"
 #endif
-
-#ifdef BALLTREE2BALLSMPI3PCF
-#include "protodefs_balltree_2balls_mpi_3pcf.h"
+#ifdef KDTREESHEARSPHERE2BALLSOMP
+#include "protodefs_kdtree_shear_sphere_2balls_omp.h"
+#endif
+#ifdef BALLTREESHEARSPHERE2BALLSOMP
+#include "protodefs_balltree_shear_sphere_2balls_omp.h"
 #endif
 
 #ifdef KDTREEBOXOMP
 #include "protodefs_kdtree_box_omp.h"
 #endif
-
 #ifdef NEIGHBORBOXESOMP
 #include "protodefs_neighbor_boxes_omp.h"
 #endif
 
-#ifdef KDTREECUTEBOX
-#include "protodefs_kdtree_cute_box.h"
-#endif
-
-#ifdef COSMOLIB
-#include "protodefs_cosmolib.h"
-#endif
-
-#ifdef PXD
-#include "protodefs_pxd.h"
-#endif
-
-
-/*
- Add your addon item here
- */
-
-
-/*
- ############################
- #B Addendum of some not important
- #   modules or that are in
- #   development phase
- # Normally they will be switched OFF
- ############################
- */
-
-#ifdef DIRECTMETHODSIMPLE
-#include "protodefs_direct_method_simple.h"
-#endif
-
-#ifdef DIRECTMETHODSIMPLELOOPID
-#include "protodefs_direct_method_simple_loopId.h"
-#endif
-
-
-#ifdef OCTREEGGG
-#include "protodefs_octree_ggg.h"
-#endif
-
-#ifdef DIRECTMETHOD
-#include "protodefs_direct_method.h"
-#endif
-
-#ifdef SAVERESTORE
-#include "protodefs_save_restore.h"
-#endif
-
-#ifdef OCTREEGGGOMPTRIANGLES
-#include "protodefs_octree_ggg_omp_triangles.h"
-#endif
-
-#ifdef OCTREEBALLS4OMP
-#include "protodefs_octree_balls4_omp.h"
-#endif
-#ifdef OCTREEBALLS4MPI
-#include "protodefs_octree_balls4_mpi.h"
-#endif
-
-#ifdef OCTREEKKKBALLS4OMPTRIANGLES
-#include "protodefs_octree_kkk_balls4_omp_triangles.h"
-#endif
-
 #if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
 #include "protodefs_octree_3pcf_3d_omp.h"
+#endif
 #ifdef OCTREE3PCF3DMPI
 #include "cb3d_mpi.h"
 #endif
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
 #include "cb3d_parallel.h"
 #endif
 
@@ -171,50 +55,14 @@
 #include "lya_forest_mpi.h"
 #endif
 
-
-/*
- #E Addendum of some not important
- ############################
-*/
-
-
-/*
- ############################
- #B Addendum of some important
- #   modules that will not be part
- #       any longer of the public version
- # Normally they will be switched OFF
- ############################
- */
-
+#ifdef COSMOLIB
+#include "protodefs_cosmolib.h"
+#endif
+#ifdef PXD
+#include "protodefs_pxd.h"
+#endif
 #ifdef OCTREESINCOSOMP
 #include "protodefs_octree_sincos_omp.h"
 #endif
 
-#ifdef TREEOMPSINCOS
-#include "protodefs_tree_omp_sincos.h"
 #endif
-
-#ifdef BALLS
-#include "protodefs_balls_omp.h"
-#endif
-
-#ifdef BALLS0357
-#include "protodefs_balls_omp_0357.h"
-#endif
-
-#ifdef OCTREEKKKOMP
-#include "protodefs_octree_kkk_omp.h"
-#endif
-
-#ifdef OCTREEBOXOMP
-#include "protodefs_octree_box_omp.h"
-#endif
-
-/*
- #E Addendum of some not important
- #  no longer part of the public version
- ############################
-*/
-
-#endif	// ! _protodefs_include_h

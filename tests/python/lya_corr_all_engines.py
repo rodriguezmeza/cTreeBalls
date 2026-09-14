@@ -25,8 +25,8 @@ import time
 import numpy as np
 
 from kappa_corr_all_engines import (
-    broadcast_array, discover_cython_methods, get_mpi_comm,
-    flatten_radial_matrix, mpi_environment_size,
+    DEFAULT_CBALLS, broadcast_array, discover_cython_methods, get_mpi_comm,
+    flatten_radial_matrix, inspect_cballs_runtime, mpi_environment_size,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -538,7 +538,7 @@ def make_plots(results, config):
     return paths
 
 
-def run_engine_suite(catalog, config, comm=None):
+def run_engine_suite(catalog, config, comm=None, runtime_info=None):
     """Retain one NumPy catalog per process; return root-only result tables."""
     if comm is None:
         comm = get_mpi_comm(
@@ -598,7 +598,8 @@ def run_engine_suite(catalog, config, comm=None):
                 key: str(value) if isinstance(value, Path) else value
                 for key, value in config.__dict__.items()
             }
-            summary = dict(catalog={**catalog.metadata, "pixels": catalog.nbody,
+            summary = dict(ctreeballs_runtime=runtime_info,
+                           catalog={**catalog.metadata, "pixels": catalog.nbody,
                                     "forests": forest_count},
                            config=config_json,
                            catalog_registrations_per_rank=1,
@@ -694,10 +695,18 @@ def main(argv=None):
         return subprocess.run(command, env={**os.environ, MPI_CHILD: "1"}, check=False).returncode
     # Importing cyballs does not initialize MPI; multi-rank execution does.
     comm = get_mpi_comm(mpi_environment_size() > 1)
+    runtime_info = collective(
+        comm, lambda: inspect_cballs_runtime(DEFAULT_CBALLS), root_only=True
+    )
+    runtime_info = comm.bcast(runtime_info, root=0)
     native_candidates = list(LYA_ENGINES)
     probe_candidates = [*native_candidates, *INCOMPATIBLE_ENGINE_REASONS]
     discovered = collective(comm, lambda: discover_cython_methods(probe_candidates))
-    available = [name for name in native_candidates if name in discovered]
+    executable_methods = set(runtime_info["search_methods"])
+    available = [
+        name for name in native_candidates
+        if name in discovered and name in executable_methods
+    ]
     if args.list_engines:
         if comm.rank == 0:
             for name, spec in LYA_ENGINES.items():
@@ -758,7 +767,7 @@ def main(argv=None):
             print(f"DESI field={source['delta_field']}, BLINDING={source['blinding']}")
         if any(3 in LYA_ENGINES[e].orders for e in engines):
             print("3PCF can be expensive on dense forests; start with --max-forests and --pixel-stride.")
-    run_engine_suite(catalog, config, comm)
+    run_engine_suite(catalog, config, comm, runtime_info=runtime_info)
     if comm.rank == 0:
         print(f"Results: {config.output_dir / 'summary.json'}")
     return 0

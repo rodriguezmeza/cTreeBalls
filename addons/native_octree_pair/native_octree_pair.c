@@ -10,12 +10,29 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef OPENMPCODE
+#include <omp.h>
+#endif
+
 #include "globaldefs.h"
 #include "native_octree_pair.h"
 #include "octree_2balls_tree.h"
 
 #define NATIVE_PAIR_SPLIT_FACTOR ((real)0.585)
 #define NATIVE_PAIR_MAX_FRONTIER ((INTEGER)256)
+#define NATIVE_PAIR_BATCH_SIZE 256
+
+#if defined(__APPLE__)
+extern void vvlog(double *, const double *, const int *);
+extern void vvlogf(float *, const float *, const int *);
+#elif defined(CBALLS_HAVE_SLEEF)
+#include <sleef.h>
+#endif
+
+#if defined(__APPLE__) || defined(CBALLS_HAVE_SLEEF) \
+    || defined(CBALLS_COMPILER_VECTOR_LOG)
+#define NATIVE_PAIR_VECTOR_LOG 1
+#endif
 
 #ifdef TWOPCF
 typedef struct {
@@ -24,7 +41,20 @@ typedef struct {
     real *field_product;
     INTEGER body_pairs;
     INTEGER cell_pairs;
+#ifdef NATIVE_PAIR_VECTOR_LOG
+    real batch_distance2[NATIVE_PAIR_BATCH_SIZE];
+    real batch_denominator[NATIVE_PAIR_BATCH_SIZE];
+    real batch_numerator[NATIVE_PAIR_BATCH_SIZE];
+    int batch_count;
+#endif
 } native_pair_histogram;
+
+typedef struct {
+    double build;
+    double frontier;
+    double traversal;
+    double reduction;
+} native_pair_phase_timers;
 
 typedef struct {
     struct cmdline_data *cmd;
@@ -34,7 +64,27 @@ typedef struct {
     bool weighted_signal;
     bool weighted_normalization;
     real pair_scale;
+    real minimum2;
+    real maximum2;
+    real theta2;
+    real bin_size;
+    real inverse_bin_size;
+    real bin_slop;
+    real bin_slop2;
+    real half_bin_plus_slop2;
+    real log_acceptance_limit2;
+    bool profile;
+    native_pair_phase_timers *timers;
 } native_pair_context;
+
+static inline double native_pair_timer_now(void)
+{
+#ifdef OPENMPCODE
+    return omp_get_wtime();
+#else
+    return CPUTIME;
+#endif
+}
 
 static const char *native_pair_method(const struct cmdline_data *cmd)
 {
@@ -121,6 +171,46 @@ static INTEGER native_pair_frontier_target(
     return MIN(NATIVE_PAIR_MAX_FRONTIER, target);
 }
 
+int cballs_native_pair_leaf_capacity(
+        const struct cmdline_data *cmd, const struct global_data *gd,
+        INTEGER point_count)
+{
+    const int base = MAX(1, cmd->nsmooth);
+    const int adaptive_base = MIN(64, base);
+    const int minimum = MAX(1, (3 * adaptive_base + 3) / 4);
+    const int maximum = MIN(
+        64, adaptive_base + MAX(1, adaptive_base / 4));
+    real bin_width;
+    real target_radius;
+    real surface_density;
+    real expected_occupancy;
+    int capacity;
+
+    if (scanopt(cmd->options, "dual-node-singleton-leaves")) return 1;
+    if (cballs_opt_no_two_balls(cmd) || !(cmd->theta > 0.0)
+        || point_count <= 0)
+        return base;
+
+    /* The unit-sphere pair workload is dominated by the widest, outermost
+     * annulus.  Estimate the number of bodies in a cell whose radius is half
+     * the accepted theta-scaled bin width.  The 75--125 percent calibration
+     * band around nsmooth prevents body-pair traffic from exploding when a
+     * dense catalog predicts an overly coarse leaf. */
+    if (cmd->useLogHist) {
+        if (!(gd->deltaR > 0.0) || !(cmd->rangeN > 0.0)) return base;
+        bin_width = cmd->rangeN * (rpow(10.0, gd->deltaR) - 1.0);
+    } else {
+        bin_width = gd->deltaR;
+    }
+    target_radius = 0.5 * cmd->theta * bin_width;
+    surface_density = (real)point_count / (4.0 * PI);
+    expected_occupancy = surface_density * PI * target_radius * target_radius;
+    if (!isfinite(expected_occupancy) || !(expected_occupancy > 0.0))
+        return base;
+    capacity = (int)rfloor(expected_occupancy + 0.5);
+    return MAX(minimum, MIN(maximum, capacity));
+}
+
 static inline INTEGER native_pair_node_count(const fcfc_ballnode *node)
 {
     return node->last - node->first + 1;
@@ -189,11 +279,10 @@ static inline int native_pair_bin_index_squared(
 {
     const struct cmdline_data *cmd = context->cmd;
     const struct global_data *gd = context->gd;
-    const real minimum2 = cmd->rminHist * cmd->rminHist;
-    const real maximum2 = cmd->rangeN * cmd->rangeN;
     int bin;
 
-    if (!(distance2 > minimum2 && distance2 < maximum2)) return -1;
+    if (!(distance2 > context->minimum2
+          && distance2 < context->maximum2)) return -1;
     if (!cmd->useLogHist)
         return native_pair_bin_index(context, rsqrt(distance2));
     if (cmd->rminHist == 0.0) {
@@ -201,25 +290,70 @@ static inline int native_pair_bin_index_squared(
             * (0.5 * rlog10(distance2) - rlog10(cmd->rangeN))
             + cmd->sizeHistN) + 1;
     } else {
-        bin = (int)(0.5 * rlog10(distance2 / minimum2)
+        bin = (int)(0.5 * rlog10(distance2 / context->minimum2)
             * gd->i_deltaR) + 1;
     }
     return bin >= 1 && bin <= cmd->sizeHistN ? bin : -1;
 }
 
-static inline real native_pair_bin_slop_width(
-        const native_pair_context *context, real distance)
+static int native_pair_initialize_acceptance(native_pair_context *context)
 {
-    if (context->cmd->useLogHist)
-        return context->cmd->theta * rlog(10.0)
-             * context->gd->deltaR * distance;
-    return context->cmd->theta * context->gd->deltaR;
+    struct cmdline_data *cmd = context->cmd;
+    const struct global_data *gd = context->gd;
+
+    context->minimum2 = rsqr(cmd->rminHist);
+    context->maximum2 = rsqr(cmd->rangeN);
+    context->theta2 = rsqr(cmd->theta);
+    context->bin_size = cmd->useLogHist
+        ? rlog(10.0) * gd->deltaR : gd->deltaR;
+    context->bin_slop = cmd->theta * context->bin_size;
+    context->bin_slop2 = rsqr(context->bin_slop);
+    context->half_bin_plus_slop2 =
+        0.25 * rsqr(context->bin_size + context->bin_slop);
+    context->log_acceptance_limit2 = MIN(
+        context->theta2,
+        MAX(context->bin_slop2, context->half_bin_plus_slop2));
+    if (!(context->bin_size > 0.0)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: radial bin width must be positive",
+                 native_pair_method(cmd));
+        return FAILURE;
+    }
+    context->inverse_bin_size = 1.0 / context->bin_size;
+    return SUCCESS;
 }
+
+#ifdef NATIVE_PAIR_VECTOR_LOG
+static void native_pair_accumulate_body_batch_flush(
+        const native_pair_context *, native_pair_histogram *,
+        real *, real *, real *, int);
+#endif
 
 static inline void native_pair_accumulate_body(
         const native_pair_context *context, native_pair_histogram *hist,
         const fcfc_ballpoint *point1, const fcfc_ballpoint *point2)
 {
+#ifdef NATIVE_PAIR_VECTOR_LOG
+    const real distance2 = native_pair_point_distance_squared(
+        context->cmd, context->gd, point1, point2);
+    const int index = hist->batch_count;
+
+    if (!(distance2 > context->minimum2
+          && distance2 < context->maximum2)) return;
+    hist->batch_distance2[index] = distance2;
+    hist->batch_denominator[index] = context->weighted_normalization
+        ? point1->weight * point2->weight : 1.0;
+    hist->batch_numerator[index] = context->weighted_signal
+        ? point1->weighted_kappa * point2->weighted_kappa
+        : point1->kappa * point2->kappa;
+    hist->batch_count++;
+    if (hist->batch_count == NATIVE_PAIR_BATCH_SIZE) {
+        native_pair_accumulate_body_batch_flush(
+            context, hist, hist->batch_distance2, hist->batch_denominator,
+            hist->batch_numerator, hist->batch_count);
+        hist->batch_count = 0;
+    }
+#else
     const int bin = native_pair_bin_index_squared(
         context, native_pair_point_distance_squared(
             context->cmd, context->gd, point1, point2));
@@ -236,7 +370,75 @@ static inline void native_pair_accumulate_body(
     hist->weight_product[bin] += context->pair_scale * denominator;
     hist->field_product[bin] += context->pair_scale * numerator;
     hist->body_pairs++;
+#endif
 }
+
+#ifdef NATIVE_PAIR_VECTOR_LOG
+static void native_pair_vector_log(real *output, const real *input, int count)
+{
+#if defined(__APPLE__)
+#if defined(DOUBLEPREC)
+    vvlog(output, input, &count);
+#else
+    vvlogf(output, input, &count);
+#endif
+#elif defined(CBALLS_HAVE_SLEEF)
+#pragma omp simd
+    for (int i = 0; i < count; i++) {
+#if defined(DOUBLEPREC)
+        output[i] = Sleef_log_u10(input[i]);
+#else
+        output[i] = Sleef_logf_u10(input[i]);
+#endif
+    }
+#else
+#pragma omp simd
+    for (int i = 0; i < count; i++) output[i] = rlog(input[i]);
+#endif
+}
+
+static void native_pair_accumulate_body_batch_flush(
+        const native_pair_context *context, native_pair_histogram *hist,
+        real *distance2, real *denominator, real *numerator, int count)
+{
+    int bins[NATIVE_PAIR_BATCH_SIZE];
+    const struct cmdline_data *cmd = context->cmd;
+
+    if (count <= 0) return;
+    if (cmd->useLogHist && cmd->rminHist > 0.0) {
+        real logarithms[NATIVE_PAIR_BATCH_SIZE];
+        const real minimum2 = cmd->rminHist * cmd->rminHist;
+        const real scale = 0.5 * context->gd->i_deltaR / rlog(10.0);
+
+        for (int i = 0; i < count; i++) distance2[i] /= minimum2;
+        if (count >= 8)
+            native_pair_vector_log(logarithms, distance2, count);
+        else
+        {
+            for (int i = 0; i < count; i++)
+                logarithms[i] = rlog(distance2[i]);
+        }
+        for (int i = 0; i < count; i++) {
+            const int bin = (int)(logarithms[i] * scale) + 1;
+
+            bins[i] = bin >= 1 && bin <= cmd->sizeHistN ? bin : -1;
+        }
+    } else {
+        for (int i = 0; i < count; i++)
+            bins[i] = native_pair_bin_index_squared(context, distance2[i]);
+    }
+
+    for (int i = 0; i < count; i++) {
+        const int bin = bins[i];
+
+        if (bin < 0) continue;
+        hist->pair_count[bin] += context->pair_scale;
+        hist->weight_product[bin] += context->pair_scale * denominator[i];
+        hist->field_product[bin] += context->pair_scale * numerator[i];
+        hist->body_pairs++;
+    }
+}
+#endif
 
 static inline bool native_pair_outside_range(
         const native_pair_context *context,
@@ -261,9 +463,9 @@ static int native_pair_two_ball_bin(
 {
     const struct cmdline_data *cmd = context->cmd;
     const real size = (real)node1->radius + (real)node2->radius;
-    real distance;
-    real lower;
-    real upper;
+    const real size2 = size * size;
+    bool have_coordinate = FALSE;
+    real coordinate = 0.0;
     int center_bin;
 
     if (!context->use_two_balls || !(distance2 > 0.0)
@@ -271,62 +473,67 @@ static int native_pair_two_ball_bin(
         return -1;
 
     if (context->use_bin_slop) {
-        real bin_size;
-        real slop;
         real fraction;
-        real coordinate;
 
-        if (size * size > rsqr(cmd->theta) * distance2) return -1;
         if (cmd->useLogHist) {
-            const real relative_size2 = size * size / distance2;
-
             if (!(cmd->rminHist > 0.0)) return -1;
-            bin_size = rlog(10.0) * context->gd->deltaR;
-            slop = cmd->theta * bin_size;
-            if (size * size > slop * slop * distance2) {
-                if (size * size
-                    > 0.25 * rsqr(bin_size + slop) * distance2)
+            if (size2 > context->log_acceptance_limit2 * distance2)
+                return -1;
+            if (size2 > context->bin_slop2 * distance2) {
+                const real relative_size2 = size2 / distance2;
+
+                if (size2 > context->half_bin_plus_slop2 * distance2)
                     return -1;
-                coordinate = 0.5 * rlog(
-                    distance2 / rsqr(cmd->rminHist)) / bin_size;
+                coordinate = 0.5 * rlog(distance2 / context->minimum2)
+                           * context->inverse_bin_size;
+                have_coordinate = TRUE;
                 fraction = coordinate - rfloor(coordinate);
                 if (fraction > 0.5) fraction = 1.0 - fraction;
-                if (size * size
-                    > rsqr(fraction * bin_size + slop) * distance2)
+                if (size2 > rsqr(fraction * context->bin_size
+                                 + context->bin_slop) * distance2)
                     return -1;
                 fraction = coordinate - rfloor(coordinate);
-                if (size * size
-                    > rsqr(fraction * bin_size + slop - relative_size2)
+                if (size2
+                    > rsqr(fraction * context->bin_size
+                           + context->bin_slop - relative_size2)
                       * distance2)
                     return -1;
             }
         } else {
-            bin_size = context->gd->deltaR;
-            slop = cmd->theta * bin_size;
-            if (size > slop) {
-                if (size > 0.5 * (bin_size + slop)) return -1;
-                distance = rsqrt(distance2);
-                coordinate = (distance - cmd->rminHist) / bin_size;
+            if (size2 > context->theta2 * distance2) return -1;
+            if (size2 > context->bin_slop2) {
+                if (size2 > context->half_bin_plus_slop2) return -1;
+                coordinate = (rsqrt(distance2) - cmd->rminHist)
+                           / context->bin_size;
                 fraction = coordinate - rfloor(coordinate);
                 if (fraction > 0.5) fraction = 1.0 - fraction;
-                if (size > fraction * bin_size + slop) return -1;
+                if (size > fraction * context->bin_size
+                         + context->bin_slop) return -1;
             }
         }
-        center_bin = native_pair_bin_index_squared(context, distance2);
+        if (!(distance2 > context->minimum2
+              && distance2 < context->maximum2))
+            return -2;
+        if (!have_coordinate)
+            coordinate = 0.5 * rlog(distance2 / context->minimum2)
+                       * context->inverse_bin_size;
+        center_bin = (int)coordinate + 1;
+        if (center_bin < 1 || center_bin > cmd->sizeHistN) return -2;
         return center_bin < 0 ? -2 : center_bin;
     }
 
-    distance = rsqrt(distance2);
-    if (size > native_pair_bin_slop_width(context, distance)) return -1;
-    lower = distance - size;
-    upper = distance + size;
-    if (!(lower > cmd->rminHist && upper < cmd->rangeN)) return -1;
-    center_bin = native_pair_bin_index(context, distance);
-    if (center_bin < 0
-        || native_pair_bin_index(context, lower) != center_bin
-        || native_pair_bin_index(context, upper) != center_bin)
-        return -1;
-    return center_bin;
+    {
+        const real distance = rsqrt(distance2);
+        const real lower = distance - size;
+        const real upper = distance + size;
+
+        center_bin = native_pair_bin_index(context, distance);
+        if (center_bin < 0
+            || native_pair_bin_index(context, lower) != center_bin
+            || native_pair_bin_index(context, upper) != center_bin)
+            return -1;
+        return center_bin;
+    }
 }
 
 static inline void native_pair_accumulate_nodes(
@@ -403,11 +610,9 @@ static void native_pair_process_pair(
         real effective_width2;
 
         if (context->cmd->useLogHist)
-            effective_width2 = rsqr(context->cmd->theta * rlog(10.0)
-                * context->gd->deltaR) * distance2;
+            effective_width2 = context->bin_slop2 * distance2;
         else
-            effective_width2 = rsqr(
-                context->cmd->theta * context->gd->deltaR);
+            effective_width2 = context->bin_slop2;
 
         if (size2 > size1) {
             split2 = TRUE;
@@ -578,12 +783,14 @@ static int native_pair_run_tasks(
     struct cmdline_data *cmd = context->cmd;
     struct global_data *gd = context->gd;
     const size_t stride = (size_t)cmd->sizeHistN + 1;
-    real *task_histograms = NULL;
-    INTEGER *task_body_counts = NULL;
-    INTEGER *task_cell_counts = NULL;
+    real *thread_histograms = NULL;
+    INTEGER *thread_body_counts = NULL;
+    INTEGER *thread_cell_counts = NULL;
+    int thread_count = 1;
     int allocation_status;
     int reduction_status = SUCCESS;
     int status = FAILURE;
+    double phase_started = 0.0;
 
     if (tree1 == NULL || tree2 == NULL
         || tree1->packed_points == NULL || tree2->packed_points == NULL) {
@@ -592,57 +799,103 @@ static int native_pair_run_tasks(
                  native_pair_method(cmd));
         goto cleanup;
     }
+#ifdef OPENMPCODE
+    thread_count = MAX(1, omp_get_max_threads());
+#endif
     allocation_status = native_pair_allocate_tasks(
-        cmd, frontier_count1, stride, &task_histograms,
-        &task_body_counts, &task_cell_counts);
+        cmd, (INTEGER)thread_count, stride, &thread_histograms,
+        &thread_body_counts, &thread_cell_counts);
     if (native_pair_consensus(
             policy, cmd, allocation_status,
             "native-octree pair-task allocation") == FAILURE)
         goto cleanup;
 
+    if (context->profile) phase_started = native_pair_timer_now();
 #ifdef OPENMPCODE
-#pragma omp parallel for schedule(dynamic,1)
+#pragma omp parallel
 #endif
-    for (INTEGER task = 0; task < frontier_count1; task++) {
-        real *base = task_histograms + (size_t)task * 3 * stride;
+    {
+#ifdef OPENMPCODE
+        const int thread = omp_get_thread_num();
+#else
+        const int thread = 0;
+#endif
+        real *base = thread_histograms + (size_t)thread * 3 * stride;
         native_pair_histogram hist;
 
-        if (!native_pair_task_owned(policy, cmd, task)) continue;
         hist.pair_count = base;
         hist.weight_product = base + stride;
         hist.field_product = base + 2 * stride;
         hist.body_pairs = 0;
         hist.cell_pairs = 0;
+#ifdef NATIVE_PAIR_VECTOR_LOG
+        hist.batch_count = 0;
+#endif
 
-        if (auto_correlation) {
-            native_pair_process_auto(
-                context, tree1, frontier1[task], &hist);
-            for (INTEGER other = task + 1;
-                 other < frontier_count2; other++)
-                native_pair_process_pair(
-                    context, tree1, frontier1[task],
-                    tree2, frontier2[other], &hist);
-        } else {
-            for (INTEGER other = 0; other < frontier_count2; other++)
-                native_pair_process_pair(
-                    context, tree1, frontier1[task],
-                    tree2, frontier2[other], &hist);
+#ifdef OPENMPCODE
+#pragma omp for schedule(dynamic,1)
+#endif
+        for (INTEGER task = 0; task < frontier_count1; task++) {
+            if (!native_pair_task_owned(policy, cmd, task)) continue;
+            if (auto_correlation) {
+                native_pair_process_auto(
+                    context, tree1, frontier1[task], &hist);
+                for (INTEGER other = task + 1;
+                     other < frontier_count2; other++)
+                    native_pair_process_pair(
+                        context, tree1, frontier1[task],
+                        tree2, frontier2[other], &hist);
+            } else {
+                for (INTEGER other = 0; other < frontier_count2; other++)
+                    native_pair_process_pair(
+                        context, tree1, frontier1[task],
+                        tree2, frontier2[other], &hist);
+            }
         }
-        task_body_counts[task] = hist.body_pairs;
-        task_cell_counts[task] = hist.cell_pairs;
+#ifdef NATIVE_PAIR_VECTOR_LOG
+        native_pair_accumulate_body_batch_flush(
+            context, &hist, hist.batch_distance2, hist.batch_denominator,
+            hist.batch_numerator, hist.batch_count);
+#endif
+        thread_body_counts[thread] = hist.body_pairs;
+        thread_cell_counts[thread] = hist.cell_pairs;
     }
+    if (context->profile)
+        context->timers->traversal += native_pair_timer_now() - phase_started;
 
+    if (context->profile) phase_started = native_pair_timer_now();
+
+#ifdef OPENMPCODE
+#pragma omp parallel
+    {
+        for (int merge_span = 1; merge_span < thread_count;
+             merge_span *= 2) {
+            const int blocks =
+                (thread_count + 2 * merge_span - 1) / (2 * merge_span);
+
+#pragma omp for schedule(static)
+            for (int block = 0; block < blocks; block++) {
+                const int destination = block * 2 * merge_span;
+                const int source = destination + merge_span;
+
+                if (source >= thread_count) continue;
+                for (size_t value = 0; value < 3 * stride; value++)
+                    thread_histograms[(size_t)destination * 3 * stride + value]
+                        += thread_histograms[(size_t)source * 3 * stride + value];
+                thread_body_counts[destination] += thread_body_counts[source];
+                thread_cell_counts[destination] += thread_cell_counts[source];
+            }
+        }
+    }
+#endif
     if (native_pair_reduce_reals(
-            policy, cmd, task_histograms,
-            (size_t)frontier_count1 * 3 * stride) == FAILURE)
+            policy, cmd, thread_histograms, 3 * stride) == FAILURE)
         reduction_status = FAILURE;
     if (native_pair_reduce_integers(
-            policy, cmd, task_body_counts,
-            (size_t)frontier_count1) == FAILURE)
+            policy, cmd, thread_body_counts, 1) == FAILURE)
         reduction_status = FAILURE;
     if (native_pair_reduce_integers(
-            policy, cmd, task_cell_counts,
-            (size_t)frontier_count1) == FAILURE)
+            policy, cmd, thread_cell_counts, 1) == FAILURE)
         reduction_status = FAILURE;
     if (native_pair_consensus(
             policy, cmd, reduction_status,
@@ -653,27 +906,20 @@ static int native_pair_run_tasks(
         goto cleanup;
     }
 
-    for (INTEGER task = 0; task < frontier_count1; task++) {
-        const real *base = task_histograms + (size_t)task * 3 * stride;
-
-        for (int bin = 1; bin <= cmd->sizeHistN; bin++) {
-            gd->histNN[bin] += base[bin];
-            gd->histNNSubXi2pcf[bin] += base[bin];
-            gd->histXi2pcf[bin] += base[2 * stride + (size_t)bin];
-        }
-        gd->nbbcalc += task_body_counts[task];
-        gd->nbccalc += task_cell_counts[task];
+    for (int bin = 1; bin <= cmd->sizeHistN; bin++) {
+        gd->histNN[bin] += thread_histograms[bin];
+        gd->histNNSubXi2pcf[bin] += thread_histograms[bin];
+        gd->histXi2pcf[bin] += thread_histograms[2 * stride + (size_t)bin];
     }
+    gd->nbbcalc += thread_body_counts[0];
+    gd->nbccalc += thread_cell_counts[0];
 
     for (int bin = 1; bin <= cmd->sizeHistN; bin++) {
-        real denominator = 0.0;
-
-        for (INTEGER task = 0; task < frontier_count1; task++)
-            denominator += task_histograms[
-                (size_t)task * 3 * stride + stride + (size_t)bin];
         gd->histXi2pcf[bin] = cballs_normalize_or_zero(
-            gd->histXi2pcf[bin], denominator);
+            gd->histXi2pcf[bin], thread_histograms[stride + (size_t)bin]);
     }
+    if (context->profile)
+        context->timers->reduction += native_pair_timer_now() - phase_started;
 
     if (cballs_opt_compute_histn(cmd) && cballs_opt_and_cf(cmd)) {
         if (policy->balls4_density_normalization) {
@@ -700,9 +946,9 @@ static int native_pair_run_tasks(
 cleanup:
     status = native_pair_consensus(
         policy, cmd, status, "native-octree pair publication");
-    free(task_cell_counts);
-    free(task_body_counts);
-    free(task_histograms);
+    free(thread_cell_counts);
+    free(thread_body_counts);
+    free(thread_histograms);
     return status;
 }
 #endif /* TWOPCF */
@@ -715,8 +961,8 @@ int cballs_native_octree_pair_search(
 {
 #ifdef TWOPCF
     const bool auto_correlation = cat1 == cat2;
-    const int leaf_capacity = scanopt(cmd->options, "dual-node-singleton-leaves")
-        ? 1 : cmd->nsmooth;
+    int leaf_capacity1;
+    int leaf_capacity2;
     INTEGER target;
     native_pair_context context;
     fcfc_balltreeptr tree1 = NULL;
@@ -725,9 +971,13 @@ int cballs_native_octree_pair_search(
     INTEGER *frontier2 = NULL;
     INTEGER frontier_count1 = 0;
     INTEGER frontier_count2 = 0;
+    bool tree_cache_hit1 = FALSE;
+    bool tree_cache_hit2 = FALSE;
     int operation_status;
     int status = FAILURE;
     const double cpustart = CPUTIME;
+    double phase_started = 0.0;
+    native_pair_phase_timers phase_timers = {0};
 
     if (policy == NULL) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -752,6 +1002,14 @@ int cballs_native_octree_pair_search(
                  "%s requires nsmooth > 0", native_pair_method(cmd));
         return FAILURE;
     }
+    context.cmd = cmd;
+    context.gd = gd;
+    context.profile = scanopt(cmd->options, "dual-node-profile");
+    context.timers = &phase_timers;
+    leaf_capacity1 = cballs_native_pair_leaf_capacity(
+        cmd, gd, body_counts[cat1]);
+    leaf_capacity2 = auto_correlation ? leaf_capacity1
+        : cballs_native_pair_leaf_capacity(cmd, gd, body_counts[cat2]);
 
     verb_print(cmd->verbose,
                "Search: Running %s with shared compact native-octree 2PCF\n",
@@ -775,6 +1033,11 @@ int cballs_native_octree_pair_search(
     else
         verb_print(cmd->verbose,
                    "conservative same-bin dual-node acceptance enabled\n");
+    verb_print(cmd->verbose >= 2 || context.profile,
+               "%s: adaptive 2PCF leaf capacities = %d, %d "
+               "(configured nsmooth=%d)\n",
+               native_pair_method(cmd), leaf_capacity1, leaf_capacity2,
+               cmd->nsmooth);
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, body_counts[cat1], cat1);
@@ -784,8 +1047,20 @@ int cballs_native_octree_pair_search(
             policy, cmd, operation_status,
             "native-octree histogram initialization") == FAILURE)
         goto cleanup;
-    operation_status = octree_2balls_tree_build(
-        cmd, gd, body_tables[cat1], body_counts[cat1], leaf_capacity, &tree1);
+    operation_status = native_pair_initialize_acceptance(&context);
+    if (native_pair_consensus(
+            policy, cmd, operation_status,
+            "native-octree pair-acceptance initialization") == FAILURE)
+        goto cleanup;
+    if (context.profile) phase_started = native_pair_timer_now();
+    if (scanopt(cmd->options, "no-native-tree-cache"))
+        operation_status = octree_2balls_tree_build(
+            cmd, gd, body_tables[cat1], body_counts[cat1], leaf_capacity1,
+            &tree1);
+    else
+        operation_status = octree_2balls_tree_build_cached(
+            cmd, gd, body_tables[cat1], body_counts[cat1], leaf_capacity1,
+            &tree1, &tree_cache_hit1);
     if (native_pair_consensus(
             policy, cmd, operation_status,
             "native-octree first compact-tree construction") == FAILURE)
@@ -793,15 +1068,31 @@ int cballs_native_octree_pair_search(
     if (auto_correlation) {
         tree2 = tree1;
     } else {
-        operation_status = octree_2balls_tree_build(
-            cmd, gd, body_tables[cat2], body_counts[cat2],
-            leaf_capacity, &tree2);
+        if (scanopt(cmd->options, "no-native-tree-cache"))
+            operation_status = octree_2balls_tree_build(
+                cmd, gd, body_tables[cat2], body_counts[cat2],
+                leaf_capacity2, &tree2);
+        else
+            operation_status = octree_2balls_tree_build_cached(
+                cmd, gd, body_tables[cat2], body_counts[cat2],
+                leaf_capacity2, &tree2, &tree_cache_hit2);
         if (native_pair_consensus(
                 policy, cmd, operation_status,
                 "native-octree second compact-tree construction") == FAILURE)
             goto cleanup;
     }
+    if (context.profile)
+        phase_timers.build += native_pair_timer_now() - phase_started;
+    verb_print(context.profile,
+               "%s: compact-tree cache = %s, %s\n",
+               native_pair_method(cmd),
+               scanopt(cmd->options, "no-native-tree-cache") ? "disabled" :
+                   (tree_cache_hit1 ? "hit" : "miss"),
+               auto_correlation ? "shared" :
+                   (scanopt(cmd->options, "no-native-tree-cache") ? "disabled" :
+                    (tree_cache_hit2 ? "hit" : "miss")));
 
+    if (context.profile) phase_started = native_pair_timer_now();
     operation_status = octree_2balls_tree_frontier(
         cmd, tree1, target, &frontier1, &frontier_count1);
     if (native_pair_consensus(
@@ -819,9 +1110,9 @@ int cballs_native_octree_pair_search(
                 "native-octree neighbor-frontier construction") == FAILURE)
             goto cleanup;
     }
+    if (context.profile)
+        phase_timers.frontier += native_pair_timer_now() - phase_started;
 
-    context.cmd = cmd;
-    context.gd = gd;
     context.use_two_balls = !cballs_opt_no_two_balls(cmd)
         && !(policy->no_one_ball_is_exact && cballs_opt_no_one_ball(cmd));
     context.use_bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
@@ -845,14 +1136,21 @@ int cballs_native_octree_pair_search(
                    ", frontier tasks = %" INTEGER_FMT "\n",
                    native_pair_method(cmd), gd->nbbcalc, gd->nbccalc,
                    frontier_count1);
+    if (context.profile && native_pair_publish(policy, cmd))
+        verb_print(TRUE,
+                   "%s phase-timers: build_wall=%.9g, frontier_wall=%.9g, "
+                   "pair_traversal_wall=%.9g, reduction_wall=%.9g\n",
+                   native_pair_method(cmd), phase_timers.build,
+                   phase_timers.frontier, phase_timers.traversal,
+                   phase_timers.reduction);
     verb_print(cmd->verbose, "Going out: CPU time = %lf\n", gd->cpusearch);
     status = SUCCESS;
 
 cleanup:
     if (!auto_correlation) free(frontier2);
     free(frontier1);
-    if (tree2 != tree1) octree_2balls_tree_free(tree2);
-    octree_2balls_tree_free(tree1);
+    if (!auto_correlation) octree_2balls_tree_release(tree2);
+    octree_2balls_tree_release(tree1);
     return native_pair_consensus(
         policy, cmd, status, "native-octree pair cleanup");
 #else

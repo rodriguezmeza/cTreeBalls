@@ -5,8 +5,14 @@
 
 int octree_2balls_tree_build(struct cmdline_data *, struct global_data *,
                              bodyptr, INTEGER, int, fcfc_balltreeptr *);
+int octree_2balls_tree_build_cached(struct cmdline_data *, struct global_data *,
+                                    bodyptr, INTEGER, int, fcfc_balltreeptr *,
+                                    bool *);
+bool octree_2balls_tree_cache_contains(struct cmdline_data *, bodyptr,
+                                       INTEGER, int);
 int octree_2balls_tree_frontier(struct cmdline_data *, fcfc_balltreeptr,
                                 INTEGER, INTEGER **, INTEGER *);
+void octree_2balls_tree_release(fcfc_balltreeptr);
 void octree_2balls_tree_free(fcfc_balltreeptr);
 
 #endif /* !_octree_2balls_tree_h */

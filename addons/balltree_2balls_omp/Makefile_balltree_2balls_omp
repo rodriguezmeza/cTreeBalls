@@ -4,17 +4,11 @@ ifeq ($(BALLTREE2BALLSOMPON),1)
 OPT2 += -DBALLTREE2BALLSOMP
 BALLTREE2BALLSOMP = $(MDIR)/addons/balltree_2balls_omp/
 vpath %.c $(BALLTREE2BALLSOMP)
-INCLUDES += -I$(BALLTREE2BALLSOMP) -I$(MDIR)/addons/balltree_omp
+INCLUDES += -I$(BALLTREE2BALLSOMP) -I$(MDIR)/addons/balltree_shared
 HEADERFILES += $(wildcard $(BALLTREE2BALLSOMP)/*.h)
-# legacy-one-ball enters the actual balltree-omp implementation. Keep it
-# available when a build profile exposes only this two-ball addon.
-ifeq ($(filter 1,$(BALLTREEOMPON) $(BALLTREEMPION)),)
-EXTERNAL += search_balltree_omp.o
-endif
 EXTERNAL += search_balltree_2balls_omp.o
 search_balltree_2balls_omp.o: \
 	$(BALLTREE2BALLSOMP)/search_balltree_2balls_omp.c \
-	$(MDIR)/addons/balltree_omp/fcfc_balltree.h \
-	$(MDIR)/addons/balltree_omp/protodefs_balltree_omp.h \
+	$(MDIR)/addons/balltree_shared/fcfc_balltree.h \
 	$(BALLTREE2BALLSOMP)/dual_node_edge_correction.h
 endif

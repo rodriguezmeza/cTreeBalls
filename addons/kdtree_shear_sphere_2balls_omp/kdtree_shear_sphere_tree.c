@@ -76,37 +76,41 @@ static bool kd_shear_basis(const real *unit, compute_vector east,
 static bool kd_shear_rotation(const real *target_unit,
                               const real *target_east,
                               const real *target_north,
-                              const real *source_position,
+                              const real *source_unit,
                               kd_shear_complex *rotation)
 {
-    compute_vector source_unit;
     compute_vector source_east;
-    compute_vector source_north;
-    compute_vector transported_east;
-    compute_vector transported_north;
     real denominator;
+    real source_target_sum;
+    real east_projection;
+    real north_projection;
+    real equatorial_norm;
     real c;
     real s;
     real norm;
-    int axis;
 
-    if (!kd_shear_unit3(source_position, source_unit)
-        || !kd_shear_basis(source_unit, source_east, source_north))
-        return FALSE;
-    (void)source_north;
+    equatorial_norm = rsqrt(source_unit[0]*source_unit[0]
+                            + source_unit[1]*source_unit[1]);
+    if (equatorial_norm > 64.0*DBL_EPSILON) {
+        source_east[0] = -source_unit[1]/equatorial_norm;
+        source_east[1] = source_unit[0]/equatorial_norm;
+        source_east[2] = 0.0;
+    } else {
+        source_east[0] = 1.0;
+        source_east[1] = 0.0;
+        source_east[2] = 0.0;
+    }
     denominator = 1.0 + kd_shear_dot3(target_unit, source_unit);
     if (!(denominator > 64.0*DBL_EPSILON) || !isfinite(denominator))
         return FALSE;
-    for (axis = 0; axis < 3; axis++) {
-        transported_east[axis] = target_east[axis]
-            - kd_shear_dot3(target_east, source_unit)/denominator
-              *(target_unit[axis] + source_unit[axis]);
-        transported_north[axis] = target_north[axis]
-            - kd_shear_dot3(target_north, source_unit)/denominator
-              *(target_unit[axis] + source_unit[axis]);
-    }
-    c = kd_shear_dot3(source_east, transported_east);
-    s = kd_shear_dot3(source_east, transported_north);
+    east_projection = kd_shear_dot3(target_east, source_unit)/denominator;
+    north_projection = kd_shear_dot3(target_north, source_unit)/denominator;
+    source_target_sum = kd_shear_dot3(source_east, target_unit)
+                      + kd_shear_dot3(source_east, source_unit);
+    c = kd_shear_dot3(source_east, target_east)
+      - east_projection*source_target_sum;
+    s = kd_shear_dot3(source_east, target_north)
+      - north_projection*source_target_sum;
     norm = rsqrt(c*c + s*s);
     if (!(norm > 64.0*DBL_EPSILON) || !isfinite(norm)) return FALSE;
     c /= norm;

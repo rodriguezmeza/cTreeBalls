@@ -70,7 +70,6 @@ run_sky_method()
     local output_dir=$3
     local options=compute-HistN,and-CF,out-m-HistZeta
 
-    [ "$method" != "octree-ggg-omp" ] || options+=,KKKCorrelation
     mkdir -p "$output_dir"
     "$CBALLS" \
         search="$method" \
@@ -141,12 +140,6 @@ profile_has OPENMPCODE \
     || fail_with_log "the active build does not enable OpenMP" /dev/null
 
 run_pair octree-sincos-omp sky
-profile_has OCTREEGGGOMP && run_pair octree-ggg-omp sky
-profile_has KDTREEOMP && run_pair kdtree-omp sky
-profile_has BALLTREEOMP && run_pair balltree-omp sky
 profile_has KDTREEBOXOMP && run_pair kdtree-box-omp box
 profile_has NEIGHBORBOXESOMP && run_pair neighbor-boxes-omp box
 profile_has NEIGHBORBOXESOMP && "$PYTHON" ./make_tests/test_neighbor_boxes_periodic.py
-profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_openmp_internal_determinism.py
-profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_only_2pcf.py
-profile_has OCTREEGGGOMP && "$PYTHON" ./make_tests/test_octree_ggg_fast_path.py

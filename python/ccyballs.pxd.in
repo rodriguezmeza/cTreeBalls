@@ -163,6 +163,8 @@ cdef extern from "cballs.h":
         double Rcut                                      # Cutoff radius
         double RcutSq
         double cpusearch
+        double cpu_edge_correction
+        double wall_edge_correction
         #
 
         int infilefmt_int
@@ -482,6 +484,8 @@ cdef extern from "cballs.h":
     int get_theta(void*, double*)
     int get_rsmooth(void*, double*)
     int get_cputime(void*, double*)
+    int get_edge_correction_cpu_time(void*, double*)
+    int get_edge_correction_wall_time(void*, double*)
     int getcputime(void*)
     int get_sizeHistN(void*, int*)
     int get_version(void*, char*)

@@ -91,12 +91,24 @@
 #include "cballs_octree_shear_sphere_2balls_omp.h"
 #endif
 
+#ifdef OCTREESHEARSPHERE2BALLSMPI
+#include "cballs_octree_shear_sphere_2balls_mpi.h"
+#endif
+
 #ifdef KDTREESHEARSPHERE2BALLSOMP
 #include "cballs_kdtree_shear_sphere_2balls_omp.h"
 #endif
 
+#ifdef KDTREESHEARSPHERE2BALLSMPI
+#include "cballs_kdtree_shear_sphere_2balls_mpi.h"
+#endif
+
 #ifdef BALLTREESHEARSPHERE2BALLSOMP
 #include "cballs_balltree_shear_sphere_2balls_omp.h"
+#endif
+
+#ifdef BALLTREESHEARSPHERE2BALLSMPI
+#include "cballs_balltree_shear_sphere_2balls_mpi.h"
 #endif
 
 #ifdef OCTREEGGGCROSSOMP

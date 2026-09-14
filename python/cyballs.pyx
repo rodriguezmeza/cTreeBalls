@@ -966,6 +966,18 @@ cdef class cballs:
         out_cputime = cputime
         return out_cputime
 
+    def getEdgeCorrectionCPUTime(self):
+        cdef double value
+        if get_edge_correction_cpu_time(&self.gd, &value) == FAILURE:
+            raise CosmoSevereErrorDummy((<char *> self.cmd.error_message).decode("utf-8", "replace"))
+        return value
+
+    def getEdgeCorrectionWallTime(self):
+        cdef double value
+        if get_edge_correction_wall_time(&self.gd, &value) == FAILURE:
+            raise CosmoSevereErrorDummy((<char *> self.cmd.error_message).decode("utf-8", "replace"))
+        return value
+
     def getsizeHistN(self):
         cdef int sizeHistN
         cdef int out_sizeHistN
@@ -1030,7 +1042,7 @@ cdef class cballs:
                 self.gd.histShearXiMinusIm == NULL or
                 self.gd.histShearXiWeight == NULL):
             raise CosmoSevereError(
-                'Shear 2PCF results are unavailable; remove options="only-3pcf" and run octree-shear-omp first.'
+                'Shear 2PCF results are unavailable; remove options="only-3pcf" and run an active full-sky shear method first.'
             )
         if self.cmd.sizeHistN <= 0:
             raise CosmoSevereError('Shear 2PCF result dimensions are inconsistent.')
@@ -1047,7 +1059,7 @@ cdef class cballs:
                 self.gd.histShearGammaRe == NULL or
                 self.gd.histShearGammaIm == NULL):
             raise CosmoSevereError(
-                'Shear 3PCF results are unavailable; remove options="only-2pcf" and run octree-shear-omp first.'
+                'Shear 3PCF results are unavailable; remove options="only-2pcf" and run an active full-sky shear method first.'
             )
 
         if (self.cmd.sizeHistN <= 0 or self.gd.shearMultipoleMax < 0 or

@@ -1,6 +1,6 @@
 #
 # -------------------------
-# To test octree-ggg-omp searching method
+# To test the octree-2balls-omp searching method
 # -------------------------
 # In Makefile_settings set:
 #
@@ -24,7 +24,7 @@
 # 	It is not necessary to give all of them explicitly. You may set only the ones
 # 	needed to be set, the others will have their defaults values that are ok with you.
 #
-searchMethod                       = octree-ggg-omp
+searchMethod                       = octree-2balls-omp
 #
 # Parameters (next three) useful to change cBalls performance 
 theta                              = 1		# increases or decreases artificially size of the cells
@@ -38,7 +38,7 @@ options                            = compute-HistN,and-CF,out-m-HistZeta
 								# you may add 'pre-/post-processing' and 
 								# 	invoque the appropriate script 
 								# 	in 'preScript'/'posScript' option below
-								# if add 'no-one-ball' to the 'options'
+# if add 'no-two-balls' to the 'options'
 								#	cBalls will act as a direct searching method
 								#	but will be slower than the default searching method
 # 
@@ -131,5 +131,4 @@ seed                               = 123			# to init random number generator
 # rangeN				      = 100.0
 # lengthBox                          = 512
 #
-
 

@@ -120,6 +120,18 @@ int get_cputime(struct  global_data* gd, real *cputime)
     return SUCCESS;
 }
 
+int get_edge_correction_cpu_time(struct global_data* gd, real *value)
+{
+    *value = gd->cpu_edge_correction;
+    return SUCCESS;
+}
+
+int get_edge_correction_wall_time(struct global_data* gd, real *value)
+{
+    *value = gd->wall_edge_correction;
+    return SUCCESS;
+}
+
 int get_sizeHistN(struct  cmdline_data* cmd, int *sizeHistN)
 {
     *sizeHistN = cmd->sizeHistN;
@@ -373,12 +385,7 @@ int get_HistZetaM_EE(struct  cmdline_data* cmd,
     int n1, n2;
 
     class_test((cmd->searchMethod != NULL
-                && (strstr(cmd->searchMethod, "2balls") != NULL
-                    || strstr(cmd->searchMethod, "octree-balls4-") != NULL
-                    || strcmp(cmd->searchMethod, "kdtree-omp") == 0
-                    || strcmp(cmd->searchMethod, "kdtree-mpi") == 0
-                    || strcmp(cmd->searchMethod, "kdtree-2balls-omp") == 0
-                    || strcmp(cmd->searchMethod, "kdtree-2balls-mpi") == 0)
+                && strstr(cmd->searchMethod, "2balls") != NULL
                 && !cballs_opt_edge_corrections(cmd)),
                errmsg, "%s: enable edge-corrections before requesting corrected multipoles",
                routineName);
@@ -412,12 +419,7 @@ int get_HistZetaM_EE_Im(struct cmdline_data* cmd,
     int n1, n2;
 
     class_test((cmd->searchMethod != NULL
-                && (strstr(cmd->searchMethod, "2balls") != NULL
-                    || strstr(cmd->searchMethod, "octree-balls4-") != NULL
-                    || strcmp(cmd->searchMethod, "kdtree-omp") == 0
-                    || strcmp(cmd->searchMethod, "kdtree-mpi") == 0
-                    || strcmp(cmd->searchMethod, "kdtree-2balls-omp") == 0
-                    || strcmp(cmd->searchMethod, "kdtree-2balls-mpi") == 0)
+                && strstr(cmd->searchMethod, "2balls") != NULL
                 && !cballs_opt_edge_corrections(cmd)),
                errmsg, "%s: enable edge-corrections before requesting corrected multipoles",
                routineName);

@@ -1,444 +1,61 @@
-# ----- MAKE FILE machine definitions (AddOns settings) -----
-# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
-#
-#
-
-#================================================================
-#B Set of settings
-#
-#B Here switch on/off the AddOns´ modules
+# Active public add-on settings
+# Mario A. Rodriguez-Meza, Ciudad de Mexico
 
 $(info )
 $(info =====================================================)
 
-# Legacy standalone search names are disabled in the default profile. Their
-# kernels remain available through the corresponding 2balls addon with
-# options=legacy-one-ball:
-#
-#   kdtree-omp / kdtree-mpi
-#       -> kdtree-2balls-omp / kdtree-2balls-mpi
-#   balltree-omp / balltree-mpi
-#       -> balltree-2balls-omp / balltree-2balls-mpi
-#   octree-ggg-omp / octree-ggg-mpi
-#       -> octree-2balls-omp / octree-2balls-mpi
-#   octree-shear-sphere-omp
-#       -> octree-shear-sphere-2balls-omp
-#
-# Set an individual legacy flag to 1 only when the old public search name is
-# required. The 2balls addons privately link the compatibility kernels.
-
-# OCTREEGGGOMP legacy public search name
-# Adaptive deterministic frontier controls.  The target count selects the
-# approximate number of logical tasks for ordinary catalogs.  Each task has at
-# least the configured number of active pivots when possible, while
-# GGG_OMP_PIVOT_CHUNK_SIZE remains the hard cap on its raw pivot span.
-GGG_OMP_FRONTIER_TARGET_TASKS ?= 256
-GGG_OMP_FRONTIER_MIN_ACTIVE ?= 64
-GGG_OMP_PIVOT_CHUNK_SIZE ?= 4096
-OCTREEGGGOMPON = 0
-
-# KDTREEOMP legacy public search name
-KDTREEOMPON = 0
-
-# KDTREEMPI legacy public search name
-KDTREEMPION = 0
-
-# KDTREE2BALLSOMP
-# dual-node-style dual-node 2PCF and LogMultipole 3PCF over a median KD tree.
+# Scalar angular correlations: OpenMP and MPI+OpenMP partners.
 KDTREE2BALLSOMPON = 1
-
-# KDTREE2BALLSMPI
-# Deterministic MPI+OpenMP counterpart of kdtree-2balls-omp.
 KDTREE2BALLSMPION = 1
-
-# BALLTREEOMP legacy public search name
-BALLTREEOMPON = 0
-
-# BALLTREE2BALLSOMP
-# dual-node-style dual-ball scan over the FCFC PCA ball tree for scalar 2pcf.
 BALLTREE2BALLSOMPON = 1
-
-# BALLTREE2BALLSMPI
-# Deterministic MPI+OpenMP dual-node 2PCF and triple-node 3PCF scan.
-# Enable with: make BALLTREE2BALLSMPION=1 cballs
 BALLTREE2BALLSMPION = 1
-
-# OCTREE2BALLSOMP
-# dual-node-style dual/triple-node scan over the native cTreeBalls octree.
 OCTREE2BALLSOMPON = 1
-
-# OCTREE2BALLSMPI
-# Deterministic MPI+OpenMP dual-node 2PCF and LogMultipole 3PCF scan.
-# Enable with: make OCTREE2BALLSMPION=1 cballs
 OCTREE2BALLSMPION = 1
 
-# BALLTREE2BALLSOMP3PCF
-# dual-node-style triple-node task traversal for scalar 3pcf.
-BALLTREE2BALLSOMP3PCFON = 0
-
-# BALLTREE2BALLSMPI3PCF
-# Deterministic MPI+OpenMP FCFC ball-tree LogMultipole scalar 3pcf.
-# Enable with: make BALLTREE2BALLSMPI3PCFON=1 TPCFON=1 cballs
-BALLTREE2BALLSMPI3PCFON = 0
-
-# BALLTREEMPI legacy public search name
-BALLTREEMPION = 0
-
-# OCTREEGGGMPI legacy public search name
-# Keep MPI work claims independent of the OpenMP reduction block so MPI ranks
-# retain sufficiently fine-grained dynamic load balancing.
-GGG_MPI_PIVOT_CLAIM_SIZE ?= 65536
-OCTREEGGGMPION = 0
-
-# LYAFORESTOMP
-# Exact weighted Lyman-alpha forest 2PCF and anisotropic 3PCF.
+# Ly-alpha forest methods and deterministic reduction controls.
 LYAFORESTOMPON = 1
-# MPI counterparts for all eight Ly-alpha modes; OpenMP-only siblings are optional.
 LYAFORESTMPION = 1
-# Fixed pivot grouping for deterministic radial OpenMP reductions.
 LYA1D_OMP_PIVOT_BLOCK_SIZE ?= 256
-# Leaf capacity for the exact radial 1D-tree 3PCF interval tree.
 LYA1D_TREE3_LEAF_SIZE ?= 8
 
-# OCTREESHEAROMP
-# Flat-sky weak-lensing shear 2PCF and natural 3PCF multipoles. The addon uses
-# SMOOTHPIVOTON when compiled and BALLS4SCANLEVON for deterministic spatial
-# pivot ordering; only-2pcf selects its allocation-light native pair kernel.
-# Enable with: make OCTREESHEAROMPON=1 cballs
-OCTREESHEAROMPON ?= 0
-# Fixed spatial pivot blocks used by the deterministic BALLS4 scan frontier.
+# Full-sky spin-2 OpenMP methods.
+OCTREESHEARSPHERE2BALLSOMPON ?= 1
+KDTREESHEARSPHERE2BALLSOMPON ?= 1
+BALLTREESHEARSPHERE2BALLSOMPON ?= 1
 SHEAR_OMP_PIVOT_BLOCK_SIZE ?= 32
 
-# OCTREESHEARSPHEREOMP legacy public search name. Full-sky compatibility is
-# provided by octree-shear-sphere-2balls-omp with options=legacy-one-ball.
-OCTREESHEARSPHEREOMPON ?= 0
-
-# OCTREESHEARSPHERE2BALLSOMP
-# Independent dual-node-style dual-node full-sky shear method.
-OCTREESHEARSPHERE2BALLSOMPON ?= 1
-
-# KDTREESHEARSPHERE2BALLSOMP
-# Full-sky spin-2 two-ball and LogMultipole scans over a median KD tree.
-KDTREESHEARSPHERE2BALLSOMPON ?= 1
-
-# BALLTREESHEARSPHERE2BALLSOMP
-# Full-sky spin-2 two-ball and LogMultipole scans over an FCFC PCA ball tree.
-BALLTREESHEARSPHERE2BALLSOMPON ?= 1
-
-# KDTREEBOXOMP
-# For computing 2pcf using kdtree-box-omp methods
+# Periodic-box methods.
 KDTREEBOXOMPON = 1
-
-# NEIGHBORBOXESOMP
-# For computing 2pcf using neighbor-boxes-omp method
 NEIGHBORBOXESOMPON = 1
 
-# Gadget I/O
-# For input data catalog in gadget format
+# I/O and Python binding support.
 GADGETIOON = 1
-
-# CLASSLIB
-# Several I/O routines from CLASS
 CLASSLIBON = 1
-
-# PXD
-# For cython interfacing...
+IOLIBON = 1
+CFITSIOON = 1
 ifeq ($(CLASSLIBON),1)
 PXDON = 1
 else
-$(info To compile with PXD needs CLASSLIBON = 1, deactivating...)
-PXDON = 0
+$(error PXDON requires CLASSLIBON=1)
 endif
 
-# IOLIB
-# Several additional I/O routines
-IOLIBON = 1
-
-# CFITSIOLIB
-# internal cfitsio lib.
-#   Default is 1, means sources are included and installed
-#   if set to 0, means you have to install cfitsio library by your self
-#   or ask administrator to have it for you.
-CFITSIOLIBON = 0
-
-# CFITSIO
-# To IO fits format
-# This addon requires IOLIBON = 1, check it...
-ifeq ($(IOLIBON),1)
-# default is ON.
-# When user knows where cfitsio lib/include directories live,
-#   make if necessary respective changes in Makefile_machine file
-#   and then set it ON. If not turn it OFF (=0)
-CFITSIOON = 1
-else
-$(info To compile with CFITSIO needs IOLIBON = 1, deactivating...)
-CFITSIOON = 0
-endif
-
-#E Set of settings
-#================================================================
-
-
-############################
-#B Special behavior settings
-# In some searching methods
-#   it will be possible to set the following flags
-
-# Pivot smoothing. Supported production engines enable it by default when this
-# setting is 1. Use "options=no-smooth-pivot" for an unsmoothed run. Engines
-# without the race-free pivot ownership path ignore the compiled capability and
-# reject an explicit "options=smooth-pivot" request.
-# note that SMOOTHPIVOTON collide with ORIGINALCB (used in neighbor boxes method)
-#   needs that ORIGINALCBON = 0 see below...
+# Production numerical behavior.
 SMOOTHPIVOTON = 1
-# Compute and add pivot neighbours when smooth-pivot support is enabled.
-ADDPIVOTNEIGHBOURSON ?= 0
-#
-
-############################
-# Nothing to do below, unless it is explicitly asked for
-############################
-
-# WKAvg switch...
-# Default is 0. If set to 0 will give tests OK (./run_tests_all; ./run_all_tests_public)
-NOWKAvgON = 0
-
-# NMultipoles switch (multipoles for counting).
-# Default is 1
 NMultipolesON = 1
-
-# NONORMHIST switch (do not use normalization of histograms).
-#   If activated histograms can be saved
-#   normalizing with monopole of N.
-# Default is 1
 NONORMHISTON = 1
-
-# POLARAXIS switch (set north pole as the axis of reference...)
-#   this is for pixel catalogs on the unit sphere: (0,0,1)
-POLARAXISON = 0
-
-# No Limber aproximation
-NOLIMBERON = 0
-
-# To remove overcounting pairs:
-OVERCOUNTINGON = 0
-
-# NOSTANDARNORMHISTON switch
-#   If activated histograms are saved without normalization
-#   only for kdtree-omp and tree-omp-sincos searching methods
-# Default is 0
-NOSTANDARNORMHISTON = 0
-
-# CMDLINE_DEFS_UNITSPHERE
-# set of useful default values for the unit sphere
 CMDLINE_DEFS_UNITSPHERE_ON = 1
-
-#B for some addons will be useful this switches
-DEFINEFLAGS =
-#
-# TWOPCFCONVERGENCE
 TWOPCFON = 1
-# THREEPCFCONVERGENCE
 TPCFON = 1
-# THREEPCFSHEAR :: in octree-ggg-omp THREEPCFSHEAR -> TPCFSHEAR
-TPCFSHEARON = 0
-#
 PRUNEON = 1
-#
-# BALLS4SCANLEVON
-# Enables native B4 pivots for octree-GGG and balanced scan-level task
-# frontiers for all KD-tree and FCFC ball-tree OpenMP/MPI variants.
-# It does not allocate the native B4 pivot table for KD/ball-tree engines;
-# those engines derive spatial task frontiers from their own trees.
 BALLS4SCANLEVON = 1
-#
-# if BALLS4SCANLEVON = 1
-# used in octree-ggg-omp when NORMALHISTSCALE is on
-# THETA control (activated with options=behavior-ball):
-#   the fraction of a bin width (deltaR) by which it is ok to let the pairs miss the correct bin.
-#   the default is to use 1 if deltaR <= 0.1, or 0.1/deltaR if deltaR > 0.1.
-# logscale: goodTHETA = 0.1 / deltaR
-# normal scale: goodTHETA = 0.1 * (rminHist + deltaR/2) / deltaR
-# THETA = MIN(goodTHETA, 1.0)
-#THETA = 0 # will give no behavior-ball, but check 1/0 divergence
-#THETA = 1 # the bin will incorrect by 1 bin width
 THETA = 1.25
-#
-# used in octree-ggg-omp, also THETA is used here
-NORMALHISTSCALEON = 0
-#
-#B several definitions from/to cute-box Makefile
+DEFINEFLAGS =
 _DEBUGON_ = 0
 LOGBINON = 0
-# this is to recover some tests results
-ORIGINALCBON = 0
-#E
 
-#E
-############################
-
-############################
-# Nothing to do below...
-############################
-
-############################
-#B Addendum of some not important
-#   modules/switches or that are in
-#   development phase
-#   and it is not for the public version
-# Normally they will be switched OFF
-
-# OCTREE3PCF3DOMP
-# 3D scalar 3PCF multipoles with spherical harmonics and OpenMP. Done by Eladio Moreno
+# Physical 3D scalar multipoles.
 OCTREE3PCF3DOMPON = 1
 OCTREE3PCF3DMPION = 1
-# Fixed reduction blocks, independent of MPI ranks and OpenMP thread count.
 CB3D_OMP_PIVOT_BLOCK_SIZE ?= 64
-
-# OCTREESMOOTHING
-# some utils and definitions useful to smooth octree cells
-OCTREESMOOTHINGON = 0
-
-#B This causes division by zero in MainLoop calling using cballys...
-# OCTREEKKKOMP
-# For computing 3pcf using octree-kkk-omp
-ifeq ($(DEFDIMENSION),3)
-OCTREEKKKOMPON = 0
-endif
-
-# BALLSOMP
-# For computing 3pcf using balls method
-BALLSON = 0
-
-BALLS0357ON = 0
-
-ALLOW_BALLS_WITH_SMOOTHING ?= 0
-
-
-# OCTREEBALLS4OMP
-# For computing 2pcf and 3pcf using octree-balls4-omp
-# Uses the normal treeload and its own BALLS4 pivot partition, independently
-# of OCTREESMOOTHINGON, BALLSON, and BALLS4SCANLEVON.
-OCTREEBALLS4OMPON = 0
-# Independent of SMOOTHPIVOTON; options=smooth-pivot is not supported.
-OCTREEBALLS4MPION = 0
-
-# OCTREEGGGCROSSOMP
-# For computing cross-3pcf using octree-ggg_cross-omp
-#   still in development phase.
-ifeq ($(USEGSL),1)
-OCTREEGGGCROSSOMPON = 0
-else
-ifeq ($(COMPLEXLIBON),1)
-OCTREEGGGCROSSOMPON = 0
-else
-$(info To compile with OCTREEGGGCROSSOMP needs USEGSL/COMPLEXLIBON = 1, deactivating...)
-# Note:
-#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
-#OCTREEGGGCROSSOMPON = 0
-OCTREEGGGCROSSOMPON = 0
-endif
-endif
-
-# DIRECTMETHOD
-# For computing 3pcf using direct method
-DIRECTMETHODON = 0
-
-# OCTREEGGG
-# For computing 3pcf using octree-ggg
-#   still is in development phase.
-ifeq ($(USEGSL),1)
-OCTREEGGGON = 0
-else
-ifeq ($(COMPLEXLIBON),1)
-OCTREEGGGON = 0
-else
-$(info To compile with OCTREEGGG needs USEGSL/COMPLEXLIBON = 1, deactivating...)
-# Note:
-#                           testing without GSL !!!!!!!!!!!!!!!!!!!!!!!
-#OCTREEGGGON = 1
-OCTREEGGGON = 0
-endif
-endif
-
-# DIRECTMETHODSIMPLE
-# For computing 3pcf using direct method simple
-DIRECTMETHODSIMPLEON = 0
-
-# DIRECTMETHODSIMPLE
-# For computing 3pcf using direct method simple loopId
-DIRECTMETHODSIMPLELOOPIDON = 0
-
-# For complex math use only one: USEGSL or COMPLEXLIB
-#   COMPLEXLIB is in development phase.
-#   Not included. Do not use.
-# COMPLEXLIB
-# Library for complex computation
-ifeq ($(USEGSL),0)
-# default is OFF, turn it ON if necessary (OCTREEGGGOMP)
-COMPLEXLIBON = 0
-else
-$(info Use only one: USEGSL or COMPLEXLIB, deactivating COMPLEXLIB...)
-COMPLEXLIBON = 0
-endif
-
-# OCTREEGGGOMPTRIANGLES
-# For computing 3pcf using octree-ggg-omp-triangles
-#   is in development phase. Not included. Do not use.
-ifeq ($(USEGSL),1)
-OCTREEGGGOMPTRIANGLESON = 0
-else
-$(info To compile with OCTREEGGGOMPTRIANGLES needs USEGSL = 1, deactivating...)
-OCTREEGGGOMPTRIANGLESON = 0
-endif
-
-# OCTREEBOXOMP
-# For computing 2pcf using octree-box-omp methods
-OCTREEBOXOMPON = 0
-
-# KDTREECUTEBOX
-# For computing 2pcf using cute-box methods
-KDTREECUTEBOXON = 0
-
-# OCTREEKKKBALLS4OMPTRIANGLES
-# For computing 3pcf using octree-kkk-balls4-omp-triangles
-#   is in development phase. Not included. Do not use.
-# Needs BALLSON = 1 when this development addon is re-enabled.
-OCTREEKKKBALLS4OMPTRIANGLESON = 0
-
-# COSMOLIB
-# For computing several cosmology functions
-COSMOLIBON = 0
-
-# SAVERESTORE
-# For save/restore options
-#   is in development phase. Do not use.
-SAVERESTOREON = 0
-
-#E
-############################
-
-
-############################
-#B Addendum of some important
-#   modules that will not be part
-#       any longer of the public version
-# Normally they will be switched OFF
-############################
-
-# TREEOMPSINCOS
-# First developed searching engine
-# For computing (2,3)pcf using tree-omp-sincos
-TREEOMPSINCOSON = 0
-
-# OCTREESINCOSOMP
-# Move to main source directory
-# For computing (2,3)pcf using octree-omp
-OCTREESINCOSOMPON = 0
-
-#E Addendum of some not important
-#  no longer part of the public version
-############################
-
 
 $(info =====================================================)

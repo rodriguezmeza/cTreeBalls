@@ -1,201 +1,60 @@
-// Use:
-//#include "startrun_include_11.h"
-//
-//  it is included in (the socket):
-//      source/startrun.c
-//      in the search_method_string_to_int routine
-//
-
-// These header files have defined tag numbers for the searching methods...
-// It is recommended to use tag numbers greater than 100
-
+/* Runtime IDs for the maintained active add-on profile. */
 #ifndef _startrun_include_11_h
 #define _startrun_include_11_h
 
-#ifdef ADDONSDEVELOP
-#include "startrun_02.h"                        // Here several tags: 1 -- 53,
-                                                //  some numbers are missing
-                                                //  and used below
-#endif
-
-#ifdef BALLS
-#include "startrun_balls_omp_06.h"                          // 46
-#endif
-
-#ifdef KDTREEOMP
-#include "startrun_kdtree_omp_11.h"                         // 59
-#endif
-#ifdef KDTREEMPI
-#include "startrun_kdtree_mpi_11.h"                         // 196
-#endif
-
 #ifdef KDTREE2BALLSOMP
-#include "startrun_kdtree_2balls_omp_11.h"                  // 197
+#include "startrun_kdtree_2balls_omp_11.h"
 #endif
 #ifdef KDTREE2BALLSMPI
-#include "startrun_kdtree_2balls_mpi_11.h"                  // 198
+#include "startrun_kdtree_2balls_mpi_11.h"
 #endif
-
-#if defined(BALLTREEOMP) || defined(BALLTREEMPI)
-#include "startrun_balltree_omp_11.h"                       // 167
-#endif
-
 #ifdef BALLTREE2BALLSOMP
-#include "startrun_balltree_2balls_omp_11.h"               // 174
+#include "startrun_balltree_2balls_omp_11.h"
 #endif
-
 #ifdef BALLTREE2BALLSMPI
-#include "startrun_balltree_2balls_mpi_11.h"               // 179
+#include "startrun_balltree_2balls_mpi_11.h"
 #endif
-
 #ifdef OCTREE2BALLSOMP
-#include "startrun_octree_2balls_omp_11.h"                 // 176
+#include "startrun_octree_2balls_omp_11.h"
 #endif
-
 #ifdef OCTREE2BALLSMPI
-#include "startrun_octree_2balls_mpi_11.h"                 // 177
-#endif
-
-#ifdef BALLTREE2BALLSOMP3PCF
-#include "startrun_balltree_2balls_omp_3pcf_11.h"          // 175
-#endif
-
-#ifdef BALLTREE2BALLSMPI3PCF
-#include "startrun_balltree_2balls_mpi_3pcf_11.h"          // 178
-#endif
-
-#ifdef OCTREEKKKOMP
-#include "startrun_octree_kkk_omp_11.h"                     // 61
-#endif
-
-#ifdef OCTREEGGGOMP
-#include "startrun_octree_ggg_omp_11.h"                     // 66
-#endif
-
-#ifdef OCTREEGGGMPI
-#include "startrun_octree_ggg_mpi_11.h"                     // 172
-#endif
-
-#ifdef OCTREESHEAROMP
-#include "startrun_octree_shear_omp_11.h"                   // 173
-#endif
-
-#ifdef OCTREESHEARSPHEREOMP
-#include "startrun_octree_shear_sphere_omp_11.h"            // 199
+#include "startrun_octree_2balls_mpi_11.h"
 #endif
 
 #ifdef OCTREESHEARSPHERE2BALLSOMP
-#include "startrun_octree_shear_sphere_2balls_omp_11.h"     // 200
+#include "startrun_octree_shear_sphere_2balls_omp_11.h"
 #endif
-
 #ifdef KDTREESHEARSPHERE2BALLSOMP
-#include "startrun_kdtree_shear_sphere_2balls_omp_11.h"     // 201
+#include "startrun_kdtree_shear_sphere_2balls_omp_11.h"
 #endif
-
 #ifdef BALLTREESHEARSPHERE2BALLSOMP
-#include "startrun_balltree_shear_sphere_2balls_omp_11.h"   // 202
-#endif
-
-#ifdef OCTREESINCOSOMP
-#include "startrun_octree_sincos_omp_11.h"                  // 74
-#endif
-
-#ifdef TREEOMPSINCOS
-#include "startrun_tree_omp_sincos_11.h"                    // 75
-#endif
-
-#ifdef OCTREEGGGCROSSOMP
-#include "startrun_octree_ggg_cross_omp_11.h"               // 76
-#endif
-
-/*
- Add your addon item here
- */
-
-// it is recommended to use tag numbers above 100...
-
-
-
-/*
- ############################
- #B Addendum of some not important
- #   modules or that are in
- #   development phase
- # Normally they will be switched OFF
- ############################
- */
-
-
-#ifdef DIRECTMETHOD
-#include "startrun_direct_method.h"                         // 19
-#endif
-
-#ifdef KDTREECUTEBOX
-#include "startrun_kdtree_cute_box.h"                       // 48
-#endif
-
-#ifdef DIRECTMETHODSIMPLE
-#include "startrun_direct_method_simple.h"                  // 67
-#endif
-
-#ifdef OCTREEGGGOMPTRIANGLES
-#include "startrun_octree_ggg_omp_triangles_11.h"           // 68
-#endif
-
-#ifdef OCTREEBALLS4OMP
-#include "startrun_octree_balls4_omp_11.h"              // 69
-#endif
-#ifdef OCTREEBALLS4MPI
-#include "startrun_octree_balls4_mpi_11.h"
-#endif
-
-#ifdef OCTREEKKKBALLS4OMPTRIANGLES
-#include "startrun_octree_kkk_balls4_omp_triangles_11.h"    // 70
+#include "startrun_balltree_shear_sphere_2balls_omp_11.h"
 #endif
 
 #ifdef KDTREEBOXOMP
-#include "startrun_kdtree_box_omp_11.h"                     // 71
+#include "startrun_kdtree_box_omp_11.h"
 #endif
-
-#ifdef OCTREEBOXOMP
-#include "startrun_octree_box_omp_11.h"                     // 72
-#endif
-
 #ifdef NEIGHBORBOXESOMP
-#include "startrun_neighbor_boxes_omp_11.h"                 // 73
-#endif
-
-#ifdef OCTREEGGG
-#include "startrun_octree_ggg_11.h"                         // 77
-#endif
-
-#ifdef DIRECTMETHODSIMPLELOOPID
-#include "startrun_direct_method_simple_loopId.h"           // 78
-#endif
-
-#ifdef BALLS0357
-#include "startrun_balls_omp_0357_06.h"                     // 79
+#include "startrun_neighbor_boxes_omp_11.h"
 #endif
 
 #ifdef OCTREE3PCF3DOMP
-#include "startrun_octree_3pcf_3d_omp_11.h"                 // 166
+#include "startrun_octree_3pcf_3d_omp_11.h"
 #endif
 #ifdef OCTREE3PCF3DMPI
-#include "startrun_octree_3pcf_3d_mpi_11.h"                // 192
+#include "startrun_octree_3pcf_3d_mpi_11.h"
 #endif
 
 #ifdef LYAFORESTOMP
-#include "startrun_lya_forest_omp_11.h"                    // 169-171, 180-182
+#include "startrun_lya_forest_omp_11.h"
 #endif
 #ifdef LYAFORESTMPI
-#include "startrun_lya_forest_mpi_11.h"                    // 185-191
+#include "startrun_lya_forest_mpi_11.h"
 #endif
 
+/* The core octree-sincos method remains part of every standard build. */
+#ifdef OCTREESINCOSOMP
+#include "startrun_octree_sincos_omp_11.h"
+#endif
 
-/*
- #E Addendum of some not important
- ############################
-*/
-
-
-#endif    // ! _startrun_include_11_h
+#endif

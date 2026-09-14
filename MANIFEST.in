@@ -25,27 +25,22 @@ prune addons
 include addons/Makefile_addons
 include addons/Makefile_addons_settings
 include addons/Makefile_gsl
-include addons/cfitsiolib/Makefile_cfitsiolib
-
 recursive-include addons/addons_include *.h
-recursive-include addons/kdtree_omp *.c *.h Makefile*
 recursive-include addons/kdtree_2balls_omp *.c *.h *.md Makefile*
 recursive-include addons/kdtree_2balls_mpi *.c *.h *.md Makefile*
-recursive-include addons/balltree_omp *.c *.h *.md Makefile*
+recursive-include addons/kdtree_shared *.c *.h Makefile*
+recursive-include addons/balltree_shared *.c *.h Makefile*
+recursive-include addons/shear_sphere_shared *.c *.h
 recursive-include addons/balltree_2balls_omp *.c *.h *.md Makefile*
 include addons/balltree_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/balltree_2balls_mpi *.c *.h *.md Makefile*
 recursive-include addons/octree_2balls_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_2balls_mpi *.c *.h *.md Makefile*
-recursive-include addons/native_octree_pair *.c *.h *.md Makefile*
-recursive-include addons/octree_ggg_omp *.c *.h Makefile*
-recursive-include addons/octree_ggg_mpi *.c *.h *.md Makefile*
+recursive-include addons/native_octree_pair *.c *.h Makefile*
 recursive-include addons/kdtree_box_omp *.c *.h Makefile*
 recursive-include addons/neighbor_boxes_omp *.c *.h Makefile*
 recursive-include addons/lya_forest_omp *.c *.h *.py *.md Makefile*
 recursive-include addons/lya_forest_mpi *.c *.h *.md *.ini *.txt Makefile*
-recursive-include addons/octree_shear_omp *.c *.h *.md Makefile*
-recursive-include addons/octree_shear_sphere_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
 include addons/octree_shear_sphere_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/kdtree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
@@ -55,12 +50,11 @@ include addons/balltree_shear_sphere_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/shear_sphere_binary_2balls *.h
 recursive-include addons/octree_3pcf_3d_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_3pcf_3d_mpi *.c *.h *.md *.ini *.txt Makefile*
-prune addons/octree_3pcf_3d_omp/backup_before_correction_following_Encore
 recursive-include addons/gadget_io *.c *.h Makefile*
 recursive-include addons/class_lib *.c *.h Makefile*
-recursive-include addons/iolib *.c *.h Makefile*
+recursive-include addons/iolib *.h Makefile*
 recursive-include addons/cfitsio *.c *.h Makefile*
-recursive-include addons/pxd *.c *.h Makefile*
+recursive-include addons/pxd *.h Makefile*
 recursive-include addons/cmdline_defs_settings *.h Makefile*
 
 global-exclude .DS_Store

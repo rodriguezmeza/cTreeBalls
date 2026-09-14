@@ -10,7 +10,6 @@ static inline bool cballs_observer_frame(const struct cmdline_data *cmd)
     return !cmd->usePeriodic && method != NULL
         && (!strcmp(method, "octree-sincos-omp")
             || !strncmp(method, "octree-ggg-", 11)
-            || !strncmp(method, "octree-balls4-", 14)
             || !strncmp(method, "octree-2balls-", 14)
             || !strncmp(method, "kdtree-", 7)
             || !strncmp(method, "balltree-", 9));

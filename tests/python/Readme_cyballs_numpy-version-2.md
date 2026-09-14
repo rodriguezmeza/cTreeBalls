@@ -1,52 +1,15 @@
-Checked. The `CFITSIOLIBON=1` fix works for CFITSIO now.
+# Building cyballs with NumPy 2
 
-What happened:
-
-`make all` built and installed `cyballs`, but import initially failed with a NumPy ABI error because `pyproject.toml` says:
-
-```toml
-numpy>=1.22,<2
-```
-
-while your runtime Python has:
-
-```text
-NumPy 2.1.3
-```
-
-So pip’s isolated build compiled `cyballs` against NumPy 1.x, then Python tried to import it with NumPy 2.1.3.
-
-I rebuilt with:
+Build the extension against the NumPy version in the target environment. If
+an isolated pip build selects an incompatible NumPy ABI, rebuild from the
+checkout with:
 
 ```bash
-python -m pip install . --no-build-isolation
+python3 -m pip install . --no-build-isolation
 ```
 
-and now import passes:
-
-```text
-/opt/homebrew/anaconda3/lib/python3.13/site-packages/cyballs.cpython-313-darwin.so
-2.1.3
-```
-
-Also confirmed the vendored CFITSIO path is working: `otool -L` no longer shows external `libcfitsio`, and `nm -u` no longer shows unresolved FITS symbols like `_ffclos`.
-
-To make `make all` reliable, change the `cyballs` target in `Makefile` from:
-
-```make
-$(PYTHON) -m pip install .
-```
-
-to:
-
-```make
-$(PYTHON) -m pip install . --no-build-isolation
-```
-
-or update `pyproject.toml` to allow NumPy 2:
-
-```toml
-numpy>=2.0
-```
-
-For your current environment, `--no-build-isolation` is the quickest correct fix.
+The maintained profile discovers CFITSIO as an external dependency through
+`pkg-config cfitsio`. Set `PKG_CONFIG_PATH` when the installation is outside
+the system search path. Build `cballs`, `libcballs.a`, and `cyballs` with the
+same Makefile profile; mixing archives or generated PXD files from different
+profiles is unsupported.

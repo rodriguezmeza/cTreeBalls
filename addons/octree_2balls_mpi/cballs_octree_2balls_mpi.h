@@ -8,28 +8,42 @@ case OCTREE2BALLSMPIMETHOD: {
                "\n\tevalHist: with distributed octree two-ball 2PCF "
                "and LogMultipole 3PCF\n\n");
     if (cballs_opt_read_mask(cmd)) {
+        bool cached_tree;
+        int leaf_capacity;
+
         ifile = gd->iCatalogs[0];
         DO_BODY(p, bodytable[ifile],
                 bodytable[ifile] + gd->nbodyTable[ifile])
             Update(p) = TRUE;
-        tree_status = MakeTree(cmd, gd, bodytable[ifile],
-                               gd->nbodyTable[ifile], ifile);
+        leaf_capacity = cballs_native_pair_leaf_capacity(
+            cmd, gd, gd->nbodyTable[ifile]);
+        cached_tree = !scanopt(cmd->options, "no-native-tree-cache")
+            && octree_2balls_tree_cache_contains(
+                cmd, bodytable[ifile], gd->nbodyTable[ifile], leaf_capacity);
+        if (!cached_tree)
+            tree_status = MakeTree(cmd, gd, bodytable[ifile],
+                                   gd->nbodyTable[ifile], ifile);
     } else {
         for (ifile = 0; ifile < gd->ninfiles; ifile++) {
+            bool cached_tree;
+            int leaf_capacity;
+
             DO_BODY(p, bodytable[ifile],
                     bodytable[ifile] + gd->nbodyTable[ifile])
                 Update(p) = TRUE;
-            if (tree_status == SUCCESS)
+            leaf_capacity = cballs_native_pair_leaf_capacity(
+                cmd, gd, gd->nbodyTable[ifile]);
+            cached_tree = !scanopt(cmd->options, "no-native-tree-cache")
+                && octree_2balls_tree_cache_contains(
+                    cmd, bodytable[ifile], gd->nbodyTable[ifile],
+                    leaf_capacity);
+            if (tree_status == SUCCESS && !cached_tree)
                 tree_status = MakeTree(cmd, gd, bodytable[ifile],
                                        gd->nbodyTable[ifile], ifile);
         }
     }
-    if (cballs_opt_legacy_one_ball(cmd))
-        tree_status = fcfc_octree_ggg_mpi_consensus(
-            cmd, tree_status, "MPI octree-GGG compatibility construction");
-    else
-        tree_status = fcfc_octree_2balls_mpi_consensus(
-            cmd, tree_status, "MPI native-octree construction");
+    tree_status = fcfc_octree_2balls_mpi_consensus(
+        cmd, tree_status, "MPI native-octree construction");
     if (tree_status == FAILURE) return FAILURE;
 
     if (cballs_opt_read_mask(cmd)) {

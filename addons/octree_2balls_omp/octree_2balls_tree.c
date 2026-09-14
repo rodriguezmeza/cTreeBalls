@@ -3,16 +3,36 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "globaldefs.h"
 #include "octree_2balls_tree.h"
 
 #define OCTREE_2BALLS_ROOT 0
+#define OCTREE_2BALLS_PARALLEL_BUILD_CUTOFF ((INTEGER)32768)
+#define OCTREE_2BALLS_CACHE_SLOTS 2
+#define OCTREE_2BALLS_HASH_CHUNKS 64
+#define OCTREE_2BALLS_PARALLEL_HASH_CUTOFF ((INTEGER)262144)
 
 typedef struct {
     nodeptr node;
     INTEGER count;
 } octree_2balls_child;
+
+typedef struct {
+    uint64_t fingerprint;
+    uint64_t stamp;
+    INTEGER nbody;
+    int leaf_capacity;
+    bool read_mask;
+    int users;
+    fcfc_balltreeptr tree;
+} octree_2balls_cache_entry;
+
+static octree_2balls_cache_entry
+    octree_2balls_cache[OCTREE_2BALLS_CACHE_SLOTS];
+static uint64_t octree_2balls_cache_stamp;
+static bool octree_2balls_cache_registered;
 
 static real octree_2balls_field(bodyptr p)
 {
@@ -21,6 +41,96 @@ static real octree_2balls_field(bodyptr p)
 #else
     return Kappa(p);
 #endif
+}
+
+static uint64_t octree_2balls_hash_word(uint64_t hash, uint64_t value)
+{
+    value ^= value >> 30;
+    value *= UINT64_C(0xbf58476d1ce4e5b9);
+    value ^= value >> 27;
+    value *= UINT64_C(0x94d049bb133111eb);
+    value ^= value >> 31;
+    return (hash ^ value) * UINT64_C(1099511628211);
+}
+
+static uint64_t octree_2balls_hash_real(uint64_t hash, real value)
+{
+    uint64_t bits = 0;
+
+    memcpy(&bits, &value, sizeof(value));
+    return octree_2balls_hash_word(hash, bits);
+}
+
+static uint64_t octree_2balls_catalog_range_fingerprint(
+        bodyptr btab, INTEGER first, INTEGER last, bool read_mask,
+        uint64_t seed)
+{
+    uint64_t hash = seed;
+
+    for (INTEGER i = first; i < last; i++) {
+        bodyptr body = btab + i;
+        const real mass = Mass(body);
+        const real field = octree_2balls_field(body);
+        const real weight = Weight(body);
+
+        for (int k = 0; k < NDIM; k++) {
+            const real position = (real)Pos(body)[k];
+
+            hash = octree_2balls_hash_real(hash, position);
+        }
+        hash = octree_2balls_hash_real(hash, mass);
+        hash = octree_2balls_hash_real(hash, field);
+        hash = octree_2balls_hash_real(hash, weight);
+        if (read_mask) {
+            const int mask = Mask(body);
+
+            hash = octree_2balls_hash_word(hash, (uint64_t)(unsigned int)mask);
+        }
+    }
+    return hash;
+}
+
+static uint64_t octree_2balls_catalog_fingerprint(
+        struct cmdline_data *cmd, bodyptr btab, INTEGER nbody,
+        int leaf_capacity)
+{
+    uint64_t partial[OCTREE_2BALLS_HASH_CHUNKS];
+    uint64_t hash = UINT64_C(1469598103934665603);
+    const bool read_mask = cballs_opt_read_mask(cmd);
+    const int chunks = (int)MIN(
+        (INTEGER)OCTREE_2BALLS_HASH_CHUNKS, nbody);
+    const INTEGER base = nbody / chunks;
+    const INTEGER remainder = nbody % chunks;
+
+    hash = octree_2balls_hash_word(hash, (uint64_t)nbody);
+    hash = octree_2balls_hash_word(hash, (uint64_t)leaf_capacity);
+    hash = octree_2balls_hash_word(hash, (uint64_t)read_mask);
+#ifdef OPENMPCODE
+#pragma omp parallel for schedule(static) \
+    if(nbody >= OCTREE_2BALLS_PARALLEL_HASH_CUTOFF && cmd->numthreads > 1)
+#endif
+    for (int chunk = 0; chunk < chunks; chunk++) {
+        const INTEGER first = (INTEGER)chunk * base
+            + MIN((INTEGER)chunk, remainder);
+        const INTEGER count = base + ((INTEGER)chunk < remainder);
+        const uint64_t seed = octree_2balls_hash_word(
+            UINT64_C(1469598103934665603), (uint64_t)chunk);
+
+        partial[chunk] = octree_2balls_catalog_range_fingerprint(
+            btab, first, first + count, read_mask, seed);
+    }
+    for (int chunk = 0; chunk < chunks; chunk++)
+        hash = octree_2balls_hash_word(hash, partial[chunk]);
+    return hash;
+}
+
+static void octree_2balls_cache_clear(void)
+{
+    for (int i = 0; i < OCTREE_2BALLS_CACHE_SLOTS; i++) {
+        octree_2balls_tree_free(octree_2balls_cache[i].tree);
+        octree_2balls_cache[i].tree = NULL;
+        octree_2balls_cache[i].users = 0;
+    }
 }
 
 static real octree_2balls_distance_squared(const cballs_storage_real *a,
@@ -61,13 +171,28 @@ static int octree_2balls_reserve_node(struct cmdline_data *cmd,
     return SUCCESS;
 }
 
-static void octree_2balls_finish_parent(struct cmdline_data *cmd,
-                                        fcfc_balltreeptr tree,
-                                        INTEGER parent_index,
-                                        INTEGER left_index,
-                                        INTEGER right_index)
+static void octree_2balls_link_parent(fcfc_balltreeptr tree,
+                                      INTEGER parent_index,
+                                      INTEGER left_index,
+                                      INTEGER right_index)
 {
     fcfc_ballnode *parent = &tree->nodes[parent_index];
+    const fcfc_ballnode *left = &tree->nodes[left_index];
+    const fcfc_ballnode *right = &tree->nodes[right_index];
+
+    parent->first = left->first;
+    parent->last = right->last;
+    parent->left = left_index;
+    parent->right = right_index;
+}
+
+static void octree_2balls_finish_parent_geometry(struct cmdline_data *cmd,
+                                                 fcfc_balltreeptr tree,
+                                                 INTEGER parent_index)
+{
+    fcfc_ballnode *parent = &tree->nodes[parent_index];
+    const INTEGER left_index = parent->left;
+    const INTEGER right_index = parent->right;
     const fcfc_ballnode *left = &tree->nodes[left_index];
     const fcfc_ballnode *right = &tree->nodes[right_index];
     const INTEGER left_count = left->last - left->first + 1;
@@ -77,10 +202,6 @@ static void octree_2balls_finish_parent(struct cmdline_data *cmd,
     INTEGER point;
     int k;
 
-    parent->first = left->first;
-    parent->last = right->last;
-    parent->left = left_index;
-    parent->right = right_index;
     DO_COORD(k) {
         parent->cmpos[k] = mass > 0.0
             ? (cballs_storage_real)
@@ -98,7 +219,7 @@ static void octree_2balls_finish_parent(struct cmdline_data *cmd,
     for (point = parent->first; point <= parent->last; point++)
         radius_squared = MAX(radius_squared,
             octree_2balls_distance_squared(
-                parent->center, Pos(tree->bptr[point])));
+                parent->center, tree->packed_points[point].pos));
     parent->radius = cballs_store_search_bound(rsqrt(radius_squared));
     parent->aggregate_radius = cmd->theta > 0.0
         ? cballs_store_search_bound(rsqrt(radius_squared) / cmd->theta)
@@ -118,9 +239,102 @@ static void octree_2balls_finish_parent(struct cmdline_data *cmd,
         / ((real)left_count + (real)right_count);
 }
 
+static void octree_2balls_finish_leaf_geometry(struct cmdline_data *cmd,
+                                               fcfc_balltreeptr tree,
+                                               INTEGER index)
+{
+    compute_vector cmpos_sum;
+    compute_vector geometric_center;
+    fcfc_ballnode *target = &tree->nodes[index];
+    real farthest2 = 0.0;
+    int k;
+
+    CLRV(cmpos_sum);
+    CLRV(geometric_center);
+    target->weight = 0.0;
+    target->kappa_sum = 0.0;
+    target->kappa_sq_sum = 0.0;
+    target->field_weight_sum = 0.0;
+    target->field_weight_sq_sum = 0.0;
+    target->weighted_kappa_sum = 0.0;
+    target->weighted_kappa_sq_sum = 0.0;
+    for (INTEGER point = target->first; point <= target->last; point++) {
+        bodyptr body = tree->bptr[point];
+        fcfc_ballpoint *packed = &tree->packed_points[point];
+        const real mass = Mass(body);
+        const real field = octree_2balls_field(body);
+        const real field_weight = Weight(body);
+
+        SETV(packed->pos, Pos(body));
+        packed->kappa = field;
+        packed->weight = field_weight;
+        packed->weighted_kappa = field_weight * field;
+        packed->source = body;
+        DO_COORD(k) {
+            cmpos_sum[k] += mass * (real)packed->pos[k];
+            geometric_center[k] += (real)packed->pos[k];
+        }
+        target->weight += mass;
+        target->kappa_sum += field;
+        target->kappa_sq_sum += field * field;
+        target->field_weight_sum += field_weight;
+        target->field_weight_sq_sum += field_weight * field_weight;
+        target->weighted_kappa_sum += field_weight * field;
+        target->weighted_kappa_sq_sum +=
+            (field_weight * field) * (field_weight * field);
+    }
+    DO_COORD(k)
+        target->cmpos[k] = (cballs_storage_real)
+            (target->weight > 0.0
+             ? cmpos_sum[k] / target->weight
+             : geometric_center[k]
+               / (real)(target->last - target->first + 1));
+    target->kappa = target->kappa_sum
+                  / (real)(target->last - target->first + 1);
+    SETV(target->center, target->cmpos);
+    for (INTEGER point = target->first; point <= target->last; point++)
+        farthest2 = MAX(farthest2, octree_2balls_distance_squared(
+            target->center, tree->packed_points[point].pos));
+    target->radius = cballs_store_search_bound(rsqrt(farthest2));
+    target->aggregate_radius = cmd->theta > 0.0
+        ? cballs_store_search_bound(rsqrt(farthest2) / cmd->theta)
+        : cballs_store_upper_bound(MAX_REAL_NUMBER);
+}
+
+static void octree_2balls_finish_subtree(struct cmdline_data *cmd,
+                                         fcfc_balltreeptr tree,
+                                         INTEGER index)
+{
+    fcfc_ballnode *node = &tree->nodes[index];
+
+    if (node->left < 0) {
+        octree_2balls_finish_leaf_geometry(cmd, tree, index);
+        return;
+    }
+#ifdef OPENMPCODE
+    if (node->last - node->first + 1 >= OCTREE_2BALLS_PARALLEL_BUILD_CUTOFF) {
+        const INTEGER left = node->left;
+        const INTEGER right = node->right;
+
+#pragma omp taskgroup
+        {
+#pragma omp task firstprivate(left) shared(cmd, tree)
+            octree_2balls_finish_subtree(cmd, tree, left);
+#pragma omp task firstprivate(right) shared(cmd, tree)
+            octree_2balls_finish_subtree(cmd, tree, right);
+        }
+    } else
+#endif
+    {
+        octree_2balls_finish_subtree(cmd, tree, node->left);
+        octree_2balls_finish_subtree(cmd, tree, node->right);
+    }
+    octree_2balls_finish_parent_geometry(cmd, tree, index);
+}
+
 static int octree_2balls_build_native(struct cmdline_data *,
                                       fcfc_balltreeptr, nodeptr, int, int,
-                                      INTEGER *);
+                                      bool, INTEGER *);
 
 static void octree_2balls_sort_children(octree_2balls_child *children,
                                         int child_count)
@@ -162,7 +376,7 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
                                      fcfc_balltreeptr tree,
                                      const octree_2balls_child *children,
                                      int first, int last, int depth,
-                                     int leaf_capacity,
+                                     int leaf_capacity, bool finish_inline,
                                      INTEGER *result)
 {
     INTEGER parent_index;
@@ -176,7 +390,8 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
 
     if (first == last)
         return octree_2balls_build_native(
-            cmd, tree, children[first].node, depth, leaf_capacity, result);
+            cmd, tree, children[first].node, depth, leaf_capacity,
+            finish_inline, result);
     if (octree_2balls_reserve_node(cmd, tree, &parent_index) == FAILURE)
         return FAILURE;
     if (depth > tree->max_depth) tree->max_depth = depth;
@@ -195,14 +410,15 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
     }
 
     if (octree_2balls_build_group(cmd, tree, children, first, split,
-                                  depth + 1, leaf_capacity,
+                                  depth + 1, leaf_capacity, finish_inline,
                                   &left_index) == FAILURE
         || octree_2balls_build_group(cmd, tree, children, split + 1, last,
-                                     depth + 1, leaf_capacity,
+                                     depth + 1, leaf_capacity, finish_inline,
                                      &right_index) == FAILURE)
         return FAILURE;
-    octree_2balls_finish_parent(
-        cmd, tree, parent_index, left_index, right_index);
+    octree_2balls_link_parent(tree, parent_index, left_index, right_index);
+    if (finish_inline)
+        octree_2balls_finish_parent_geometry(cmd, tree, parent_index);
     *result = parent_index;
     return SUCCESS;
 }
@@ -246,15 +462,10 @@ static int octree_2balls_collect_bodies(struct cmdline_data *cmd,
 static int octree_2balls_build_leaf(struct cmdline_data *cmd,
                                     fcfc_balltreeptr tree, nodeptr source,
                                     INTEGER expected_count, int depth,
-                                    INTEGER *result)
+                                    bool finish_inline, INTEGER *result)
 {
-    compute_vector cmpos_sum;
-    compute_vector geometric_center;
     fcfc_ballnode *target;
     INTEGER index;
-    INTEGER i;
-    real farthest2;
-    int k;
 
     if (octree_2balls_reserve_node(cmd, tree, &index) == FAILURE)
         return FAILURE;
@@ -271,51 +482,8 @@ static int octree_2balls_build_leaf(struct cmdline_data *cmd,
     target->left = -1;
     target->right = -1;
     if (depth > tree->max_depth) tree->max_depth = depth;
-
-    CLRV(cmpos_sum);
-    CLRV(geometric_center);
-    target->weight = 0.0;
-    target->kappa_sum = 0.0;
-    target->kappa_sq_sum = 0.0;
-    target->field_weight_sum = 0.0;
-    target->field_weight_sq_sum = 0.0;
-    target->weighted_kappa_sum = 0.0;
-    target->weighted_kappa_sq_sum = 0.0;
-    for (i = target->first; i <= target->last; i++) {
-        bodyptr body = tree->bptr[i];
-        const real mass = Mass(body);
-        const real field = octree_2balls_field(body);
-        const real field_weight = Weight(body);
-
-        DO_COORD(k) {
-            cmpos_sum[k] += mass * (real)Pos(body)[k];
-            geometric_center[k] += (real)Pos(body)[k];
-        }
-        target->weight += mass;
-        target->kappa_sum += field;
-        target->kappa_sq_sum += field * field;
-        target->field_weight_sum += field_weight;
-        target->field_weight_sq_sum += field_weight * field_weight;
-        target->weighted_kappa_sum += field_weight * field;
-        target->weighted_kappa_sq_sum +=
-            (field_weight * field) * (field_weight * field);
-    }
-    DO_COORD(k)
-        target->cmpos[k] = (cballs_storage_real)
-            (target->weight > 0.0
-             ? cmpos_sum[k] / target->weight
-             : geometric_center[k] / (real)expected_count);
-    target->kappa = target->kappa_sum / (real)expected_count;
-
-    SETV(target->center, target->cmpos);
-    farthest2 = 0.0;
-    for (i = target->first; i <= target->last; i++)
-        farthest2 = MAX(farthest2, octree_2balls_distance_squared(
-            target->center, Pos(tree->bptr[i])));
-    target->radius = cballs_store_search_bound(rsqrt(farthest2));
-    target->aggregate_radius = cmd->theta > 0.0
-        ? cballs_store_search_bound(rsqrt(farthest2) / cmd->theta)
-        : cballs_store_upper_bound(MAX_REAL_NUMBER);
+    if (finish_inline)
+        octree_2balls_finish_leaf_geometry(cmd, tree, index);
     *result = index;
     return SUCCESS;
 }
@@ -323,7 +491,7 @@ static int octree_2balls_build_leaf(struct cmdline_data *cmd,
 static int octree_2balls_build_native(struct cmdline_data *cmd,
                                       fcfc_balltreeptr tree, nodeptr source,
                                       int depth, int leaf_capacity,
-                                      INTEGER *result)
+                                      bool finish_inline, INTEGER *result)
 {
     octree_2balls_child children[NSUB];
     const INTEGER source_count = octree_2balls_native_count(cmd, source);
@@ -338,7 +506,7 @@ static int octree_2balls_build_native(struct cmdline_data *cmd,
     if (Type(source) == BODY || Type(source) == BODY3
         || source_count <= leaf_capacity)
         return octree_2balls_build_leaf(
-            cmd, tree, source, source_count, depth, result);
+            cmd, tree, source, source_count, depth, finish_inline, result);
     if (Type(source) != CELL) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: unsupported native node type %d",
@@ -361,7 +529,7 @@ static int octree_2balls_build_native(struct cmdline_data *cmd,
     octree_2balls_sort_children(children, child_count);
     return octree_2balls_build_group(
         cmd, tree, children, 0, child_count - 1, depth,
-        leaf_capacity, result);
+        leaf_capacity, finish_inline, result);
 }
 
 int octree_2balls_tree_build(struct cmdline_data *cmd,
@@ -372,6 +540,7 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
     fcfc_balltreeptr tree = NULL;
     INTEGER root = -1;
     INTEGER live_count;
+    bool finish_inline;
     int catalog = -1;
     int i;
 
@@ -422,9 +591,20 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
     tree->capacity = 2 * live_count;
     tree->bptr = malloc((size_t)live_count * sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
-    if (tree->bptr == NULL || tree->nodes == NULL) goto allocation_failure;
+    tree->packed_points = malloc(
+        (size_t)live_count * sizeof(*tree->packed_points));
+    if (tree->bptr == NULL || tree->nodes == NULL
+        || tree->packed_points == NULL)
+        goto allocation_failure;
+#ifdef OPENMPCODE
+    finish_inline = live_count < OCTREE_2BALLS_PARALLEL_BUILD_CUTOFF
+                 || cmd->numthreads <= 1;
+#else
+    finish_inline = TRUE;
+#endif
     if (octree_2balls_build_native(cmd, tree, (nodeptr)roottable[catalog],
-                                   0, leaf_capacity, &root) == FAILURE)
+                                   0, leaf_capacity, finish_inline,
+                                   &root) == FAILURE)
         goto failure;
     if (root != OCTREE_2BALLS_ROOT || tree->npoint != live_count) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -432,17 +612,16 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
         goto failure;
     }
 
-    tree->packed_points = malloc(
-        (size_t)tree->npoint * sizeof(*tree->packed_points));
-    if (tree->packed_points == NULL) goto allocation_failure;
-    for (INTEGER point = 0; point < tree->npoint; point++) {
-        const real field = octree_2balls_field(tree->bptr[point]);
-        const real weight = Weight(tree->bptr[point]);
-        SETV(tree->packed_points[point].pos, Pos(tree->bptr[point]));
-        tree->packed_points[point].kappa = field;
-        tree->packed_points[point].weight = weight;
-        tree->packed_points[point].weighted_kappa = weight * field;
-        tree->packed_points[point].source = tree->bptr[point];
+    if (!finish_inline) {
+#ifdef OPENMPCODE
+#pragma omp parallel
+        {
+#pragma omp single nowait
+            octree_2balls_finish_subtree(cmd, tree, root);
+        }
+#else
+        octree_2balls_finish_subtree(cmd, tree, root);
+#endif
     }
 
     gd->bytes_tot += sizeof(*tree)
@@ -468,6 +647,157 @@ allocation_failure:
 failure:
     octree_2balls_tree_free(tree);
     return FAILURE;
+}
+
+int octree_2balls_tree_build_cached(struct cmdline_data *cmd,
+                                    struct global_data *gd, bodyptr btab,
+                                    INTEGER nbody, int leaf_capacity,
+                                    fcfc_balltreeptr *result, bool *cache_hit)
+{
+    uint64_t fingerprint;
+    bool read_mask;
+    fcfc_balltreeptr built = NULL;
+    fcfc_balltreeptr found = NULL;
+    int install_slot = -1;
+    bool reused = FALSE;
+
+    if (cmd == NULL || btab == NULL || nbody < 1 || leaf_capacity < 1
+        || result == NULL || cache_hit == NULL) {
+        if (cmd == NULL) return FAILURE;
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls-omp: invalid compact-tree cache result");
+        return FAILURE;
+    }
+    *result = NULL;
+    *cache_hit = FALSE;
+    read_mask = cballs_opt_read_mask(cmd);
+    fingerprint = octree_2balls_catalog_fingerprint(
+        cmd, btab, nbody, leaf_capacity);
+
+#ifdef OPENMPCODE
+#pragma omp critical(octree_2balls_tree_cache)
+#endif
+    {
+        for (int i = 0; i < OCTREE_2BALLS_CACHE_SLOTS; i++) {
+            octree_2balls_cache_entry *entry = &octree_2balls_cache[i];
+
+            if (entry->tree != NULL
+                && entry->fingerprint == fingerprint
+                && entry->nbody == nbody
+                && entry->leaf_capacity == leaf_capacity
+                && entry->read_mask == read_mask) {
+                entry->users++;
+                entry->stamp = ++octree_2balls_cache_stamp;
+                found = entry->tree;
+                reused = TRUE;
+                break;
+            }
+        }
+    }
+    if (found != NULL) {
+        *result = found;
+        *cache_hit = TRUE;
+        return SUCCESS;
+    }
+
+    if (octree_2balls_tree_build(
+            cmd, gd, btab, nbody, leaf_capacity, &built) == FAILURE)
+        return FAILURE;
+
+#ifdef OPENMPCODE
+#pragma omp critical(octree_2balls_tree_cache)
+#endif
+    {
+        uint64_t oldest_stamp = UINT64_MAX;
+
+        /* A concurrent caller may have installed the same catalog while this
+         * thread built its private candidate. */
+        for (int i = 0; i < OCTREE_2BALLS_CACHE_SLOTS; i++) {
+            octree_2balls_cache_entry *entry = &octree_2balls_cache[i];
+
+            if (entry->tree != NULL
+                && entry->fingerprint == fingerprint
+                && entry->nbody == nbody
+                && entry->leaf_capacity == leaf_capacity
+                && entry->read_mask == read_mask) {
+                entry->users++;
+                entry->stamp = ++octree_2balls_cache_stamp;
+                found = entry->tree;
+                reused = TRUE;
+                break;
+            }
+            if (entry->users == 0
+                && (entry->tree == NULL || entry->stamp < oldest_stamp)) {
+                install_slot = i;
+                oldest_stamp = entry->tree == NULL ? 0 : entry->stamp;
+            }
+        }
+        if (found == NULL && install_slot >= 0) {
+            octree_2balls_cache_entry *entry =
+                &octree_2balls_cache[install_slot];
+
+            octree_2balls_tree_free(entry->tree);
+            free(built->bptr);
+            built->bptr = NULL;
+            for (INTEGER i = 0; i < built->npoint; i++)
+                built->packed_points[i].source = NULL;
+            entry->fingerprint = fingerprint;
+            entry->stamp = ++octree_2balls_cache_stamp;
+            entry->nbody = nbody;
+            entry->leaf_capacity = leaf_capacity;
+            entry->read_mask = read_mask;
+            entry->users = 1;
+            entry->tree = built;
+            found = built;
+            built = NULL;
+            if (!octree_2balls_cache_registered) {
+                atexit(octree_2balls_cache_clear);
+                octree_2balls_cache_registered = TRUE;
+            }
+        }
+    }
+
+    if (built != NULL && found != NULL) octree_2balls_tree_free(built);
+    if (found != NULL) {
+        *result = found;
+        *cache_hit = reused;
+    } else {
+        *result = built;
+    }
+    return SUCCESS;
+}
+
+bool octree_2balls_tree_cache_contains(struct cmdline_data *cmd,
+                                       bodyptr btab, INTEGER nbody,
+                                       int leaf_capacity)
+{
+    uint64_t fingerprint;
+    bool found = FALSE;
+    bool read_mask;
+
+    if (cmd == NULL || btab == NULL || nbody < 1 || leaf_capacity < 1)
+        return FALSE;
+    read_mask = cballs_opt_read_mask(cmd);
+    fingerprint = octree_2balls_catalog_fingerprint(
+        cmd, btab, nbody, leaf_capacity);
+#ifdef OPENMPCODE
+#pragma omp critical(octree_2balls_tree_cache)
+#endif
+    {
+        for (int i = 0; i < OCTREE_2BALLS_CACHE_SLOTS; i++) {
+            const octree_2balls_cache_entry *entry = &octree_2balls_cache[i];
+
+            if (entry->tree != NULL
+                && entry->fingerprint == fingerprint
+                && entry->nbody == nbody
+                && entry->leaf_capacity == leaf_capacity
+                && entry->read_mask == read_mask) {
+                found = TRUE;
+                break;
+            }
+        }
+    }
+    return found;
 }
 
 int octree_2balls_tree_frontier(struct cmdline_data *cmd,
@@ -539,4 +869,25 @@ void octree_2balls_tree_free(fcfc_balltreeptr tree)
     free(tree->nodes);
     free(tree->bptr);
     free(tree);
+}
+
+void octree_2balls_tree_release(fcfc_balltreeptr tree)
+{
+    bool cached = FALSE;
+
+    if (tree == NULL) return;
+#ifdef OPENMPCODE
+#pragma omp critical(octree_2balls_tree_cache)
+#endif
+    {
+        for (int i = 0; i < OCTREE_2BALLS_CACHE_SLOTS; i++) {
+            octree_2balls_cache_entry *entry = &octree_2balls_cache[i];
+
+            if (entry->tree != tree) continue;
+            if (entry->users > 0) entry->users--;
+            cached = TRUE;
+            break;
+        }
+    }
+    if (!cached) octree_2balls_tree_free(tree);
 }

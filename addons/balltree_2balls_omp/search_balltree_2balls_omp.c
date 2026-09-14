@@ -3,8 +3,8 @@
  *
  * The node-pair recursion and split heuristic are adapted from dual-node:
  * Copyright (c) 2003-2024 Mike Jarvis, used under its BSD-style license.
- * The ball-tree builder is the FCFC-derived implementation shared with
- * balltree-omp; its source file carries the full FCFC MIT notice.
+ * The ball-tree builder is the shared FCFC-derived implementation; its source
+ * file carries the full FCFC MIT notice.
  */
 
 #include <float.h>
@@ -13,19 +13,29 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef OPENMPCODE
+#include <omp.h>
+#endif
+
 #include "globaldefs.h"
 #include "fcfc_balltree.h"
+
+#if defined(__APPLE__) && !defined(DUAL_NODE_METHOD_NAME)
+#define DUAL_NODE_USE_ACCELERATE_VFORCE 1
+#endif
+#ifdef DUAL_NODE_USE_ACCELERATE_VFORCE
+extern void vvlog(double *, const double *, const int *);
+extern void vvlogf(float *, const float *, const int *);
+#endif
+#ifdef DUAL_NODE_USE_SLEEF
+#include "dual_node_sleef_log.h"
+#endif
 
 #ifndef DUAL_NODE_METHOD_NAME
 #define DUAL_NODE_METHOD_NAME "balltree-2balls-omp"
 #define BALLTREE_2BALLS_PRIMARY_FEATURES 1
 #define BALLTREE_2BALLS_FULL_FUNCTION searchcalc_balltree_2balls_full_omp
 #define BALLTREE_2BALLS_SEARCH_FUNCTION searchcalc_balltree_2balls_omp
-#define BALLTREE_2BALLS_LEGACY_FUNCTION searchcalc_balltree_omp
-#endif
-
-#ifdef BALLTREE_2BALLS_LEGACY_FUNCTION
-#include "protodefs_balltree_omp.h"
 #endif
 
 #ifdef BALLTREE_2BALLS_SEARCH_FUNCTION
@@ -83,10 +93,18 @@ static inline int balltree_2balls_prepare_pivots(
 #endif
 #define DUAL_NODE_CONTEXT_WEIGHTED(cmd) \
     (cballs_opt_weights_norm(cmd) || cballs_opt_smooth_pivot(cmd))
+#define DUAL_NODE_ADAPTIVE_PAIR_LEAVES 1
+#define DUAL_NODE_PAIR_BATCH_SIZE 256
+#define DUAL_NODE_USE_NATURAL_LOG_BINS 1
+#if !defined(DUAL_NODE_DISTRIBUTED_ENGINE)
+#define DUAL_NODE_SCALAR_TREE_CACHE 1
+#define DUAL_NODE_RELEASE_TREE(tree) fcfc_balltree_release(tree)
+#endif
 #ifdef THREEPCFCONVERGENCE
 #define DUAL_NODE_TASK_FRONTIER_ENGINE 1
 #define DUAL_NODE_LOG_MULTIPOLE_ENGINE 1
 #define DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE 1
+#define DUAL_NODE_PERSISTENT_NEIGHBOR_FRONTIER 1
 #endif
 #endif
 
@@ -126,6 +144,9 @@ static inline int balltree_2balls_prepare_pivots(
 #ifndef DUAL_NODE_CONTEXT_WEIGHTED
 #define DUAL_NODE_CONTEXT_WEIGHTED(cmd) cballs_opt_weights_norm(cmd)
 #endif
+#ifndef DUAL_NODE_RELEASE_TREE
+#define DUAL_NODE_RELEASE_TREE(tree) fcfc_balltree_free(tree)
+#endif
 
 #define DUAL_NODE_SPLIT_FACTOR ((real)0.585)
 #define DUAL_NODE_PAIR_FRONTIER_TARGET ((INTEGER)256)
@@ -133,6 +154,25 @@ static inline int balltree_2balls_prepare_pivots(
 #define DUAL_NODE_LARGE_DIRECT_3PCF ((INTEGER)1000000)
 #define DUAL_NODE_TRIPLE_TASK_TARGET ((INTEGER)256)
 #define DUAL_NODE_TRIPLE_TASK_MEMORY ((size_t)128 * 1024 * 1024)
+
+typedef struct {
+    double build;
+    double frontier;
+    double pair_traversal;
+    double pivot_transport_thread;
+    double scratch_clear_thread;
+    double multipole_products_thread;
+    double reduction;
+} dual_node_phase_timers;
+
+static inline double dual_node_timer_now(void)
+{
+#ifdef OPENMPCODE
+    return omp_get_wtime();
+#else
+    return CPUTIME;
+#endif
+}
 
 #ifdef TWOPCF
 typedef struct {
@@ -153,7 +193,44 @@ typedef struct {
     bool weighted;
     real angular_tolerance;
     real max_angular_ratio;
+    real minimum2;
+    real maximum2;
+    real natural_log_scale;
+    real logarithmic_bin_size;
+    real logarithmic_minimum2;
+    real logarithmic_maximum;
+    real bin_size;
+    real bin_slop;
+    real theta2;
+    real bin_slop2;
+    real half_bin_plus_slop2;
+    bool profile;
+    dual_node_phase_timers *timers;
 } dual_node_search_context;
+
+static void dual_node_initialize_radial_context(
+        dual_node_search_context *context, struct cmdline_data *cmd,
+        struct global_data *gd)
+{
+    const real log10_natural = rlog(10.0);
+
+    context->cmd = cmd;
+    context->gd = gd;
+    context->minimum2 = rsqr(cmd->rminHist);
+    context->maximum2 = rsqr(cmd->rangeN);
+    context->natural_log_scale = gd->i_deltaR / log10_natural;
+    context->logarithmic_bin_size = log10_natural * gd->deltaR;
+    context->logarithmic_minimum2 = cmd->rminHist > 0.0
+        ? rlog(context->minimum2) : 0.0;
+    context->logarithmic_maximum = rlog(cmd->rangeN);
+    context->bin_size = cmd->useLogHist
+        ? context->logarithmic_bin_size : gd->deltaR;
+    context->bin_slop = cmd->theta * context->bin_size;
+    context->theta2 = rsqr(cmd->theta);
+    context->bin_slop2 = rsqr(context->bin_slop);
+    context->half_bin_plus_slop2 =
+        0.25 * rsqr(context->bin_size + context->bin_slop);
+}
 
 #ifdef DUAL_NODE_DISTRIBUTED_ENGINE
 static inline bool dual_node_distributed_task_owned(INTEGER task)
@@ -349,22 +426,34 @@ static inline int dual_node_bin_index(const dual_node_search_context *context,
                                      real distance)
 {
     const struct cmdline_data *cmd = context->cmd;
-    const struct global_data *gd = context->gd;
     int n;
 
     if (!(distance > cmd->rminHist && distance < cmd->rangeN))
         return -1;
     if (cmd->useLogHist) {
+#ifdef DUAL_NODE_USE_NATURAL_LOG_BINS
+        if (cmd->rminHist == 0.0) {
+            n = (int)(context->natural_log_scale
+                * (rlog(distance) - context->logarithmic_maximum)
+                + cmd->sizeHistN) + 1;
+        } else {
+            n = (int)((rlog(distance)
+                - 0.5 * context->logarithmic_minimum2)
+                * context->natural_log_scale) + 1;
+        }
+#else
         if (cmd->rminHist == 0.0) {
             n = (int)(cmd->logHistBinsPD
                 * (rlog10(distance) - rlog10(cmd->rangeN))
                 + cmd->sizeHistN) + 1;
         } else {
             n = (int)(rlog10(distance / cmd->rminHist)
-                * gd->i_deltaR) + 1;
+                * context->gd->i_deltaR) + 1;
         }
+#endif
     } else {
-        n = (int)((distance - cmd->rminHist) * gd->i_deltaR) + 1;
+        n = (int)((distance - cmd->rminHist)
+            * context->gd->i_deltaR) + 1;
     }
     return n >= 1 && n <= cmd->sizeHistN ? n : -1;
 }
@@ -373,22 +462,32 @@ static inline int dual_node_bin_index_squared(
         const dual_node_search_context *context, real distance2)
 {
     const struct cmdline_data *cmd = context->cmd;
-    const struct global_data *gd = context->gd;
-    const real minimum2 = cmd->rminHist * cmd->rminHist;
-    const real maximum2 = cmd->rangeN * cmd->rangeN;
     int n;
 
-    if (!(distance2 > minimum2 && distance2 < maximum2)) return -1;
+    if (!(distance2 > context->minimum2
+          && distance2 < context->maximum2)) return -1;
     if (!cmd->useLogHist)
         return dual_node_bin_index(context, rsqrt(distance2));
+#ifdef DUAL_NODE_USE_NATURAL_LOG_BINS
+    if (cmd->rminHist == 0.0) {
+        n = (int)((cmd->logHistBinsPD / rlog(10.0))
+            * (0.5 * rlog(distance2) - context->logarithmic_maximum)
+            + cmd->sizeHistN) + 1;
+    } else {
+        n = (int)(0.5
+            * (rlog(distance2) - context->logarithmic_minimum2)
+            * context->natural_log_scale) + 1;
+    }
+#else
     if (cmd->rminHist == 0.0) {
         n = (int)(cmd->logHistBinsPD
             * (0.5 * rlog10(distance2) - rlog10(cmd->rangeN))
             + cmd->sizeHistN) + 1;
     } else {
-        n = (int)(0.5 * rlog10(distance2 / minimum2)
-            * gd->i_deltaR) + 1;
+        n = (int)(0.5 * rlog10(distance2 / context->minimum2)
+            * context->gd->i_deltaR) + 1;
     }
+#endif
     return n >= 1 && n <= cmd->sizeHistN ? n : -1;
 }
 
@@ -397,9 +496,8 @@ static inline real dual_node_bin_slop_width(
         const dual_node_search_context *context, real distance)
 {
     if (context->cmd->useLogHist)
-        return context->cmd->theta * rlog(10.0)
-             * context->gd->deltaR * distance;
-    return context->cmd->theta * context->gd->deltaR;
+        return context->bin_slop * distance;
+    return context->bin_slop;
 }
 
 #ifdef TWOPCF
@@ -427,6 +525,113 @@ static inline void dual_node_accumulate_body_pair(
     hist->field_product[n] += numerator;
     hist->body_pairs++;
 }
+
+#ifdef DUAL_NODE_PAIR_BATCH_SIZE
+static void dual_node_vector_log(real *output, const real *input, int count)
+{
+#ifdef DUAL_NODE_USE_ACCELERATE_VFORCE
+#if defined(DOUBLEPREC)
+    vvlog(output, input, &count);
+#else
+    vvlogf(output, input, &count);
+#endif
+#elif defined(DUAL_NODE_USE_SLEEF)
+#if defined(DOUBLEPREC)
+    dual_node_sleef_log_double(output, input, (size_t)count);
+#else
+    dual_node_sleef_log_float(output, input, (size_t)count);
+#endif
+#else
+    for (int i = 0; i < count; i++)
+        output[i] = rlog(input[i]);
+#endif
+}
+
+static void dual_node_accumulate_body_pair_batch_flush(
+        const dual_node_search_context *context, dual_node_histogram *hist,
+        real *distance2, real *denominator, real *numerator, int count)
+{
+    int bins[DUAL_NODE_PAIR_BATCH_SIZE];
+    const struct cmdline_data *cmd = context->cmd;
+
+    if (count <= 0) return;
+    if (cmd->useLogHist && cmd->rminHist > 0.0) {
+        real logarithms[DUAL_NODE_PAIR_BATCH_SIZE];
+        const real scale = 0.5 * context->natural_log_scale;
+#if defined(DUAL_NODE_USE_ACCELERATE_VFORCE) || defined(DUAL_NODE_USE_SLEEF)
+        if (count >= 8) {
+            dual_node_vector_log(logarithms, distance2, count);
+        } else
+#endif
+        {
+            for (int i = 0; i < count; i++)
+                logarithms[i] = rlog(distance2[i]);
+        }
+        for (int i = 0; i < count; i++) {
+            const int n = (int)((logarithms[i]
+                - context->logarithmic_minimum2) * scale) + 1;
+            bins[i] = n >= 1 && n <= cmd->sizeHistN ? n : -1;
+        }
+    } else {
+        for (int i = 0; i < count; i++)
+            bins[i] = dual_node_bin_index_squared(context, distance2[i]);
+    }
+
+    for (int i = 0; i < count; i++) {
+        const int n = bins[i];
+
+        if (n < 0) continue;
+        hist->pair_count[n] += 1.0;
+        hist->weight_product[n] += denominator[i];
+        hist->field_product[n] += numerator[i];
+        hist->body_pairs++;
+    }
+}
+
+static void dual_node_accumulate_body_pair_batch(
+        const dual_node_search_context *context, dual_node_histogram *hist,
+        const fcfc_balltreeptr tree1, INTEGER first1, INTEGER last1,
+        const fcfc_balltreeptr tree2, INTEGER first2, INTEGER last2,
+        bool triangular)
+{
+    real distance2[DUAL_NODE_PAIR_BATCH_SIZE];
+    real denominator[DUAL_NODE_PAIR_BATCH_SIZE];
+    real numerator[DUAL_NODE_PAIR_BATCH_SIZE];
+    int count = 0;
+
+    for (INTEGER i = first1; i <= last1; i++) {
+        const INTEGER begin = triangular ? i + 1 : first2;
+        const fcfc_ballpoint *p = &tree1->packed_points[i];
+
+        for (INTEGER j = begin; j <= last2; j++) {
+            const fcfc_ballpoint *q = &tree2->packed_points[j];
+            real d2;
+
+            if (p->source != NULL && p->source == q->source) continue;
+            d2 = dual_node_point_distance_squared(
+                context->cmd, context->gd, p, q);
+            if (!(d2 > context->minimum2 && d2 < context->maximum2))
+                continue;
+            distance2[count] = d2;
+            if (context->weighted) {
+                denominator[count] = p->weight * q->weight;
+                numerator[count] = p->weighted_kappa * q->weighted_kappa;
+            } else {
+                denominator[count] = 1.0;
+                numerator[count] = p->kappa * q->kappa;
+            }
+            count++;
+            if (count == DUAL_NODE_PAIR_BATCH_SIZE) {
+                dual_node_accumulate_body_pair_batch_flush(
+                    context, hist, distance2, denominator, numerator, count);
+                count = 0;
+            }
+        }
+    }
+    dual_node_accumulate_body_pair_batch_flush(
+        context, hist, distance2, denominator, numerator, count);
+}
+#endif
 
 static inline bool dual_node_pair_outside_range(
         const dual_node_search_context *context,
@@ -460,45 +665,47 @@ static int dual_node_two_ball_bin(const dual_node_search_context *context,
         return -1;
 
     if (context->use_bin_slop) {
-        real bin_size;
-        real slop;
         real fraction;
         real coordinate;
 
-        if (size * size > rsqr(cmd->theta) * distance2) return -1;
+        if (size * size > context->theta2 * distance2) return -1;
         if (cmd->useLogHist) {
             const real relative_size2 = size * size / distance2;
 
             if (!(cmd->rminHist > 0.0)) return -1;
-            bin_size = rlog(10.0) * context->gd->deltaR;
-            slop = cmd->theta * bin_size;
-            if (size * size > slop * slop * distance2) {
-                if (size * size
-                    > 0.25 * rsqr(bin_size + slop) * distance2)
+            if (size * size > context->bin_slop2 * distance2) {
+                if (size * size > context->half_bin_plus_slop2 * distance2)
                     return -1;
                 coordinate = 0.5 * rlog(
-                    distance2 / rsqr(cmd->rminHist)) / bin_size;
+                    distance2 / context->minimum2)
+                    / context->logarithmic_bin_size;
                 fraction = coordinate - rfloor(coordinate);
                 if (fraction > 0.5) fraction = 1.0 - fraction;
                 if (size * size
-                    > rsqr(fraction * bin_size + slop) * distance2)
+                    > rsqr(fraction * context->bin_size
+                          + context->bin_slop) * distance2)
                     return -1;
                 fraction = coordinate - rfloor(coordinate);
                 if (size * size
-                    > rsqr(fraction * bin_size + slop - relative_size2)
+                    > rsqr(fraction * context->bin_size
+                          + context->bin_slop - relative_size2)
                       * distance2)
                     return -1;
+                center_bin = (int)coordinate + 1;
+                return center_bin >= 1 && center_bin <= cmd->sizeHistN
+                    ? center_bin : -2;
             }
         } else {
-            bin_size = context->gd->deltaR;
-            slop = cmd->theta * bin_size;
-            if (size > slop) {
-                if (size > 0.5 * (bin_size + slop)) return -1;
+            if (size > context->bin_slop) {
+                if (size > 0.5 * (context->bin_size
+                                  + context->bin_slop)) return -1;
                 distance = rsqrt(distance2);
-                coordinate = (distance - cmd->rminHist) / bin_size;
+                coordinate = (distance - cmd->rminHist)
+                           / context->bin_size;
                 fraction = coordinate - rfloor(coordinate);
                 if (fraction > 0.5) fraction = 1.0 - fraction;
-                if (size > fraction * bin_size + slop) return -1;
+                if (size > fraction * context->bin_size
+                         + context->bin_slop) return -1;
             }
         }
         center_bin = dual_node_bin_index_squared(context, distance2);
@@ -564,6 +771,14 @@ static void dual_node_process_pair(const dual_node_search_context *context,
     }
 
     if (leaf1 && leaf2) {
+#ifdef DUAL_NODE_PAIR_BATCH_SIZE
+        if (dual_node_node_count(node1) * dual_node_node_count(node2) > 64) {
+            dual_node_accumulate_body_pair_batch(
+                context, hist, tree1, node1->first, node1->last,
+                tree2, node2->first, node2->last, FALSE);
+            return;
+        }
+#endif
         INTEGER p1;
         INTEGER p2;
         for (p1 = node1->first; p1 <= node1->last; p1++)
@@ -642,6 +857,14 @@ static void dual_node_process_auto(const dual_node_search_context *context,
 
     if (2.0 * (real)node->radius <= context->cmd->rminHist) return;
     if (dual_node_node_is_leaf(node)) {
+#ifdef DUAL_NODE_PAIR_BATCH_SIZE
+        if (dual_node_node_count(node) > 12) {
+            dual_node_accumulate_body_pair_batch(
+                context, hist, tree, node->first, node->last,
+                tree, node->first, node->last, TRUE);
+            return;
+        }
+#endif
         INTEGER i;
         INTEGER j;
         for (i = node->first; i <= node->last; i++)
@@ -1654,7 +1877,43 @@ typedef struct {
     INTEGER pair_tests;
     INTEGER pivot_restarts;
     INTEGER pivot_finishes;
+    double pivot_transport_seconds;
+    double scratch_clear_seconds;
+    double multipole_product_seconds;
 } dual_node_multipole_scratch;
+
+typedef struct {
+    INTEGER *nodes;
+    INTEGER count;
+    INTEGER capacity;
+    bool allocation_failed;
+} dual_node_neighbor_frontier;
+
+static bool dual_node_neighbor_frontier_append(
+        dual_node_neighbor_frontier *frontier, INTEGER node)
+{
+    if (frontier->count == frontier->capacity) {
+        const INTEGER capacity = frontier->capacity > 0
+            ? 2 * frontier->capacity : 64;
+        INTEGER *nodes;
+
+        if (capacity < frontier->capacity
+            || (size_t)capacity > SIZE_MAX / sizeof(*nodes)) {
+            frontier->allocation_failed = TRUE;
+            return FALSE;
+        }
+        nodes = realloc(frontier->nodes,
+                        (size_t)capacity * sizeof(*nodes));
+        if (nodes == NULL) {
+            frontier->allocation_failed = TRUE;
+            return FALSE;
+        }
+        frontier->nodes = nodes;
+        frontier->capacity = capacity;
+    }
+    frontier->nodes[frontier->count++] = node;
+    return TRUE;
+}
 
 typedef struct {
     const cballs_storage_real *position;
@@ -1665,7 +1924,80 @@ typedef struct {
     INTEGER first;
     INTEGER last;
     bool can_split;
+#if NDIM == 3
+    real position_norm;
+    real normal[3];
+    real first_axis[3];
+    real second_axis[3];
+    bool angular_basis_valid;
+#endif
 } dual_node_multipole_pivot;
+
+static inline void dual_node_multipole_initialize_pivot_geometry(
+        dual_node_multipole_pivot *pivot)
+{
+#if NDIM == 3 && !defined(DUAL_NODE_DISABLE_CACHED_GEOMETRY)
+    pivot->position_norm = hypot(
+        hypot((real)pivot->position[0], (real)pivot->position[1]),
+        (real)pivot->position[2]);
+    pivot->angular_basis_valid = cballs_angular_basis(
+        pivot->position, pivot->normal,
+        pivot->first_axis, pivot->second_axis);
+#else
+    (void)pivot;
+#endif
+}
+
+static inline bool dual_node_multipole_angular_phase(
+        const dual_node_multipole_pivot *pivot,
+        const compute_vector dr, real *cosphi, real *sinphi)
+{
+#if NDIM == 3 && !defined(DUAL_NODE_DISABLE_CACHED_GEOMETRY)
+    real x = 0.0;
+    real y = 0.0;
+    real norm;
+
+    if (!pivot->angular_basis_valid) return FALSE;
+    for (int k = 0; k < 3; k++) {
+        x -= dr[k] * pivot->first_axis[k];
+        y -= dr[k] * pivot->second_axis[k];
+    }
+    norm = hypot(x, y);
+    if (!(norm > 32.0 * DBL_EPSILON
+          * hypot(hypot(dr[0], dr[1]), dr[2])))
+        return FALSE;
+    *cosphi = x / norm;
+    *sinphi = y / norm;
+    return isfinite(*cosphi) && isfinite(*sinphi);
+#else
+    return cballs_angular_phase(pivot->position, dr, cosphi, sinphi);
+#endif
+}
+
+static inline real dual_node_multipole_angular_extent(
+        const dual_node_multipole_pivot *pivot,
+        const compute_vector dr, real neighbor_radius)
+{
+#if NDIM == 3 && !defined(DUAL_NODE_DISABLE_CACHED_GEOMETRY)
+    real cross[3];
+    real distance;
+    real transverse;
+    real error;
+
+    if (!pivot->angular_basis_valid
+        || !(pivot->position_norm > pivot->radius))
+        return 1.0;
+    CROSSVP(cross, pivot->normal, dr);
+    distance = hypot(hypot(dr[0], dr[1]), dr[2]);
+    transverse = hypot(hypot(cross[0], cross[1]), cross[2]);
+    error = pivot->radius + neighbor_radius
+        + distance * pivot->radius / (pivot->position_norm - pivot->radius);
+    return transverse > error ? error / transverse : 1.0;
+#else
+    return cballs_angular_extent(
+        pivot->position, dr, pivot->radius, neighbor_radius);
+#endif
+}
 
 static void dual_node_initialize_multipole_scratch(
         dual_node_multipole_scratch *, real *, size_t, int, int, size_t);
@@ -1700,9 +2032,35 @@ static inline real dual_node_body_weighted_field(
     return context->weighted ? Weight(p) * field : field;
 }
 
+static inline real dual_node_point_normalization(
+        const dual_node_search_context *context,
+        const fcfc_ballpoint *point)
+{
+    return context->weighted ? (real)point->weight : 1.0;
+}
+
+static inline real dual_node_point_weighted_field(
+        const dual_node_search_context *context,
+        const fcfc_ballpoint *point)
+{
+    return context->weighted
+        ? (real)point->weighted_kappa : (real)point->kappa;
+}
+
 static void dual_node_multipole_clear(dual_node_multipole_scratch *scratch)
 {
     memset(scratch->field_cos, 0, scratch->values * sizeof(real));
+}
+
+static void dual_node_multipole_clear_profiled(
+        const dual_node_search_context *context,
+        dual_node_multipole_scratch *scratch)
+{
+    const double started = context->profile ? dual_node_timer_now() : 0.0;
+
+    dual_node_multipole_clear(scratch);
+    if (context->profile)
+        scratch->scratch_clear_seconds += dual_node_timer_now() - started;
 }
 
 static void dual_node_multipole_add(
@@ -1771,15 +2129,14 @@ static int dual_node_multipole_pair_status_limited(
         return DUAL_NODE_TRIPLE_OUTSIDE;
     if (!context->use_two_balls || !(distance > size)
         || size > dual_node_bin_slop_width(context, distance)
-        || cballs_angular_extent(pivot->position, dr, pivot->radius, neighbor_radius)
+        || dual_node_multipole_angular_extent(pivot, dr, neighbor_radius)
             > context->max_angular_ratio)
         return DUAL_NODE_TRIPLE_SPLIT;
     *radial_bin = dual_node_bin_index(context, distance);
     if (*radial_bin < 0 || !(distance < upper_limit))
         return DUAL_NODE_TRIPLE_OUTSIDE;
-    if (!dual_node_polar_coordinates_from_displacement(
-            context, pivot->position, neighbor_position,
-            dr, distance, cosphi, sinphi))
+    if (!dual_node_multipole_angular_phase(
+            pivot, dr, cosphi, sinphi))
         return DUAL_NODE_TRIPLE_SPLIT;
     return DUAL_NODE_TRIPLE_ACCEPT;
 }
@@ -1800,33 +2157,39 @@ static int dual_node_multipole_pair_status(
 static int dual_node_multipole_add_body(
         const dual_node_search_context *context,
         const dual_node_multipole_pivot *pivot,
-        dual_node_multipole_scratch *scratch, bodyptr neighbor)
+        dual_node_multipole_scratch *scratch,
+        const fcfc_ballpoint *neighbor)
 {
+    compute_vector dr;
     real distance;
     real cosphi;
     real sinphi;
     int radial_bin;
 
-    if (pivot->source != NULL && pivot->source == neighbor) return SUCCESS;
+    if (pivot->source != NULL && pivot->source == neighbor->source)
+        return SUCCESS;
     if (pivot->radius > 0.0) {
         scratch->pair_tests++;
         const int pair_status = dual_node_multipole_pair_status(
-            context, pivot, Pos(neighbor), 0.0,
+            context, pivot, neighbor->pos, 0.0,
             &radial_bin, &cosphi, &sinphi);
         if (pair_status == DUAL_NODE_TRIPLE_OUTSIDE) return SUCCESS;
         if (pair_status != DUAL_NODE_TRIPLE_ACCEPT) return FAILURE;
     } else {
-        if (!dual_node_polar_coordinates(
-                context, pivot->position, Pos(neighbor),
-                &distance, &cosphi, &sinphi))
+        distance = dual_node_position_distance(
+            context, pivot->position, neighbor->pos, dr);
+        if (!(distance > 0.0)
+            || !dual_node_multipole_angular_phase(
+                pivot, dr, &cosphi, &sinphi))
             return SUCCESS;
         radial_bin = dual_node_bin_index(context, distance);
         if (radial_bin < 0) return SUCCESS;
     }
     {
-        const real field = dual_node_body_weighted_field(context, neighbor);
-        const real normalization = dual_node_body_normalization(
-            context, neighbor);
+        const real field = context->weighted
+            ? (real)neighbor->weighted_kappa : (real)neighbor->kappa;
+        const real normalization = context->weighted
+            ? (real)neighbor->weight : 1.0;
 
         dual_node_multipole_add(
             scratch, radial_bin, field, field * field,
@@ -1870,7 +2233,7 @@ static int dual_node_multipole_scan_neighbors(
                 if (i >= pivot->first && i <= pivot->last) continue;
                 if (dual_node_multipole_add_body(
                         context, pivot, scratch,
-                        neighbor_tree->bptr[i]) == FAILURE)
+                        &neighbor_tree->packed_points[i]) == FAILURE)
                     return FAILURE;
             }
             return SUCCESS;
@@ -1917,7 +2280,8 @@ static int dual_node_multipole_scan_neighbors(
     for (INTEGER i = neighbor->first; i <= neighbor->last; i++) {
         if (same_tree && i >= pivot->first && i <= pivot->last) continue;
         if (dual_node_multipole_add_body(
-                context, pivot, scratch, neighbor_tree->bptr[i]) == FAILURE)
+                context, pivot, scratch,
+                &neighbor_tree->packed_points[i]) == FAILURE)
             return FAILURE;
     }
     return SUCCESS;
@@ -2034,13 +2398,35 @@ static void dual_node_multipole_finish_pivot_range(
 }
 
 static void dual_node_multipole_finish_pivot(
+        const dual_node_search_context *context,
         dual_node_triple_histogram *hist,
         const dual_node_multipole_pivot *pivot,
         dual_node_multipole_scratch *scratch, int radial_bins)
 {
+    const double started = context->profile ? dual_node_timer_now() : 0.0;
+
     dual_node_multipole_finish_pivot_range(
         hist, pivot, scratch, 1, radial_bins + 1, radial_bins);
+    if (context->profile)
+        scratch->multipole_product_seconds += dual_node_timer_now() - started;
     scratch->pivot_finishes++;
+}
+
+static void dual_node_multipole_finish_pivot_range_profiled(
+        const dual_node_search_context *context,
+        dual_node_triple_histogram *hist,
+        const dual_node_multipole_pivot *pivot,
+        dual_node_multipole_scratch *scratch,
+        dual_node_multipole_scratch *statistics,
+        int first_radial_bin, int radial_bin_limit, int radial_bins)
+{
+    const double started = context->profile ? dual_node_timer_now() : 0.0;
+
+    dual_node_multipole_finish_pivot_range(
+        hist, pivot, scratch, first_radial_bin,
+        radial_bin_limit, radial_bins);
+    if (context->profile)
+        statistics->multipole_product_seconds += dual_node_timer_now() - started;
 }
 
 static void dual_node_multipole_process_body(
@@ -2050,28 +2436,215 @@ static void dual_node_multipole_process_body(
         dual_node_multipole_scratch *scratch,
         dual_node_triple_histogram *hist)
 {
-    bodyptr pivot_body = pivot_tree->bptr[pivot_index];
+    const fcfc_ballpoint *pivot_point =
+        &pivot_tree->packed_points[pivot_index];
     dual_node_multipole_pivot pivot;
 
-    if (!DUAL_NODE_PIVOT_IS_ACTIVE(context, pivot_body)) return;
-    pivot.position = Pos(pivot_body);
-    pivot.source = pivot_body;
+    pivot.position = pivot_point->pos;
+    pivot.source = pivot_point->source;
     pivot.radius = 0.0;
-    pivot.field_sum = DUAL_NODE_PIVOT_FIELD(context, pivot_body);
-    pivot.normalization_sum = DUAL_NODE_PIVOT_NORMALIZATION(
-        context, pivot_body);
+    pivot.field_sum = dual_node_point_weighted_field(context, pivot_point);
+    pivot.normalization_sum =
+        dual_node_point_normalization(context, pivot_point);
     pivot.first = pivot_index;
     pivot.last = pivot_index;
     pivot.can_split = FALSE;
-    dual_node_multipole_clear(scratch);
+    dual_node_multipole_initialize_pivot_geometry(&pivot);
+    dual_node_multipole_clear_profiled(context, scratch);
     if (dual_node_multipole_scan_neighbors(
             context, &pivot, neighbor_tree, 0,
             same_tree, scratch) == SUCCESS)
         dual_node_multipole_finish_pivot(
-            hist, &pivot, scratch, context->cmd->sizeHistN);
+            context, hist, &pivot, scratch, context->cmd->sizeHistN);
 }
 
 #ifdef DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE
+static void dual_node_multipole_process_body_pivots(
+        const dual_node_search_context *, const fcfc_balltreeptr, INTEGER,
+        const fcfc_balltreeptr, bool, dual_node_multipole_scratch *,
+        dual_node_triple_histogram *);
+
+#ifdef DUAL_NODE_PERSISTENT_NEIGHBOR_FRONTIER
+#ifndef DUAL_NODE_ADAPTIVE_FRONTIER_BASE
+#define DUAL_NODE_ADAPTIVE_FRONTIER_BASE ((INTEGER)32)
+#endif
+#ifndef DUAL_NODE_ADAPTIVE_FRONTIER_MAX
+#define DUAL_NODE_ADAPTIVE_FRONTIER_MAX ((INTEGER)256)
+#endif
+static INTEGER dual_node_adaptive_frontier_limit(
+        const dual_node_search_context *context,
+        const fcfc_ballnode *pivot_node,
+        const fcfc_balltreeptr neighbor_tree)
+{
+    const real pivot_count = (real)dual_node_node_count(pivot_node);
+    const real radial_fraction = MIN(
+        1.0, 0.25 * rsqr(context->cmd->rangeN));
+    const real expected_neighbors = MAX(
+        1.0, radial_fraction * (real)neighbor_tree->npoint);
+    const real pivot_scale = MAX(1.0, rlog2(pivot_count + 1.0));
+    const INTEGER limit = DUAL_NODE_ADAPTIVE_FRONTIER_BASE
+        + (INTEGER)(4.0 * rsqrt(expected_neighbors)
+                    + 2.0 * pivot_scale);
+
+    return MIN(DUAL_NODE_ADAPTIVE_FRONTIER_MAX,
+               MAX(DUAL_NODE_ADAPTIVE_FRONTIER_BASE, limit));
+}
+
+static bool dual_node_neighbor_frontier_append_bounded(
+        dual_node_neighbor_frontier *frontier, INTEGER node, INTEGER limit)
+{
+    return frontier->count < limit
+        && dual_node_neighbor_frontier_append(frontier, node);
+}
+
+static bool dual_node_neighbor_frontier_refine_node(
+        const dual_node_search_context *context,
+        const dual_node_multipole_pivot *pivot,
+        const fcfc_balltreeptr neighbor_tree, INTEGER neighbor_index,
+        bool same_tree, dual_node_neighbor_frontier *frontier, INTEGER limit)
+{
+    const fcfc_ballnode *neighbor = &neighbor_tree->nodes[neighbor_index];
+    const bool overlap = same_tree && dual_node_ranges_overlap(
+        pivot->first, pivot->last, neighbor->first, neighbor->last);
+    compute_vector dr;
+    const real distance = dual_node_position_distance(
+        context, pivot->position, neighbor->center, dr);
+    const real size = pivot->radius + (real)neighbor->radius;
+    const bool outside = !overlap
+        && (distance + size <= context->cmd->rminHist
+            || distance - size >= context->cmd->rangeN);
+    const real split_radius = MAX(
+        pivot->radius, 0.125 * context->cmd->rangeN);
+
+    if (outside) return TRUE;
+    if (dual_node_node_is_leaf(neighbor)
+        || (!overlap && (real)neighbor->radius <= split_radius))
+        return dual_node_neighbor_frontier_append_bounded(
+            frontier, neighbor_index, limit);
+    /* Preserve a coarse candidate when the bounded sparse list cannot hold
+     * both refinements.  Descendant pivots may split it after pruning more
+     * of the surrounding volume. */
+    if (frontier->count + 1 >= limit)
+        return dual_node_neighbor_frontier_append_bounded(
+            frontier, neighbor_index, limit);
+    if (!dual_node_neighbor_frontier_refine_node(
+            context, pivot, neighbor_tree, neighbor->left,
+            same_tree, frontier, limit - 1))
+        return FALSE;
+    return dual_node_neighbor_frontier_refine_node(
+        context, pivot, neighbor_tree, neighbor->right,
+        same_tree, frontier, limit);
+}
+
+static bool dual_node_neighbor_frontier_refine(
+        const dual_node_search_context *context,
+        const fcfc_ballnode *pivot_node,
+        const fcfc_balltreeptr neighbor_tree,
+        const INTEGER *parent_nodes, INTEGER parent_count,
+        bool same_tree, dual_node_neighbor_frontier *frontier, INTEGER limit)
+{
+    dual_node_multipole_pivot pivot;
+
+    pivot.position = pivot_node->center;
+    pivot.source = NULL;
+    pivot.radius = (real)pivot_node->radius;
+    pivot.field_sum = 0.0;
+    pivot.normalization_sum = 0.0;
+    pivot.first = pivot_node->first;
+    pivot.last = pivot_node->last;
+    pivot.can_split = !dual_node_node_is_leaf(pivot_node);
+    dual_node_multipole_initialize_pivot_geometry(&pivot);
+    frontier->count = 0;
+    frontier->allocation_failed = FALSE;
+    for (INTEGER i = 0; i < parent_count; i++) {
+        /* Reserve one slot for each untouched disjoint parent subtree. */
+        const INTEGER local_limit =
+            limit - (parent_count - i - 1);
+
+        if (!dual_node_neighbor_frontier_refine_node(
+                context, &pivot, neighbor_tree, parent_nodes[i],
+                same_tree, frontier, local_limit))
+            return FALSE;
+    }
+    return TRUE;
+}
+
+static void dual_node_multipole_process_body_frontier(
+        const dual_node_search_context *context,
+        const fcfc_balltreeptr pivot_tree, INTEGER pivot_index,
+        const fcfc_balltreeptr neighbor_tree, bool same_tree,
+        const dual_node_neighbor_frontier *frontier,
+        dual_node_multipole_scratch *scratch,
+        dual_node_triple_histogram *hist)
+{
+    const fcfc_ballpoint *pivot_point =
+        &pivot_tree->packed_points[pivot_index];
+    dual_node_multipole_pivot pivot;
+
+    pivot.position = pivot_point->pos;
+    pivot.source = pivot_point->source;
+    pivot.radius = 0.0;
+    pivot.field_sum = dual_node_point_weighted_field(context, pivot_point);
+    pivot.normalization_sum =
+        dual_node_point_normalization(context, pivot_point);
+    pivot.first = pivot_index;
+    pivot.last = pivot_index;
+    pivot.can_split = FALSE;
+    dual_node_multipole_initialize_pivot_geometry(&pivot);
+    dual_node_multipole_clear_profiled(context, scratch);
+    for (INTEGER i = 0; i < frontier->count; i++) {
+        if (dual_node_multipole_scan_neighbors(
+                context, &pivot, neighbor_tree, frontier->nodes[i],
+                same_tree, scratch) == FAILURE)
+            return;
+    }
+    dual_node_multipole_finish_pivot(
+        context, hist, &pivot, scratch, context->cmd->sizeHistN);
+}
+
+static void dual_node_multipole_process_body_pivots_frontier(
+        const dual_node_search_context *context,
+        const fcfc_balltreeptr pivot_tree, INTEGER pivot_node_index,
+        const fcfc_balltreeptr neighbor_tree, bool same_tree,
+        const INTEGER *parent_nodes, INTEGER parent_count,
+        dual_node_neighbor_frontier *levels, int depth,
+        dual_node_multipole_scratch *scratch,
+        dual_node_triple_histogram *hist)
+{
+    const fcfc_ballnode *pivot_node = &pivot_tree->nodes[pivot_node_index];
+    dual_node_neighbor_frontier *frontier = &levels[depth];
+    const INTEGER frontier_limit = MAX(
+        parent_count,
+        dual_node_adaptive_frontier_limit(
+            context, pivot_node, neighbor_tree));
+
+    if (!dual_node_neighbor_frontier_refine(
+            context, pivot_node, neighbor_tree,
+            parent_nodes, parent_count, same_tree, frontier, frontier_limit)) {
+        scratch->pivot_restarts += dual_node_node_count(pivot_node);
+        dual_node_multipole_process_body_pivots(
+            context, pivot_tree, pivot_node_index, neighbor_tree,
+            same_tree, scratch, hist);
+        return;
+    }
+    if (!dual_node_node_is_leaf(pivot_node)) {
+        dual_node_multipole_process_body_pivots_frontier(
+            context, pivot_tree, pivot_node->left, neighbor_tree,
+            same_tree, frontier->nodes, frontier->count,
+            levels, depth + 1, scratch, hist);
+        dual_node_multipole_process_body_pivots_frontier(
+            context, pivot_tree, pivot_node->right, neighbor_tree,
+            same_tree, frontier->nodes, frontier->count,
+            levels, depth + 1, scratch, hist);
+        return;
+    }
+    for (INTEGER i = pivot_node->first; i <= pivot_node->last; i++)
+        dual_node_multipole_process_body_frontier(
+            context, pivot_tree, i, neighbor_tree,
+            same_tree, frontier, scratch, hist);
+}
+#endif
+
 static void dual_node_multipole_process_body_pivots(
         const dual_node_search_context *context,
         const fcfc_balltreeptr pivot_tree, INTEGER pivot_node_index,
@@ -2139,12 +2712,13 @@ static void dual_node_multipole_process_pivots(
         pivot.first = pivot_node->first;
         pivot.last = pivot_node->last;
         pivot.can_split = !dual_node_node_is_leaf(pivot_node);
-        dual_node_multipole_clear(scratch);
+        dual_node_multipole_initialize_pivot_geometry(&pivot);
+        dual_node_multipole_clear_profiled(context, scratch);
         if (dual_node_multipole_scan_neighbors(
                 context, &pivot, neighbor_tree, 0,
                 same_tree, scratch) == SUCCESS) {
             dual_node_multipole_finish_pivot(
-                hist, &pivot, scratch, context->cmd->sizeHistN);
+                context, hist, &pivot, scratch, context->cmd->sizeHistN);
             return;
         }
         scratch->pivot_restarts++;
@@ -2205,8 +2779,11 @@ static void dual_node_multipole_mark_unresolved(
 }
 
 static void dual_node_multipole_clear_radial_through(
-        dual_node_multipole_scratch *scratch, int radial_bin)
+        const dual_node_search_context *context,
+        dual_node_multipole_scratch *scratch,
+        dual_node_multipole_scratch *statistics, int radial_bin)
 {
+    const double started = context->profile ? dual_node_timer_now() : 0.0;
     const size_t count = (size_t)radial_bin + 1;
     real *order_arrays[5] = {
         scratch->field_cos, scratch->field_sin,
@@ -2227,6 +2804,8 @@ static void dual_node_multipole_clear_radial_through(
         memset(scratch->window_sin + (size_t)order * scratch->stride,
                0, count * sizeof(real));
     }
+    if (context->profile)
+        statistics->scratch_clear_seconds += dual_node_timer_now() - started;
 }
 
 static void dual_node_multipole_copy_values(
@@ -2242,19 +2821,20 @@ static void dual_node_multipole_scan_body_partial(
         const dual_node_multipole_pivot *pivot,
         dual_node_multipole_scratch *scratch,
         dual_node_multipole_scratch *statistics,
-        bodyptr neighbor, real active_upper,
+        const fcfc_ballpoint *neighbor, real active_upper,
         real *max_unresolved_extent)
 {
+    compute_vector dr;
     real distance;
     real cosphi;
     real sinphi;
     real upper_extent;
     int radial_bin;
 
-    if (pivot->source != NULL && pivot->source == neighbor) return;
+    if (pivot->source != NULL && pivot->source == neighbor->source) return;
     if (pivot->radius > 0.0) {
         const int pair_status = dual_node_multipole_pair_status_limited(
-            context, pivot, Pos(neighbor), 0.0, active_upper,
+            context, pivot, neighbor->pos, 0.0, active_upper,
             &radial_bin, &cosphi, &sinphi, &upper_extent);
 
         statistics->pair_tests++;
@@ -2265,18 +2845,20 @@ static void dual_node_multipole_scan_body_partial(
             return;
         }
     } else {
-        if (!dual_node_polar_coordinates(
-                context, pivot->position, Pos(neighbor),
-                &distance, &cosphi, &sinphi)
+        distance = dual_node_position_distance(
+            context, pivot->position, neighbor->pos, dr);
+        if (!(distance > 0.0)
+            || !dual_node_multipole_angular_phase(
+                pivot, dr, &cosphi, &sinphi)
             || !(distance < active_upper))
             return;
         radial_bin = dual_node_bin_index(context, distance);
         if (radial_bin < 0) return;
     }
     {
-        const real field = dual_node_body_weighted_field(context, neighbor);
-        const real normalization = dual_node_body_normalization(
-            context, neighbor);
+        const real field = dual_node_point_weighted_field(context, neighbor);
+        const real normalization =
+            dual_node_point_normalization(context, neighbor);
 
         dual_node_multipole_add(
             scratch, radial_bin, field, field * field,
@@ -2292,7 +2874,8 @@ static void dual_node_multipole_scan_neighbors_partial(
         const fcfc_balltreeptr neighbor_tree, INTEGER neighbor_index,
         bool same_tree, dual_node_multipole_scratch *scratch,
         dual_node_multipole_scratch *statistics,
-        real active_upper, real *max_unresolved_extent)
+        real active_upper, real *max_unresolved_extent,
+        dual_node_neighbor_frontier *unresolved)
 {
     const fcfc_ballnode *neighbor = &neighbor_tree->nodes[neighbor_index];
     int radial_bin;
@@ -2308,6 +2891,9 @@ static void dual_node_multipole_scan_neighbors_partial(
             dual_node_multipole_mark_unresolved(
                 context, MIN(active_upper, 2.0 * pivot->radius),
                 max_unresolved_extent);
+            if (unresolved != NULL)
+                dual_node_neighbor_frontier_append(
+                    unresolved, neighbor_index);
             return;
         }
         if (dual_node_node_is_leaf(neighbor)) {
@@ -2315,7 +2901,7 @@ static void dual_node_multipole_scan_neighbors_partial(
                 if (i >= pivot->first && i <= pivot->last) continue;
                 dual_node_multipole_scan_body_partial(
                     context, pivot, scratch, statistics,
-                    neighbor_tree->bptr[i], active_upper,
+                    &neighbor_tree->packed_points[i], active_upper,
                     max_unresolved_extent);
             }
             return;
@@ -2323,11 +2909,12 @@ static void dual_node_multipole_scan_neighbors_partial(
         dual_node_multipole_scan_neighbors_partial(
             context, pivot, neighbor_tree, neighbor->left,
             same_tree, scratch, statistics,
-            active_upper, max_unresolved_extent);
+            active_upper, max_unresolved_extent, unresolved);
+        if (unresolved != NULL && unresolved->allocation_failed) return;
         dual_node_multipole_scan_neighbors_partial(
             context, pivot, neighbor_tree, neighbor->right,
             same_tree, scratch, statistics,
-            active_upper, max_unresolved_extent);
+            active_upper, max_unresolved_extent, unresolved);
         return;
     }
 
@@ -2345,6 +2932,18 @@ static void dual_node_multipole_scan_neighbors_partial(
             dual_node_node_normalization_sq_sum(context, neighbor),
             dual_node_node_count(neighbor), cosphi, sinphi);
         statistics->accepted_nodes++;
+        /* Acceptance is provisional until every neighbor has established the
+         * completed radial range. If a different node leaves this bin
+         * unresolved, the child must re-evaluate this node in its own basis. */
+        if (unresolved != NULL)
+            dual_node_neighbor_frontier_append(unresolved, neighbor_index);
+        return;
+    }
+
+    if (!pivot->can_split && pivot->radius > 0.0 && unresolved != NULL) {
+        dual_node_multipole_mark_unresolved(
+            context, upper_extent, max_unresolved_extent);
+        dual_node_neighbor_frontier_append(unresolved, neighbor_index);
         return;
     }
 
@@ -2354,16 +2953,19 @@ static void dual_node_multipole_scan_neighbors_partial(
         dual_node_multipole_scan_neighbors_partial(
             context, pivot, neighbor_tree, neighbor->left,
             same_tree, scratch, statistics,
-            active_upper, max_unresolved_extent);
+            active_upper, max_unresolved_extent, unresolved);
+        if (unresolved != NULL && unresolved->allocation_failed) return;
         dual_node_multipole_scan_neighbors_partial(
             context, pivot, neighbor_tree, neighbor->right,
             same_tree, scratch, statistics,
-            active_upper, max_unresolved_extent);
+            active_upper, max_unresolved_extent, unresolved);
         return;
     }
     if (pivot->can_split) {
         dual_node_multipole_mark_unresolved(
             context, upper_extent, max_unresolved_extent);
+        if (unresolved != NULL)
+            dual_node_neighbor_frontier_append(unresolved, neighbor_index);
         return;
     }
 
@@ -2371,30 +2973,34 @@ static void dual_node_multipole_scan_neighbors_partial(
         if (same_tree && i >= pivot->first && i <= pivot->last) continue;
         dual_node_multipole_scan_body_partial(
             context, pivot, scratch, statistics,
-            neighbor_tree->bptr[i], active_upper,
+            &neighbor_tree->packed_points[i], active_upper,
             max_unresolved_extent);
     }
 }
 
 /* Completed bins are expressed in their parent's tangent basis. Transport
  * them before mixing them with moments evaluated at a descendant pivot. */
-static void dual_node_transport_moments(dual_node_multipole_scratch *scratch,
+static void dual_node_transport_moments(
+        const dual_node_search_context *context,
+        dual_node_multipole_scratch *scratch,
+        dual_node_multipole_scratch *statistics,
         const cballs_storage_real *from, const cballs_storage_real *to)
 {
+    const double started = context->profile ? dual_node_timer_now() : 0.0;
 #if NDIM == 3
     real n0[3], a0[3], b0[3], n1[3], a1[3], b1[3], transported[3];
     if (!cballs_angular_basis(from, n0, a0, b0)
-        || !cballs_angular_basis(to, n1, a1, b1)) return;
+        || !cballs_angular_basis(to, n1, a1, b1)) goto transport_done;
     real dot, along, c, s;
     DOTVP(dot, n0, n1);
-    if (!(1.0 + dot > 32.0*DBL_EPSILON)) return;
+    if (!(1.0 + dot > 32.0*DBL_EPSILON)) goto transport_done;
     DOTVP(along, a0, n1);
     for (int k = 0; k < 3; k++)
         transported[k] = a0[k] - along*(n0[k]+n1[k])/(1.0+dot);
     DOTVP(c, transported, a1);
     DOTVP(s, transported, b1);
     const real norm = hypot(c, s);
-    if (!(norm > 0.0)) return;
+    if (!(norm > 0.0)) goto transport_done;
     c /= norm; s /= norm;
     real cm = 1.0, sm = 0.0;
     for (int m = 0; m < MAX(scratch->orders, scratch->window_orders); m++) {
@@ -2422,6 +3028,9 @@ static void dual_node_transport_moments(dual_node_multipole_scratch *scratch,
 #else
     (void)scratch; (void)from; (void)to;
 #endif
+transport_done:
+    if (context->profile)
+        statistics->pivot_transport_seconds += dual_node_timer_now() - started;
 }
 
 static int dual_node_balltree_depth(
@@ -2440,18 +3049,20 @@ static int dual_node_balltree_depth(
  * each child then inherits the completed work, as in dual-node's LogMultipole
  * traversal.
  */
-static void dual_node_multipole_process_pivots_partial(
+static int dual_node_multipole_process_pivots_partial(
         const dual_node_search_context *context,
         const fcfc_balltreeptr pivot_tree, INTEGER pivot_node_index,
         const fcfc_balltreeptr neighbor_tree, bool same_tree,
         dual_node_multipole_scratch *scratch,
         dual_node_multipole_scratch *statistics,
         real *scratch_levels, size_t scratch_values_per_level,
-        int depth,
+        int depth, const INTEGER *parent_nodes, INTEGER parent_count,
+        dual_node_neighbor_frontier *frontier_levels,
         real active_upper, int radial_bin_limit,
         dual_node_triple_histogram *hist)
 {
     const fcfc_ballnode *pivot_node = &pivot_tree->nodes[pivot_node_index];
+    dual_node_neighbor_frontier *frontier = &frontier_levels[depth];
     dual_node_multipole_pivot pivot;
     real max_unresolved_extent = 0.0;
     int unresolved_bin;
@@ -2465,23 +3076,31 @@ static void dual_node_multipole_process_pivots_partial(
     pivot.first = pivot_node->first;
     pivot.last = pivot_node->last;
     pivot.can_split = !dual_node_node_is_leaf(pivot_node);
+    dual_node_multipole_initialize_pivot_geometry(&pivot);
 
-    dual_node_multipole_scan_neighbors_partial(
-        context, &pivot, neighbor_tree, 0, same_tree,
-        scratch, statistics, active_upper, &max_unresolved_extent);
+    frontier->count = 0;
+    frontier->allocation_failed = FALSE;
+    for (INTEGER i = 0; i < parent_count; i++) {
+        dual_node_multipole_scan_neighbors_partial(
+            context, &pivot, neighbor_tree, parent_nodes[i], same_tree,
+            scratch, statistics, active_upper, &max_unresolved_extent,
+            frontier);
+        if (frontier->allocation_failed) return FAILURE;
+    }
     unresolved_bin = dual_node_unresolved_radial_bin(
         context, max_unresolved_extent, radial_bin_limit);
 
     if (unresolved_bin + 1 < radial_bin_limit) {
-        dual_node_multipole_finish_pivot_range(
-            hist, &pivot, scratch, unresolved_bin + 1,
+        dual_node_multipole_finish_pivot_range_profiled(
+            context, hist, &pivot, scratch, statistics, unresolved_bin + 1,
             radial_bin_limit, context->cmd->sizeHistN);
         statistics->pivot_finishes++;
     }
-    if (unresolved_bin == 0) return;
+    if (unresolved_bin == 0) return SUCCESS;
 
     statistics->pivot_restarts++;
-    dual_node_multipole_clear_radial_through(scratch, unresolved_bin);
+    dual_node_multipole_clear_radial_through(
+        context, scratch, statistics, unresolved_bin);
     active_upper = dual_node_radial_upper_edge(context, unresolved_bin);
     radial_bin_limit = unresolved_bin + 1;
 
@@ -2497,20 +3116,24 @@ static void dual_node_multipole_process_pivots_partial(
                 &child_scratch, child_base, scratch->stride,
                 scratch->orders, scratch->window_orders, scratch_values_per_level);
             dual_node_multipole_copy_values(&child_scratch, scratch);
-            dual_node_transport_moments(&child_scratch, pivot.position,
+            dual_node_transport_moments(
+                context, &child_scratch, statistics, pivot.position,
                 pivot_tree->nodes[children[child_index]].center);
-            dual_node_multipole_process_pivots_partial(
+            if (dual_node_multipole_process_pivots_partial(
                 context, pivot_tree, children[child_index],
                 neighbor_tree, same_tree, &child_scratch, statistics,
                 scratch_levels, scratch_values_per_level,
-                depth + 1,
-                active_upper, radial_bin_limit, hist);
+                depth + 1, frontier->nodes, frontier->count,
+                frontier_levels, active_upper, radial_bin_limit, hist)
+                    == FAILURE)
+                return FAILURE;
         }
     } else {
         for (INTEGER i = pivot_node->first; i <= pivot_node->last; i++) {
             dual_node_multipole_scratch body_scratch;
             dual_node_multipole_pivot body_pivot;
-            bodyptr pivot_body = pivot_tree->bptr[i];
+            const fcfc_ballpoint *pivot_point =
+                &pivot_tree->packed_points[i];
             real body_unresolved_extent = 0.0;
             real *body_base = scratch_levels
                 + (size_t)(depth + 1) * scratch_values_per_level;
@@ -2519,27 +3142,34 @@ static void dual_node_multipole_process_pivots_partial(
                 &body_scratch, body_base, scratch->stride,
                 scratch->orders, scratch->window_orders, scratch_values_per_level);
             dual_node_multipole_copy_values(&body_scratch, scratch);
-            dual_node_transport_moments(&body_scratch, pivot.position, Pos(pivot_body));
-            body_pivot.position = Pos(pivot_body);
-            body_pivot.source = pivot_body;
+            dual_node_transport_moments(
+                context, &body_scratch, statistics,
+                pivot.position, pivot_point->pos);
+            body_pivot.position = pivot_point->pos;
+            body_pivot.source = pivot_point->source;
             body_pivot.radius = 0.0;
-            body_pivot.field_sum = DUAL_NODE_PIVOT_FIELD(
-                context, pivot_body);
-            body_pivot.normalization_sum = DUAL_NODE_PIVOT_NORMALIZATION(
-                context, pivot_body);
+            body_pivot.field_sum =
+                dual_node_point_weighted_field(context, pivot_point);
+            body_pivot.normalization_sum =
+                dual_node_point_normalization(context, pivot_point);
             body_pivot.first = i;
             body_pivot.last = i;
             body_pivot.can_split = FALSE;
-            dual_node_multipole_scan_neighbors_partial(
-                context, &body_pivot, neighbor_tree, 0, same_tree,
-                &body_scratch, statistics, active_upper,
-                &body_unresolved_extent);
-            dual_node_multipole_finish_pivot_range(
-                hist, &body_pivot, &body_scratch,
+            dual_node_multipole_initialize_pivot_geometry(&body_pivot);
+            for (INTEGER candidate = 0;
+                 candidate < frontier->count; candidate++)
+                dual_node_multipole_scan_neighbors_partial(
+                    context, &body_pivot, neighbor_tree,
+                    frontier->nodes[candidate], same_tree,
+                    &body_scratch, statistics, active_upper,
+                    &body_unresolved_extent, NULL);
+            dual_node_multipole_finish_pivot_range_profiled(
+                context, hist, &body_pivot, &body_scratch, statistics,
                 1, radial_bin_limit, context->cmd->sizeHistN);
             statistics->pivot_finishes++;
         }
     }
+    return SUCCESS;
 }
 
 static int dual_node_allocate_multipole_scratch(
@@ -2613,7 +3243,43 @@ static void dual_node_initialize_multipole_scratch(
     scratch->pair_tests = 0;
     scratch->pivot_restarts = 0;
     scratch->pivot_finishes = 0;
+    scratch->pivot_transport_seconds = 0.0;
+    scratch->scratch_clear_seconds = 0.0;
+    scratch->multipole_product_seconds = 0.0;
 }
+
+#ifdef DUAL_NODE_ADAPTIVE_PAIR_LEAVES
+static int dual_node_adaptive_pair_leaf_capacity(
+        const struct cmdline_data *cmd, const INTEGER *nbody,
+        int cat1, int cat2)
+{
+    const real catalog_size = (real)MAX(nbody[cat1], nbody[cat2]);
+    const real expected_neighbors = MAX(
+        1.0, 0.25 * catalog_size * rsqr(cmd->rangeN));
+    real relative_bin_width;
+    real target;
+
+    if (cmd->useLogHist && cmd->rminHist > 0.0)
+        relative_bin_width = rlog(cmd->rangeN / cmd->rminHist)
+                           / (real)cmd->sizeHistN;
+    else
+        relative_bin_width = (cmd->rangeN - cmd->rminHist)
+                           / ((real)cmd->sizeHistN * cmd->rangeN);
+
+    /* Calibrated against exact pair histograms: denser catalogs and narrower
+     * bins need smaller terminal cells; a larger slop budget permits more
+     * bodies per leaf.  Small catalogs rarely accept enough cell pairs to
+     * repay the extra build and traversal nodes of four-body leaves. Powers
+     * of two keep the tree shape deterministic. */
+    target = 16.0 / rsqrt(expected_neighbors)
+           * rsqrt(MAX(relative_bin_width, 1.0e-6) / 0.35)
+           * rsqrt(MAX(0.125, cmd->theta));
+    if (target < 6.0)
+        return catalog_size >= (real)262144.0 ? 4 : 8;
+    if (target < 12.0) return 8;
+    return 16;
+}
+#endif
 
 static int dual_node_search_log_multipole(
         struct cmdline_data *cmd, struct global_data *gd,
@@ -2636,9 +3302,27 @@ static int dual_node_search_log_multipole(
     const INTEGER target_tasks = run_3pcf
         ? dual_node_task_target(cmd, stride, orders)
         : dual_node_pair_frontier_target(cmd);
-    const int leaf_capacity = scanopt(cmd->options, "dual-node-singleton-leaves")
-        ? 1 : cmd->nsmooth;
-    dual_node_search_context context;
+    int leaf_capacity =
+        scanopt(cmd->options, "dual-node-singleton-leaves") ? 1 : cmd->nsmooth;
+#ifdef DUAL_NODE_SCALAR_TREE_CACHE
+    const bool use_tree_cache = auto_correlation
+        && (run_2pcf || run_3pcf)
+        && !scanopt(cmd->options, "no-balltree-tree-cache");
+    bool tree_cache_hit = FALSE;
+#endif
+#ifdef DUAL_NODE_ADAPTIVE_PAIR_LEAVES
+    if (!run_3pcf
+        && !scanopt(cmd->options, "dual-node-singleton-leaves")
+        && !scanopt(cmd->options, "dual-node-bucket-leaves"))
+        leaf_capacity = dual_node_adaptive_pair_leaf_capacity(
+            cmd, nbody, cat1, cat2);
+#elif defined(DUAL_NODE_PAIR_LEAF_CAPACITY)
+    if (!run_3pcf
+        && !scanopt(cmd->options, "dual-node-singleton-leaves")
+        && !scanopt(cmd->options, "dual-node-bucket-leaves"))
+        leaf_capacity = DUAL_NODE_PAIR_LEAF_CAPACITY;
+#endif
+    dual_node_search_context context = {0};
     fcfc_balltreeptr tree1 = NULL;
     fcfc_balltreeptr tree2 = NULL;
     INTEGER *frontier = NULL;
@@ -2658,11 +3342,21 @@ static int dual_node_search_log_multipole(
     INTEGER pair_test_total = 0;
     INTEGER pivot_restart_total = 0;
     INTEGER pivot_finish_total = 0;
+    INTEGER frontier_failure_total = 0;
     INTEGER distributed_statistics[3] = {0, 0, 0};
+    real distributed_profile_statistics[3] = {0.0, 0.0, 0.0};
+    double pivot_transport_total = 0.0;
+    double scratch_clear_total = 0.0;
+    double multipole_product_total = 0.0;
+    dual_node_phase_timers phase_timers = {0};
+    double phase_started = 0.0;
     int operation_status;
     int reduction_status = SUCCESS;
     int status = FAILURE;
     const double cpustart = CPUTIME;
+
+    gd->cpu_edge_correction = 0.0;
+    gd->wall_edge_correction = 0.0;
 
     if (only_2pcf && only_3pcf) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -2687,6 +3381,9 @@ static int dual_node_search_log_multipole(
                  "%s requires nsmooth > 0", DUAL_NODE_METHOD_NAME);
         return FAILURE;
     }
+
+    context.profile = scanopt(cmd->options, "dual-node-profile");
+    context.timers = &phase_timers;
 
     verb_print(cmd->verbose, "Search: Running %s", cmd->searchMethod);
 #ifdef TWOPCF
@@ -2717,7 +3414,7 @@ static int dual_node_search_log_multipole(
                "native-octree binary view with exact body pivots\n");
 #else
     verb_print(cmd->verbose,
-               "ball-tree leaf capacity = %d\n", leaf_capacity);
+               "dual-node tree leaf capacity = %d\n", leaf_capacity);
 #endif
 #ifdef DUAL_NODE_SCAN_LEVEL_FRONTIER
     verb_print(cmd->verbose,
@@ -2730,6 +3427,8 @@ static int dual_node_search_log_multipole(
                       ? "normalized by distinct-triplet weight sum"
                       : "normalized by distinct-triplet count")
                    : "raw distinct-triplet sums");
+    if (context.profile)
+        verb_print(cmd->verbose, "native dual-node phase timing enabled\n");
 
 #ifdef OPENMPCODE
     ThreadCount(cmd, gd, nbody[cat1], cat1);
@@ -2746,6 +3445,14 @@ static int dual_node_search_log_multipole(
             cmd, operation_status,
             "two-ball histogram initialization") == FAILURE)
         goto cleanup;
+    if (context.profile) phase_started = dual_node_timer_now();
+#ifdef DUAL_NODE_SCALAR_TREE_CACHE
+    if (use_tree_cache)
+        operation_status = fcfc_balltree_build_scalar_role_cached(
+            cmd, gd, btab[cat1], nbody[cat1], leaf_capacity,
+            TRUE, &tree1, &tree_cache_hit);
+    else
+#endif
     operation_status = DUAL_NODE_BUILD_PIVOT_TREE(
         cmd, gd, btab[cat1], nbody[cat1], leaf_capacity, &tree1);
     if (dual_node_distributed_consensus(
@@ -2764,15 +3471,24 @@ static int dual_node_search_log_multipole(
             goto cleanup;
         DUAL_NODE_PUBLISH_NODE_COUNT(gd, cat2, tree2->nnode);
     }
+    if (context.profile)
+        phase_timers.build += dual_node_timer_now() - phase_started;
+#ifdef DUAL_NODE_SCALAR_TREE_CACHE
+    if (use_tree_cache)
+        verb_print(cmd->verbose,
+                   "%s: compact-tree cache = %s\n",
+                   DUAL_NODE_METHOD_NAME,
+                   tree_cache_hit ? "hit" : "miss");
+#endif
 
-    context.cmd = cmd;
-    context.gd = gd;
+    dual_node_initialize_radial_context(&context, cmd, gd);
     context.use_two_balls = !cballs_opt_no_two_balls(cmd);
     context.use_bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
     context.use_three_cells = context.use_two_balls;
     context.weighted = DUAL_NODE_CONTEXT_WEIGHTED(cmd);
     dual_node_initialize_angular_tolerance(&context);
 
+    if (context.profile) phase_started = dual_node_timer_now();
     operation_status = fcfc_balltree_frontier(
         cmd, tree1, target_tasks, &frontier, &task_count);
     if (dual_node_distributed_consensus(
@@ -2793,6 +3509,8 @@ static int dual_node_search_log_multipole(
             goto cleanup;
 #endif
     }
+    if (context.profile)
+        phase_timers.frontier += dual_node_timer_now() - phase_started;
 
 #ifdef TWOPCF
     if (run_2pcf
@@ -2804,7 +3522,9 @@ static int dual_node_search_log_multipole(
 #endif
 
     if (run_3pcf) {
-#ifdef DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE
+#ifdef DUAL_NODE_PERSISTENT_PARTIAL_FRONTIER
+    scratch_level_count = dual_node_balltree_depth(tree1, 0) + 1;
+#elif defined(DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE)
     scratch_level_count = 1;
 #else
     scratch_level_count = dual_node_balltree_depth(tree1, 0) + 1;
@@ -2826,8 +3546,9 @@ static int dual_node_search_log_multipole(
             "two-ball multipole scratch allocation") == FAILURE)
         goto cleanup;
 
+    if (context.profile) phase_started = dual_node_timer_now();
 #pragma omp parallel for schedule(dynamic,1) \
-    reduction(+:pair_test_total,pivot_restart_total,pivot_finish_total)
+    reduction(+:pair_test_total,pivot_restart_total,pivot_finish_total,frontier_failure_total,pivot_transport_total,scratch_clear_total,multipole_product_total)
     for (INTEGER itask = 0; itask < task_count; itask++) {
         real *hist_base = task_histograms
                         + (size_t)itask * hist_values_per_task;
@@ -2843,13 +3564,66 @@ static int dual_node_search_log_multipole(
         dual_node_initialize_multipole_scratch(
             &scratch, scratch_base, stride, orders,
             dual_node_window_orders(cmd), scratch_values_per_level);
-#ifdef DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE
+#ifdef DUAL_NODE_PERSISTENT_PARTIAL_FRONTIER
+        if (context.use_two_balls) {
+            const INTEGER neighbor_root = 0;
+            dual_node_neighbor_frontier *levels = calloc(
+                (size_t)tree1->max_depth + 1, sizeof(*levels));
+
+            if (levels == NULL) {
+                frontier_failure_total++;
+            } else {
+                dual_node_multipole_clear_profiled(&context, &scratch);
+                if (dual_node_multipole_process_pivots_partial(
+                        &context, tree1, frontier[itask], tree2,
+                        auto_correlation, &scratch, &scratch,
+                        scratch_base, scratch_values_per_level,
+                        0, &neighbor_root, 1, levels, cmd->rangeN,
+                        cmd->sizeHistN + 1, &hist) == FAILURE)
+                    frontier_failure_total++;
+                for (int level = 0; level <= tree1->max_depth; level++)
+                    free(levels[level].nodes);
+                free(levels);
+            }
+        } else {
+            dual_node_multipole_process_body_pivots(
+                &context, tree1, frontier[itask], tree2,
+                auto_correlation, &scratch, &hist);
+        }
+#elif defined(DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE)
+#ifdef DUAL_NODE_PERSISTENT_NEIGHBOR_FRONTIER
+        if (context.use_two_balls
+            && !scanopt(cmd->options, "no-balltree-persistent-frontier")) {
+            const INTEGER neighbor_root = 0;
+            dual_node_neighbor_frontier *levels = calloc(
+                (size_t)tree1->max_depth + 1, sizeof(*levels));
+
+            if (levels != NULL) {
+                dual_node_multipole_process_body_pivots_frontier(
+                    &context, tree1, frontier[itask], tree2,
+                    auto_correlation, &neighbor_root, 1,
+                    levels, 0, &scratch, &hist);
+                for (int level = 0; level <= tree1->max_depth; level++)
+                    free(levels[level].nodes);
+                free(levels);
+            } else {
+                dual_node_multipole_process_body_pivots(
+                    &context, tree1, frontier[itask], tree2,
+                    auto_correlation, &scratch, &hist);
+            }
+        } else {
+            dual_node_multipole_process_body_pivots(
+                &context, tree1, frontier[itask], tree2,
+                auto_correlation, &scratch, &hist);
+        }
+#else
         dual_node_multipole_process_body_pivots(
             &context, tree1, frontier[itask], tree2,
             auto_correlation, &scratch, &hist);
+#endif
 #else
         if (context.use_two_balls) {
-            dual_node_multipole_clear(&scratch);
+            dual_node_multipole_clear_profiled(&context, &scratch);
             dual_node_multipole_process_pivots_partial(
                 &context, tree1, frontier[itask], tree2,
                 auto_correlation, &scratch, &scratch,
@@ -2865,13 +3639,32 @@ static int dual_node_search_log_multipole(
         pair_test_total += scratch.pair_tests;
         pivot_restart_total += scratch.pivot_restarts;
         pivot_finish_total += scratch.pivot_finishes;
+        pivot_transport_total += scratch.pivot_transport_seconds;
+        scratch_clear_total += scratch.scratch_clear_seconds;
+        multipole_product_total += scratch.multipole_product_seconds;
         task_body_counts[itask] = scratch.body_visits;
         task_cell_counts[itask] = scratch.accepted_nodes;
     }
+    if (context.profile)
+        phase_timers.pair_traversal += dual_node_timer_now() - phase_started;
+
+    operation_status = frontier_failure_total == 0 ? SUCCESS : FAILURE;
+    if (operation_status == FAILURE)
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: persistent neighbor-frontier allocation failed",
+                 DUAL_NODE_METHOD_NAME);
+    if (dual_node_distributed_consensus(
+            cmd, operation_status,
+            "two-ball persistent neighbor-frontier traversal") == FAILURE)
+        goto cleanup;
 
     distributed_statistics[0] = pair_test_total;
     distributed_statistics[1] = pivot_restart_total;
     distributed_statistics[2] = pivot_finish_total;
+    distributed_profile_statistics[0] = (real)pivot_transport_total;
+    distributed_profile_statistics[1] = (real)scratch_clear_total;
+    distributed_profile_statistics[2] = (real)multipole_product_total;
+    if (context.profile) phase_started = dual_node_timer_now();
     if (dual_node_distributed_reduce_reals(
             cmd, task_histograms,
             (size_t)task_count * hist_values_per_task) == FAILURE)
@@ -2885,6 +3678,10 @@ static int dual_node_search_log_multipole(
     if (dual_node_distributed_reduce_integers(
             cmd, distributed_statistics, 3) == FAILURE)
         reduction_status = FAILURE;
+    if (context.profile
+        && dual_node_distributed_reduce_reals(
+            cmd, distributed_profile_statistics, 3) == FAILURE)
+        reduction_status = FAILURE;
     if (dual_node_distributed_consensus(
             cmd, reduction_status,
             "two-ball multipole reduction") == FAILURE)
@@ -2894,6 +3691,14 @@ static int dual_node_search_log_multipole(
     pair_test_total = distributed_statistics[0];
     pivot_restart_total = distributed_statistics[1];
     pivot_finish_total = distributed_statistics[2];
+    if (context.profile) {
+        phase_timers.pivot_transport_thread =
+            (double)distributed_profile_statistics[0];
+        phase_timers.scratch_clear_thread =
+            (double)distributed_profile_statistics[1];
+        phase_timers.multipole_products_thread =
+            (double)distributed_profile_statistics[2];
+    }
     for (INTEGER itask = 0; itask < task_count; itask++) {
         const real *base = task_histograms
                          + (size_t)itask * hist_values_per_task;
@@ -2962,6 +3767,8 @@ static int dual_node_search_log_multipole(
     }
     }
     }
+    if (context.profile && run_3pcf)
+        phase_timers.reduction += dual_node_timer_now() - phase_started;
 
     gd->cpusearch = CPUTIME - cpustart;
 #ifdef TWOPCF
@@ -2985,6 +3792,18 @@ static int dual_node_search_log_multipole(
                    cmd->searchMethod, pair_test_total,
                    pivot_restart_total, pivot_finish_total);
     }
+    if (context.profile && dual_node_distributed_publish())
+        verb_print(TRUE,
+                   "%s phase-timers: build_wall=%.9g, frontier_wall=%.9g, "
+                   "pair_traversal_wall=%.9g, pivot_transport_thread=%.9g, "
+                   "scratch_clear_thread=%.9g, multipole_products_thread=%.9g, "
+                   "reduction_wall=%.9g\n",
+                   DUAL_NODE_METHOD_NAME, phase_timers.build,
+                   phase_timers.frontier, phase_timers.pair_traversal,
+                   phase_timers.pivot_transport_thread,
+                   phase_timers.scratch_clear_thread,
+                   phase_timers.multipole_products_thread,
+                   phase_timers.reduction);
     verb_print(cmd->verbose, "Going out: CPU time = %lf\n", gd->cpusearch);
     status = SUCCESS;
 
@@ -2995,8 +3814,8 @@ cleanup:
     free(task_histograms);
     if (!auto_correlation) free(pair_frontier2);
     free(frontier);
-    if (tree2 != tree1) fcfc_balltree_free(tree2);
-    fcfc_balltree_free(tree1);
+    if (tree2 != tree1) DUAL_NODE_RELEASE_TREE(tree2);
+    DUAL_NODE_RELEASE_TREE(tree1);
     return status;
 }
 #endif /* THREEPCFCONVERGENCE */
@@ -3089,6 +3908,7 @@ static int dual_node_run_pair_tasks(
     int allocation_status;
     int reduction_status = SUCCESS;
     int status = FAILURE;
+    double phase_started = 0.0;
 
     if (tree1 == NULL || tree2 == NULL
         || tree1->packed_points == NULL || tree2->packed_points == NULL) {
@@ -3106,6 +3926,7 @@ static int dual_node_run_pair_tasks(
             "two-ball pair-task allocation") == FAILURE)
         goto cleanup;
 
+    if (context->profile) phase_started = dual_node_timer_now();
 #pragma omp parallel for schedule(dynamic,1)
     for (INTEGER itask = 0; itask < frontier_count1; itask++) {
         real *base = task_histograms + (size_t)itask * 3 * stride;
@@ -3136,7 +3957,11 @@ static int dual_node_run_pair_tasks(
         task_body_counts[itask] = hist.body_pairs;
         task_cell_counts[itask] = hist.cell_pairs;
     }
+    if (context->profile)
+        context->timers->pair_traversal +=
+            dual_node_timer_now() - phase_started;
 
+    if (context->profile) phase_started = dual_node_timer_now();
     if (dual_node_distributed_reduce_reals(
             cmd, task_histograms,
             (size_t)frontier_count1 * 3 * stride) == FAILURE)
@@ -3152,6 +3977,9 @@ static int dual_node_run_pair_tasks(
             "two-ball pair-task reduction") == FAILURE)
         goto cleanup;
     if (!dual_node_distributed_publish()) {
+        if (context->profile)
+            context->timers->reduction +=
+                dual_node_timer_now() - phase_started;
         status = SUCCESS;
         goto cleanup;
     }
@@ -3195,6 +4023,8 @@ static int dual_node_run_pair_tasks(
         if (search_compute_HistN(cmd, gd, (int)tree1->npoint) == FAILURE)
             goto cleanup;
     }
+    if (context->profile)
+        context->timers->reduction += dual_node_timer_now() - phase_started;
     status = SUCCESS;
 
 cleanup:
@@ -3229,7 +4059,7 @@ global int searchcalc_balltree_2balls_omp(
     const bool run_3pcf = FALSE;
 #endif
     const size_t stride = (size_t)cmd->sizeHistN + 1;
-    dual_node_search_context context;
+    dual_node_search_context context = {0};
     fcfc_balltreeptr tree1 = NULL;
     fcfc_balltreeptr tree2 = NULL;
     INTEGER *frontier1 = NULL;
@@ -3252,6 +4082,9 @@ global int searchcalc_balltree_2balls_omp(
     int operation_status;
     int status = FAILURE;
     const double cpustart = CPUTIME;
+
+    gd->cpu_edge_correction = 0.0;
+    gd->wall_edge_correction = 0.0;
 
 #if !defined(TWOPCF) && !defined(THREEPCFCONVERGENCE)
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -3377,8 +4210,7 @@ global int searchcalc_balltree_2balls_omp(
             goto cleanup;
     }
 
-    context.cmd = cmd;
-    context.gd = gd;
+    dual_node_initialize_radial_context(&context, cmd, gd);
     context.use_two_balls = !cballs_opt_no_two_balls(cmd);
     context.use_bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
     context.use_three_cells = !cballs_opt_no_two_balls(cmd);
@@ -3576,8 +4408,8 @@ cleanup:
 #endif
     if (!auto_correlation) free(frontier2);
     free(frontier1);
-    if (tree2 != tree1) fcfc_balltree_free(tree2);
-    fcfc_balltree_free(tree1);
+    if (tree2 != tree1) DUAL_NODE_RELEASE_TREE(tree2);
+    DUAL_NODE_RELEASE_TREE(tree1);
     return status;
 }
 #endif /* !DUAL_NODE_TASK_FRONTIER_ENGINE */
@@ -3609,7 +4441,7 @@ global int searchcalc_balltree_2balls_omp(
     const INTEGER target_tasks = dual_node_task_target(cmd, stride, triple_orders);
     const int leaf_capacity = scanopt(cmd->options, "dual-node-bucket-leaves")
         ? cmd->nsmooth : 1;
-    dual_node_search_context context;
+    dual_node_search_context context = {0};
     fcfc_balltreeptr tree1 = NULL;
     fcfc_balltreeptr tree2 = NULL;
     dual_node_triple_task *tasks = NULL;
@@ -3628,6 +4460,9 @@ global int searchcalc_balltree_2balls_omp(
     int reduction_status = SUCCESS;
     int status = FAILURE;
     const double cpustart = CPUTIME;
+
+    gd->cpu_edge_correction = 0.0;
+    gd->wall_edge_correction = 0.0;
 
     if (only_2pcf && only_3pcf) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -3716,8 +4551,7 @@ global int searchcalc_balltree_2balls_omp(
         DUAL_NODE_PUBLISH_NODE_COUNT(gd, cat2, tree2->nnode);
     }
 
-    context.cmd = cmd;
-    context.gd = gd;
+    dual_node_initialize_radial_context(&context, cmd, gd);
     context.use_two_balls = !cballs_opt_no_two_balls(cmd);
     context.use_bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
     context.use_three_cells = !cballs_opt_no_two_balls(cmd);
@@ -3900,8 +4734,8 @@ cleanup:
     free(tasks);
     if (!auto_correlation) free(pair_frontier2);
     free(pair_frontier1);
-    if (tree2 != tree1) fcfc_balltree_free(tree2);
-    fcfc_balltree_free(tree1);
+    if (tree2 != tree1) DUAL_NODE_RELEASE_TREE(tree2);
+    DUAL_NODE_RELEASE_TREE(tree1);
     return status;
 #else
     (void)gd;
@@ -3926,52 +4760,6 @@ global int BALLTREE_2BALLS_SEARCH_FUNCTION(
         bodyptr *btab, INTEGER *nbody, INTEGER ipmin, INTEGER *ipmax,
         int cat1, int cat2)
 {
-#ifdef DUAL_NODE_DISTRIBUTED_ENGINE
-    if (cballs_opt_legacy_one_ball(cmd)) {
-#ifdef BALLTREE_2BALLS_LEGACY_FUNCTION
-        if (cballs_opt_no_two_balls(cmd)
-            || scanopt(cmd->options, "dual-node-bin-slop")
-            || scanopt(cmd->options, "dual-node-direct-triples")) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s: legacy-one-ball cannot be combined with "
-                     "no-two-balls, dual-node-bin-slop, or "
-                     "dual-node-direct-triples",
-                     cmd->searchMethod);
-            return FAILURE;
-        }
-        verb_print(cmd->verbose,
-                   "%s: dispatching to the distributed balltree legacy "
-                   "kernel\n",
-                   cmd->searchMethod);
-        return BALLTREE_2BALLS_LEGACY_FUNCTION(
-            cmd, gd, btab, nbody, ipmin, ipmax, cat1, cat2);
-#else
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "%s does not support legacy-one-ball; use "
-                 "search=balltree-mpi for the distributed legacy kernel",
-                 cmd->searchMethod);
-        return FAILURE;
-#endif
-    }
-#else
-    if (cballs_opt_legacy_one_ball(cmd)) {
-        if (cballs_opt_no_two_balls(cmd)
-            || scanopt(cmd->options, "dual-node-bin-slop")
-            || scanopt(cmd->options, "dual-node-direct-triples")) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s: legacy-one-ball cannot be combined with "
-                     "no-two-balls, dual-node-bin-slop, or "
-                     "dual-node-direct-triples",
-                     cmd->searchMethod);
-            return FAILURE;
-        }
-        verb_print(cmd->verbose,
-                   "%s: dispatching to the balltree-omp legacy kernel\n",
-                   cmd->searchMethod);
-        return BALLTREE_2BALLS_LEGACY_FUNCTION(
-            cmd, gd, btab, nbody, ipmin, ipmax, cat1, cat2);
-    }
-#endif
 #ifdef SMOOTHPIVOT
     if (cballs_opt_smooth_pivot(cmd)
         && scanopt(cmd->options, "dual-node-direct-triples")) {

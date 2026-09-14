@@ -118,11 +118,6 @@ Compute complex scalar or shear 3PCF window correction. This requires 3PCF.
 .TP
 .B weights-norm
 Use catalog weights in signal and normalization moments.
-.TP
-.B legacy-one-ball
-Dispatch a supported active two-ball method to its privately linked
-compatibility kernel. The old public names are disabled in the maintained
-profile.
 .SH PYTHON
 The compiled extension is imported as
 .BR cyballs .

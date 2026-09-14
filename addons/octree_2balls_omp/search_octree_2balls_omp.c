@@ -11,6 +11,8 @@
 #define fcfc_balltree_frontier octree_2balls_tree_frontier
 #define fcfc_balltree_free octree_2balls_tree_free
 #define searchcalc_balltree_2balls_omp searchcalc_octree_2balls_full_omp
+#define DUAL_NODE_USE_NATURAL_LOG_BINS 1
+#define DUAL_NODE_PERSISTENT_NEIGHBOR_FRONTIER 1
 #ifdef BALLS4SCANLEV
 #define DUAL_NODE_SCAN_LEVEL_FRONTIER 1
 #endif
@@ -33,14 +35,6 @@ global int searchcalc_octree_2balls_omp(
     const cballs_native_pair_policy policy = {
         FALSE, FALSE, FALSE, FALSE, NULL
     };
-
-    if (cballs_opt_legacy_one_ball(cmd)) {
-        verb_print(cmd->verbose,
-                   "octree-2balls-omp: dispatching to the octree-GGG "
-                   "compatibility kernel\n");
-        return searchcalc_octree_ggg_omp(
-            cmd, gd, btab, nbody, ipmin, ipmax, cat1, cat2);
-    }
 
 #ifdef THREEPCFCONVERGENCE
     if (!cballs_opt_only_2pcf(cmd))

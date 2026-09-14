@@ -89,26 +89,6 @@ for mode in both only-2pcf only-3pcf; do
         || fail_with_log "MPI $mode differs from OpenMP" "$TMP_ROOT/mpi-$mode/run.log"
 done
 
-legacy=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot
-run_case legacy-omp kdtree-2balls-omp 1 1 \
-    "$legacy,legacy-one-ball"
-run_case legacy-mpi kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" \
-    "$legacy,legacy-one-ball"
-compare_numeric "$TMP_ROOT/legacy-omp" "$TMP_ROOT/legacy-mpi" \
-    || fail_with_log "distributed legacy mode differs from OpenMP compatibility" \
-                     "$TMP_ROOT/legacy-mpi/run.log"
-grep -q 'dispatching to the distributed kdtree legacy kernel' \
-    "$TMP_ROOT/legacy-mpi/run.log" \
-    || fail_with_log "legacy-one-ball did not use the distributed legacy kernel" \
-                     "$TMP_ROOT/legacy-mpi/run.log"
-if grep -q -- '-DKDTREEMPI\([[:space:]]\|$\)' <<<"$build_env"; then
-    run_case legacy-reference kdtree-mpi "$MPI_RANKS" "$MPI_THREADS" \
-        "$legacy"
-    compare_numeric "$TMP_ROOT/legacy-reference" "$TMP_ROOT/legacy-mpi" \
-        || fail_with_log "distributed legacy mode differs from kdtree-mpi" \
-                         "$TMP_ROOT/legacy-mpi/run.log"
-fi
-
 direct=KKKCorrelation,compute-HistN,out-m-HistZeta,only-3pcf,no-two-balls,no-smooth-pivot,dual-node-direct-triples
 run_case direct-omp kdtree-2balls-omp 1 1 "$direct" 24
 run_case direct-mpi kdtree-2balls-mpi "$MPI_RANKS" "$MPI_THREADS" "$direct" 24
@@ -149,4 +129,4 @@ if grep -q -- '-DSMOOTHPIVOT\([[:space:]]\|$\)' <<<"$build_env"; then
                          "$TMP_ROOT/mpi-smooth/run.log"
 fi
 
-echo "PASS: KDTREE2BALLSMPI modes, legacy dispatch, direct triples, smoothing, reductions, and repeatability"
+echo "PASS: KDTREE2BALLSMPI modes, direct triples, smoothing, reductions, and repeatability"

@@ -1383,8 +1383,8 @@ local void cb3d_init_ylm_recurrence(cb3d_histptr h)
 }
 
 /* Cartesian normalized spherical harmonics for m>=0. Accumulate directly into
- * the selected radial shell, as octree-GGG does with its recurrence-backed
- * thread histograms. This removes two maximum-lmax temporary arrays and the
+ * the selected radial shell using recurrence-backed per-thread histograms.
+ * This removes two maximum-lmax temporary arrays and the
  * second pass over all modes for every accepted neighbor. */
 local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int radial_bin,
                                          REAL field, double xhat,

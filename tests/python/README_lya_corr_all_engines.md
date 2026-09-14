@@ -11,6 +11,11 @@ List the methods compiled into the current extension:
 python3 tests/python/lya_corr_all_engines.py --list-engines
 ```
 
+The driver intersects that extension inventory with the executable's
+`print-search-methods` output. It also records `print-options` and `make-info`
+in `summary.json["ctreeballs_runtime"]`, including the full command output and
+parsed build settings.
+
 ## Input
 
 NPZ catalogs contain `positions`, `delta`, `weights`, and integer

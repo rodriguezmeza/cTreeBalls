@@ -13,7 +13,7 @@
 #include "globaldefs.h"
 
 #include "kdtree.h"
-#include "../kdtree_omp/kdtree_scan_frontier.h"
+#include "kdtree_scan_frontier.h"
 
 //B Some macros and definitions
 #define KD_COORD_DELTA(a, b) ((real)(a) - (real)(b))

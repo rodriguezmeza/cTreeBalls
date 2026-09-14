@@ -8,6 +8,15 @@
 
 #include <complex.h>
 
+static inline double dual_node_edge_timer_now(void)
+{
+#ifdef OPENMPCODE
+    return omp_get_wtime();
+#else
+    return CPUTIME;
+#endif
+}
+
 static bool dual_node_triple_values(size_t stride, int orders, int window_orders,
                                    size_t *values)
 {
@@ -107,7 +116,9 @@ static int dual_node_publish_edge(
     size_t window_values;
     real *window = NULL;
     double complex *matrix = NULL, *rhs = NULL;
+    double solve_cpu_started = 0.0, solve_wall_started = 0.0;
     int singular = 0, empty = 0;
+    int solve_timing_active = FALSE;
     int status = FAILURE;
 
     if (!cballs_opt_edge_corrections(cmd)) return SUCCESS;
@@ -149,6 +160,9 @@ static int dual_node_publish_edge(
         }
     }
 
+    solve_cpu_started = CPUTIME;
+    solve_wall_started = dual_node_edge_timer_now();
+    solve_timing_active = TRUE;
     for (int i = 1; i <= cmd->sizeHistN; i++) {
         for (int j = 1; j <= cmd->sizeHistN; j++) {
             const size_t bin = (size_t)i * stride + (size_t)j;
@@ -193,6 +207,9 @@ static int dual_node_publish_edge(
             }
         }
     }
+    gd->cpu_edge_correction += CPUTIME - solve_cpu_started;
+    gd->wall_edge_correction += dual_node_edge_timer_now() - solve_wall_started;
+    solve_timing_active = FALSE;
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "%s: edge correction uses window modes 0..%d; "
         "%d empty and %d singular radial-bin pairs set to zero\n",
@@ -216,6 +233,10 @@ static int dual_node_publish_edge(
     }
     status = SUCCESS;
 cleanup:
+    if (solve_timing_active) {
+        gd->cpu_edge_correction += CPUTIME - solve_cpu_started;
+        gd->wall_edge_correction += dual_node_edge_timer_now() - solve_wall_started;
+    }
     free(rhs);
     free(matrix);
     free(window);

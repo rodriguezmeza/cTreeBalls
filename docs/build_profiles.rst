@@ -39,14 +39,11 @@ from this table:
      - ``1``
      - Enable GSL-backed paths.
    * - ``GSLINTERNAL``
-     - ``1``
-     - Build the bundled/internal GSL sources.
+     - ``0``
+     - Discover an external GSL installation.
    * - ``CFITSIOON``
      - ``1``
      - Enable FITS/HEALPix I/O support.
-   * - ``CFITSIOLIBON``
-     - ``1``
-     - Build/use the bundled/internal CFITSIO library.
    * - ``OPENMPMACHINE``
      - ``1``
      - Enable OpenMP and ``OPENMPCODE``.
@@ -60,7 +57,7 @@ from this table:
      - ``0``
      - Double storage/computation; ``1`` selects mixed storage with double arithmetic.
    * - ``SMOOTHPIVOTON``
-     - ``0``
+     - ``1``
      - Enable smoothing by default on supported engines; use
        ``options=no-smooth-pivot`` for an unsmoothed run.
 
@@ -74,7 +71,7 @@ Native Libraries
 When ``GSLINTERNAL = 0``, GSL is discovered with ``gsl-config`` unless
 ``GSL_INCLUDE`` and ``GSL_LIB`` are provided manually.
 
-When ``CFITSIOON = 1`` and ``CFITSIOLIBON = 0``, CFITSIO is discovered with
+When ``CFITSIOON = 1``, CFITSIO is discovered with
 ``pkg-config cfitsio`` unless ``CFITSIO_INCLUDE`` and ``CFITSIO_LIB`` are
 provided manually.
 

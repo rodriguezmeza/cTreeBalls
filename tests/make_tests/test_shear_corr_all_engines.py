@@ -15,6 +15,7 @@ sys.path.insert(0, os.fspath(ROOT / "tests" / "python"))
 from shear_corr_all_engines import (  # noqa: E402
     ENGINE_ORDER,
     RunConfig,
+    SHEAR_SPHERE_ENGINES,
     SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE,
     SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE,
     SHEAR_SPHERE_TWO_BALLS_ENGINE,
@@ -28,16 +29,15 @@ from shear_corr_all_engines import (  # noqa: E402
 )
 
 
-ACTIVE_ENGINES = (
-    SHEAR_SPHERE_TWO_BALLS_ENGINE,
-    SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE,
-    SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE,
-)
+ACTIVE_ENGINES = SHEAR_SPHERE_ENGINES
 
 
 def test_registry_is_limited_to_active_full_sky_addons():
     assert ENGINE_ORDER == ACTIVE_ENGINES
     assert resolve_engines(("all",), ACTIVE_ENGINES, "sphere") == list(ACTIVE_ENGINES)
+    assert resolve_engines(("all-omp",), ACTIVE_ENGINES, "sphere") == list(
+        SHEAR_SPHERE_ENGINES
+    )
     assert resolve_engines((ACTIVE_ENGINES[1],), ACTIVE_ENGINES, "sphere") == [
         ACTIVE_ENGINES[1]
     ]

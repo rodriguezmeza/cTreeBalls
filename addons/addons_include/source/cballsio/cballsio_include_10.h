@@ -23,7 +23,7 @@ free_dvector(gd->histNNSubN2pcf,1,cmd->sizeHistN);
  Add your addon item here
  */
 
-#ifdef OCTREESHEAROMP
+#ifdef THREEPCFSHEAR
 free(gd->histShearGammaIm);
 gd->histShearGammaIm = NULL;
 free(gd->histShearGammaRe);

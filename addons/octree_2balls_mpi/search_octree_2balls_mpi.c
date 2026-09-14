@@ -25,6 +25,8 @@
 #define fcfc_balltree_frontier octree_2balls_tree_frontier
 #define fcfc_balltree_free octree_2balls_tree_free
 #define searchcalc_balltree_2balls_omp searchcalc_octree_2balls_full_mpi
+#define DUAL_NODE_USE_NATURAL_LOG_BINS 1
+#define DUAL_NODE_PERSISTENT_NEIGHBOR_FRONTIER 1
 #ifdef BALLS4SCANLEV
 #define DUAL_NODE_SCAN_LEVEL_FRONTIER 1
 #endif
@@ -57,14 +59,6 @@ global int searchcalc_octree_2balls_mpi(
         bodyptr *btab, INTEGER *nbody, INTEGER ipmin, INTEGER *ipmax,
         int cat1, int cat2)
 {
-    if (cballs_opt_legacy_one_ball(cmd)) {
-        verb_print(cmd->verbose,
-                   "octree-2balls-mpi: dispatching to the distributed "
-                   "octree-GGG compatibility kernel\n");
-        return searchcalc_octree_ggg_mpi(
-            cmd, gd, btab, nbody, ipmin, ipmax, cat1, cat2);
-    }
-
     const cballs_native_pair_parallel parallel = {
         fcfc_octree_2balls_mpi_size(),
         octree_2balls_mpi_task_owned,

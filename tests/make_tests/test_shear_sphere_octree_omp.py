@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
+import re
 import tempfile
 
 import numpy as np
@@ -21,7 +23,7 @@ FAST_OPTIONS = "no-out-Hist,no-smooth-pivot"
 SMOOTH_OPTIONS = "no-out-Hist,smooth-pivot,no-one-ball"
 SMOOTH_RMIN_ARCMIN = 40.0
 ENGINE = os.environ.get(
-    "CBALLS_SHEAR_SPHERE_ENGINE", "octree-shear-sphere-omp",
+    "CBALLS_SHEAR_SPHERE_ENGINE", "octree-shear-sphere-2balls-omp",
 )
 DUAL_NODE_TWO_BALLS = ENGINE in {
     "octree-shear-sphere-2balls-omp",
@@ -39,6 +41,16 @@ def fixture(nbody: int = 45):
     gamma = (0.018 + 0.006*np.cos(3.0*latitude)) \
         * np.exp(2j*(longitude + 0.21*np.sin(latitude)))
     weights = 0.65 + 0.7*rng.random(nbody)
+    return positions, gamma, weights
+
+
+def octant_fixture(nbody: int = 320):
+    rng = np.random.default_rng(314159)
+    positions = rng.uniform(0.05, 1.0, size=(nbody, 3))
+    positions /= np.linalg.norm(positions, axis=1)[:, None]
+    gamma = rng.normal(scale=0.02, size=nbody) \
+        + 1j*rng.normal(scale=0.02, size=nbody)
+    weights = 0.5 + rng.random(nbody)
     return positions, gamma, weights
 
 
@@ -306,6 +318,33 @@ def run_native(positions, gamma, weights, threads, options=OPTIONS, theta=1.0,
     )
 
 
+def run_native_with_profile(positions, gamma, weights, threads, options):
+    descriptor, path = tempfile.mkstemp(prefix="ctreeballs-shear-profile-")
+    saved_stderr = os.dup(2)
+    previous = os.environ.get("CBALLS_SHEAR_PROFILE")
+    try:
+        os.environ["CBALLS_SHEAR_PROFILE"] = "1"
+        os.dup2(descriptor, 2)
+        os.close(descriptor)
+        result = run_native(
+            positions, gamma, weights, threads, options=options,
+        )
+        ctypes.CDLL(None).fflush(None)
+    finally:
+        os.dup2(saved_stderr, 2)
+        os.close(saved_stderr)
+        if previous is None:
+            os.environ.pop("CBALLS_SHEAR_PROFILE", None)
+        else:
+            os.environ["CBALLS_SHEAR_PROFILE"] = previous
+    try:
+        with open(path, encoding="utf-8") as stream:
+            profile = stream.read()
+    finally:
+        os.unlink(path)
+    return result, profile
+
+
 def assert_results_identical(reference, compatibility, label):
     if set(reference) != set(compatibility):
         raise AssertionError(f"{label}: result fields differ")
@@ -437,6 +476,37 @@ def test_spherical_accepted_cell_transport():
         raise AssertionError("accepted-cell fixture exercised only body nodes")
 
 
+def test_spherical_octant_frontier_parallelism():
+    if ENGINE != "octree-shear-sphere-2balls-omp":
+        return
+
+    positions, gamma, weights = octant_fixture()
+    options = f"{FAST_OPTIONS},only-3pcf"
+    serial = run_native(
+        positions, gamma, weights, 1, options=options,
+    )
+    threaded, profile = run_native_with_profile(
+        positions, gamma, weights, min(4, os.cpu_count() or 1), options,
+    )
+    match = re.search(r"frontier_tasks=(\d+)", profile)
+    if match is None or int(match.group(1)) <= 1:
+        raise AssertionError(
+            f"single-octant frontier did not branch:\n{profile}"
+        )
+    worker_pivots = [
+        int(value) for thread, value in re.findall(
+            r"thread=(\d+) pivots=(\d+)", profile,
+        ) if int(thread) > 0
+    ]
+    if not any(value > 0 for value in worker_pivots):
+        raise AssertionError(
+            f"single-octant frontier left every worker idle:\n{profile}"
+        )
+    assert_results_identical(
+        serial, threaded, "single-octant frontier determinism",
+    )
+
+
 def test_spherical_runtime_order_switches():
     positions, gamma, weights = fixture(39)
     combined = run_native(positions, gamma, weights, 1, theta=0.05)
@@ -451,76 +521,6 @@ def test_spherical_runtime_order_switches():
             values, combined[name], rtol=4.0e-12, atol=4.0e-13,
             err_msg=f"only-3pcf changed {name}",
         )
-
-
-def test_spherical_two_ball_legacy_compatibility():
-    if ENGINE != "octree-shear-sphere-2balls-omp":
-        return
-
-    positions, gamma, weights = fixture(47)
-    standard_engine = "octree-shear-sphere-omp"
-    has_public_legacy = search_method_id(standard_engine) >= 0
-    cases = (
-        ("combined", OPTIONS, None),
-        ("only-2pcf", f"{FAST_OPTIONS},only-2pcf", None),
-        ("only-3pcf", f"{FAST_OPTIONS},only-3pcf", None),
-    )
-    for label, options, rsmooth in cases:
-        compatibility = run_native(
-            positions, gamma, weights, 1,
-            options=f"{options},legacy-one-ball", theta=0.05,
-            rsmooth=rsmooth,
-        )
-        if has_public_legacy:
-            reference = run_native(
-                positions, gamma, weights, 1, options=options, theta=0.05,
-                rsmooth=rsmooth, engine=standard_engine,
-            )
-            assert_results_identical(reference, compatibility, label)
-
-    smooth_positions, smooth_gamma, smooth_weights = smooth_fixture(12)
-    smooth_compatibility = run_native(
-        smooth_positions, smooth_gamma, smooth_weights, 1,
-        options=f"{SMOOTH_OPTIONS},legacy-one-ball", theta=0.05,
-        rsmooth=SMOOTH_RMIN_ARCMIN,
-    )
-    if has_public_legacy:
-        smooth_reference = run_native(
-            smooth_positions, smooth_gamma, smooth_weights, 1,
-            options=SMOOTH_OPTIONS, theta=0.05,
-            rsmooth=SMOOTH_RMIN_ARCMIN, engine=standard_engine,
-        )
-        assert_results_identical(
-            smooth_reference, smooth_compatibility, "smooth-pivot",
-        )
-
-    mask = np.ones(positions.shape[0], dtype=np.uint8)
-    mask[::4] = 0
-    edge_options = (
-        f"{OPTIONS},read-mask,edge-corrections,no-normalize-HistZeta"
-    )
-    edge_compatibility = run_native(
-        positions, gamma, weights, 1,
-        options=f"{edge_options},legacy-one-ball", theta=0.05, mask=mask,
-    )
-    if has_public_legacy:
-        edge_reference = run_native(
-            positions, gamma, weights, 1, options=edge_options, theta=0.05,
-            mask=mask, engine=standard_engine,
-        )
-        assert_results_identical(
-            edge_reference, edge_compatibility, "masked edge correction",
-        )
-
-    threaded = run_native(
-        positions, gamma, weights, min(4, os.cpu_count() or 1),
-        options=f"{OPTIONS},legacy-one-ball", theta=0.05,
-    )
-    serial = run_native(
-        positions, gamma, weights, 1,
-        options=f"{OPTIONS},legacy-one-ball", theta=0.05,
-    )
-    assert_results_identical(serial, threaded, "compatibility determinism")
 
 
 def test_spherical_smooth_pivot_transport():
@@ -712,15 +712,13 @@ def test_spherical_contract_failures():
 if __name__ == "__main__":
     test_spherical_oracle_and_determinism()
     test_spherical_accepted_cell_transport()
+    test_spherical_octant_frontier_parallelism()
     test_spherical_runtime_order_switches()
-    test_spherical_two_ball_legacy_compatibility()
     test_spherical_smooth_pivot_transport()
     test_spherical_smooth_radius_contract()
     test_spherical_mask_equivalence()
     test_spherical_contract_failures()
-    compatibility = ", compatibility" \
-        if ENGINE == "octree-shear-sphere-2balls-omp" else ""
     print(
-        f"PASS: {ENGINE} full-sky spin-2 oracle{compatibility}, smoothing, "
+        f"PASS: {ENGINE} full-sky spin-2 oracle, smoothing, "
         "contracts, and determinism"
     )

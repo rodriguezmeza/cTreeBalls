@@ -86,13 +86,13 @@ different Python minor versions.
 Native Dependencies
 -------------------
 
-``GSLINTERNAL=1`` and ``CFITSIOLIBON=1`` select bundled sources.
-``USEGSL=1`` is required by the current wrapper. FITS support additionally
-requires ``CFITSIOON=1``.
+``GSLINTERNAL=1`` selects the bundled GSL sources. ``USEGSL=1`` is required by
+the current wrapper. FITS support additionally requires ``CFITSIOON=1`` and an
+external CFITSIO installation.
 
 For external GSL use ``GSLINTERNAL=0`` and ``gsl-config``, or explicit
-``GSL_INCLUDE``/``GSL_LIB``. For external CFITSIO use ``CFITSIOLIBON=0``
-and ``pkg-config cfitsio``. Set ``PKG_CONFIG_PATH`` to the directory containing
+``GSL_INCLUDE``/``GSL_LIB``. CFITSIO uses ``pkg-config cfitsio``. Set
+``PKG_CONFIG_PATH`` to the directory containing
 ``cfitsio.pc`` for a custom installation. Make derives include, library, and
 runtime-search flags; do not hardcode another user's absolute library path.
 

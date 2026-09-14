@@ -15,10 +15,6 @@ rank `i % nranks`, OpenMP processes the owned slots, and task-indexed
 histograms are reduced to rank 0. Rank 0 publishes tasks in the same order as
 the OpenMP method and is the only rank that writes output files.
 
-`options=legacy-one-ball` selects the privately linked distributed FCFC
-ball-tree compatibility kernel. This replaces the default-profile need for the
-removed standalone one-ball search while retaining its runtime controls.
-
 Build and run with:
 
 ```text

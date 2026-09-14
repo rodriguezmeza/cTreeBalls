@@ -31,9 +31,8 @@ complex Toeplitz solve. Empty or singular systems publish zero. Masking is
 selection; it does not itself request edge correction.
 
 The KD and PCA ball-tree families use smooth pivots by default when
-``SMOOTHPIVOTON=1``. ``no-smooth-pivot`` disables this. The native octree
-dual-node path is unsmoothed; its ``legacy-one-ball`` compatibility mode can
-use the privately linked smoothing-capable kernel.
+``SMOOTHPIVOTON=1``. ``no-smooth-pivot`` disables this. The native-octree
+dual-node path retains exact body pivots.
 
 Full-Sky Spin-2 Trees
 ---------------------
@@ -70,8 +69,8 @@ Input and Utility Add-ons
 -------------------------
 
 The maintained profile also enables ``GADGETIOON``, ``CLASSLIBON``,
-``PXDON``, ``IOLIBON``, and ``CFITSIOON``. CFITSIO is discovered externally
-because ``CFITSIOLIBON=0``. ``kdtree-box-omp`` and ``neighbor-boxes-omp``
+``PXDON``, ``IOLIBON``, and ``CFITSIOON``. CFITSIO is discovered as an
+external dependency. ``kdtree-box-omp`` and ``neighbor-boxes-omp``
 provide periodic Cartesian 2PCF methods.
 
 Parallel Rules

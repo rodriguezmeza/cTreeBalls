@@ -1,0 +1,9 @@
+# Shared FCFC-derived PCA ball-tree builder used by active two-ball engines.
+
+ifneq ($(filter 1,$(BALLTREE2BALLSOMPON) $(BALLTREE2BALLSMPION) $(BALLTREESHEARSPHERE2BALLSOMPON)),)
+BALLTREE_SHARED = $(MDIR)/addons/balltree_shared/
+vpath %.c $(BALLTREE_SHARED)
+INCLUDES += -I$(BALLTREE_SHARED)
+HEADERFILES += $(wildcard $(BALLTREE_SHARED)/*.h)
+EXTERNAL += fcfc_balltree.o
+endif

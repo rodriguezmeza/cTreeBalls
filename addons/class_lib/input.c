@@ -932,7 +932,7 @@ int input_default_params(struct cmdline_data *cmd)
 #ifdef OPENMPCODE
     cmd->numthreads = 4;
 #endif
-    cmd->options = "legacy-one-ball";
+    cmd->options = "";
     //E
 
 //B socket:

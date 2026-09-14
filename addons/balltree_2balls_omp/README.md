@@ -26,20 +26,50 @@ providing the reference path used by the regression tests.
 `nsmooth` sets leaf capacity, `theta` scales the split tolerances, and
 `weights-norm` selects weighted scalar normalization.
 
+For an ordinary auto-correlation 2PCF, the production engine chooses a
+deterministic leaf capacity from catalog size, radial-bin width, and `theta`.
+Catalogs below 262144 active points keep at least eight bodies per leaf;
+denser catalogs may use four-body leaves when their smaller cells are likely
+to repay the extra construction work.  Terminal body pairs are evaluated in
+batches of 256.  Logarithmic bins use the platform vector-log backend on
+Apple builds. Linux builds use explicit SLEEF AVX2, SSE2, or AArch64 Advanced
+SIMD entry points when `pkg-config` can resolve the library and fall back to
+scalar `log` otherwise. Set `SLEEFON=1` to require SLEEF or `SLEEFON=0` to
+disable it; `make test-sleef-vector-log` checks both SIMD and scalar-tail
+results against libm and rejects a build that selected only one-wide lanes.
+
+The OpenMP auto-2PCF and LogMultipole auto-3PCF paths keep a two-entry,
+process-local cache of compact
+trees.  Cache keys include catalog contents and all tree-shaping field,
+weight, mask, smoothing, and leaf settings, so modifying a catalog causes a
+rebuild. Cached trees own packed positions, scalar values, weights, and moments;
+they retain no body or Python-model pointers after installation. This is useful
+for repeated 2PCFs, repeated 3PCFs, or thread sweeps over the same catalog.
+Cross-correlations continue to build independent trees. Add
+`no-balltree-tree-cache` when measuring cold construction or when the
+application prefers immediate release. With `dual-node-profile`, the search
+log reports `compact-tree cache = hit` or `miss`.
+
+Large ball trees use deterministic preassigned node ranges and OpenMP subtree
+tasks. Range statistics combine covariance, aggregate moments, and field
+moments in deterministic chunks; the enclosing-sphere and aggregate-radius
+pass is also fused and parallel above a large cutoff. Sufficiently large
+disjoint children build concurrently without allocator contention. Add
+`no-balltree-parallel-build` for a serial-construction diagnostic run.
+
+The production 3PCF passes each pivot child a bounded sparse list of unresolved
+neighbor nodes. It prunes geometrically irrelevant entries and refines useful
+large entries without copying any multipole scratch level between pivot nodes.
+Leaf pivots accumulate into their own cleared scratch arrays, preserving the
+original arithmetic order. Add `no-balltree-persistent-frontier` to compare
+against a neighbor-root restart for every body pivot.
+
 `read-mask` removes masked bodies before either role-specific tree is built.
 With `SMOOTHPIVOTON=1`, deterministic smooth pivots are enabled by default and
 the pivot tree stores the same grouped field and normalization sums as the KD
 two-ball engine; `no-smooth-pivot` restores ordinary body pivots. Complex
 `edge-corrections,no-normalize-HistZeta` uses window modes through twice the
 requested signal order.
-
-`options=legacy-one-ball` dispatches to the actual legacy ball-tree
-implementation. Its controls remain unchanged: `behavior-ball` enables
-one-ball node aggregation, while `no-one-ball` forces exact traversal. Use it
-with `search=balltree-2balls-omp` for OpenMP or
-`search=balltree-2balls-mpi` for MPI. Do not combine compatibility mode with
-`no-two-balls`, `dual-node-bin-slop`, or `dual-node-direct-triples`. The old
-standalone search names are disabled in the default build profile.
 
 Three-dimensional angular phases and acceptance use projected tangent
 bearings in the original observer frame, with chord-distance bins.
@@ -65,8 +95,8 @@ The direct validation engine explicitly visits distinct triples and has cubic
 worst-case work. Do not use `dual-node-direct-triples` for a full-sky catalog;
 the default LogMultipole path is the production algorithm.
 
-The node recursion follows dual-node by Mike Jarvis, distributed under its
+The node recursion follows the dual-node method by Mike Jarvis, distributed under its
 BSD-style license. The PCA ball-tree construction is adapted from FCFC by
 Cheng Zhao under the MIT license; see the notices in
-`addons/balltree_omp/fcfc_balltree.c`. dual-node's redistribution terms are in
+`addons/balltree_shared/fcfc_balltree.c`. The redistribution terms are in
 `dual-node_LICENSE`.

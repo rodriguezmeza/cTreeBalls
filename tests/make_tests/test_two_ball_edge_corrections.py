@@ -13,9 +13,7 @@ import numpy as np
 
 ENGINES = (
     "balltree-2balls-omp", "balltree-2balls-mpi",
-    "balltree-2balls-omp_3pcf", "balltree-2balls-mpi_3pcf",
     "octree-2balls-omp", "octree-2balls-mpi",
-    "kdtree-omp", "kdtree-mpi",
     "kdtree-2balls-omp", "kdtree-2balls-mpi",
 )
 MMAX, BINS, RMIN, RMAX = 2, 4, 0.02, 1.5
@@ -147,11 +145,7 @@ def cli_tests(executable, engines, dimension, mpi_command):
             if weighted:
                 options.append("weights-norm")
             if exact:
-                options.append(
-                    "no-one-ball"
-                    if engine in {"kdtree-omp", "kdtree-mpi"}
-                    else "no-two-balls"
-                )
+                options.append("no-two-balls")
             files = datafile if isinstance(datafile, tuple) else (datafile,)
             command = [str(executable), f"search={engine}",
                        "in=" + ",".join(str(root / name) for name in files),

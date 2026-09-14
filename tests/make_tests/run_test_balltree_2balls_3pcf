@@ -6,8 +6,8 @@ cd "$(dirname "$0")/.."
 CBALLS=${CBALLS:-../cballs}
 PYTHON=${PYTHON:-python3}
 MULTI_THREADS=${MULTI_THREADS:-4}
-ENGINE=${ENGINE:-balltree-2balls-omp_3pcf}
-ENGINE_MACRO=${ENGINE_MACRO:-BALLTREE2BALLSOMP3PCF}
+ENGINE=${ENGINE:-balltree-2balls-omp}
+ENGINE_MACRO=${ENGINE_MACRO:-BALLTREE2BALLSOMP}
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-2balls-3pcf.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
@@ -110,8 +110,8 @@ run_auto()
         || fail_with_log "$name failed" "$output/run.log"
 }
 
-exact_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,no-normalize-HistZeta,out-m-HistZeta
-normalized_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,out-m-HistZeta
+exact_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,no-smooth-pivot,no-normalize-HistZeta,out-m-HistZeta
+normalized_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-two-balls,no-smooth-pivot,out-m-HistZeta
 aggregate_options=pos-and-convergence,KKKCorrelation,only-3pcf,no-normalize-HistZeta,out-m-HistZeta
 run_auto exact-one 1 "$exact_options"
 run_auto exact-many "$MULTI_THREADS" "$exact_options"

@@ -32,8 +32,7 @@ static bool fcfc_octree_2balls_native_mpi_selected(
         const struct cmdline_data *cmd)
 {
     return cmd != NULL && cmd->searchMethod != NULL
-        && strcmp(cmd->searchMethod, "octree-2balls-mpi") == 0
-        && !cballs_opt_legacy_one_ball(cmd);
+        && strcmp(cmd->searchMethod, "octree-2balls-mpi") == 0;
 }
 
 static void finalize_at_exit(void)

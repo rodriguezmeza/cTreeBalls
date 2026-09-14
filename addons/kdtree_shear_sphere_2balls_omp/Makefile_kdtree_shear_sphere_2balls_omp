@@ -6,20 +6,20 @@ OPT2 += -DKDTREESHEARSPHERE2BALLSOMP -DTHREEPCFSHEAR -DTWOPCF \
 KDTREESHEARSPHERE2BALLSOMP = $(MDIR)/addons/kdtree_shear_sphere_2balls_omp/
 vpath %.c $(KDTREESHEARSPHERE2BALLSOMP)
 INCLUDES += -I$(KDTREESHEARSPHERE2BALLSOMP) \
-	-I$(MDIR)/addons/octree_shear_sphere_omp \
-	-I$(MDIR)/addons/octree_shear_omp \
+	-I$(MDIR)/addons/shear_sphere_shared \
 	-I$(MDIR)/addons/shear_sphere_binary_2balls \
-	-I$(MDIR)/addons/balltree_omp
+	-I$(MDIR)/addons/balltree_shared
 HEADERFILES += $(wildcard $(KDTREESHEARSPHERE2BALLSOMP)/*.h)
 EXTERNAL += kdtree_shear_sphere_tree.o \
 	search_kdtree_shear_sphere_2balls_omp.o
 kdtree_shear_sphere_tree.o: \
 	$(KDTREESHEARSPHERE2BALLSOMP)/kdtree_shear_sphere_tree.c \
 	$(KDTREESHEARSPHERE2BALLSOMP)/kdtree_shear_sphere_tree.h \
-	$(MDIR)/addons/balltree_omp/fcfc_balltree.h
+	$(MDIR)/addons/balltree_shared/fcfc_balltree.h
 search_kdtree_shear_sphere_2balls_omp.o: \
 	$(KDTREESHEARSPHERE2BALLSOMP)/search_kdtree_shear_sphere_2balls_omp.c \
 	$(MDIR)/addons/shear_sphere_binary_2balls/shear_sphere_binary_scan.h \
 	$(KDTREESHEARSPHERE2BALLSOMP)/kdtree_shear_sphere_tree.h \
-	$(MDIR)/addons/octree_shear_omp/search_octree_shear_omp.c
+	$(MDIR)/addons/shear_sphere_shared/shear_sphere_engine.c \
+	$(MDIR)/addons/shear_sphere_shared/shear_sphere_frontier_scheduler.h
 endif

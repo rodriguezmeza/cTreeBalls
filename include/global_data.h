@@ -100,9 +100,11 @@ struct global_data{
     real cputree;
 
 // Tree:
-     real Rcut;                                     // Cutoff radius
-     real RcutSq;
+    real Rcut;                                     // Cutoff radius
+    real RcutSq;
     real cpusearch;
+    real cpu_edge_correction;
+    real wall_edge_correction;
 //
 
     int infilefmt_int;
@@ -168,7 +170,7 @@ struct global_data{
     real **histXicos;
     real **histXisin;
 
-// Flat-sky weak-lensing shear correlations (octree-shear-omp).
+// Weak-lensing shear correlations for the active full-sky engines.
     real *histShearXiPlusRe;
     real *histShearXiPlusIm;
     real *histShearXiMinusRe;

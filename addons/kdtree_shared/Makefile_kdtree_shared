@@ -1,0 +1,9 @@
+# Shared KD-tree builder used by the active periodic-box engine.
+
+ifeq ($(KDTREEBOXOMPON),1)
+KDTREE_SHARED = $(MDIR)/addons/kdtree_shared/
+vpath %.c $(KDTREE_SHARED)
+INCLUDES += -I$(KDTREE_SHARED)
+HEADERFILES += $(wildcard $(KDTREE_SHARED)/*.h)
+EXTERNAL += kdtree.o
+endif

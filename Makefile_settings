@@ -24,6 +24,9 @@ GSLINTERNAL = 0
 # export OMP_NUM_THREADS=8
 # Set following line to 1 for OPENMP parallel version, or 0 to switch it off
 OPENMPMACHINE = 1
+# Auto-detect SLEEF on Linux for batched vector logarithms. Use 0 to disable or
+# 1 to require it explicitly.
+SLEEFON = auto
 #
 # If you have at least one addon then set to 1:
 ADDONSON = 1
@@ -36,4 +39,3 @@ include $(MACHINES_DIR)Makefile_machine
 
 # Note:  Be careful in the options to set 1 or 0 without further space
 #        or a comment starting with #...
-

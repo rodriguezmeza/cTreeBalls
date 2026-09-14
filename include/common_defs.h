@@ -17,7 +17,7 @@
 
 /* BALLS4 engines always need the B4 partition.  With BALLS4SCANLEV, selected
  * octree estimators also use it as a scheduling/locality frontier. */
-#if defined(BALLS4SCANLEV) || defined(OCTREEBALLS4OMP) || defined(OCTREEBALLS4MPI)
+#ifdef BALLS4SCANLEV
 #define CBALLS_NEEDS_BALLS4_SCAN 1
 #endif
 

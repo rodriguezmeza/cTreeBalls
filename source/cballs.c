@@ -16,6 +16,11 @@
 
 #include "globaldefs.h"
 
+#if defined(OCTREE2BALLSOMP) || defined(OCTREE2BALLSMPI)
+#include "native_octree_pair.h"
+#include "octree_2balls_tree.h"
+#endif
+
 #ifndef cBALLS_FAIL
 #ifdef CLASSLIB
 #define cBALLS_FAIL(cmd, ...)                                           \

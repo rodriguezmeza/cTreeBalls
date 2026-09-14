@@ -6,17 +6,12 @@ OPT2 += -DOCTREESHEARSPHERE2BALLSOMP -DTHREEPCFSHEAR -DTWOPCF \
 OCTREESHEARSPHERE2BALLSOMP = $(MDIR)/addons/octree_shear_sphere_2balls_omp/
 vpath %.c $(OCTREESHEARSPHERE2BALLSOMP)
 INCLUDES += -I$(OCTREESHEARSPHERE2BALLSOMP) \
-	-I$(MDIR)/addons/octree_shear_sphere_omp \
-	-I$(MDIR)/addons/octree_shear_omp
+	-I$(MDIR)/addons/shear_sphere_shared
 HEADERFILES += $(wildcard $(OCTREESHEARSPHERE2BALLSOMP)/*.h)
 EXTERNAL += search_octree_shear_sphere_2balls_omp.o
-ifneq ($(OCTREESHEARSPHEREOMPON),1)
-vpath %.c $(MDIR)/addons/octree_shear_sphere_omp
-EXTERNAL += search_octree_shear_sphere_omp.o
-endif
 search_octree_shear_sphere_2balls_omp.o: \
 	$(OCTREESHEARSPHERE2BALLSOMP)/search_octree_shear_sphere_2balls_omp.c \
-	$(MDIR)/addons/octree_shear_omp/search_octree_shear_omp.c \
-	$(MDIR)/addons/octree_shear_sphere_omp/shear_sphere_dual_tree.h \
-	$(MDIR)/addons/octree_shear_sphere_omp/protodefs_octree_shear_sphere_omp.h
+	$(MDIR)/addons/shear_sphere_shared/shear_sphere_engine.c \
+	$(MDIR)/addons/shear_sphere_shared/shear_sphere_dual_tree.h \
+	$(MDIR)/addons/shear_sphere_shared/shear_sphere_frontier_scheduler.h
 endif

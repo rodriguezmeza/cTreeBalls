@@ -1,7 +1,7 @@
 # Octree two-ball OpenMP addon
 
 `search=octree-2balls-omp` applies dual-node-style scans to the native
-cTreeBalls octree. It does not construct the FCFC PCA ball tree. A temporary
+cTreeBalls octree. It does not construct the FCFC PCA ball tree. A compact
 binary view groups each octree cell's live children while retaining the native
 octree hierarchy. The 2PCF uses a dual-node traversal. The production 3PCF
 uses LogMultipole pivot-neighbor scans and forms every `(r1,r2,m)` bin from
@@ -9,11 +9,31 @@ products of radial moments, with second moments removing `q == r` exactly.
 The octree adapter keeps pivots at exact body positions and applies two-ball
 acceptance to neighbor nodes, avoiding failed coarse-pivot scans while still
 reusing each accepted neighbor moment across all 3PCF radial-bin pairs.
+For large multithreaded builds, the compact view first assigns deterministic
+node and packed-point ranges, then computes leaf moments and parent bounds in
+a post-order OpenMP task tree for subtrees above 32768 points. Single-thread
+and smaller builds compute geometry inline to retain cache locality. This
+parallelizes the expensive large-tree geometry pass without a concurrent
+allocator or nondeterministic node numbering.
 
-The two-ball acceptance requires the full interval
-`distance - radius1 - radius2` through `distance + radius1 + radius2` to stay
-inside one radial bin and satisfy the `theta`-scaled bin-slop tolerance.
-Otherwise the larger node is split with dual-node's `0.585` split rule. The
+The process keeps the two most recently used compact views in a content-keyed
+cache. Repeating a 2PCF over an unchanged catalog reuses its topology, bounds,
+packed points, and scalar moments; changes to positions, masks, weights, or the
+scalar field invalidate the entry. The cache also distinguishes adaptive leaf
+capacities. Catalog fingerprints use fixed deterministic chunks and parallelize
+above 262144 bodies, avoiding a serial validation floor on cache hits. A probe
+before native tree construction lets a cache hit skip both the temporary native
+octree and compact-view builds. Use
+`options=no-native-tree-cache` for a cold-build benchmark or when retaining the
+compact views is undesirable.
+
+With `dual-node-bin-slop`, two-ball acceptance uses the dual-node controlled
+`radius1 + radius2 <= theta * bin_width` criterion and its conservative
+near-boundary fallback. Without that option, the full interval
+`distance - radius1 - radius2` through `distance + radius1 + radius2` must stay
+inside one radial bin. Otherwise the larger node is split with dual-node's
+`0.585` split rule. Acceptance constants are precomputed once, and a boundary
+case reuses its logarithmic bin coordinate rather than evaluating a second log. The
 3PCF also bounds angular phase error by `theta*pi/(2*mChebyshev+1)`. Use
 `options=no-two-balls` for exact body-pair and body-moment accumulation.
 
@@ -29,25 +49,28 @@ When both are active, `only-2pcf` and `only-3pcf` select one at runtime.
 
 The fixed pivot frontier owns private moment and histogram buffers and is
 reduced in a fixed order, so OpenMP worker count does not alter the result.
+Within each body-pivot task, the 3PCF now passes an inherited neighbor frontier
+to child pivots. Its retention policy is adaptive: when splitting would exceed
+the candidate budget, it retains the unresolved parent cell for a descendant
+to refine instead of abandoning the list and restarting at the catalog root.
+The first body in a dense leaf measures the local root cost before the
+remaining bodies are allowed to reuse the inherited list. This keeps frontier
+traffic bounded while preserving every disjoint candidate subtree.
+
+The independent 2PCF path uses one dense histogram per OpenMP thread, reuses
+its body-pair batch buffer across dynamic frontier tasks, and combines thread
+histograms with a binary tree reduction. Its approximate-mode leaf capacity
+uses catalog surface density, the outer radial-bin width, and the selected
+`theta` error budget, with a calibrated 75--125 percent bound around
+`nsmooth`; exact mode retains the configured `nsmooth` capacity. On macOS,
+logarithmic body bins use
+Accelerate vForce. On Linux, `NATIVE_PAIR_VECTOR_LOG=auto` enables the batched
+path when `pkg-config sleef` is available. Use
+`NATIVE_PAIR_VECTOR_LOG=sleef` to require that backend, or
+`NATIVE_PAIR_VECTOR_LOG=compiler` with a toolchain configured for vector libm;
+otherwise Linux retains the scalar logarithm path.
+
 `options=dual-node-direct-triples` retains the cubic triple-node traversal as a
 validation oracle for moderate catalogs. The traversal is adapted from
 dual-node by Mike Jarvis under its BSD license; the full notice is in
 `addons/balltree_2balls_omp/dual-node_LICENSE`.
-
-## Octree-GGG compatibility
-
-`options=legacy-one-ball` switches this search name to the privately linked
-one-ball native-octree implementation. This is a real kernel dispatch: tree loading
-builds the threaded native octree and GGG scan frontier instead of the compact
-binary view. Consequently `behavior-ball`/`no-one-ball`, `compute-HistN`,
-masking, normalization, complex edge correction, `ggg-full-window`, and
-`ggg-profile` have exactly their GGG meanings. With `SMOOTHPIVOTON=1`, pivot
-smoothing is enabled by default in compatibility mode and
-`options=no-smooth-pivot` disables it.
-
-Do not combine `legacy-one-ball` with `no-two-balls`, `dual-node-bin-slop`, or
-`dual-node-direct-triples`; those select features of the native two-ball
-kernel. `only-2pcf` is supported. `only-3pcf` is rejected because the GGG
-kernel does not yet provide a true skip-2PCF execution path. Without
-`legacy-one-ball`, smooth-pivot remains unsupported and the compact two-ball
-algorithm is unchanged.

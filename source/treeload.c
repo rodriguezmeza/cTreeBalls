@@ -162,24 +162,15 @@ global int MakeTree(struct  cmdline_data* cmd,
 // By now it is only working with boxes centered at (0,0,...)
     cpustartMiddle = CPUTIME;
     if (FindRootCenter(cmd, gd, btab, nbody, ifile, roottable[ifile]) == FAILURE) return FAILURE;
-#ifdef OCTREESHEAROMP
-    preserve_catalog_frame |= gd->searchMethod_int == OCTREESHEARMETHOD;
-#endif
-#ifdef OCTREESHEARSPHEREOMP
-    preserve_catalog_frame |=
-        gd->searchMethod_int == OCTREESHEARSPHEREMETHOD;
-#endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
     preserve_catalog_frame |=
         gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD;
 #endif
 #ifdef OCTREE2BALLSOMP
-    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD
-        && !cballs_opt_legacy_one_ball(cmd);
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD;
 #endif
 #ifdef OCTREE2BALLSMPI
-    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMPIMETHOD
-        && !cballs_opt_legacy_one_ball(cmd);
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMPIMETHOD;
 #endif
     if (!preserve_catalog_frame
         && centerBodies(btab, nbody, ifile, roottable[ifile]) == FAILURE)
@@ -534,17 +525,8 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                                      cmd->error_message, _ERRORMSGSIZE_,
                                      "rsmooth") == FAILURE)
                 return FAILURE;
-#if defined(OCTREESHEARSPHEREOMP) || defined(OCTREESHEARSPHERE2BALLSOMP)
-            if (
-#ifdef OCTREESHEARSPHEREOMP
-                gd->searchMethod_int == OCTREESHEARSPHEREMETHOD
-#else
-                FALSE
-#endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
-                || gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD
-#endif
-               )
+            if (gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD)
                 gd->rsmooth[0] = 2.0*rsin(
                     0.5*(real)rsmooth_arcmin*ARCMINTORAD);
             else

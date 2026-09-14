@@ -13,12 +13,9 @@ and ball-tree implementations when building C and Cython:
       KDTREESHEARSPHERE2BALLSOMPON=1 \
       BALLTREESHEARSPHERE2BALLSOMPON=1 PYTHON=python3 all
 
-The octree two-ball addon keeps its native dual-node behavior by default. Add
-``options=legacy-one-ball`` to use its privately linked one-node compatibility
-kernel. This is a complete compatibility dispatch, including combined 2PCF/3PCF traversal,
-spherical transport, smoothing, masks, edge correction, normalization,
-output, and deterministic ``BALLS4SCANLEV`` reduction. The compatibility
-kernel is linked privately when the ordinary addon is disabled.
+The octree two-ball addon uses its native dual-node behavior for pair work and
+its spherical pivot-ring frontier for 3PCF work. Both paths support masks,
+edge correction, normalization, and deterministic ``BALLS4SCANLEV`` reduction.
 
 Scientific Convention
 ---------------------

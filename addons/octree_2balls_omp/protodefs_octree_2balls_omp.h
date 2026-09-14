@@ -3,8 +3,6 @@
 
 #define OCTREE2BALLSMETHOD 176
 
-#include "protodefs_octree_ggg_omp.h"
-
 global int searchcalc_octree_2balls_omp(struct cmdline_data *,
                                         struct global_data *, bodyptr *,
                                         INTEGER *, INTEGER, INTEGER *,

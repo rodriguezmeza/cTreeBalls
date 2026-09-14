@@ -13,6 +13,12 @@ acceptance; `--dual-node-bin-slop` enables the looser bin-aware policy, and
 `--option no-two-balls` requests an exact body-level validation walk where
 supported.
 
+The driver obtains its method list, option list, and compiled settings from
+`options=print-search-methods`, `options=print-options`, and
+`options=make-info`. Their parsed values and complete output are retained in
+`summary.json["ctreeballs_runtime"]` so a benchmark remains tied to the build
+that produced it.
+
 ## Examples
 
 Run all compiled OpenMP engines on a FITS map:

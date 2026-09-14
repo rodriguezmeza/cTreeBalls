@@ -16,7 +16,7 @@ int main(void)
     memset(&first, 0, sizeof(first));
     memset(&second, 0, sizeof(second));
 
-    first.searchMethod = "octree-ggg-omp";
+    first.searchMethod = "octree-sincos-omp";
     second.searchMethod = "octree-2balls-omp";
     first.options = "read-mask,no-one-ball,smooth-pivot,full-sky";
     second.options = "behavior-ball,edge-corrections";
@@ -34,7 +34,6 @@ int main(void)
                      && cballs_opt_no_one_ball(&first)
                      && cballs_opt_smooth_pivot_requested(&first)
                      && cballs_opt_full_sky(&first)
-                     && !cballs_opt_smooth(&first)
                      && !cballs_opt_no_check_equal_positions(&first),
                      "first cache lost a present option") == FAILURE)
         return EXIT_FAILURE;
@@ -76,13 +75,11 @@ int main(void)
         return EXIT_FAILURE;
 #endif
 
-    second.options = "smooth,no-check-two-bodies-eq-pos,ggg-full-window,ggg-profile,legacy-one-ball";
+    second.options = "only-2pcf,no-check-two-bodies-eq-pos,no-smooth-pivot";
     cballs_refresh_option_cache(&second);
-    if (require_true(cballs_opt_smooth(&second)
+    if (require_true(cballs_opt_only_2pcf(&second)
                      && cballs_opt_no_check_equal_positions(&second)
-                     && cballs_opt_ggg_full_window(&second)
-                     && cballs_opt_ggg_profile(&second)
-                     && cballs_opt_legacy_one_ball(&second)
+                     && cballs_opt_no_smooth_pivot(&second)
                      && !cballs_opt_smooth_pivot_requested(&second)
                      && !cballs_opt_smooth_pivot(&second),
                      "high cache bits or exact token matching failed") == FAILURE)

@@ -7,7 +7,6 @@
 #define BALLTREE_2BALLS_PRIMARY_FEATURES 1
 #define BALLTREE_2BALLS_FULL_FUNCTION searchcalc_balltree_2balls_full_mpi
 #define BALLTREE_2BALLS_SEARCH_FUNCTION searchcalc_balltree_2balls_mpi
-#define BALLTREE_2BALLS_LEGACY_FUNCTION searchcalc_balltree_mpi
 #ifdef BALLS4SCANLEV
 #define DUAL_NODE_SCAN_LEVEL_FRONTIER 1
 #endif

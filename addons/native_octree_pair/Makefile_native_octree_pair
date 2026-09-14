@@ -5,10 +5,31 @@ NATIVEOCTREEPAIRTREE = $(MDIR)/addons/octree_2balls_omp/
 vpath %.c $(NATIVEOCTREEPAIR):$(NATIVEOCTREEPAIRTREE)
 INCLUDES += -I$(NATIVEOCTREEPAIR) \
             -I$(NATIVEOCTREEPAIRTREE) \
-            -I$(MDIR)/addons/balltree_omp
+            -I$(MDIR)/addons/balltree_shared
 HEADERFILES += $(wildcard $(NATIVEOCTREEPAIR)/*.h) \
                $(wildcard $(NATIVEOCTREEPAIRTREE)/*.h)
 EXTERNAL += native_octree_pair.o octree_2balls_tree.o
+
+# Apple uses Accelerate's vForce entry points.  On Linux, prefer SLEEF when it
+# is available; the explicit compiler mode is useful for toolchains configured
+# with a vector libm (for example GCC + glibc libmvec).
+PKG_CONFIG ?= pkg-config
+NATIVE_PAIR_VECTOR_LOG ?= auto
+ifeq ($(UNAME_S),Linux)
+ifeq ($(NATIVE_PAIR_VECTOR_LOG),auto)
+ifneq ($(shell $(PKG_CONFIG) --exists sleef 2>/dev/null && echo yes),)
+NATIVE_PAIR_VECTOR_LOG := sleef
+endif
+endif
+ifeq ($(NATIVE_PAIR_VECTOR_LOG),sleef)
+CCFLAG += $(shell $(PKG_CONFIG) --cflags sleef 2>/dev/null) -DCBALLS_HAVE_SLEEF
+LDFLAG += $(shell $(PKG_CONFIG) --libs sleef 2>/dev/null)
+endif
+ifeq ($(NATIVE_PAIR_VECTOR_LOG),compiler)
+native_octree_pair.o: CCFLAG += -fno-math-errno -fno-trapping-math \
+    -DCBALLS_COMPILER_VECTOR_LOG
+endif
+endif
 
 native_octree_pair.o: \
 	$(NATIVEOCTREEPAIR)/native_octree_pair.c \

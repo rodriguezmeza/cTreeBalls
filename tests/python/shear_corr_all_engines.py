@@ -14,6 +14,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -65,6 +66,7 @@ SHEAR_ENGINE_SETTINGS = {
     SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE: "BALLTREESHEARSPHERE2BALLSOMPON",
 }
 COMPONENT_LABELS = ("Gamma0", "Gamma1", "Gamma2", "Gamma3")
+RUNTIME_HELP_OPTIONS = ("print-search-methods", "print-options", "make-info")
 
 # Prefer the extension built beside this source tree over a site installation.
 if any(PROJECT_ROOT.glob("cyballs*.so")) or any(PROJECT_ROOT.glob("cyballs*.pyd")):
@@ -688,7 +690,50 @@ def save_catalog_npz(path: Path, catalog: ShearCatalog) -> None:
 
 
 
-def available_engines(cballs_executable: Path = DEFAULT_CBALLS) -> list[str]:
+def inspect_cballs_runtime(
+    cballs_executable: Path = DEFAULT_CBALLS,
+) -> dict[str, Any]:
+    executable = Path(cballs_executable).expanduser().resolve()
+    runtime: dict[str, Any] = {
+        "available": executable.is_file() and os.access(executable, os.X_OK),
+        "executable": os.fspath(executable),
+        "queries": {},
+    }
+    if not runtime["available"]:
+        runtime["reason"] = "cballs executable is missing or not executable"
+        return runtime
+    for option in RUNTIME_HELP_OPTIONS:
+        completed = subprocess.run(
+            [os.fspath(executable), f"options={option}"],
+            cwd=executable.parent, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, check=False,
+        )
+        runtime["queries"][option] = {
+            "returncode": completed.returncode,
+            "ok": completed.returncode in (0, 1),
+            "output": completed.stdout,
+        }
+    methods = runtime["queries"]["print-search-methods"]["output"]
+    options = runtime["queries"]["print-options"]["output"]
+    make_info = runtime["queries"]["make-info"]["output"]
+    runtime["search_methods"] = re.findall(
+        r"^- ([^ ]+) \(id=[0-9]+\)$", methods, re.MULTILINE
+    )
+    runtime["registered_options"] = re.findall(
+        r"^- ([^ ]+) \[[^]]+\]:", options, re.MULTILINE
+    )
+    runtime["make_settings"] = dict(re.findall(
+        r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$",
+        make_info, re.MULTILINE,
+    ))
+    runtime["available"] = all(
+        query["ok"] for query in runtime["queries"].values()
+    )
+    return runtime
+
+
+def available_engines(cballs_executable: Path = DEFAULT_CBALLS,
+                      runtime_info: Optional[dict[str, Any]] = None) -> list[str]:
     result: list[str] = []
     try:
         from cyballs import search_method_id
@@ -697,16 +742,12 @@ def available_engines(cballs_executable: Path = DEFAULT_CBALLS) -> list[str]:
                 result.append(engine)
     except (ImportError, OSError, AttributeError):
         pass
-    executable = Path(cballs_executable).expanduser().resolve()
+    runtime = runtime_info or inspect_cballs_runtime(cballs_executable)
     if any(engine in result for engine in NATIVE_SHEAR_ENGINES) \
-            and executable.is_file():
-        probe = subprocess.run(
-            [os.fspath(executable), "options=print-search-methods"],
-            cwd=executable.parent, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, check=False,
-        )
+            and runtime.get("available"):
+        registered = set(runtime.get("search_methods", ()))
         for engine in NATIVE_SHEAR_ENGINES:
-            if engine in result and f"- {engine} " not in probe.stdout:
+            if engine in result and engine not in registered:
                 result.remove(engine)
     return result
 
@@ -801,11 +842,11 @@ def _timing_metadata(setup_wall: float, setup_cpu: float,
 
 def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
                    engine: Optional[str] = None) -> dict[str, Any]:
+    engine = engine or SHEAR_SPHERE_TWO_BALLS_ENGINE
     try:
         from cyballs import cballs
     except (ImportError, OSError) as exc:
         raise RuntimeError("cannot import cyballs; rebuild this source profile") from exc
-    engine = engine or SHEAR_SPHERE_TWO_BALLS_ENGINE
     minimum, maximum = config.native_limits(catalog.geometry)
     span = np.ptp(catalog.positions, axis=0)
     length_box = max(2.0*maximum, 1.1*float(np.max(span)), 1.0)
@@ -863,13 +904,13 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
                 f"elapsed_{config.statistics}": elapsed,
                 f"cpu_{config.statistics}": elapsed_cpu,
                 "native_reported_cpu_time": float(model.getCPUTime()),
-                "radius": model.getrBins().copy(),
             }
             result.update(_timing_metadata(
                 setup_wall, setup_cpu, elapsed, elapsed_cpu,
                 "cTreeBalls object/catalog/thread setup plus one native MainLoop; "
                 f"{engine} native {config.statistics} execution path",
             ))
+            result["radius"] = model.getrBins().copy()
             if config.statistics in {"2pcf", "both"}:
                 result.update(
                     xi_plus=model.getShearXiPlus().copy(),
@@ -998,7 +1039,7 @@ def timing_summary(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, An
 
 def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
     columns = (
-        ("engine", 25), ("backend", 10), ("setup_wall_s", 14),
+        ("engine", 41), ("setup_wall_s", 14),
         ("compute_wall_s", 16), ("total_wall_s", 14),
         ("setup_cpu_s", 13), ("compute_cpu_s", 15), ("total_cpu_s", 13),
         ("native_cpu_s", 14), ("cpu/wall", 10),
@@ -1009,7 +1050,7 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
         ratio = values["compute_cpu_wall_ratio"]
         native_cpu = values["native_reported_cpu_time"]
         fields = (
-            engine, values["backend"],
+            engine,
             f'{values["setup_wall_time"]:.6f}',
             f'{values["compute_wall_time"]:.6f}',
             f'{values["total_wall_time"]:.6f}',
@@ -1023,7 +1064,7 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
     lines.extend((
         "",
         "CPU values are process CPU seconds; they may exceed wall time for threaded work.",
-        "The native shear addon computes 2PCF and 3PCF together in one MainLoop.",
+        "The selected only-2pcf/only-3pcf option isolates the requested statistic.",
     ))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -1144,7 +1185,9 @@ def make_plots(results: dict[str, dict[str, Any]], config: RunConfig) -> list[st
 
 
 def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
-                     config: RunConfig) -> dict[str, dict[str, Any]]:
+                     config: RunConfig,
+                     runtime_info: Optional[dict[str, Any]] = None
+                     ) -> dict[str, dict[str, Any]]:
     catalog = catalog.normalized()
     config = config.normalized()
     config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -1166,6 +1209,7 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
         )
     timings = timing_summary(results)
     summary = {
+        "ctreeballs_runtime": runtime_info,
         "catalog": {**catalog.metadata, "nbody": catalog.nbody,
                     "geometry": catalog.geometry},
         "config": {
@@ -1246,7 +1290,10 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--save-catalog-npz", type=Path)
     parser.add_argument(
         "--engine", "--engines", dest="engines", action="append", default=[],
-        help="repeat or pass comma lists; all selects every enabled shear engine",
+        help=(
+            "repeat or pass comma lists; all or all-omp selects every enabled "
+            "full-sky shear engine"
+        ),
     )
     parser.add_argument("--list-engines", action="store_true")
     parser.add_argument(
@@ -1302,15 +1349,17 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = parse_arguments(argv)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    args = parse_arguments(raw)
     try:
-        available = available_engines(args.cballs)
+        runtime_info = inspect_cballs_runtime(args.cballs)
+        available = available_engines(args.cballs, runtime_info=runtime_info)
         if args.list_engines:
             print("Shear-compatible engines:")
             for name in ENGINE_ORDER:
-                if name == SHEAR_SPHERE_TWO_BALLS_ENGINE:
+                if name.startswith("octree-"):
                     note = "native full-sky spin-2 octree dual-node estimator"
-                elif name == SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE:
+                elif name.startswith("kdtree-"):
                     note = ("native full-sky spin-2 median KD tree with dual-node "
                             "2PCF and accepted-node Gamma 3PCF")
                 else:
@@ -1319,6 +1368,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 setting = SHEAR_ENGINE_SETTINGS[name]
                 print(
                     f"- {name}: {'available' if name in available else 'unavailable'}; "
+                    "parallel=OpenMP; "
                     f"build={setting}; mask=preselect; edge=3PCF mode-coupling; "
                     f"smooth=supported; {note}"
                 )
@@ -1387,7 +1437,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         if args.save_catalog_npz is not None:
             save_catalog_npz(args.save_catalog_npz, catalog)
-        run_engine_suite(catalog, engines, config)
+        run_engine_suite(catalog, engines, config, runtime_info=runtime_info)
         print(f"Results written to {config.output_dir}")
         return 0
     except (OSError, RuntimeError, ValueError) as exc:

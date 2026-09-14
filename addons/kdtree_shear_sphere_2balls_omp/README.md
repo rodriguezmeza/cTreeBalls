@@ -12,6 +12,22 @@ split heuristic. The 3PCF keeps exact body pivots and scans accepted neighbor
 KD nodes into radial LogMultipole rings, including exact repeated-neighbor
 second-moment subtraction.
 
+Catalog positions are normalized once before the tree is built. Tree
+aggregation and the hot transport kernel then reuse those unit vectors rather
+than taking another square root per node membership or accepted neighbor.
+Radial rings use a bin-major layout and store only nonnegative weight modes;
+transport geometry is shared across the complex products, whose two-component
+updates are SIMD-friendly. Ring buffers are reused and only their active spans
+are cleared.
+
+With `BALLS4SCANLEVON=1`, 3PCF work is split into a work-estimated pivot-cell
+frontier rather than fixed pivot ranges. Tasks prefilter conservative neighbor
+roots, run under dynamic OpenMP scheduling, and merge task-local histograms in
+spatial order under a bounded memory budget. The independent 2PCF path uses a
+symmetric dual-tree frontier. Set `CBALLS_SHEAR_PROFILE=1` to print wall and
+per-thread time in radial lookup, transport, ring accumulation, ring clearing,
+tree walking, and reduction.
+
 `only-2pcf` and `only-3pcf` skip the unused statistic. `no-two-balls` or
 `no-one-ball` forces body-level results; `dual-node-bin-slop` enables the looser
 dual-node radial criterion. Masks and the shared shear mode-coupling edge solve

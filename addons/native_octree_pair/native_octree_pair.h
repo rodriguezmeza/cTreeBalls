@@ -23,6 +23,8 @@ typedef struct {
     const cballs_native_pair_parallel *parallel;
 } cballs_native_pair_policy;
 
+int cballs_native_pair_leaf_capacity(
+        const struct cmdline_data *, const struct global_data *, INTEGER);
 int cballs_native_octree_pair_search(
         struct cmdline_data *, struct global_data *, bodyptr *, INTEGER *,
         INTEGER, INTEGER *, int, int, const cballs_native_pair_policy *);

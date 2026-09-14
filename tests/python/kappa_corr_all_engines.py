@@ -71,6 +71,7 @@ def _default_cballs_executable() -> Path:
 
 DEFAULT_CBALLS = _default_cballs_executable()
 MPI_CHILD_ENV = "CTREEBALLS_KAPPA_MPI_CHILD"
+RUNTIME_HELP_OPTIONS = ("print-search-methods", "print-options", "make-info")
 
 # A directly executed source-tree script otherwise searches ``python/`` before
 # the repository root and may load a stale site-installed extension.
@@ -359,36 +360,59 @@ def statistics_from_options(values: Iterable[str] | str | None) -> str:
     return "both"
 
 
-def discover_search_methods(executable: Path = DEFAULT_CBALLS) -> list[str]:
+def inspect_cballs_runtime(executable: Path = DEFAULT_CBALLS) -> dict[str, Any]:
     executable = Path(executable).expanduser().resolve()
     if not executable.is_file():
         raise FileNotFoundError(f"cballs executable not found: {executable}")
-    completed = subprocess.run(
-        [os.fspath(executable), "options=print-search-methods"],
-        cwd=executable.parent,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
+    queries: dict[str, dict[str, Any]] = {}
+    for option in RUNTIME_HELP_OPTIONS:
+        completed = subprocess.run(
+            [os.fspath(executable), f"options={option}"],
+            cwd=executable.parent, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, check=False,
+        )
+        queries[option] = {
+            "returncode": completed.returncode,
+            "ok": completed.returncode in (0, 1),
+            "output": completed.stdout,
+        }
+    methods = re.findall(
+        r"^- ([^ ]+) \(id=-?\d+\)$",
+        queries["print-search-methods"]["output"], re.MULTILINE,
     )
-    methods = re.findall(r"^- ([^ ]+) \(id=-?\d+\)$", completed.stdout, re.MULTILINE)
     if not methods:
         raise RuntimeError(
             f"could not discover search methods from {executable}:\n"
-            f"{completed.stdout[-2000:]}"
+            f"{queries['print-search-methods']['output'][-2000:]}"
         )
-    return methods
+    options = re.findall(
+        r"^- ([^ ]+) \[[^]]+\]:",
+        queries["print-options"]["output"], re.MULTILINE,
+    )
+    make_settings = dict(re.findall(
+        r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$",
+        queries["make-info"]["output"], re.MULTILINE,
+    ))
+    return {
+        "available": all(query["ok"] for query in queries.values()),
+        "executable": os.fspath(executable),
+        "queries": queries,
+        "search_methods": methods,
+        "registered_options": options,
+        "make_settings": make_settings,
+    }
+
+
+def discover_search_methods(executable: Path = DEFAULT_CBALLS) -> list[str]:
+    return list(inspect_cballs_runtime(executable)["search_methods"])
 
 
 def discover_make_settings(executable: Path = DEFAULT_CBALLS) -> dict[str, str]:
     executable = Path(executable).expanduser().resolve()
     completed = subprocess.run(
         [os.fspath(executable), "options=make-info"],
-        cwd=executable.parent,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
+        cwd=executable.parent, text=True, stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT, check=False,
     )
     if completed.returncode not in (0, 1):
         raise RuntimeError(
@@ -396,8 +420,7 @@ def discover_make_settings(executable: Path = DEFAULT_CBALLS) -> dict[str, str]:
         )
     return dict(re.findall(
         r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$",
-        completed.stdout,
-        re.MULTILINE,
+        completed.stdout, re.MULTILINE,
     ))
 
 
@@ -1459,6 +1482,7 @@ def run_engine_suite(
     catalog: KappaCatalog,
     config: RunConfig,
     comm: Any = None,
+    runtime_info: Optional[dict[str, Any]] = None,
 ) -> dict[str, dict]:
     """Run all selected engines while retaining one registered NumPy catalog."""
     config = config.normalized()
@@ -1583,6 +1607,7 @@ def run_engine_suite(
     if comm.rank == 0:
         timings = timing_summary(results)
         summary = {
+            "ctreeballs_runtime": runtime_info,
             "catalog": {**catalog.metadata, "nbody": catalog.nbody},
             "requested_statistics": statistics_from_options(config.options),
             "engines": {
@@ -1732,8 +1757,9 @@ def main() -> int:
         raise SystemExit("ERROR: --mpi-ranks must be positive")
 
     try:
-        executable_methods = discover_search_methods(args.cballs)
-        make_settings = discover_make_settings(args.cballs)
+        runtime_info = inspect_cballs_runtime(args.cballs)
+        executable_methods = list(runtime_info["search_methods"])
+        make_settings = dict(runtime_info["make_settings"])
         smooth_setting = make_settings.get("SMOOTHPIVOTON")
         smooth_pivot_compiled = (
             smooth_setting == "1" if smooth_setting in {"0", "1"} else None
@@ -1888,7 +1914,7 @@ def main() -> int:
                 ),
                 flush=True,
             )
-        run_engine_suite(catalog, config, comm=comm)
+        run_engine_suite(catalog, config, comm=comm, runtime_info=runtime_info)
         if comm.rank == 0:
             print(f"Results written to {Path(args.outdir).expanduser().resolve()}")
         return 0

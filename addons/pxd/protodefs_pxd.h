@@ -33,6 +33,8 @@ int get_theta(struct  cmdline_data* cmd,
               real *theta);
 int get_rsmooth(struct  global_data* gd, real *value);
 int get_cputime(struct  global_data* gd, real *cputime);
+int get_edge_correction_cpu_time(struct global_data* gd, real *value);
+int get_edge_correction_wall_time(struct global_data* gd, real *value);
 int get_sizeHistN(struct  cmdline_data* cmd, int *sizeHistN);
 int get_version(struct  cmdline_data* cmd, char *param);
 int get_rootDir(struct  cmdline_data* cmd, char *value);

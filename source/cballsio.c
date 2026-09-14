@@ -2476,10 +2476,7 @@ global int EndRun_FreeMemory_tree(struct cmdline_data* cmd,
     #endif
     }
 
-    if (!scanopt(cmd->searchMethod, "kdtree-omp")
-        && !scanopt(cmd->searchMethod, "kdtree-box-omp")
-        && !scanopt(cmd->searchMethod, "balltree-omp")
-        && !scanopt(cmd->searchMethod, "balltree-mpi")
+    if (!scanopt(cmd->searchMethod, "kdtree-box-omp")
         && !scanopt(cmd->searchMethod, "balltree-2balls-omp")) {
         freeTree(cmd, gd);
     }

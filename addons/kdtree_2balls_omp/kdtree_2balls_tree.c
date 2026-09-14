@@ -4,10 +4,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef OPENMPCODE
+#include <omp.h>
+#endif
+
 #include "globaldefs.h"
 #include "kdtree_2balls_tree.h"
 
 #define KDTREE_2BALLS_ROOT 0
+#define KDTREE_2BALLS_PARALLEL_BUILD_MIN ((INTEGER)262144)
+#define KDTREE_2BALLS_PARALLEL_SUBTREE_MIN ((INTEGER)65536)
+#define KDTREE_2BALLS_SHAPE_CACHE_SIZE 256
 
 typedef enum {
     KDTREE_2BALLS_PIVOT,
@@ -179,7 +186,7 @@ static void kdtree_2balls_aggregate(
         : cballs_store_upper_bound(MAX_REAL_NUMBER);
 }
 
-static int kdtree_2balls_build_node(
+static int kdtree_2balls_build_node_serial(
         struct cmdline_data *cmd, fcfc_balltreeptr tree,
         INTEGER first, INTEGER last, int leaf_capacity, int depth,
         kdtree_2balls_role role, INTEGER *result)
@@ -222,15 +229,147 @@ static int kdtree_2balls_build_node(
         const INTEGER middle = first + (last - first + 1) / 2;
 
         kdtree_2balls_select(tree->bptr, first, last, middle, split_axis);
-        if (kdtree_2balls_build_node(
+        if (kdtree_2balls_build_node_serial(
                 cmd, tree, first, middle - 1, leaf_capacity, depth + 1,
                 role, &node->left) == FAILURE
-            || kdtree_2balls_build_node(
+            || kdtree_2balls_build_node_serial(
                 cmd, tree, middle, last, leaf_capacity, depth + 1,
                 role, &node->right) == FAILURE)
             return FAILURE;
     }
     *result = index;
+    return SUCCESS;
+}
+
+typedef struct {
+    INTEGER points;
+    INTEGER nodes;
+    int depth;
+} kdtree_2balls_shape;
+
+typedef struct {
+    kdtree_2balls_shape entries[KDTREE_2BALLS_SHAPE_CACHE_SIZE];
+    INTEGER *nodes_by_points;
+    int count;
+    int leaf_capacity;
+} kdtree_2balls_shape_cache;
+
+static int kdtree_2balls_shape_find(
+        const kdtree_2balls_shape_cache *cache, INTEGER points)
+{
+    for (int i = 0; i < cache->count; i++)
+        if (cache->entries[i].points == points) return i;
+    return -1;
+}
+
+static int kdtree_2balls_shape_add(
+        kdtree_2balls_shape_cache *cache, INTEGER points)
+{
+    int found = kdtree_2balls_shape_find(cache, points);
+    INTEGER nodes = 1;
+    int depth = 0;
+
+    if (found >= 0) return found;
+    if (points > cache->leaf_capacity) {
+        const INTEGER left_points = points / 2;
+        const INTEGER right_points = points - left_points;
+        const int left = kdtree_2balls_shape_add(cache, left_points);
+        const int right = kdtree_2balls_shape_add(cache, right_points);
+
+        if (left < 0 || right < 0) return -1;
+        nodes += cache->entries[left].nodes + cache->entries[right].nodes;
+        depth = 1 + MAX(cache->entries[left].depth,
+                        cache->entries[right].depth);
+    }
+    if (cache->count >= KDTREE_2BALLS_SHAPE_CACHE_SIZE) return -1;
+    found = cache->count++;
+    cache->entries[found].points = points;
+    cache->entries[found].nodes = nodes;
+    cache->entries[found].depth = depth;
+    cache->nodes_by_points[points] = nodes;
+    return found;
+}
+
+static INTEGER kdtree_2balls_shape_nodes(
+        const kdtree_2balls_shape_cache *cache, INTEGER points)
+{
+    return cache->nodes_by_points[points];
+}
+
+static int kdtree_2balls_build_node(
+        struct cmdline_data *cmd, fcfc_balltreeptr tree,
+        INTEGER first, INTEGER last, int leaf_capacity, int depth,
+        kdtree_2balls_role role, INTEGER index,
+        const kdtree_2balls_shape_cache *shape, bool parallel_build)
+{
+    cballs_storage_real minimum[NDIM];
+    cballs_storage_real maximum[NDIM];
+    fcfc_ballnode *node;
+    INTEGER point;
+    int split_axis = 0;
+    int axis;
+
+    if (index < 0 || index >= tree->capacity) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "kdtree-2balls: node capacity exceeded");
+        return FAILURE;
+    }
+    node = &tree->nodes[index];
+    node->first = first;
+    node->last = last;
+    node->left = -1;
+    node->right = -1;
+
+    DO_COORD(axis)
+        minimum[axis] = maximum[axis] = Pos(tree->bptr[first])[axis];
+    for (point = first + 1; point <= last; point++)
+        DO_COORD(axis) {
+            minimum[axis] = MIN(minimum[axis], Pos(tree->bptr[point])[axis]);
+            maximum[axis] = MAX(maximum[axis], Pos(tree->bptr[point])[axis]);
+        }
+    DO_COORD(axis)
+        if ((real)maximum[axis] - (real)minimum[axis]
+            > (real)maximum[split_axis] - (real)minimum[split_axis])
+            split_axis = axis;
+
+    kdtree_2balls_aggregate(cmd, tree, node, role);
+    if (last - first + 1 > leaf_capacity) {
+        const INTEGER points = last - first + 1;
+        const INTEGER middle = first + points / 2;
+        const INTEGER left_points = middle - first;
+        const INTEGER left_index = index + 1;
+        const INTEGER right_index = left_index
+            + kdtree_2balls_shape_nodes(shape, left_points);
+        int left_status = SUCCESS;
+        int right_status = SUCCESS;
+
+        kdtree_2balls_select(tree->bptr, first, last, middle, split_axis);
+        node->left = left_index;
+        node->right = right_index;
+#ifdef OPENMPCODE
+        if (parallel_build && points >= KDTREE_2BALLS_PARALLEL_SUBTREE_MIN) {
+#pragma omp task shared(left_status)
+            left_status = kdtree_2balls_build_node(
+                cmd, tree, first, middle - 1, leaf_capacity, depth + 1,
+                role, left_index, shape, parallel_build);
+#pragma omp task shared(right_status)
+            right_status = kdtree_2balls_build_node(
+                cmd, tree, middle, last, leaf_capacity, depth + 1,
+                role, right_index, shape, parallel_build);
+#pragma omp taskwait
+        } else
+#endif
+        {
+            left_status = kdtree_2balls_build_node(
+                cmd, tree, first, middle - 1, leaf_capacity, depth + 1,
+                role, left_index, shape, parallel_build);
+            right_status = kdtree_2balls_build_node(
+                cmd, tree, middle, last, leaf_capacity, depth + 1,
+                role, right_index, shape, parallel_build);
+        }
+        if (left_status == FAILURE || right_status == FAILURE)
+            return FAILURE;
+    }
     return SUCCESS;
 }
 
@@ -249,9 +388,13 @@ static int kdtree_2balls_tree_build(
         kdtree_2balls_role role, fcfc_balltreeptr *result)
 {
     fcfc_balltreeptr tree = NULL;
+    kdtree_2balls_shape_cache shape = {0};
     INTEGER valid_count = 0;
     INTEGER root = -1;
     INTEGER source;
+    int root_shape = -1;
+    int build_status = FAILURE;
+    bool parallel_build = FALSE;
 
     if (result == NULL || body_table == NULL
         || body_count <= 0 || leaf_capacity <= 0) {
@@ -282,10 +425,34 @@ static int kdtree_2balls_tree_build(
         return FAILURE;
     }
 
+#ifdef OPENMPCODE
+    parallel_build = valid_count >= KDTREE_2BALLS_PARALLEL_BUILD_MIN
+                  && omp_get_max_threads() > 1;
+#endif
+    if (parallel_build) {
+        shape.leaf_capacity = leaf_capacity;
+        shape.nodes_by_points = calloc(
+            (size_t)valid_count + 1, sizeof(*shape.nodes_by_points));
+        if (shape.nodes_by_points == NULL) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "kdtree-2balls: tree-shape allocation failed");
+            return FAILURE;
+        }
+        root_shape = kdtree_2balls_shape_add(&shape, valid_count);
+        if (root_shape < 0 || shape.entries[root_shape].nodes <= 0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "kdtree-2balls: tree-shape construction failed");
+            free(shape.nodes_by_points);
+            return FAILURE;
+        }
+    }
+
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
     tree->npoint = valid_count;
-    tree->capacity = 2 * valid_count;
+    tree->nnode = parallel_build ? shape.entries[root_shape].nodes : 0;
+    tree->capacity = parallel_build ? tree->nnode : 2 * valid_count;
+    tree->max_depth = parallel_build ? shape.entries[root_shape].depth : 0;
     tree->bptr = malloc((size_t)valid_count * sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
     tree->packed_points = malloc(
@@ -300,15 +467,33 @@ static int kdtree_2balls_tree_build(
         if (kdtree_2balls_valid_body(cmd, body, role))
             tree->bptr[valid_count++] = body;
     }
-    if (kdtree_2balls_build_node(
+#ifdef OPENMPCODE
+    if (parallel_build) {
+#pragma omp parallel shared(build_status)
+        {
+#pragma omp single
+            build_status = kdtree_2balls_build_node(
+                cmd, tree, 0, valid_count - 1, leaf_capacity, 0,
+                role, KDTREE_2BALLS_ROOT, &shape, parallel_build);
+        }
+    } else
+#endif
+    {
+        build_status = kdtree_2balls_build_node_serial(
             cmd, tree, 0, valid_count - 1, leaf_capacity, 0,
-            role, &root) == FAILURE || root != KDTREE_2BALLS_ROOT) {
+            role, &root);
+        if (root != KDTREE_2BALLS_ROOT) build_status = FAILURE;
+    }
+    if (build_status == FAILURE) {
         if (cmd->error_message[0] == '\0')
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "kdtree-2balls: node construction failed");
         kdtree_2balls_tree_free(tree);
+        free(shape.nodes_by_points);
         return FAILURE;
     }
+    free(shape.nodes_by_points);
+    shape.nodes_by_points = NULL;
 
     for (source = 0; source < valid_count; source++) {
         real field;
@@ -335,6 +520,7 @@ allocation_failure:
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
              "kdtree-2balls: memory allocation failed");
     kdtree_2balls_tree_free(tree);
+    free(shape.nodes_by_points);
     return FAILURE;
 }
 

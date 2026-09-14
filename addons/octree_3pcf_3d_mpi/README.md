@@ -64,8 +64,10 @@ See `../octree_3pcf_3d_omp/README.md` for the detailed estimator definitions.
 - Fixed blocks of `CB3D_OMP_PIVOT_BLOCK_SIZE` pivots (default 64) are
   assigned cyclically to ranks. OpenMP dynamically schedules local blocks,
   which are committed in block order.
-- Thread-count changes are deterministic for a fixed rank count. Rank-count
-  changes regroup floating-point sums and can change the last rounding bits.
+- Thread-count changes preserve results within floating-point rounding for a
+  fixed rank count. Rank-count changes also regroup floating-point sums and can
+  change the last rounding bits. Repeated runs with the same configuration are
+  deterministic.
 - Small catalogs with fewer blocks than ranks cannot occupy all ranks.
   There is no measured speedup guarantee; sufficiently large workloads are
   needed to amortize replicated startup and MPI reduction.

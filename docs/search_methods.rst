@@ -50,10 +50,6 @@ singular correction systems publish finite zero. The KD and PCA ball-tree
 methods support the compiled smooth-pivot default; ``no-smooth-pivot`` disables
 it. Native octree dual-node mode does not use smooth pivots.
 
-The option ``legacy-one-ball`` dispatches from an active two-ball method to its
-privately linked compatibility kernel. The old public method names remain
-disabled in the maintained profile.
-
 Full-Sky Shear Methods
 ----------------------
 
@@ -78,6 +74,15 @@ These consume observer-centered three-dimensional vectors and
 positions to the unit sphere, bin chord distance, parallel transport spin-2
 fields along great circles, and compute xi+/xi- plus natural 3PCF multipoles.
 See :doc:`shear`.
+
+With ``BALLS4SCANLEVON=1``, ``balltree-shear-sphere-2balls-omp`` schedules its
+body-pivot 3PCF through an adaptive PCA-cell frontier.  It repeatedly splits
+the task with the largest estimated pivot-by-neighbor work, prefilters a
+256-node neighbor multipole frontier by conservative spherical-ball overlap,
+and executes the resulting tasks dynamically.  Each task owns a private
+histogram, capped collectively at 256 MiB, and task histograms are merged in
+spatial order after the parallel region for deterministic results.  The
+``only-2pcf`` path continues to use the symmetric dual-tree scan.
 
 Lyman-alpha Forest Methods
 --------------------------

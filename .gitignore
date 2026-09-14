@@ -8,7 +8,7 @@ dist/
 cballs
 *.egg-info/
 *.egg
-python/cballys.c
+python/cyballs.c
 python/ccyballs.pxd
 python/build/
 

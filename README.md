@@ -71,9 +71,9 @@ The import name is always `cyballs`. A pip installation does not install the
 checkout's `cballs` command, examples, or benchmark source trees.
 
 Configure `Makefile_settings`, `Makefile_machine`, and
-`addons/Makefile_addons_settings` before building. Bundled GSL and CFITSIO
-are selected with `GSLINTERNAL=1` and `CFITSIOLIBON=1`; system-library
-discovery uses `gsl-config` and `pkg-config cfitsio`. Keep C and Cython
+`addons/Makefile_addons_settings` before building. Bundled GSL is selected
+with `GSLINTERNAL=1`; CFITSIO is an external dependency discovered with
+`pkg-config cfitsio`. Keep C and Cython
 flags identical and rebuild both after changing a profile. Do not hand-edit
 the generated `python/ccyballs.pxd`.
 
@@ -107,8 +107,8 @@ Older affected multipoles must be recomputed.
 `SMOOTHPIVOTON=1` enables pivot smoothing by default on active engines that
 advertise support through `options=print-search-methods`. Add
 `options=no-smooth-pivot` to recover the unsmoothed estimator. The explicit
-`smooth-pivot` spelling remains accepted. Compact dual-node traversal does not
-smooth pivots; the `legacy-one-ball` compatibility mode does where documented.
+`smooth-pivot` spelling remains accepted. Methods that do not advertise this
+feature always retain exact body pivots.
 Validate approximate tree acceptance against exact small-catalog runs before
 interpreting speedups.
 
@@ -128,7 +128,7 @@ try:
     model.set(searchMethod="octree-2balls-omp", rootDir="Output_memory",
               rangeN=1.0, rminHist=0.05, sizeHistN=6, mChebyshev=3,
               numberThreads=2, useLogHist=True,
-              options="no-normalize-HistZeta,weights-norm,no-one-ball")
+              options="no-normalize-HistZeta,weights-norm,no-two-balls")
     model.set_catalog(xyz, kappa=rng.normal(size=len(xyz)))
     model.Run()
     xi = model.getHistXi2pcf()

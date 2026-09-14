@@ -29,8 +29,8 @@ automatically broadcast their catalog input.
 GSL and CFITSIO Discovery
 -------------------------
 
-Bundled builds use ``GSLINTERNAL=1`` and ``CFITSIOLIBON=1``.
-For external libraries, verify::
+Bundled GSL builds use ``GSLINTERNAL=1``. CFITSIO is always external in the
+maintained profile. For external libraries, verify::
 
    gsl-config --cflags --libs
    pkg-config --cflags --libs cfitsio

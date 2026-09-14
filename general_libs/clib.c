@@ -840,7 +840,7 @@ long rcpu_time(void)
 
 double second(void)
 {
-  return ((double)((unsigned int)clock()))/CLOCKS_PER_SEC;
+  return ((double)clock()) / ((double)CLOCKS_PER_SEC);
 
 }
 
