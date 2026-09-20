@@ -22,8 +22,10 @@ NATIVE_PAIR_VECTOR_LOG := sleef
 endif
 endif
 ifeq ($(NATIVE_PAIR_VECTOR_LOG),sleef)
-CCFLAG += $(shell $(PKG_CONFIG) --cflags sleef 2>/dev/null) -DCBALLS_HAVE_SLEEF
-LDFLAG += $(shell $(PKG_CONFIG) --libs sleef 2>/dev/null)
+NATIVE_PAIR_SLEEF_CFLAGS := $(shell $(PKG_CONFIG) --cflags sleef 2>/dev/null)
+NATIVE_PAIR_SLEEF_LIBS := $(shell $(PKG_CONFIG) --libs sleef 2>/dev/null)
+CCFLAG += $(NATIVE_PAIR_SLEEF_CFLAGS) -DCBALLS_HAVE_SLEEF
+LDFLAG += $(NATIVE_PAIR_SLEEF_LIBS)
 endif
 ifeq ($(NATIVE_PAIR_VECTOR_LOG),compiler)
 native_octree_pair.o: CCFLAG += -fno-math-errno -fno-trapping-math \

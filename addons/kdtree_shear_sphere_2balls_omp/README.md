@@ -28,6 +28,22 @@ symmetric dual-tree frontier. Set `CBALLS_SHEAR_PROFILE=1` to print wall and
 per-thread time in radial lookup, transport, ring accumulation, ring clearing,
 tree walking, and reduction.
 
+Unsmoothed repeated catalog roles share one immutable KD tree within a
+correlation call. Smoothed pivot and neighbor roles keep separate trees;
+nothing is cached across calls or retained after model cleanup. Profiling also
+reports `binary_tree_build` and the number of `unique_trees` actually built.
+
+The binary traversal rejects cells before logarithmic bin lookup or bearing
+calculation when cheaper range and angular-extent tests suffice. The 2PCF
+reuses pair distance for its split decision and prepares its fixed acceptance
+settings once per traversal. Bin edges, opening tolerances, and histogram
+publication order are unchanged. These optimizations apply to the shared
+binary scan used by the spherical ball-tree and MPI partners as well.
+
+Coincident cell centers are subdivided when their bounding spheres overlap the
+search range. They are not treated as zero-distance body pairs: cross catalogs
+can have identical cell centers while containing valid nonzero-distance pairs.
+
 `only-2pcf` and `only-3pcf` skip the unused statistic. `no-two-balls` or
 `no-one-ball` forces body-level results; `dual-node-bin-slop` enables the looser
 dual-node radial criterion. Masks and the shared shear mode-coupling edge solve

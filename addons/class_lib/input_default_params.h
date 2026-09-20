@@ -67,7 +67,7 @@ int input_default_params(struct cmdline_data *cmd)
 #ifdef OPENMPCODE
     cmd->numthreads = 16;
 #endif
-    cmd->options = "";
+    cmd->options = "legacy-one-ball";
     cmd->options_cache_flags = 0;
     cmd->options_cache_valid = FALSE;
     //E

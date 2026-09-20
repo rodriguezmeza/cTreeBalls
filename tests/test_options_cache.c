@@ -16,7 +16,13 @@ int main(void)
     memset(&first, 0, sizeof(first));
     memset(&second, 0, sizeof(second));
 
-    first.searchMethod = "octree-sincos-omp";
+    first.searchMethod = "octree-ggg-3d-mpi";
+    if (require_true(!cballs_observer_frame(&first), "physical MPI alias misclassified as angular") == FAILURE)
+        return EXIT_FAILURE;
+    first.searchMethod = "octree-ggg-3d-omp";
+    if (require_true(!cballs_observer_frame(&first), "physical OMP alias misclassified as angular") == FAILURE)
+        return EXIT_FAILURE;
+    first.searchMethod = "octree-ggg-omp";
     second.searchMethod = "octree-2balls-omp";
     first.options = "read-mask,no-one-ball,smooth-pivot,full-sky";
     second.options = "behavior-ball,edge-corrections";
@@ -34,6 +40,7 @@ int main(void)
                      && cballs_opt_no_one_ball(&first)
                      && cballs_opt_smooth_pivot_requested(&first)
                      && cballs_opt_full_sky(&first)
+                     && !cballs_opt_smooth(&first)
                      && !cballs_opt_no_check_equal_positions(&first),
                      "first cache lost a present option") == FAILURE)
         return EXIT_FAILURE;
@@ -75,16 +82,26 @@ int main(void)
         return EXIT_FAILURE;
 #endif
 
-    second.options = "only-2pcf,no-check-two-bodies-eq-pos,no-smooth-pivot";
+    second.options = "smooth,no-check-two-bodies-eq-pos,ggg-full-window,ggg-profile,legacy-one-ball";
     cballs_refresh_option_cache(&second);
-    if (require_true(cballs_opt_only_2pcf(&second)
+    if (require_true(cballs_opt_smooth(&second)
                      && cballs_opt_no_check_equal_positions(&second)
-                     && cballs_opt_no_smooth_pivot(&second)
-                     && !cballs_opt_smooth_pivot_requested(&second)
-                     && !cballs_opt_smooth_pivot(&second),
+                     && cballs_opt_ggg_full_window(&second)
+                     && cballs_opt_ggg_profile(&second)
+                     && cballs_opt_legacy_one_ball(&second)
+                     && !cballs_opt_smooth_pivot_requested(&second),
                      "high cache bits or exact token matching failed") == FAILURE)
         return EXIT_FAILURE;
 
+#ifdef SMOOTHPIVOT
+    if (require_true(cballs_opt_smooth_pivot(&second),
+                     "legacy octree compatibility must default to smoothing") == FAILURE)
+        return EXIT_FAILURE;
+#else
+    if (require_true(!cballs_opt_smooth_pivot(&second),
+                     "compiled-off smoothing became effective") == FAILURE)
+        return EXIT_FAILURE;
+#endif
     puts("PASS: search option cache fallback, refresh, and ownership");
     return EXIT_SUCCESS;
 }

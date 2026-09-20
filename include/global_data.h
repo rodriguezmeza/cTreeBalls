@@ -42,6 +42,13 @@ struct global_data{
     real **matPXD;
     real *histZetaMFlatten;
     real ***histZetaM_EE;
+    /* Scalar angular edge-correction support, row-major B by B. */
+    unsigned char *scalar_window_status;
+    real *scalar_window_w0;
+    real *scalar_window_pivot_ratio;
+    int scalar_window_bins;
+    bool scalar_window_ready;
+
     real ***histZetaM_EE_Im;
     //B cross
     real ***histZetaM_EE2;
@@ -170,7 +177,7 @@ struct global_data{
     real **histXicos;
     real **histXisin;
 
-// Weak-lensing shear correlations for the active full-sky engines.
+// Flat-sky weak-lensing shear correlations (octree-shear-omp).
     real *histShearXiPlusRe;
     real *histShearXiPlusIm;
     real *histShearXiMinusRe;

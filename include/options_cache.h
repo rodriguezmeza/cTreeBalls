@@ -11,15 +11,18 @@
     X(AND_CF, and_cf, "and-CF", 0) \
     X(ASYMMETRIC, asymmetric, "asymmetric", 1) \
     X(BEHAVIOR_BALL, behavior_ball, "behavior-ball", 2) \
+    X(BEHAVIOR_TREE_OMP, behavior_tree_omp, "behavior-tree-omp", 3) \
     X(BH86, bh86, "bh86", 4) \
     X(CELESTIAL, celestial, "celestial", 5) \
     X(CENTER_OF_MASS, center_of_mass, "center-of-mass", 6) \
     X(COMPUTE_HISTN, compute_histn, "compute-HistN", 7) \
+    X(COMPUTE_J_NO_EQ_I, compute_j_no_eq_i, "compute-j-no-eq-i", 8) \
     X(CUTE_BOX, cute_box, "cute-box", 9) \
     X(CUTE_BOX_FMT, cute_box_fmt, "cute-box-fmt", 10) \
     X(CUTE_BOX_RMIN, cute_box_rmin, "cute-box-rmin", 11) \
     X(DEFAULT_RSMOOTH, default_rsmooth, "default-rsmooth", 12) \
     X(EDGE_CORRECTIONS, edge_corrections, "edge-corrections", 13) \
+    X(EDGE_EFFECTS, edge_effects, "edge-effects", 14) \
     X(FIX_RSMOOTH, fix_rsmooth, "fix-rsmooth", 15) \
     X(GGG_CORRELATION, ggg_correlation, "GGGCorrelation", 16) \
     X(KAPPA_CONSTANT, kappa_constant, "kappa-constant", 17) \
@@ -32,11 +35,13 @@
     X(NO_NORMALIZE_HISTZETA, no_normalize_histzeta, "no-normalize-HistZeta", 24) \
     X(NO_ONE_BALL, no_one_ball, "no-one-ball", 25) \
     X(NO_OUT_HIST, no_out_hist, "no-out-Hist", 26) \
+    X(NO_TWO_BALL, no_two_ball, "no-two-ball", 27) \
     X(NO_TWO_BALLS, no_two_balls, "no-two-balls", 28) \
     X(ONLY_POS, only_pos, "only-pos", 29) \
     X(OUT_HISTZETAG, out_histzetag, "out-HistZetaG", 30) \
     X(OUT_M_HISTZETA, out_m_histzeta, "out-m-HistZeta", 31) \
     X(PATCH_WITH_ALL, patch_with_all, "patch-with-all", 32) \
+    X(PIVOT_LOOP, pivot_loop, "pivot-loop", 33) \
     X(PIVOT_NUMBER, pivot_number, "pivot-number", 34) \
     X(RA_REVERSED, ra_reversed, "ra-reversed", 35) \
     X(RBIN_ARCMIN, rbin_arcmin, "rbin-arcmin", 36) \
@@ -51,12 +56,19 @@
     X(ECLIPTIC, ecliptic, "ecliptic", 45) \
     X(SAME_INFILES, same_infiles, "same-infiles", 46) \
     X(FULL_SKY, full_sky, "full-sky", 47) \
+    X(SMOOTH, smooth, "smooth", 48) \
+    X(SET_NB_NOSEL, set_nb_nosel, "set-Nb-noSel", 49) \
+    X(SMOOTH_MIN_CELL, smooth_min_cell, "smooth-min-cell", 50) \
+    X(SET_DEFAULT_PARAM, set_default_param, "set-default-param", 51) \
     X(REMOVE_MEAN, remove_mean, "remove-mean", 52) \
     X(NO_CHECK_EQUAL_POSITIONS, no_check_equal_positions, \
       "no-check-two-bodies-eq-pos", 53) \
     X(ONLY_2PCF, only_2pcf, "only-2pcf", 54) \
+    X(GGG_FULL_WINDOW, ggg_full_window, "ggg-full-window", 55) \
+    X(GGG_PROFILE, ggg_profile, "ggg-profile", 56) \
     X(NO_SMOOTH_PIVOT, no_smooth_pivot, "no-smooth-pivot", 57) \
-    X(ONLY_3PCF, only_3pcf, "only-3pcf", 58)
+    X(ONLY_3PCF, only_3pcf, "only-3pcf", 58) \
+    X(LEGACY_ONE_BALL, legacy_one_ball, "legacy-one-ball", 59)
 
 #define CBALLS_OPTION_ENUM(symbol, accessor, text, bit) \
     CBALLS_OPTF_##symbol = 1ULL << (bit),
@@ -101,21 +113,34 @@ CBALLS_CACHED_OPTION_TABLE(CBALLS_OPTION_ACCESSOR)
 #undef CBALLS_OPTION_ACCESSOR
 #undef CBALLS_CACHED_OPTION_TABLE
 
-/* Keep this list restricted to active engines using prepare_smooth_pivots().
- * That helper publishes private pivot state before workers start and is the
- * thread-safe ownership contract. */
+/* Keep this list restricted to engines, or explicit compatibility modes,
+ * using prepare_smooth_pivots().  That helper publishes private pivot state
+ * before workers start and is the thread-safe ownership contract. */
 static inline bool cballs_method_supports_smooth_pivot(const char *method)
 {
     if (method == NULL || method[0] == '\0')
         return FALSE;
     return strcmp(method, "octree-sincos-omp") == 0
+        || strcmp(method, "kdtree-omp") == 0
+        || strcmp(method, "kdtree-mpi") == 0
         || strcmp(method, "kdtree-2balls-omp") == 0
         || strcmp(method, "kdtree-2balls-mpi") == 0
+        || strcmp(method, "balltree-omp") == 0
+        || strcmp(method, "balltree-mpi") == 0
         || strcmp(method, "balltree-2balls-omp") == 0
         || strcmp(method, "balltree-2balls-mpi") == 0
+        || strcmp(method, "octree-2balls-omp") == 0
+        || strcmp(method, "octree-2balls-mpi") == 0
+        || strcmp(method, "octree-ggg-omp") == 0
+        || strcmp(method, "octree-ggg-mpi") == 0
+        || strcmp(method, "octree-shear-omp") == 0
+        || strcmp(method, "octree-shear-sphere-omp") == 0
         || strcmp(method, "octree-shear-sphere-2balls-omp") == 0
+        || strcmp(method, "octree-shear-sphere-2balls-mpi") == 0
         || strcmp(method, "kdtree-shear-sphere-2balls-omp") == 0
+        || strcmp(method, "kdtree-shear-sphere-2balls-mpi") == 0
         || strcmp(method, "balltree-shear-sphere-2balls-omp") == 0
+        || strcmp(method, "balltree-shear-sphere-2balls-mpi") == 0
         || strcmp(method, "neighbor-boxes-omp") == 0;
 }
 
@@ -124,6 +149,10 @@ static inline bool cballs_run_supports_smooth_pivot(
 {
     if (cmd == NULL)
         return FALSE;
+    if (cmd->searchMethod != NULL
+        && (strcmp(cmd->searchMethod, "octree-2balls-omp") == 0
+            || strcmp(cmd->searchMethod, "octree-2balls-mpi") == 0))
+        return cballs_opt_legacy_one_ball(cmd);
     return cballs_method_supports_smooth_pivot(cmd->searchMethod);
 }
 

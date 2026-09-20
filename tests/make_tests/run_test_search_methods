@@ -51,6 +51,7 @@ active_methods=(
     kdtree-box-omp neighbor-boxes-omp
     octree-3pcf-3d-omp octree-3pcf-3d-mpi
     lya-2pcf-omp lya-3pcf-omp lya-2pcf-3pcf-omp
+    lya-los-tree-2pcf-omp lya-los-tree-3pcf-omp lya-los-tree-2pcf-3pcf-omp
     lya-1d-2pcf-omp lya-1d-3pcf-omp lya-1d-2pcf-3pcf-omp
     lya-1d-tree-2pcf-omp lya-1d-tree-same-los-2pcf-omp
     lya-1d-tree-3pcf-omp
@@ -64,6 +65,20 @@ for method in "${active_methods[@]}"; do
         printf 'FAIL: active method is missing: %s\n' "${method}" >&2
         exit 1
     }
+done
+
+inactive_methods=(
+    balls-omp kdtree-omp kdtree-mpi
+    balltree-omp balltree-mpi octree-ggg-omp octree-ggg-mpi
+    octree-balls4-omp octree-balls4-mpi octree-shear-omp
+    octree-shear-sphere-omp balltree-2balls-omp_3pcf
+    balltree-2balls-mpi_3pcf
+)
+for method in "${inactive_methods[@]}"; do
+    if grep -Fq -- "- ${method} (id=" "${methods_output}"; then
+        printf 'FAIL: disabled public method was advertised: %s\n' "${method}" >&2
+        exit 1
+    fi
 done
 
 method_names=$(sed -nE 's/^- ([^ ]+) \(id=[0-9]+\)$/\1/p' "${methods_output}")
@@ -94,15 +109,23 @@ if [[ $(printf '%s\n' "${option_names}" | sort | uniq -d | wc -l | tr -d ' ') !=
 fi
 
 for option in print-search-methods make-info smooth-pivot no-smooth-pivot \
-    read-mask edge-corrections only-2pcf only-3pcf \
+    legacy-one-ball read-mask edge-corrections only-2pcf only-3pcf \
     compute-2pcf-3d compute-3pcf-3d survey-estimator-3d \
     exclude-same-los exclude-all-same-los dual-node-bin-slop \
     dual-node-direct-triples dual-node-bucket-leaves \
     dual-node-singleton-leaves dual-node-profile no-balltree-tree-cache \
-    no-balltree-persistent-frontier no-balltree-parallel-build weights-norm \
-    default-rsmooth fix-rsmooth; do
+    no-balltree-persistent-frontier no-balltree-parallel-build weights-norm; do
     grep -Fq -- "- ${option} [" "${options_output}" || {
         printf 'FAIL: active option is missing: %s\n' "${option}" >&2
+        exit 1
+    }
+done
+
+for option in behavior-tree-omp compute-j-no-eq-i pivot-loop default-rsmooth \
+    fix-rsmooth edge-effects no-two-ball set-default-param set-Nb-noSel \
+    smooth smooth-min-cell; do
+    grep -Fq -- "- ${option} [" "${options_output}" || {
+        printf 'FAIL: cached legacy option is missing: %s\n' "${option}" >&2
         exit 1
     }
 done
@@ -132,6 +155,15 @@ for setting in KDTREE2BALLSOMPON KDTREE2BALLSMPION BALLTREE2BALLSOMPON \
         printf 'FAIL: make-info is missing active setting: %s\n' "${setting}" >&2
         exit 1
     }
+done
+
+for setting in KDTREEOMPON KDTREEMPION BALLTREEOMPON BALLTREEMPION \
+    OCTREEGGGOMPON OCTREEGGGMPION OCTREEBALLS4OMPON OCTREEBALLS4MPION; do
+    if grep -Eq "^[[:space:]]+${setting}[[:space:]]+= 1$" "${make_output}"; then
+        printf 'FAIL: make-info published an inactive addon as enabled: %s\n' \
+            "${setting}" >&2
+        exit 1
+    fi
 done
 
 printf 'PASS: runtime help matches the active addon profile.\n'

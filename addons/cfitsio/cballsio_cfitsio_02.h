@@ -7,300 +7,123 @@
 
 #include <ctype.h>
 
-// input in: addons/source/cballsio/cballsio_include_11a.h
+/* Preserve the first read error while always closing with a fresh status. */
+static int fits_failure(struct cmdline_data *cmd, int status, const char *where);
 
-local int inputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
-                               string filename, int ifile)
+local int cfitsio_close_input(struct cmdline_data *cmd, fitsfile *fptr, int rc)
 {
-    string routineName = "inputdata_cfitsio";
-    fitsfile *fptr;
+    int close_status = 0;
+    if (fptr != NULL && fits_close_file(fptr, &close_status) && rc == SUCCESS)
+        return fits_failure(cmd, close_status, "fits_close_file (input)");
+    return rc;
+}
+
+/* All table readers share header validation and ownership of the open handle.
+   Never consume metadata after CFITSIO reports a failure. */
+local int cfitsio_open_table(struct cmdline_data *cmd, string filename,
+                            fitsfile **fptr)
+{
+    int status = 0, nkeys = 0, ncols = 0;
     char card[FLEN_CARD];
-    int status = 0, nkeys, ii;                      // MUST initialize status
-
-    gd->input_comment = "fits input file";
-
-    //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
-    verb_print(cmd->verbose,
-               "\tinputdata_cfitsio: -D_REENTRANT flag: %d...\n",
-               fits_is_reentrant());
-    //E
-
-    verb_print(cmd->verbose,
-               "\tinputdata_cfitsio: opening fits file: %s...\n",
-               filename);
+    *fptr = NULL;
     if (scanopt(cmd->options, "fits-type-file"))
-        fits_open_file(&fptr, filename, READONLY, &status);
+        fits_open_file(fptr, filename, READONLY, &status);
     else
-        fits_open_data(&fptr, filename, READONLY, &status);
-    
-    if (status) {
-        fits_report_error(stderr, status);
-        cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
-                    routineName, filename, status);
-    }
-
-    fits_get_hdrspace(fptr, &nkeys, NULL, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_hdrspace status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-    fits_get_num_rows(fptr, &cmd->nbody, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_num_rows status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose,"\nHeader information:\n\n");
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-            printf("%s\n", card);
-        }
-        printf("END\n\n");                          // terminate listing
-                                                    //  with END
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
-            "... and number of columns = %d\n\n",
-            cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            cBALLS_FAIL(cmd,
-                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                        cmd->nbody);
-
-        int typecode;
-        long repeat;
-        long width;
-        verb_print(cmd->verbose,
-                   "Columns info details:\n");
-        for (ii = 1; ii <= ncols; ii++) {
-            fits_get_coltype(fptr, ii, &typecode,
-                             &repeat, &width, &status);
-            switch(typecode) {
-                case TLONG:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TLONG", repeat, width);
-                    break;
-                case TFLOAT:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TFLOAT", repeat, width);
-                    break;
-                case TDOUBLE:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TDOUBLE", repeat, width);
-                    break;
-            }
-        }
-        verb_print(cmd->verbose,"\n");
-        verb_print(cmd->verbose,"end of header information.\n\n");
-    } else { // ! header-info
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-        }
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
-            "... and number of columns = %d\n",
-            cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            cBALLS_FAIL(cmd,
-                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                        cmd->nbody);
-    }
-
-    if (scanopt(cmd->options, "stop-fits")) {
-        if (strnull(cmd->outfile)) {
-            fits_close_file(fptr, &status);
-            gd->inputHeaderFlag = TRUE;
-            gd->stopflag = TRUE;
-            if (status) {                           // print error message
-                verb_print(cmd->verbose,
-                           "\tinputdata_cfitsio: status: %d...\n\n",
-                           status);
-                fits_report_error(stderr, status);
-            }
-            return SUCCESS;
-            
-        }
-    }
-
-    if (inputdata_cfitsio_xyz(cmd, gd, filename, ifile, fptr) == FAILURE) {
-        fits_close_file(fptr, &status);
+        fits_open_data(fptr, filename, READONLY, &status);
+    if (status) goto fail;
+    fits_get_hdrspace(*fptr, &nkeys, NULL, &status);
+    if (status) goto fail;
+    fits_get_num_rows(*fptr, &cmd->nbody, &status);
+    if (status) goto fail;
+    fits_get_num_cols(*fptr, &ncols, &status);
+    if (status) goto fail;
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "FITS input '%s': table must contain at least one row", filename);
+        cfitsio_close_input(cmd, *fptr, FAILURE);
+        *fptr = NULL;
         return FAILURE;
     }
-
-    //B once data has been read, close fits file
-    verb_print(cmd->verbose,
-               "\tinputdata_cfitsio: closing fits file: %s...\n",
-               filename);
-    fits_close_file(fptr, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
+    if (scanopt(cmd->options, "header-info")) {
+        for (int ii = 1; ii <= nkeys; ii++) {
+            fits_read_record(*fptr, ii, card, &status);
+            if (status) goto fail;
+            printf("%s\n", card);
+        }
+        printf("END\n\n");
+        for (int ii = 1; ii <= ncols; ii++) {
+            int typecode;
+            long repeat, width;
+            fits_get_coltype(*fptr, ii, &typecode, &repeat, &width, &status);
+            if (status) goto fail;
+            verb_print(cmd->verbose, "%d: typecode, repeat, width = %d %ld %ld\n",
+                       ii, typecode, repeat, width);
+        }
     }
-    //E
-
+    verb_print(cmd->verbose, "FITS input: nbody = %ld, columns = %d\n",
+               (long)cmd->nbody, ncols);
     return SUCCESS;
+fail:
+    fits_failure(cmd, status, filename);
+    cfitsio_close_input(cmd, *fptr, FAILURE);
+    *fptr = NULL;
+    return FAILURE;
+}
+
+local int cfitsio_column_error(struct cmdline_data *cmd, int status,
+                               int column, string filename)
+{
+    fits_report_error(stderr, status);
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "FITS input '%s': column %d failed with status=%d",
+             filename, column, status);
+    return FAILURE;
+}
+
+// input in: addons/source/cballsio/cballsio_include_11a.h
+
+local int inputdata_cfitsio(struct cmdline_data* cmd,
+                               struct global_data* gd, string filename, int ifile)
+{
+    fitsfile *fptr = NULL;
+    int rc;
+    gd->input_comment = "fits input file";
+    if (cfitsio_open_table(cmd, filename, &fptr) == FAILURE)
+        return FAILURE;
+    if (scanopt(cmd->options, "stop-fits") && strnull(cmd->outfile)) {
+        rc = cfitsio_close_input(cmd, fptr, SUCCESS);
+        if (rc == FAILURE) return FAILURE;
+        gd->inputHeaderFlag = TRUE;
+        gd->stopflag = TRUE;
+        return SUCCESS;
+    }
+    rc = inputdata_cfitsio_xyz(cmd, gd, filename, ifile, fptr);
+    return cfitsio_close_input(cmd, fptr, rc);
 }
 
 // Routine to read ra-dec-field fits files
 //  use columns=1,2,3,4 -> to adjust ra-dec-field-weight information
 local int inputdata_cfitsio_radec_field(struct cmdline_data* cmd,
-                                             struct  global_data* gd,
-                                             string filename, int ifile)
+                               struct global_data* gd, string filename, int ifile)
 {
-    string routineName = "inputdata_cfitsio_radec_field";
-    fitsfile *fptr;
-    char card[FLEN_CARD];
-    int status = 0, nkeys, ii;                      // MUST init status
-
+    fitsfile *fptr = NULL;
+    int rc;
     gd->input_comment = "fits-radec-field input file";
-
-    //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                          "\tinputdata_cfitsio: -D_REENTRANT flag: %d...\n",
-                          fits_is_reentrant());
-    //E
-
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\tinputdata_cfitsio: opening fits file: %s...\n",
-                        filename);
-
-    if (scanopt(cmd->options, "fits-type-file"))
-        fits_open_file(&fptr, filename, READONLY, &status);
-    else
-        fits_open_data(&fptr, filename, READONLY, &status);
-
-    if (status) {
-        fits_report_error(stderr, status);
-        cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
-                    routineName, filename, status);
-    }
-
-    fits_get_hdrspace(fptr, &nkeys, NULL, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_hdrspace status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-    fits_get_num_rows(fptr, &cmd->nbody, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_num_rows status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose,"\nHeader information:\n\n");
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-            printf("%s\n", card);
-        }
-        printf("END\n\n");                          // terminate listing
-                                                    //  with END
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
-            "... and number of columns = %d\n\n",
-            cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            cBALLS_FAIL(cmd,
-                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                        cmd->nbody);
-
-        int typecode;
-        long repeat;
-        long width;
-        verb_print(cmd->verbose,
-                   "Columns info details:\n");
-        for (ii = 1; ii <= ncols; ii++) {
-            fits_get_coltype(fptr, ii, &typecode,
-                             &repeat, &width, &status);
-            switch(typecode) {
-                case TLONG:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TLONG", repeat, width);
-                    break;
-                case TFLOAT:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TFLOAT", repeat, width);
-                    break;
-                case TDOUBLE:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TDOUBLE", repeat, width);
-                    break;
-            }
-        }
-        verb_print(cmd->verbose,"\n");
-        verb_print(cmd->verbose,"end of header information.\n\n");
-    } else { // ! header-info
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-        }
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
-            "... and number of columns = %d\n",
-            cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            cBALLS_FAIL(cmd,
-                        "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                        cmd->nbody);
-    }
-
-    if (scanopt(cmd->options, "stop-fits")) {
-        if (strnull(cmd->outfile)) {
-            fits_close_file(fptr, &status);
-            cBALLS_FAIL(cmd, "%s: stop-fits requested for '%s'\n",
-                        routineName, filename);
-        }
-    }
-
-    if (inputdata_cfitsio_ra_dec(cmd, gd, filename, ifile, fptr) == FAILURE) {
-        fits_close_file(fptr, &status);
+    if (cfitsio_open_table(cmd, filename, &fptr) == FAILURE)
         return FAILURE;
+    if (scanopt(cmd->options, "stop-fits") && strnull(cmd->outfile)) {
+        rc = cfitsio_close_input(cmd, fptr, SUCCESS);
+        if (rc == FAILURE) return FAILURE;
+        gd->inputHeaderFlag = TRUE;
+        gd->stopflag = TRUE;
+        return SUCCESS;
     }
-
-    //B once data has been read, close fits file
-    verb_print(cmd->verbose,
-               "\tinputdata_cfitsio: closing fits file: %s...\n",
-               filename);
-    fits_close_file(fptr, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-    //E
-
-    return SUCCESS;
+    rc = inputdata_cfitsio_ra_dec(cmd, gd, filename, ifile, fptr);
+    return cfitsio_close_input(cmd, fptr, rc);
 }
 
 // Routine to read ra-dec-field fits files
-//  columns order is ra,dec,field,weight
+//  columns order is field,ra,dec,weight (angles in radians)
 //  Check header with:
 //      options=header-info,stop-fits
 //  and if needed add to options 'with-weight'
@@ -310,6 +133,11 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
 {
     string routineName = "inputdata_cfitsio_ra_dec";
     bodyptr p;
+    double *arrayKappa = NULL;
+    double *arrayRA = NULL;
+    double *arrayDEC = NULL;
+    double *arrayWEIGHT = NULL;
+
     real mass=1;
     real weight=1;
 
@@ -318,8 +146,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     LONGLONG firstrow;
     LONGLONG firstelem;
     LONGLONG nelements;
-    float nulval;
-    float *arrayKappa;
+    double nulval = 0.0;
     int anynul;
     int status = 0;
 
@@ -328,16 +155,15 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
                      gd->columns[0], gd->columns[1],
                      gd->columns[2], gd->columns[3]);
 
-    //B if necessary change to DOUBLE
-    datatype = 42;                                  // TFLOAT
-    //E
+    datatype = TDOUBLE;
     colnum = gd->columns[0];
     firstrow = 1;
     firstelem = 1;
     nelements = cmd->nbody;
-    arrayKappa = (float*) allocate(cmd->nbody * sizeof(float));
+    arrayKappa = (double*) allocate(cmd->nbody * sizeof(double));
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
+    if (status) goto fits_read_fail;
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
     gd->bodytable_allocated = TRUE;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
@@ -351,41 +177,32 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     }
 
     free(arrayKappa);
+    arrayKappa = NULL;
 
 #if NDIM == 3
     real ra, dec;
-    //B if necessary change to DOUBLE
-    float *arrayRA;
-    float *arrayDEC;
-    float *arrayWEIGHT;
-    arrayRA = (float*) allocate(cmd->nbody * sizeof(float));
-    arrayDEC = (float*) allocate(cmd->nbody * sizeof(float));
-    arrayWEIGHT = (float*) allocate(cmd->nbody * sizeof(float));
+    arrayRA = (double*) allocate(cmd->nbody * sizeof(double));
+    arrayDEC = (double*) allocate(cmd->nbody * sizeof(double));
+
     //E
     colnum = gd->columns[1];
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayRA, &anynul, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n", status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
     colnum = gd->columns[2];
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayDEC, &anynul, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n", status);
-        fits_report_error(stderr, status);
+    if (status) goto fits_read_fail;
+
+    if (scanopt(cmd->options, "with-weight")) {
+        arrayWEIGHT = (double*) allocate(cmd->nbody * sizeof(double));
+        colnum = gd->columns[3];
+        fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
+                      nelements, &nulval, arrayWEIGHT, &anynul, &status);
+        if (status) goto fits_read_fail;
     }
-    colnum = gd->columns[3];
-    fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
-                  nelements, &nulval, arrayWEIGHT, &anynul, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n", status);
-        fits_report_error(stderr, status);
-    }
+
     if (scanopt(cmd->options, "no-arfken")) {
         DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
             ra = arrayRA[p-bodytable[ifile]];
@@ -415,8 +232,11 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     }
 
     free(arrayWEIGHT);
+    arrayWEIGHT = NULL;
     free(arrayDEC);
+    arrayDEC = NULL;
     free(arrayRA);
+    arrayRA = NULL;
 
     gd->nbodyTable[ifile] = cmd->nbody;
 
@@ -470,158 +290,35 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
 #endif
 
     return SUCCESS;
+
+fits_read_fail:
+    free(arrayKappa);
+    free(arrayRA);
+    free(arrayDEC);
+    free(arrayWEIGHT);
+    return cfitsio_column_error(cmd, status, colnum, filename);
 }
 
 //B RADECR_FIELD
 // Routine to read ra-dec-field fits files
 //  use columns=1,2,3,4 -> to adjust ra-dec-r-field-weight information
 local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
-                                         struct  global_data* gd,
-                                         string filename, int ifile)
+                               struct global_data* gd, string filename, int ifile)
 {
-    string routineName = "inputdata_cfitsio_radecr_field";
-    fitsfile *fptr;
-    char card[FLEN_CARD];
-    int status = 0, nkeys, ii;                      // MUST init status
-
+    fitsfile *fptr = NULL;
+    int rc;
     gd->input_comment = "fits-radecr-field input file";
-
-    //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                          "\t%s: -D_REENTRANT flag: %d...\n",
-                          routineName, fits_is_reentrant());
-    //E
-
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\t%s: opening fits file: %s...\n",
-                        routineName, filename);
-
-    if (scanopt(cmd->options, "fits-type-file"))
-        fits_open_file(&fptr, filename, READONLY, &status);
-    else
-        fits_open_data(&fptr, filename, READONLY, &status);
-
-    if (status) {
-        fits_report_error(stderr, status);
-        cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
-                    routineName, filename, status);
-    }
-
-
-    fits_get_hdrspace(fptr, &nkeys, NULL, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_hdrspace status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-    fits_get_num_rows(fptr, &cmd->nbody, &status);
-    if (status) {                                   // print error message
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_num_rows status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose,"\nHeader information:\n\n");
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-            printf("%s\n", card);
-        }
-        printf("END\n\n");                          // terminate listing
-                                                    //  with END
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
-            "... and number of columns = %d\n\n",
-            cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            cBALLS_FAIL(cmd,
-                "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                cmd->nbody);
-
-        int typecode;
-        long repeat;
-        long width;
-        verb_print(cmd->verbose,
-                   "Columns info details:\n");
-        for (ii = 1; ii <= ncols; ii++) {
-            fits_get_coltype(fptr, ii, &typecode,
-                             &repeat, &width, &status);
-            switch(typecode) {
-                case TLONG:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TLONG", repeat, width);
-                    break;
-                case TFLOAT:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TFLOAT", repeat, width);
-                    break;
-                case TDOUBLE:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TDOUBLE", repeat, width);
-                    break;
-            }
-        }
-        verb_print(cmd->verbose,"\n");
-        verb_print(cmd->verbose,"end of header information.\n\n");
-    } else { // ! header-info
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-        }
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody = %" INTEGER_FMT
-            "... and number of columns = %d\n",
-            cmd->nbody, ncols);
-        if (cmd->nbody < 1)
-            cBALLS_FAIL(cmd,
-                "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                cmd->nbody);
-    }
-
-    if (scanopt(cmd->options, "stop-fits")) {
-        if (strnull(cmd->outfile)) {
-            fits_close_file(fptr, &status);
-            if (status) {                           // print any error messages
-                verb_print(cmd->verbose,
-                           "\tinputdata_cfitsio: status: %d...\n\n",
-                           status);
-                fits_report_error(stderr, status);
-            }
-            gd->inputHeaderFlag=TRUE;
-            gd->stopflag = TRUE;
-            return SUCCESS;
-        }
-    }
-
-    if (inputdata_cfitsio_ra_dec_r(cmd, gd, filename, ifile, fptr) == FAILURE) {
-        fits_close_file(fptr, &status);
+    if (cfitsio_open_table(cmd, filename, &fptr) == FAILURE)
         return FAILURE;
+    if (scanopt(cmd->options, "stop-fits") && strnull(cmd->outfile)) {
+        rc = cfitsio_close_input(cmd, fptr, SUCCESS);
+        if (rc == FAILURE) return FAILURE;
+        gd->inputHeaderFlag = TRUE;
+        gd->stopflag = TRUE;
+        return SUCCESS;
     }
-
-    //B once data has been read, close fits file
-    verb_print(cmd->verbose,
-               "\tinputdata_cfitsio: closing fits file: %s...\n",
-               filename);
-    fits_close_file(fptr, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-    //E
-
-    return SUCCESS;
+    rc = inputdata_cfitsio_ra_dec_r(cmd, gd, filename, ifile, fptr);
+    return cfitsio_close_input(cmd, fptr, rc);
 }
 
 
@@ -637,6 +334,13 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
 {
     string routineName = "inputdata_cfitsio_ra_dec_r";
     bodyptr p;
+    double *arrayKappa = NULL;
+    double *arrayRA = NULL;
+    double *arrayDEC = NULL;
+    double *arrayR = NULL;
+    double *arrayWEIGHT = NULL;
+    bodyptr bodytabtmp = NULL;
+
     real mass=1;
     real weight=1;
 
@@ -645,7 +349,7 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     LONGLONG firstrow;
     LONGLONG firstelem;
     LONGLONG nelements;
-    double nulval;
+    double nulval = 0.0;
     int anynul;
     int status = 0;
     INTEGER nrows;
@@ -661,11 +365,11 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
                      gd->columns[2], gd->columns[3], gd->columns[4]);
 
     //B arrayKappa
-    double *arrayKappa;
     datatype = 82;                                  // TDOUBLE
     colnum = gd->columns[3];
     verb_print(cmd->verbose, "Column info details (Kappa):\n");
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
+    if (status) goto fits_read_fail;
     switch(typecode) {
         case TLONG:
             verb_print(cmd->verbose,
@@ -691,12 +395,12 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     verb_print_debug(1, "\n%s: rows, nelements: %ld %ld\n",
                      routineName, cmd->nbody, nelements);
     cmd->nbody = nelements;
-    bodyptr bodytabtmp;
     bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
 
     arrayKappa = (double*) allocate(nelements * sizeof(double));
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
+    if (status) goto fits_read_fail;
 
     INTEGER nonvalid=0;
     INTEGER valid=0;
@@ -741,10 +445,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     real dec = 0.0;
 
     //B arrayRA
-    double *arrayRA;
     colnum = gd->columns[0];
     verb_print(cmd->verbose, "Column info details (RA):\n");
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
+    if (status) goto fits_read_fail;
     nelements = nrows*repeat;
     arrayRA = (double*) allocate(nelements * sizeof(double));
     switch(typecode) {
@@ -766,18 +470,15 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     }
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayRA, &anynul, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n", status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
     //E
 
     //B arrayDEC
-    double *arrayDEC;
     colnum = gd->columns[1];
     verb_print(cmd->verbose, "Column info details (DEC):\n");
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
+    if (status) goto fits_read_fail;
     nelements = nrows*repeat;
     arrayDEC = (double*) allocate(nelements * sizeof(double));
     switch(typecode) {
@@ -799,18 +500,15 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     }
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayDEC, &anynul, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n", status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
     //E
 
     //B arrayR
-    double *arrayR;
     colnum = gd->columns[2];
     verb_print(cmd->verbose, "Column info details (R):\n");
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
+    if (status) goto fits_read_fail;
     nelements = nrows*repeat;
     arrayR = (double*) allocate(nelements * sizeof(double));
     switch(typecode) {
@@ -832,11 +530,8 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     }
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayR, &anynul, &status);
-    if (status) {                               // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n", status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
 
     INTEGER nonvalidR=0;
     INTEGER validR=0;
@@ -865,11 +560,11 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     //E arrayR
 
     //B arrayWEIGHT
-    double *arrayWEIGHT = NULL;
     if (scanopt(cmd->options, "with-weight")) {
         colnum = gd->columns[4];
         verb_print(cmd->verbose, "Column info details (weight):\n");
         fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
+        if (status) goto fits_read_fail;
         nelements = nrows*repeat;
         arrayWEIGHT = (double*) allocate(nelements * sizeof(double));
         switch(typecode) {
@@ -891,16 +586,14 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         }
         fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                       nelements, &nulval, arrayWEIGHT, &anynul, &status);
-        if (status) {                               // print any error messages
-            verb_print(cmd->verbose,
-                       "\tinputdata_cfitsio: status: %d...\n\n", status);
-            fits_report_error(stderr, status);
-        }
+        if (status) goto fits_read_fail;
     }
+
     int repeatWeight = repeat;
-    if (repeatKappa != repeatWeight)
-        cBALLS_FAIL(cmd,
-            "\nSize of Kappa array must be equal to Weight's one.");
+    if (scanopt(cmd->options, "with-weight") && repeatKappa != repeatWeight) {
+        status = BAD_TFORM;
+        goto fits_read_fail;
+    }
     //E
 
     ij=1;
@@ -975,12 +668,16 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "\t%s: min and max of r = %f %f\n",
                routineName, rmin, rmax);
 
-    if (scanopt(cmd->options, "with-weight"))
-        free(arrayWEIGHT);
+    free(arrayWEIGHT);
+    arrayWEIGHT = NULL;
     free(arrayR);
+    arrayR = NULL;
     free(arrayDEC);
+    arrayDEC = NULL;
     free(arrayRA);
+    arrayRA = NULL;
     free(arrayKappa);
+    arrayKappa = NULL;
 
     cmd->nbody = valid;
     gd->nbodyTable[ifile] = cmd->nbody;
@@ -1086,6 +783,15 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
 #endif
 
     return SUCCESS;
+
+fits_read_fail:
+    free(arrayKappa);
+    free(arrayRA);
+    free(arrayDEC);
+    free(arrayR);
+    free(arrayWEIGHT);
+    free(bodytabtmp);
+    return cfitsio_column_error(cmd, status, colnum, filename);
 }
 //E RADECR_FIELD
 
@@ -1123,6 +829,11 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                                 string filename, int ifile, fitsfile *fptr)
 {
     bodyptr p;
+    double *arrayKappa = NULL;
+    double *arrayX = NULL;
+    double *arrayY = NULL;
+    double *arrayZ = NULL;
+
     real mass=1;
     real weight=1;
 
@@ -1131,8 +842,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     LONGLONG firstrow;
     LONGLONG firstelem;
     LONGLONG nelements;
-    double nulval;
-    double *arrayKappa;
+    double nulval = 0.0;
     int anynul;
     int status = 0;
 #if (defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)) && NDIM == 3
@@ -1159,6 +869,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                colnum);
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
+    if (status) goto fits_read_fail;
 
     bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
     gd->bodytable_allocated = TRUE;
@@ -1172,11 +883,9 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
         }
     }
     free(arrayKappa);
+    arrayKappa = NULL;
 
 #if NDIM == 3
-    double *arrayX;
-    double *arrayY;
-    double *arrayZ;
     arrayX = (double*) allocate(cmd->nbody * sizeof(double));
     arrayY = (double*) allocate(cmd->nbody * sizeof(double));
     arrayZ = (double*) allocate(cmd->nbody * sizeof(double));
@@ -1187,12 +896,8 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                colnum);
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayX, &anynul, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
     
     colnum = gd->columns[1];
     verb_print(cmd->verbose,
@@ -1200,12 +905,8 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                colnum);
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayY, &anynul, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
 
     colnum = gd->columns[2];
     verb_print(cmd->verbose,
@@ -1213,12 +914,8 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
                colnum);
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayZ, &anynul, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
+    if (status) goto fits_read_fail;
+
 
 #if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     if (read_weight) {
@@ -1226,6 +923,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
         arrayWeight = (double*) allocate(cmd->nbody * sizeof(double));
         fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                       nelements, &nulval, arrayWeight, &anynul, &status);
+        if (status) goto fits_read_fail;
     }
     if (read_los_id) {
         LONGLONG nulval_los = 0;
@@ -1233,17 +931,9 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
         arrayLosId = (LONGLONG*) allocate(cmd->nbody * sizeof(LONGLONG));
         fits_read_col(fptr, TLONGLONG, colnum, firstrow, firstelem,
                       nelements, &nulval_los, arrayLosId, &anynul, &status);
+        if (status) goto fits_read_fail;
     }
-    if (status) {
-        free(arrayX);
-        free(arrayY);
-        free(arrayZ);
-        free(arrayWeight);
-        free(arrayLosId);
-        cBALLS_FAIL(cmd,
-                    "inputdata_cfitsio_xyz: FITS column read failed with status=%d",
-                    status);
-    }
+
 #endif
 
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
@@ -1265,8 +955,11 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     }
 
     free(arrayX);
+    arrayX = NULL;
     free(arrayY);
+    arrayY = NULL;
     free(arrayZ);
+    arrayZ = NULL;
 #if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     free(arrayWeight);
     free(arrayLosId);
@@ -1329,152 +1022,43 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
 #endif
 
     return SUCCESS;
+
+fits_read_fail:
+    free(arrayKappa);
+    free(arrayX);
+    free(arrayY);
+    free(arrayZ);
+#if (defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)) && NDIM == 3
+    free(arrayWeight);
+    free(arrayLosId);
+#endif
+    return cfitsio_column_error(cmd, status, colnum, filename);
 }
 
 // Routine to read fits-healpix files
 //  so far only RING scheme
 local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
-                                    struct  global_data* gd,
-                                    string filename, int ifile)
+                                   struct global_data* gd, string filename, int ifile)
 {
     string routineName = "inputdata_cfitsio_healpix";
-    fitsfile *fptr;
-    char card[FLEN_CARD];
-    int status = 0, nkeys, ii;                      // MUST initialize status
-
+    fitsfile *fptr = NULL;
     int rc;
-
     gd->input_comment = "fits-healpix input file";
-
-    //B Was CFITSIO compiled with the -D_REENTRANT flag?  1 = yes, 0 = no.
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                          "\t%s: -D_REENTRANT flag: %d...\n",
-                          routineName,fits_is_reentrant());
-    //E
-
-    verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                          "\t%s: opening fits file: %s...\n",
-                          routineName,filename);
-    if (scanopt(cmd->options, "fits-type-file"))
-        fits_open_file(&fptr, filename, READONLY, &status);
-    else
-        fits_open_data(&fptr, filename, READONLY, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\t%s: open status: %d...\n\n",
-                   routineName,status);
-        fits_report_error(stderr, status);
-        if (status) {
-            fits_report_error(stderr, status);
-            cBALLS_FAIL(cmd, "%s: cannot open FITS file '%s' status=%d\n",
-                        routineName, filename, status);
-        }
+    if (cfitsio_open_table(cmd, filename, &fptr) == FAILURE)
+        return FAILURE;
+    if (scanopt(cmd->options, "stop-fits") && strnull(cmd->outfile)) {
+        rc = cfitsio_close_input(cmd, fptr, SUCCESS);
+        if (rc == FAILURE) return FAILURE;
+        gd->inputHeaderFlag = TRUE;
+        gd->stopflag = TRUE;
+        return SUCCESS;
     }
-
-    fits_get_hdrspace(fptr, &nkeys, NULL, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\t%s: get_hdrspace status: %d...\n\n",
-                   routineName,status);
-        fits_report_error(stderr, status);
-    }
-    fits_get_num_rows(fptr, &cmd->nbody, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\tinputdata_cfitsio: get_num_rows status: %d...\n\n",
-                   status);
-        fits_report_error(stderr, status);
-    }
-
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose,"\nHeader information:\n\n");
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-            printf("%s\n", card);
-        }
-        printf("END\n\n");                          // terminate listing
-                                                    //  with END
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print(cmd->verbose,
-            "\tinputdata_cfitsio: nbody (nrows) = %" INTEGER_FMT
-            "... %s = %d\n\n",
-            cmd->nbody, "and number of columns", ncols);
-        if (cmd->nbody < 1) {
-            fits_close_file(fptr, &status);
-            cBALLS_FAIL(cmd,
-                "inputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                cmd->nbody);
-        }
-
-        int typecode;
-        long repeat;
-        long width;
-        verb_print(cmd->verbose,
-                   "Columns info details:\n");
-        for (ii = 1; ii <= ncols; ii++) {
-            fits_get_coltype(fptr, ii, &typecode,
-                             &repeat, &width, &status);
-            switch(typecode) {
-                case TLONG:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TLONG", repeat, width);
-                    break;
-                case TFLOAT:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TFLOAT", repeat, width);
-                    break;
-                case TDOUBLE:
-                    verb_print(cmd->verbose,
-                               "%d: typecode, repeat, width = %d %s %ld %ld\n",
-                               ii, typecode, "TDOUBLE", repeat, width);
-                    break;
-            }
-        }
-        verb_print(cmd->verbose,"\n");
-        verb_print(cmd->verbose,"end of header information.\n\n");
-    } else { // ! header-info
-        for (ii = 1; ii <= nkeys; ii++) {
-            fits_read_record(fptr, ii, card, &status); // read keyword
-        }
-        fits_get_num_rows(fptr, &cmd->nbody, &status);
-        int ncols;
-        fits_get_num_cols(fptr, &ncols, &status);
-        verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                    "\t%s: nbody(nrows) = %" INTEGER_FMT "... %s = %d\n",
-                    routineName, cmd->nbody, "and number of columns", ncols);
-        if (cmd->nbody < 1) {
-            fits_close_file(fptr, &status);
-            cBALLS_FAIL(cmd,
-                "\tinputdata_cfitsio: nbody = %" INTEGER_FMT " is absurd\n",
-                cmd->nbody);
-        }
-    }
-
-    if (scanopt(cmd->options, "stop-fits")) {
-        if (strnull(cmd->outfile)) {
-            fits_close_file(fptr, &status);
-            if (status) {                           // print any error messages
-                verb_print(cmd->verbose,
-                           "\tinputdata_cfitsio: status: %d...\n\n",
-                           status);
-                fits_report_error(stderr, status);
-            }
-            gd->inputHeaderFlag = TRUE;
-            gd->stopflag = TRUE;
-            return SUCCESS;
-        }
-    }
-    
     if (scanopt(cmd->options, "read-mask")) {
         if (ifile == 0) {
             rc = inputdata_cfitsio_healpix_map(cmd, gd, filename, ifile, fptr);
         } else {
             if (ifile != 1) {
-                fits_close_file(fptr, &status);
+                cfitsio_close_input(cmd, fptr, FAILURE);
                 cBALLS_FAIL(cmd, "\t%s: read-mask ifile = %d is absurd\n",
                             routineName, ifile);
             }
@@ -1490,26 +1074,7 @@ local int inputdata_cfitsio_healpix(struct cmdline_data* cmd,
         }
     }
 
-    if (rc == FAILURE) {
-        fits_close_file(fptr, &status);
-        return FAILURE;
-    }
-    
-
-    //B once data has been read, close fits file
-    verb_print(cmd->verbose,
-               "\t%s: closing fits file: %s...\n",
-               routineName, filename);
-    fits_close_file(fptr, &status);
-    if (status) {                                   // print any error messages
-        verb_print(cmd->verbose,
-                   "\t%s: status: %d...\n\n",
-                   routineName, status);
-        fits_report_error(stderr, status);
-    }
-    //E
-
-    return SUCCESS;
+    return cfitsio_close_input(cmd, fptr, rc);
 }
 
 local int cfitsio_healpix_map_to_ring(struct cmdline_data *cmd,

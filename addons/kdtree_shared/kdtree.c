@@ -34,17 +34,14 @@ ballxptr init_kdtree(struct cmdline_data* cmd,
     ballxptr kd;
     INTEGER i, j;
 
-    if (nbody <= 0) {
+    if (btab == NULL || nbody <= 0) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "init_kdtree: catalog is empty");
+                 "init_kdtree: catalog is null or empty");
         return NULL;
     }
-    kd = calloc(1, sizeof(*kd));
-    if (kd == NULL) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "init_kdtree: unable to allocate tree context");
+    if (cballs_calloc_checked((void **)&kd, 1, sizeof(*kd),
+            "KDTREE context", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
         return NULL;
-    }
     kd->npoint = nbody;
     kd->body_base = btab;
     if (cballs_malloc_checked((void **)&kd->bptr, (size_t)nbody,
@@ -183,7 +180,7 @@ int build_kdtree(struct cmdline_data* cmd,
 #ifdef SINGLEP
     if (cballs_malloc_checked((void **)&kd->packed_points,
             (size_t)kd->npoint, sizeof(*kd->packed_points),
-            "KD-tree packed leaf points", cmd->error_message,
+            "KDTREEOMP packed leaf points", cmd->error_message,
             _ERRORMSGSIZE_) == FAILURE)
         return FAILURE;
     for (j = 0; j < kd->npoint; j++) {

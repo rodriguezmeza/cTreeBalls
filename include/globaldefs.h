@@ -246,6 +246,7 @@ global const void *cballs_runtime_bodytable_at(
 global void cballs_runtime_destroy(cballs_runtime_state *state);
 
 #include "protodefs.h"
+#include "scalar_window.h"
 #ifdef CBALLS_MPI_ENABLED
 #include "cballs_mpi_dispatch.h"
 #endif

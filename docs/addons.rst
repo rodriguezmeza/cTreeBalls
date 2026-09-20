@@ -18,7 +18,9 @@ OpenMP and MPI method:
 They compute 2PCF and LogMultipole 3PCF, selected with ``only-2pcf`` or
 ``only-3pcf``. Dual-node acceptance is conservative by default;
 ``dual-node-bin-slop`` enables bin-aware approximation and ``no-two-balls``
-selects exact bodies. ``BALLS4SCANLEVON=1`` supplies balanced task frontiers.
+selects exact body pairs. Exact unsmoothed 3PCF uses
+``no-one-ball,no-smooth-pivot``; native octree 3PCF is not exact with
+``no-two-balls`` alone. ``BALLS4SCANLEVON=1`` supplies balanced task frontiers.
 
 All six support ``read-mask`` and complex scalar edge correction. Enable
 ``TPCFON=1`` and use::
@@ -27,7 +29,8 @@ All six support ``read-mask`` and complex scalar edge correction. Enable
 
 Add ``weights-norm`` for weighted signal and window moments. The correction
 uses signal modes through :math:`M` and window modes through :math:`2M` in a
-complex Toeplitz solve. Empty or singular systems publish zero. Masking is
+complex Toeplitz solve. Empty or singular scalar systems publish NaN with
+validity and conditioning diagnostics. Masking is
 selection; it does not itself request edge correction.
 
 The KD and PCA ball-tree families use smooth pivots by default when

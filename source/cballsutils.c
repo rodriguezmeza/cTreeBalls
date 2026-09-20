@@ -946,149 +946,102 @@ global int search_init_gd_hist_sincos(struct  cmdline_data* cmd, struct  global_
     return SUCCESS;
 }
 
-//B Computation of histogram of all B-B encounters
-// The correlation function is estimated as:
-//    xi=(V/v(r))*(DD(r)/N^2)
-// where v(r)=4*pi*((r+dr/2)^3-(r-dr/2)^3)/3, V=box_size^3 and N is the
-// total # particles.
-//
-// Note: only rminHistN = 0 works and agree with CUTE_BOX
-//  you may try options=cute-box-rmin to correct a bit the results...
-//      but for biger values of rminHistN differences grow...
-//
-local int search_compute_Xi(struct  cmdline_data* cmd,
-                            struct  global_data* gd, int nbody)
+/* HistN producers supply ordered, self-excluded auto-pair counts. Publish
+   unordered DD and (optionally) the existing N^2 density estimator:
+       xi = 2 DD V / (N^2 shell_volume) - 1.
+   Keep catalog sizes as INTEGER and convert before all count products. */
+global int search_normalize_count_histograms(struct cmdline_data *cmd,
+                                             struct global_data *gd,
+                                             INTEGER nbody,
+                                             real *histNN, real *histCF)
 {
-    int k;
-    int n;
-    real normFac;
-    real Vol;
-    //B correct cute-box-rmin
-    real deltaR = gd->deltaR;
-    if ((cballs_opt_cute_box_rmin(cmd)))
-        deltaR = cmd->rangeN/cmd->sizeHistN;
-    //E
+    const double count = (double)nbody;
+    const int compute_cf = cballs_opt_and_cf(cmd);
+    double volume = 1.0;
 
-    Vol = 1.0;
-    DO_COORD(k)
-        Vol = Vol*gd->Box[k];
-
-if (!cmd->useLogHist) {
-    if ((cballs_opt_cute_box(cmd))) {
-        gd->histNN[1]-=nbody;
+    if (histNN == NULL || cmd->sizeHistN < 1 || (compute_cf && histCF == NULL)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "count normalization: invalid histogram storage");
+        return FAILURE;
     }
-}
-    real *edd;
-    real *corr;
-    real *ercorr;
-    edd = dvector(1,cmd->sizeHistN);
-    corr = dvector(1,cmd->sizeHistN);
-    ercorr = dvector(1,cmd->sizeHistN);
-    real rho_av=(real)nbody/Vol;
-
-    for (n = 1; n <= cmd->sizeHistN; n++)
-        edd[n] = 1./rsqrt(gd->histNN[n]);
-
-    for (n = 1; n <= cmd->sizeHistN; n++) {
-        if(gd->histNN[n]==0) {
-            corr[n]=0;
-            ercorr[n]=0;
-        } else {
-            double r0,r1,vr,rho_r;
-            if (cmd->useLogHist) {
-                if (cmd->rminHist==0) {
-                    r0 = rpow(10.0, ((real)(n-cmd->sizeHistN))/cmd->logHistBinsPD
-                              + rlog10(cmd->rangeN) );
-                    r1 = rpow(10.0, ((real)(n+1-cmd->sizeHistN))/cmd->logHistBinsPD
-                              + rlog10(cmd->rangeN) );
-                } else {
-                    r0 = rpow(10.0, rlog10(cmd->rminHist) + ((real)(n))*gd->deltaR );
-                    r1 = rpow(10.0, rlog10(cmd->rminHist) + ((real)(n+1))*gd->deltaR );
-                }
-            } else {
-                //B correct cute-box-rmin
-                if ((cballs_opt_cute_box_rmin(cmd))) {
-                    r0=(real)n*deltaR;
-                    r1=(real)(n+1)*deltaR;
-                } else {
-                    r0=(real)n*gd->deltaR;
-                    r1=(real)(n+1)*gd->deltaR;
-                }
+    if (compute_cf) {
+        if (nbody <= 0 || !isfinite(count*count)) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "count normalization: body count must be positive and representable");
+            return FAILURE;
+        }
+        for (int k = 0; k < NDIM; k++) {
+            if (!isfinite(gd->Box[k]) || gd->Box[k] <= 0.0) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "count normalization: box lengths must be finite and positive");
+                return FAILURE;
             }
-
-#if (NDIM==3)
-            if (cballs_opt_cute_box(cmd)) {
-                //B this version does not give same results as CB
-                //      although the programming is the same...
-                vr=4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
-                rho_r=gd->histNN[n]/((real)nbody*vr);
-                corr[n]=rho_r/rho_av-1;             // Correlation function
-                ercorr[n]=(1+corr[n])*edd[n];       // Poisson errors
-                gd->histCF[n] = corr[n];            // Original line
-                //E
-            } else {
-                if (cmd->useLogHist) {
-                    vr=4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
-// rho_r/rho_av = ( histNN[n]/(nbody*vr) ) / (nbody/Vol)
-                    normFac = Vol/(vr*((real)(nbody*nbody)));
-                    gd->histCF[n] = gd->histNN[n] * normFac - 1.0;
-                } else {
-                    //B correct cute-box-rmin
-                    if ((cballs_opt_cute_box_rmin(cmd))) {
-                        normFac = Vol/(2.0*PI*rpow(deltaR,3.0)*nbody*nbody);
-                    } else {
-                        normFac = Vol/(2.0*PI*rpow(gd->deltaR,3.0)*nbody*nbody);
-// This line gives results for rdf (radial distribution function):
-//                gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5);
-// This line gives results in agreement with CB:
-                    }
-                    gd->histCF[n] = gd->histNN[n] * normFac / rsqr((int)n-0.5) -1.0;
-                    //E
-                }
-            }
-#else
-            if (cballs_opt_cute_box(cmd)) {
-                // This should be CB version...
-                normFac = Vol/(PI*rpow(gd->deltaR,2.0)*nbody*nbody);
-                gd->histCF[n] = gd->histNN[n] * normFac / ((int)n-0.5) - 1.0;
-            } else {
-                normFac = Vol/(PI*rpow(gd->deltaR,2.0)*nbody*nbody);
-// This line gives results for rdf (radial distribution function):
-//                gd->histCF[n] = gd->histNN[n] * normFac / ((int)n-0.5);
-// This line gives results in agreement with CB:
-                gd->histCF[n] = gd->histNN[n] * normFac / ((int)n-0.5) - 1.0;
-            }
-#endif // ! NDIM
+            volume *= (double)gd->Box[k];
+        }
+        if (!isfinite(volume) || volume <= 0.0
+            || !isfinite(cmd->rminHist) || cmd->rminHist < 0.0
+            || !isfinite(cmd->rangeN) || cmd->rangeN <= cmd->rminHist
+            || !isfinite(gd->deltaR) || gd->deltaR <= 0.0
+            || (cmd->useLogHist && cmd->rminHist == 0.0 && cmd->logHistBinsPD <= 0)) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "count normalization: invalid volume or radial domain");
+            return FAILURE;
         }
     }
-
-    free_dvector(ercorr,1,cmd->sizeHistN);
-    free_dvector(corr,1,cmd->sizeHistN);
-    free_dvector(edd,1,cmd->sizeHistN);
-
+    for (int n = 1; n <= cmd->sizeHistN; n++) {
+        if (!isfinite(histNN[n]) || histNN[n] < 0.0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "count normalization: invalid pair count in bin %d", n);
+            return FAILURE;
+        }
+        if (compute_cf) {
+            double r0, r1, shell;
+            if (cmd->useLogHist) {
+                if (cmd->rminHist == 0.0) {
+                    /* The zero-cutoff legacy bin index truncates toward zero:
+                       bin 1 also accepts the interval immediately below the
+                       nominal grid. Normalize the actual accepted interval. */
+                    const int lower = n == 1 ? -1 : n-1;
+                    r0 = cmd->rangeN * pow(10.0,
+                        ((double)lower-cmd->sizeHistN)/cmd->logHistBinsPD);
+                    r1 = cmd->rangeN * pow(10.0,
+                        ((double)n-cmd->sizeHistN)/cmd->logHistBinsPD);
+                } else {
+                    r0 = cmd->rminHist * pow(10.0, (double)(n-1)*gd->deltaR);
+                    r1 = cmd->rminHist * pow(10.0, (double)n*gd->deltaR);
+                }
+            } else {
+                r0 = cmd->rminHist + (double)(n-1)*gd->deltaR;
+                r1 = cmd->rminHist + (double)n*gd->deltaR;
+            }
+#if NDIM == 3
+            shell = (4.0*PI/3.0)*(r1-r0)*(r1*r1+r1*r0+r0*r0);
+#else
+            shell = PI*(r1-r0)*(r1+r0);
+#endif
+            if (!isfinite(shell) || shell <= 0.0) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "count normalization: invalid shell volume in bin %d", n);
+                return FAILURE;
+            }
+            /* histNN is still ordered here, hence no additional factor two. */
+            const double xi = ((double)histNN[n]/count)/count*(volume/shell)-1.0;
+            if (!isfinite(xi)) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "count normalization: non-finite correlation in bin %d", n);
+                return FAILURE;
+            }
+            histCF[n] = xi;
+        }
+        histNN[n] *= 0.5;
+    }
     return SUCCESS;
 }
 
-
-global int search_compute_HistN(struct  cmdline_data* cmd, 
-                                struct  global_data* gd, int nbody)
+global int search_compute_HistN(struct cmdline_data *cmd,
+                                struct global_data *gd, INTEGER nbody)
 {
-    int n;
-    real normFac;
-
-//B Check this factor is correct...
-// to agree with cute_box normalization commented out these lines
-//B these does not work!!
-//    normFac = 1.0;
-//E
-    normFac = 0.5;
-    for (n = 1; n <= cmd->sizeHistN; n++)
-        gd->histNN[n] *= normFac;
-//E
-    if (cballs_opt_and_cf(cmd))
-        search_compute_Xi(cmd, gd, nbody);
-
-    return SUCCESS;
+    return search_normalize_count_histograms(cmd, gd, nbody, gd->histNN, gd->histCF);
 }
 
 

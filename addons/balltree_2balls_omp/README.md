@@ -64,12 +64,51 @@ Leaf pivots accumulate into their own cleared scratch arrays, preserving the
 original arithmetic order. Add `no-balltree-persistent-frontier` to compare
 against a neighbor-root restart for every body pivot.
 
+## Completed-pivot progress
+
+The production 3PCF reports completed active pivots in exact and approximate
+mode, with either the persistent neighbor frontier or body-root restart.
+Add `stepState=10000 verbose=1 verbose_log=1` to the cballs command or parameter
+file. Example output:
+
+```text
+balltree-2balls-omp: 3PCF progress: completed pivots 10000 / 100000 (10.0%); elapsed 2.35 s
+```
+
+The counter starts at zero and ends at the pivot-tree population, excluding
+masked bodies and pivots absorbed by smoothing. Each active smoothed
+representative counts once. Counts measure finished pivots, not input indices
+or node visits. Workers publish local batches of at most 64, smaller when
+`stepState` is smaller, and flush any remainder at task completion. A displayed
+count can therefore pass the requested interval. Updates and flushed output
+are serialized so dynamic OpenMP scheduling cannot reorder progress lines.
+
+Use `verbose=0 verbose_log=1` for log-only reporting and
+`verbose=1 verbose_log=0` for terminal-only reporting. Setting both to zero
+disables counting/publication overhead. `stepState=1` prints each pivot and can
+be expensive. The 100% line precedes histogram reduction, normalization, edge
+correction and output; it does not mean the entire application has exited.
+
+Only the OpenMP production 3PCF has this new counter. Combined 2PCF/3PCF runs
+start it after the independent pair traversal. `only-2pcf`,
+`dual-node-direct-triples`, MPI, and legacy-kernel reporting are unchanged.
+
 `read-mask` removes masked bodies before either role-specific tree is built.
 With `SMOOTHPIVOTON=1`, deterministic smooth pivots are enabled by default and
 the pivot tree stores the same grouped field and normalization sums as the KD
 two-ball engine; `no-smooth-pivot` restores ordinary body pivots. Complex
 `edge-corrections,no-normalize-HistZeta` uses window modes through twice the
 requested signal order.
+
+`options=legacy-one-ball` dispatches to the actual legacy ball-tree
+implementation. Its controls remain unchanged: `behavior-ball` enables
+one-ball node aggregation, while `no-one-ball` forces exact traversal. Use it
+with `search=balltree-2balls-omp` for OpenMP or
+`search=balltree-2balls-mpi` for MPI. Do not combine compatibility mode with
+`no-two-balls`, `dual-node-bin-slop`, or `dual-node-direct-triples`. The old
+standalone search names are disabled in the default build profile. The legacy
+ball-tree kernel has no angular-window solver: combining `legacy-one-ball`
+with `edge-corrections` is rejected. Remove `legacy-one-ball` to solve the window.
 
 Three-dimensional angular phases and acceptance use projected tangent
 bearings in the original observer frame, with chord-distance bins.
@@ -95,8 +134,8 @@ The direct validation engine explicitly visits distinct triples and has cubic
 worst-case work. Do not use `dual-node-direct-triples` for a full-sky catalog;
 the default LogMultipole path is the production algorithm.
 
-The node recursion follows the dual-node method by Mike Jarvis, distributed under its
+The node recursion follows dual-node by Mike Jarvis, distributed under its
 BSD-style license. The PCA ball-tree construction is adapted from FCFC by
 Cheng Zhao under the MIT license; see the notices in
-`addons/balltree_shared/fcfc_balltree.c`. The redistribution terms are in
+`addons/balltree_shared/fcfc_balltree.c`. dual-node's redistribution terms are in
 `dual-node_LICENSE`.

@@ -10,7 +10,7 @@ LYAFORESTOMP = $(MDIR)/addons/lya_forest_omp/
 vpath %.c $(LYAFORESTOMP)
 INCLUDES += -I$(LYAFORESTOMP)
 HEADERFILES += $(wildcard $(LYAFORESTOMP)/*.h)
-EXTERNAL += input_lya_forest_omp.o search_lya_forest_omp.o \
+EXTERNAL += input_lya_forest_omp.o search_lya_forest_omp.o search_lya_forest_los_tree_omp.o \
 	search_lya_forest_1d_omp.o search_lya_forest_1d_tree_omp.o \
 	search_lya_forest_1d_tree_3pcf_omp.o
 endif

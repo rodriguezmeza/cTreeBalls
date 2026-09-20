@@ -7,10 +7,21 @@
 
 #define INLYAASCII 18
 
+static inline int lya_forest_is_los_tree_method(const char *name)
+{
+    return name != NULL
+        && (strcmp(name, "lya-los-tree-2pcf-omp") == 0
+            || strcmp(name, "lya-los-tree-3pcf-omp") == 0
+            || strcmp(name, "lya-los-tree-2pcf-3pcf-omp") == 0);
+}
+
 /* Shared family classification for validation and MPI dispatch. */
 static inline int lya_forest_method_kind(const char *name)
 {
     if (name == NULL) return -1;
+    if (strcmp(name, "lya-los-tree-2pcf-omp") == 0) return 0;
+    if (strcmp(name, "lya-los-tree-3pcf-omp") == 0) return 1;
+    if (strcmp(name, "lya-los-tree-2pcf-3pcf-omp") == 0) return 2;
     if (strcmp(name, "lya-2pcf-omp") == 0 || strcmp(name, "lya-2pcf-mpi") == 0) return 0;
     if (strcmp(name, "lya-3pcf-omp") == 0 || strcmp(name, "lya-3pcf-mpi") == 0) return 1;
     if (strcmp(name, "lya-2pcf-3pcf-omp") == 0 || strcmp(name, "lya-2pcf-3pcf-mpi") == 0) return 2;

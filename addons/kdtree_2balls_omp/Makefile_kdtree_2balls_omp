@@ -11,14 +11,25 @@ EXTERNAL += kdtree_2balls_tree.o
 ifeq ($(UNAME_S),Darwin)
 MLIBS += -framework Accelerate
 endif
+# legacy-one-ball enters the actual kdtree implementation for either the
+# OpenMP or MPI two-ball method. Keep it linkable in a two-ball-only profile.
+ifeq ($(filter 1,$(KDTREEOMPON) $(KDTREEMPION)),)
+vpath %.c $(MDIR)/addons/kdtree_shared
+INCLUDES += -I$(MDIR)/addons/kdtree_shared
+HEADERFILES += $(MDIR)/addons/kdtree_shared/protodefs_kdtree_omp.h
+EXTERNAL += kdtree.o search_kdtree_omp.o kdtree_edge.o
+endif
 endif
 
 ifeq ($(KDTREE2BALLSOMPON),1)
 OPT2 += -DKDTREE2BALLSOMP
+INCLUDES += -I$(MDIR)/addons/kdtree_shared
+HEADERFILES += $(MDIR)/addons/kdtree_shared/protodefs_kdtree_omp.h
 EXTERNAL += search_kdtree_2balls_omp.o
 search_kdtree_2balls_omp.o: \
 	$(KDTREE2BALLSOMP)/search_kdtree_2balls_omp.c \
 	$(KDTREE2BALLSOMP)/kdtree_2balls_tree.h \
+	$(MDIR)/addons/kdtree_shared/protodefs_kdtree_omp.h \
 	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c \
 	$(MDIR)/addons/balltree_2balls_omp/dual_node_edge_correction.h
 endif

@@ -65,7 +65,7 @@ searchMethod = octree-ggg-3d-omp
 is also accepted.
 
 The code reuses the cTreeBalls octree traversal and OpenMP parallel loop pattern
-from `addons/octree_ggg_omp`, but the angular estimator is exact-in-angle: cells
+from `addons/scalar_compat_shared`, but the angular estimator is exact-in-angle: cells
 are used for pruning only, and accepted leaves are individual bodies.
 
 `rangeN` is always the physical radial cutoff for this exact estimator. The

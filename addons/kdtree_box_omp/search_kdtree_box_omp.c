@@ -13,7 +13,7 @@
 #include "globaldefs.h"
 
 #include "kdtree.h"
-#include "kdtree_scan_frontier.h"
+#include "../kdtree_shared/kdtree_scan_frontier.h"
 
 //B Some macros and definitions
 #define KD_COORD_DELTA(a, b) ((real)(a) - (real)(b))
@@ -261,7 +261,11 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
     //E
     verb_print(cmd->verbose, "\nkdtree build: nbucket = %d\n",nbucket);
     kd = init_kdtree(cmd, gd, btab[cat2], nbody[cat2]);
-    build_kdtree(cmd, gd, kd, nbucket);
+    if (kd == NULL) return FAILURE;
+    if (build_kdtree(cmd, gd, kd, nbucket) == FAILURE) {
+        finish_kdtree(kd);
+        return FAILURE;
+    }
     verb_print(cmd->verbose, "kdtree build: CPU time = %lf\n",
                CPUTIME-cpu_build_kdtree);
 //E
@@ -397,12 +401,16 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
     //E
 
     if (cballs_opt_compute_histn(cmd)) {
-        search_compute_HistN(cmd, gd, nbody[cat1]);
+        if (search_compute_HistN(cmd, gd, nbody[cat1]) == FAILURE) {
+            finish_kdtree(kd);
+            return FAILURE;
+        }
     }
 
     gd->cpusearch = CPUTIME - cpustart;
     verb_print(cmd->verbose, "Going out: CPU time = %lf\n",CPUTIME-cpustart);
 
+    finish_kdtree(kd);
     return SUCCESS;
 }
 
@@ -424,7 +432,15 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
         q = bptr[pj];
         if (accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr)) {
             if(dr1>cmd->rminHist) {
-                n = (int) ( (dr1-cmd->rminHist) * gd->i_deltaR) + 1;
+                if (cmd->useLogHist) {
+                    if (cmd->rminHist == 0)
+                        n = (int)(cmd->logHistBinsPD*(rlog10(dr1)
+                            - rlog10(cmd->rangeN)) + cmd->sizeHistN) + 1;
+                    else
+                        n = (int)(rlog10(dr1/cmd->rminHist)*gd->i_deltaR) + 1;
+                } else {
+                    n = (int)((dr1-cmd->rminHist)*gd->i_deltaR) + 1;
+                }
                 if (n<=cmd->sizeHistN && n>=1) {
                     hist->histNthread[n] = hist->histNthread[n] + 1.;
                     hist->histNNSubXi2pcfthread[n] =

@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 import json
 import math
 import os
+from collections.abc import Mapping
 from pathlib import Path
 import re
 import shlex
@@ -71,7 +72,6 @@ def _default_cballs_executable() -> Path:
 
 DEFAULT_CBALLS = _default_cballs_executable()
 MPI_CHILD_ENV = "CTREEBALLS_KAPPA_MPI_CHILD"
-RUNTIME_HELP_OPTIONS = ("print-search-methods", "print-options", "make-info")
 
 # A directly executed source-tree script otherwise searches ``python/`` before
 # the repository root and may load a stale site-installed extension.
@@ -165,6 +165,43 @@ INCOMPATIBLE_ENGINE_REASONS.update({
 METHOD_ALIASES = {}
 
 
+@dataclass(frozen=True)
+class AngularPatch:
+    """Open longitude/colatitude rectangle, with bounds in degrees."""
+
+    phi_left: float = 0.0
+    phi_right: float = 90.0
+    theta_left: float = 0.0
+    theta_right: float = 90.0
+
+    def __post_init__(self) -> None:
+        if not all(math.isfinite(value) for value in (
+            self.phi_left, self.phi_right, self.theta_left, self.theta_right,
+        )):
+            raise ValueError("patch bounds must be finite degrees")
+        if not 0.0 <= self.phi_left < self.phi_right <= 360.0:
+            raise ValueError("patch requires 0 <= phiL < phiR <= 360 degrees")
+        if not 0.0 <= self.theta_left < self.theta_right <= 180.0:
+            raise ValueError("patch requires 0 <= thetaL < thetaR <= 180 degrees")
+
+    def select(self, theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
+        # Match the native FITS patch predicate, including open boundaries.
+        return (
+            (theta > math.radians(self.theta_left))
+            & (theta < math.radians(self.theta_right))
+            & (phi > math.radians(self.phi_left))
+            & (phi < math.radians(self.phi_right))
+        )
+
+    def metadata(self) -> dict:
+        return {
+            "phiL": self.phi_left, "phiR": self.phi_right,
+            "thetaL": self.theta_left, "thetaR": self.theta_right,
+            "units": "degree", "theta_convention": "colatitude",
+            "boundaries": "exclusive",
+        }
+
+
 @dataclass
 class KappaCatalog:
     positions: np.ndarray
@@ -235,6 +272,18 @@ class RunConfig:
     smooth_pivot_compiled: Optional[bool] = None
     plots: bool = True
     flatten_plots: bool = True
+    patch: bool = False
+
+    @property
+    def angular_patch(self) -> Optional[AngularPatch]:
+        options = _split_options(self.options)
+        if not self.patch and "patch" not in options:
+            return None
+        if "patch-with-all" in options:
+            raise ValueError("patch-with-all is not supported with the shared patch filter")
+        return AngularPatch(
+            self.phi_left, self.phi_right, self.theta_left, self.theta_right,
+        )
 
     @property
     def wants_edge_corrections(self) -> bool:
@@ -270,6 +319,7 @@ class RunConfig:
         if self.result_type not in {"sincos", "edge_effects"}:
             raise ValueError("result_type must be sincos or edge_effects")
         options = tuple(_split_options(self.options))
+        patch = self.angular_patch
         edge = self.wants_edge_corrections
         if edge and "only-2pcf" in options:
             raise ValueError("edge corrections require 3PCF; remove only-2pcf")
@@ -279,6 +329,7 @@ class RunConfig:
                 "engines": engines,
                 "output_dir": output_dir,
                 "options": options,
+                "patch": patch is not None,
                 "edge_corrections": edge,
                 "result_type": "edge_effects" if edge else self.result_type,
             }
@@ -360,59 +411,36 @@ def statistics_from_options(values: Iterable[str] | str | None) -> str:
     return "both"
 
 
-def inspect_cballs_runtime(executable: Path = DEFAULT_CBALLS) -> dict[str, Any]:
+def discover_search_methods(executable: Path = DEFAULT_CBALLS) -> list[str]:
     executable = Path(executable).expanduser().resolve()
     if not executable.is_file():
         raise FileNotFoundError(f"cballs executable not found: {executable}")
-    queries: dict[str, dict[str, Any]] = {}
-    for option in RUNTIME_HELP_OPTIONS:
-        completed = subprocess.run(
-            [os.fspath(executable), f"options={option}"],
-            cwd=executable.parent, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, check=False,
-        )
-        queries[option] = {
-            "returncode": completed.returncode,
-            "ok": completed.returncode in (0, 1),
-            "output": completed.stdout,
-        }
-    methods = re.findall(
-        r"^- ([^ ]+) \(id=-?\d+\)$",
-        queries["print-search-methods"]["output"], re.MULTILINE,
+    completed = subprocess.run(
+        [os.fspath(executable), "options=print-search-methods"],
+        cwd=executable.parent,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
     )
+    methods = re.findall(r"^- ([^ ]+) \(id=-?\d+\)$", completed.stdout, re.MULTILINE)
     if not methods:
         raise RuntimeError(
             f"could not discover search methods from {executable}:\n"
-            f"{queries['print-search-methods']['output'][-2000:]}"
+            f"{completed.stdout[-2000:]}"
         )
-    options = re.findall(
-        r"^- ([^ ]+) \[[^]]+\]:",
-        queries["print-options"]["output"], re.MULTILINE,
-    )
-    make_settings = dict(re.findall(
-        r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$",
-        queries["make-info"]["output"], re.MULTILINE,
-    ))
-    return {
-        "available": all(query["ok"] for query in queries.values()),
-        "executable": os.fspath(executable),
-        "queries": queries,
-        "search_methods": methods,
-        "registered_options": options,
-        "make_settings": make_settings,
-    }
-
-
-def discover_search_methods(executable: Path = DEFAULT_CBALLS) -> list[str]:
-    return list(inspect_cballs_runtime(executable)["search_methods"])
+    return methods
 
 
 def discover_make_settings(executable: Path = DEFAULT_CBALLS) -> dict[str, str]:
     executable = Path(executable).expanduser().resolve()
     completed = subprocess.run(
         [os.fspath(executable), "options=make-info"],
-        cwd=executable.parent, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, check=False,
+        cwd=executable.parent,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
     )
     if completed.returncode not in (0, 1):
         raise RuntimeError(
@@ -420,7 +448,8 @@ def discover_make_settings(executable: Path = DEFAULT_CBALLS) -> dict[str, str]:
         )
     return dict(re.findall(
         r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$",
-        completed.stdout, re.MULTILINE,
+        completed.stdout,
+        re.MULTILINE,
     ))
 
 
@@ -620,6 +649,7 @@ def _native_resolution_healpix_catalog(
     max_points: int,
     sampling_seed: int,
     chunk_pixels: int,
+    patch: Optional[AngularPatch] = None,
 ) -> KappaCatalog:
     """Build a catalog by scanning memory-mapped map columns in chunks."""
     try:
@@ -655,6 +685,7 @@ def _native_resolution_healpix_catalog(
         retained_priorities = np.empty(0, dtype=np.uint64)
         pixel_chunks: list[np.ndarray] = []
         eligible_count = 0
+        before_patch = 0
         for start in range(0, values.size, chunk_pixels):
             stop = min(start + chunk_pixels, values.size)
             selected = _healpix_valid(values[start:stop], hp)
@@ -666,6 +697,12 @@ def _native_resolution_healpix_catalog(
             if not local.size:
                 continue
             local += start
+            before_patch += int(local.size)
+            if patch is not None:
+                theta, phi = hp.pix2ang(nside, local, nest=nested)
+                local = local[patch.select(theta, phi)]
+                if not local.size:
+                    continue
             eligible_count += int(local.size)
             if max_points:
                 priorities = _splitmix64(local, sampling_seed)
@@ -684,7 +721,7 @@ def _native_resolution_healpix_catalog(
             pixels = np.empty(0, dtype=np.int64)
         pixels.sort()
         if pixels.size < 3:
-            raise ValueError("the map and mask contain fewer than three valid pixels")
+            raise ValueError("the map, mask, and patch select fewer than three valid pixels")
         kappa = np.ascontiguousarray(values[pixels], dtype=np.float64)
 
     x, y, z = hp.pix2vec(nside, pixels, nest=nested)
@@ -709,6 +746,8 @@ def _native_resolution_healpix_catalog(
             "source_fields": fields,
             "centered": center_field,
             "mask_preselected": mask_path is not None,
+            "patch": patch.metadata() if patch is not None else None,
+            "eligible_pixels_before_patch": before_patch,
             "eligible_pixels_before_thinning": eligible_count,
             "max_points": max_points,
             "sampling_seed": sampling_seed if max_points else None,
@@ -729,6 +768,7 @@ def catalog_from_healpix(
     max_points: int = 0,
     sampling_seed: int = 8675309,
     chunk_pixels: int = 1 << 20,
+    patch: Optional[AngularPatch] = None,
 ) -> KappaCatalog:
     try:
         import healpy as hp
@@ -769,6 +809,7 @@ def catalog_from_healpix(
             return _native_resolution_healpix_catalog(
                 fits_path, field_index, mask_path, mask_threshold, center_field,
                 max_points, sampling_seed, chunk_pixels,
+                patch,
             )
         except ValueError as exc:
             if "map and mask to have the same NSIDE and ORDERING" not in str(exc):
@@ -806,6 +847,14 @@ def catalog_from_healpix(
 
     eligible = valid & mask_full
     pixels = np.flatnonzero(eligible)
+    before_patch = int(pixels.size)
+    if patch is not None:
+        keep_patch = np.empty(pixels.size, dtype=bool)
+        for start in range(0, pixels.size, chunk_pixels):
+            stop = min(start + chunk_pixels, pixels.size)
+            theta, phi = hp.pix2ang(nside, pixels[start:stop], nest=False)
+            keep_patch[start:stop] = patch.select(theta, phi)
+        pixels = pixels[keep_patch]
     eligible_count = int(pixels.size)
     if max_points:
         if max_points < 3:
@@ -815,7 +864,7 @@ def catalog_from_healpix(
             keep = np.argpartition(priorities, max_points - 1)[:max_points]
             pixels = np.sort(pixels[keep])
     if pixels.size < 3:
-        raise ValueError("the HEALPix map contains fewer than three valid pixels")
+        raise ValueError("the map, mask, and patch select fewer than three valid pixels")
     x, y, z = hp.pix2vec(nside, pixels, nest=False)
     positions = np.ascontiguousarray(np.column_stack((x, y, z)), dtype=np.float64)
     kappa = np.ascontiguousarray(values[pixels], dtype=np.float64)
@@ -837,6 +886,8 @@ def catalog_from_healpix(
             "field": field_index,
             "centered": center_field,
             "mask_preselected": mask_values is not None,
+            "patch": patch.metadata() if patch is not None else None,
+            "eligible_pixels_before_patch": before_patch,
             "eligible_pixels_before_thinning": eligible_count,
             "max_points": max_points,
             "sampling_seed": sampling_seed if max_points else None,
@@ -849,7 +900,10 @@ def catalog_from_healpix(
     ).normalized()
 
 
-def synthetic_healpix_catalog(nside: int = 4, center_field: bool = True) -> KappaCatalog:
+def synthetic_healpix_catalog(
+    nside: int = 4, center_field: bool = True,
+    patch: Optional[AngularPatch] = None,
+) -> KappaCatalog:
     try:
         import healpy as hp
     except ImportError as exc:
@@ -857,6 +911,12 @@ def synthetic_healpix_catalog(nside: int = 4, center_field: bool = True) -> Kapp
     if not hp.isnsideok(nside):
         raise ValueError("synthetic_nside must be a valid HEALPix NSIDE")
     pixels = np.arange(hp.nside2npix(nside))
+    before_patch = int(pixels.size)
+    if patch is not None:
+        theta, phi = hp.pix2ang(nside, pixels, nest=False)
+        pixels = pixels[patch.select(theta, phi)]
+        if pixels.size < 3:
+            raise ValueError("the patch selects fewer than three valid pixels")
     x, y, z = hp.pix2vec(nside, pixels, nest=False)
     positions = np.column_stack((x, y, z))
     kappa = 0.35 * x - 0.21 * y + 0.08 * z * z
@@ -867,11 +927,51 @@ def synthetic_healpix_catalog(nside: int = 4, center_field: bool = True) -> Kapp
         positions=positions,
         kappa=kappa,
         weights=weights,
-        metadata={"source": "synthetic", "nside": nside, "centered": center_field},
+        metadata={
+            "source": "synthetic", "nside": nside, "centered": center_field,
+            "patch": patch.metadata() if patch is not None else None,
+            "eligible_pixels_before_patch": before_patch,
+            "eligible_pixels_before_thinning": int(pixels.size),
+        },
     ).normalized()
 
 
-def catalog_from_npz(path: Path, center_field: bool = False) -> KappaCatalog:
+def filter_catalog_patch(
+    catalog: KappaCatalog, patch: Optional[AngularPatch],
+) -> KappaCatalog:
+    """Filter already-loaded arrays without moving the observer or input rows."""
+    if patch is None or catalog.metadata.get("patch") == patch.metadata():
+        return catalog
+    catalog = catalog.normalized()
+    radius = np.linalg.norm(catalog.positions, axis=1)
+    if np.any(radius == 0.0) or not np.all(np.isfinite(radius)):
+        raise ValueError("angular patch selection requires finite nonzero position radii")
+    theta = np.arccos(np.clip(catalog.positions[:, 2] / radius, -1.0, 1.0))
+    phi = np.mod(np.arctan2(catalog.positions[:, 1], catalog.positions[:, 0]), 2*np.pi)
+    selected = patch.select(theta, phi)
+    active = (catalog.mask.astype(bool) if catalog.mask is not None
+              else np.ones(catalog.nbody, dtype=bool))
+    if np.count_nonzero(selected & active) < 3:
+        raise ValueError("the patch and mask select fewer than three valid points")
+    kappa = catalog.kappa[selected].copy()
+    if catalog.metadata.get("centered", False):
+        kappa -= np.mean(kappa[active[selected]], dtype=np.float64)
+    return KappaCatalog(
+        positions=catalog.positions[selected], kappa=kappa,
+        weights=catalog.weights[selected] if catalog.weights is not None else None,
+        mask=catalog.mask[selected] if catalog.mask is not None else None,
+        metadata={
+            **catalog.metadata, "patch": patch.metadata(),
+            "eligible_pixels_before_patch": int(np.count_nonzero(active)),
+            "eligible_pixels_before_thinning": int(np.count_nonzero(selected & active)),
+        },
+    ).normalized()
+
+
+def catalog_from_npz(
+    path: Path, center_field: bool = False,
+    patch: Optional[AngularPatch] = None,
+) -> KappaCatalog:
     path = Path(path).expanduser().resolve()
     with np.load(path, allow_pickle=False) as archive:
         catalog = KappaCatalog(
@@ -881,6 +981,7 @@ def catalog_from_npz(path: Path, center_field: bool = False) -> KappaCatalog:
             mask=archive["mask"] if "mask" in archive else None,
             metadata={"source": os.fspath(path)},
         ).normalized()
+    catalog = filter_catalog_patch(catalog, patch)
     if center_field:
         selection = (
             catalog.mask.astype(bool)
@@ -968,12 +1069,15 @@ def broadcast_catalog(comm: Any, catalog: Optional[KappaCatalog]) -> KappaCatalo
 
 
 def engine_parameters(config: RunConfig, engine: str, masked: bool) -> dict:
+    if engine not in KAPPA_ENGINES:
+        raise ValueError(f"{engine} does not support this active scalar driver")
     spec = KAPPA_ENGINES[engine]
     rmin, rmax = angular_limits(config)
     angular_bins_needed = max(4, 2 * config.multipoles + 1)
     angular_bins = 1 << (angular_bins_needed - 1).bit_length()
     options = ["compute-HistN", "and-CF", "out-m-HistZeta", "KKKCorrelation"]
-    options.extend(config.options)
+    # The shared Python catalog has already been cut; do not filter it again in C.
+    options.extend(option for option in _split_options(config.options) if option != "patch")
     if masked and "read-mask" not in options:
         options.append("read-mask")
     options = _split_options(options)
@@ -1032,6 +1136,15 @@ def smooth_pivot_mode(config: RunConfig, engine: str) -> str:
     return "enabled-by-build-default" if config.smooth_pivot_compiled else "build-default"
 
 
+def settings_to_json(value: Any) -> Any:
+    """Detach immutable run settings into JSON-compatible containers."""
+    if isinstance(value, Mapping):
+        return {key: settings_to_json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [settings_to_json(item) for item in value]
+    return value
+
+
 def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
     spec = KAPPA_ENGINES[engine]
     options = set(_split_options(config.options))
@@ -1045,6 +1158,7 @@ def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
         "nbody": int(balls.getNBody()),
         "result_type": "edge_effects" if edge else config.result_type,
         "edge_corrections": edge,
+        "run_settings": settings_to_json(balls.run_settings),
         "warnings": [],
     }
     if want_3pcf:
@@ -1090,6 +1204,12 @@ def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
                         + 1j * (components[2] - components[3])
                     )
             else:
+                diagnostics = balls.getScalarWindowDiagnostics()
+                for name in ("status", "valid", "window_monopole", "pivot_ratio"):
+                    result[f"scalar_window_{name}"] = diagnostics[name].copy()
+                valid = diagnostics["valid"]
+                if valid.shape != (config.bins, config.bins):
+                    raise ValueError("scalar window validity has unexpected shape")
                 for order in range(1, multipoles + 2):
                     result[f"zeta_edge_{order}"] = np.asarray(
                         balls.getHistZetaM_EE(order)
@@ -1101,8 +1221,10 @@ def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
                         value = result[key]
                         if value.shape != (config.bins, config.bins):
                             raise ValueError(f"{key} has unexpected shape {value.shape}")
-                        if not np.all(np.isfinite(value)):
-                            raise ValueError(f"{key} contains nonfinite values")
+                        if not np.all(np.isfinite(value[valid])):
+                            raise ValueError(f"{key} contains nonfinite valid estimates")
+                        if not np.all(np.isnan(value[~valid])):
+                            raise ValueError(f"{key} must mark unsupported bins as NaN")
                     result[f"zeta_edge_complex_{order}"] = (
                         result[f"zeta_edge_{order}"]
                         + 1j * result[f"zeta_edge_im_{order}"]
@@ -1121,7 +1243,7 @@ def copy_engine_results(balls: Any, engine: str, config: RunConfig) -> dict:
 
 def solve_scalar_mode_coupling(
     signal: np.ndarray, window: np.ndarray, max_n: int,
-) -> tuple[np.ndarray, dict[str, int]]:
+) -> tuple[np.ndarray, dict[str, Any]]:
     """Solve C[ell,n] zeta[n] = signal[ell]/window[0] per radial bin."""
     signal = np.asarray(signal, dtype=np.complex128)
     window = np.asarray(window, dtype=np.complex128)
@@ -1139,12 +1261,16 @@ def solve_scalar_mode_coupling(
         raise ValueError("scalar signal/window multipoles contain nonfinite values")
 
     orders = np.arange(-max_n, max_n + 1)
-    corrected = np.zeros_like(signal)
-    diagnostics = {"empty_bins": 0, "singular_bins": 0}
+    corrected = np.full_like(signal, complex(np.nan, np.nan))
+    status = np.full((bins, bins), 2, dtype=np.uint8)
+    ratio = np.full((bins, bins), np.nan)
+    diagnostics = {"empty_bins": 0, "singular_bins": 0, "nonfinite_bins": 0,
+                   "status": status, "window_monopole": window[:, :, 2*max_n].real.copy(),
+                   "pivot_ratio": ratio}
     for bin_1 in range(bins):
         for bin_2 in range(bins):
             n_zero = window[bin_1, bin_2, 2 * max_n]
-            if abs(n_zero) <= np.finfo(float).tiny:
+            if n_zero.real <= 0 or abs(n_zero) <= np.finfo(float).tiny:
                 diagnostics["empty_bins"] += 1
                 continue
             matrix = np.empty((multipoles, multipoles), dtype=np.complex128)
@@ -1159,11 +1285,21 @@ def solve_scalar_mode_coupling(
                 1.0 + math.sqrt(matrix_scale / abs(n_zero) ** 2)
             )
             singular = False
+            nonfinite = not (np.all(np.isfinite(matrix)) and np.all(np.isfinite(rhs)))
+            smallest_pivot, largest_pivot = math.inf, 0.0
             for column in range(multipoles):
+                if nonfinite:
+                    break
                 pivot = column + int(np.argmax(np.abs(matrix[column:, column]) ** 2))
-                if abs(matrix[pivot, column]) ** 2 <= tolerance ** 2:
+                pivot_size = abs(matrix[pivot, column])
+                if not np.isfinite(pivot_size):
+                    nonfinite = True
+                    break
+                if pivot_size ** 2 <= tolerance ** 2:
                     singular = True
                     break
+                smallest_pivot = min(smallest_pivot, pivot_size)
+                largest_pivot = max(largest_pivot, pivot_size)
                 if pivot != column:
                     matrix[[column, pivot], :] = matrix[[pivot, column], :]
                     rhs[[column, pivot]] = rhs[[pivot, column]]
@@ -1177,10 +1313,18 @@ def solve_scalar_mode_coupling(
                     if factor != 0.0:
                         matrix[row, :] -= factor * matrix[column, :]
                         rhs[row] -= factor * rhs[column]
-            if singular:
+            if nonfinite or not np.all(np.isfinite(rhs)):
+                diagnostics["nonfinite_bins"] += 1
+                status[bin_1, bin_2] = 4
+            elif singular:
                 diagnostics["singular_bins"] += 1
+                status[bin_1, bin_2] = 3
+                ratio[bin_1, bin_2] = 0.0
             else:
+                status[bin_1, bin_2] = 1
+                ratio[bin_1, bin_2] = smallest_pivot/largest_pivot
                 corrected[bin_1, bin_2, :] = rhs
+    diagnostics["valid"] = status == 1
     return corrected, diagnostics
 
 
@@ -1197,6 +1341,22 @@ def _timing_metadata(
         "total_cpu_time": float(setup_cpu + compute_cpu),
         "timing_scope": scope,
     }
+
+
+def aggregate_rank_timings(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Use critical-path wall time and consumed CPU time, never rank-zero alone."""
+    if not rows:
+        raise ValueError("at least one participating rank is required")
+    result = {
+        name: (max if "wall" in name else sum)(float(row[name]) for row in rows)
+        for name in ("setup_wall_time", "setup_cpu_time", "compute_wall_time",
+                     "compute_cpu_time", "total_wall_time", "total_cpu_time",
+                     "native_reported_cpu_time")
+    }
+    result.update(ranks=len(rows), rank_timings=list(rows),
+                  timing_scope=rows[0]["timing_scope"] +
+                  "; wall=max(participating ranks), CPU=sum(participating ranks)")
+    return result
 
 
 
@@ -1225,13 +1385,13 @@ def _finite_limit(arrays: Sequence[np.ndarray]) -> float:
     return max((float(np.max(value)) for value in finite if value.size), default=1.0e-15)
 
 
-def compare_result_arrays(results: dict[str, dict]) -> dict[str, dict[str, float]]:
+def compare_result_arrays(results: dict[str, dict]) -> dict[str, dict[str, Any]]:
     """Compare common 2PCF/3PCF products against the first engine."""
     if not results:
         return {}
     reference_name = next(iter(results))
     reference = results[reference_name]
-    comparisons: dict[str, dict[str, float]] = {}
+    comparisons: dict[str, dict[str, Any]] = {}
     for name, result in list(results.items())[1:]:
         keys = sorted(
             key for key in reference.keys() & result.keys()
@@ -1249,12 +1409,14 @@ def compare_result_arrays(results: dict[str, dict]) -> dict[str, dict[str, float
             finite = np.isfinite(absolute) & np.isfinite(relative)
             tag = f"{name}__vs__{reference_name}__{key}"
             comparisons[tag] = {
-                "max_absolute": float(np.max(absolute[finite], initial=0.0)),
+                "max_absolute": float(np.max(absolute[finite])) if np.any(finite) else None,
                 "rms_absolute": float(np.sqrt(np.mean(absolute[finite] ** 2)))
-                if np.any(finite) else 0.0,
+                if np.any(finite) else None,
                 "max_symmetric_relative": float(
-                    np.max(relative[finite], initial=0.0)
-                ),
+                    np.max(relative[finite])
+                ) if np.any(finite) else None,
+                "unsupported_reference_bins": int(np.count_nonzero(~np.isfinite(left))),
+                "unsupported_candidate_bins": int(np.count_nonzero(~np.isfinite(right))),
                 "compared_bins": int(np.count_nonzero(finite)),
             }
     return comparisons
@@ -1472,8 +1634,8 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
     lines.extend((
         "",
         "CPU values are process CPU seconds; they may exceed wall time for threaded work.",
-        "MPI cTreeBalls process CPU measurements describe rank 0 only.",
-        "Kappa setup scopes differ by backend; compare compute columns for search timing.",
+        "MPI CPU is summed across participating ranks; wall time is their maximum.",
+        "Read timing_scope in summary.json: setup, output and cleanup scopes differ by driver.",
     ))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -1482,7 +1644,6 @@ def run_engine_suite(
     catalog: KappaCatalog,
     config: RunConfig,
     comm: Any = None,
-    runtime_info: Optional[dict[str, Any]] = None,
 ) -> dict[str, dict]:
     """Run all selected engines while retaining one registered NumPy catalog."""
     config = config.normalized()
@@ -1492,6 +1653,7 @@ def run_engine_suite(
             or any(KAPPA_ENGINES[e].mpi for e in config.engines if e in KAPPA_ENGINES)
         )
     catalog = catalog.normalized()
+    catalog = filter_catalog_patch(catalog, config.angular_patch)
     masked = catalog.mask is not None
     native_engines = list(config.engines)
     for engine in config.engines:
@@ -1532,6 +1694,7 @@ def run_engine_suite(
             participates = spec.mpi or comm.rank == 0
             local_error = None
             result = None
+            rank_timing = None
             if participates:
                 engine_root = config.output_dir / engine
                 engine_root.mkdir(parents=True, exist_ok=True)
@@ -1553,18 +1716,18 @@ def run_engine_suite(
                     started = time.perf_counter()
                     started_cpu = time.process_time()
                     balls.Run(level=["MainLoop"])
+                    compute_seconds = time.perf_counter() - started
+                    compute_cpu_seconds = time.process_time() - started_cpu
+                    rank_timing = _timing_metadata(
+                        setup_seconds, setup_cpu_seconds,
+                        compute_seconds, compute_cpu_seconds,
+                        "cTreeBalls parameter/thread setup plus MainLoop; "
+                        "in-memory catalog registration and cleanup excluded",
+                    )
+                    rank_timing.update(rank=comm.rank,
+                                       native_reported_cpu_time=float(balls.getCPUTime()))
                     if comm.rank == 0:
-                        compute_seconds = time.perf_counter() - started
-                        compute_cpu_seconds = time.process_time() - started_cpu
                         result = copy_engine_results(balls, engine, config)
-                        result["native_reported_cpu_time"] = result.get("cpu_time")
-                        result.update(_timing_metadata(
-                            setup_seconds, setup_cpu_seconds,
-                            compute_seconds, compute_cpu_seconds,
-                            "cTreeBalls parameter/thread setup plus MainLoop; "
-                            "in-memory catalog registration excluded",
-                        ))
-                        result["wall_time"] = compute_seconds
                 except Exception as exc:
                     local_error = f"{type(exc).__name__}: {exc}"
                 finally:
@@ -1583,6 +1746,14 @@ def run_engine_suite(
                 root_error = comm.bcast(local_error if comm.rank == 0 else None, root=0)
                 errors = [root_error]
             errors = [error for error in errors if error]
+            if not errors:
+                rank_timings = comm.allgather(rank_timing) if spec.mpi else [rank_timing]
+                if comm.rank == 0 and result is not None:
+                    result.update(aggregate_rank_timings(rank_timings))
+                    result["wall_time"] = result["compute_wall_time"]
+                    result["cpu_time"] = result["native_reported_cpu_time"]
+                    result["threads_per_rank"] = config.threads
+                    result["parameters"] = engine_parameters(config, engine, masked)
             if errors:
                 message = "; ".join(dict.fromkeys(errors))
                 failures[engine] = message
@@ -1595,7 +1766,7 @@ def run_engine_suite(
                 save_engine_results(config.output_dir / engine, result)
                 print(
                     f"Finished {engine}: compute wall "
-                    f"{result['compute_wall_time']:.6g} s, process CPU "
+                    f"{result['compute_wall_time']:.6g} s, summed process CPU "
                     f"{result['compute_cpu_time']:.6g} s",
                     flush=True,
                 )
@@ -1607,7 +1778,6 @@ def run_engine_suite(
     if comm.rank == 0:
         timings = timing_summary(results)
         summary = {
-            "ctreeballs_runtime": runtime_info,
             "catalog": {**catalog.metadata, "nbody": catalog.nbody},
             "requested_statistics": statistics_from_options(config.options),
             "engines": {
@@ -1622,6 +1792,9 @@ def run_engine_suite(
                     "total_cpu_time": value.get("total_cpu_time"),
                     "native_reported_cpu_time": value.get("native_reported_cpu_time"),
                     "timing_scope": value.get("timing_scope"),
+                    "rank_timings": value["rank_timings"],
+                    "ranks": value["ranks"],
+                    "parameters": value["parameters"],
                     "edge_corrections": value["edge_corrections"],
                     "result_type": value["result_type"],
                     "smooth_pivot": value["smooth_pivot"],
@@ -1662,7 +1835,7 @@ def spawn_mpi(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     sources = parser.add_mutually_exclusive_group()
     sources.add_argument("--fits", type=Path, help="HEALPix convergence FITS map")
@@ -1722,10 +1895,19 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--nsmooth", type=int, default=16)
     parser.add_argument("--linear-bins", action="store_true")
-    parser.add_argument("--thetaL", type=float, default=0.0)
-    parser.add_argument("--thetaR", type=float, default=90.0)
-    parser.add_argument("--phiL", type=float, default=0.0)
-    parser.add_argument("--phiR", type=float, default=90.0)
+    parser.add_argument(
+        "--patch", action="store_true",
+        help="select the same angular patch for every engine before thinning and centering; "
+             "also enabled by --more-options patch",
+    )
+    parser.add_argument("--thetaL", type=float, default=0.0,
+                        help="patch lower colatitude in degrees (0=north pole)")
+    parser.add_argument("--thetaR", type=float, default=90.0,
+                        help="patch upper colatitude in degrees (180=south pole)")
+    parser.add_argument("--phiL", type=float, default=0.0,
+                        help="patch lower longitude in degrees [0, 360]")
+    parser.add_argument("--phiR", type=float, default=90.0,
+                        help="patch upper longitude in degrees [0, 360]; no wraparound")
     parser.add_argument("--more-options", action="append", default=[])
     parser.add_argument(
         "--no-smooth-pivot", action="store_true",
@@ -1748,7 +1930,7 @@ def parse_arguments() -> argparse.Namespace:
         "--no-flatten-plots", action="store_true",
         help="omit Figure-7-style flattened 3PCF radial-bin plots",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> int:
@@ -1757,9 +1939,8 @@ def main() -> int:
         raise SystemExit("ERROR: --mpi-ranks must be positive")
 
     try:
-        runtime_info = inspect_cballs_runtime(args.cballs)
-        executable_methods = list(runtime_info["search_methods"])
-        make_settings = dict(runtime_info["make_settings"])
+        executable_methods = discover_search_methods(args.cballs)
+        make_settings = discover_make_settings(args.cballs)
         smooth_setting = make_settings.get("SMOOTHPIVOTON")
         smooth_pivot_compiled = (
             smooth_setting == "1" if smooth_setting in {"0", "1"} else None
@@ -1815,6 +1996,7 @@ def main() -> int:
             phi_right=args.phiR,
             theta_left=args.thetaL,
             theta_right=args.thetaR,
+            patch=args.patch,
             options=merge_statistics_options(
                 args.statistics,
                 tuple(args.more_options) + (
@@ -1861,18 +2043,21 @@ def main() -> int:
                     max_points=args.max_points,
                     sampling_seed=args.sampling_seed,
                     chunk_pixels=args.fits_chunk_pixels,
+                    patch=config.angular_patch,
                 )
             elif args.catalog_npz is not None:
                 if args.mask is not None:
                     raise ValueError("--mask is only valid with --fits")
                 catalog = catalog_from_npz(
-                    args.catalog_npz, center_field=not args.no_center_field
+                    args.catalog_npz, center_field=not args.no_center_field,
+                    patch=config.angular_patch,
                 )
             elif args.synthetic_nside is not None:
                 if args.mask is not None:
                     raise ValueError("--mask is only valid with --fits")
                 catalog = synthetic_healpix_catalog(
-                    args.synthetic_nside, center_field=not args.no_center_field
+                    args.synthetic_nside, center_field=not args.no_center_field,
+                    patch=config.angular_patch,
                 )
             else:
                 raise ValueError(
@@ -1880,6 +2065,17 @@ def main() -> int:
                 )
             if args.save_catalog_npz is not None:
                 save_catalog_npz(args.save_catalog_npz, catalog)
+            if config.angular_patch is not None:
+                patch = config.angular_patch
+                print(
+                    f"Shared patch (degrees, open bounds): "
+                    f"{patch.phi_left:g} < phi < {patch.phi_right:g}, "
+                    f"{patch.theta_left:g} < colatitude < {patch.theta_right:g}; "
+                    f"{catalog.metadata['eligible_pixels_before_patch']} eligible -> "
+                    f"{catalog.metadata['eligible_pixels_before_thinning']} in patch -> "
+                    f"{catalog.nbody} retained",
+                    flush=True,
+                )
             print(
                 f"Catalog loaded once on rank 0: {catalog.nbody} bodies",
                 flush=True,
@@ -1914,7 +2110,7 @@ def main() -> int:
                 ),
                 flush=True,
             )
-        run_engine_suite(catalog, config, comm=comm, runtime_info=runtime_info)
+        run_engine_suite(catalog, config, comm=comm)
         if comm.rank == 0:
             print(f"Results written to {Path(args.outdir).expanduser().resolve()}")
         return 0

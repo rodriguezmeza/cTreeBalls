@@ -9,16 +9,20 @@ recursive-include main *.c
 recursive-include include *.h
 recursive-include general_libs *.c *.h
 recursive-include getparam *.c *.h
-include scripts/generate_make_info_header.sh
+recursive-include scripts *.py *.sh
 recursive-include python *.pyx
 include python/ccyballs.pxd.in
 recursive-include tests/python *.py *.md *.txt
 include examples/download_desi_lya_example.sh
 recursive-include examples *.py *.ipynb
 recursive-include docs *.rst *.py Makefile
-recursive-include docs/man cballs.1 cballs.m cballs.html
+include docs/requirements.txt
+recursive-include docs/man cballs.1 cballs.m cballs.html *.sh
 prune docs/_build
 recursive-include tests/make_tests README.md run_test* *.py
+recursive-include tests/fixtures *
+recursive-include tests/In *
+recursive-include tests *.c
 
 prune addons
 
@@ -31,6 +35,7 @@ recursive-include addons/kdtree_2balls_mpi *.c *.h *.md Makefile*
 recursive-include addons/kdtree_shared *.c *.h Makefile*
 recursive-include addons/balltree_shared *.c *.h Makefile*
 recursive-include addons/shear_sphere_shared *.c *.h
+recursive-include addons/scalar_compat_shared *.c *.h
 recursive-include addons/balltree_2balls_omp *.c *.h *.md Makefile*
 include addons/balltree_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/balltree_2balls_mpi *.c *.h *.md Makefile*

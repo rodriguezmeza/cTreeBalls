@@ -25,6 +25,10 @@ Print registered runtime option names, scope, and a short description.
 .B options=print-search-methods
 Print only search methods registered in this executable, with geometry,
 statistics, build switch, and usage notes.
+.TP
+.B options=build-fingerprint
+Print the source/profile/toolchain JSON identity. The Python extension exposes
+the corresponding identity through cyballs.build_info().
 .SH ACTIVE SEARCH METHODS
 The maintained profile enables these families:
 .TP
@@ -52,6 +56,11 @@ Full-sky spin-2 correlation functions over a PCA ball tree.
 .B lya-*-omp, lya-*-mpi
 Anisotropic, radial, and radial interval-tree forest estimators. Run
 options=print-search-methods for the complete names.
+.TP
+.B lya-los-tree-2pcf-omp, lya-los-tree-3pcf-omp, lya-los-tree-2pcf-3pcf-omp
+Exact anisotropic 3D forest estimators using octree forest discovery and
+per-LOS radial trees. Transverse distance is retained. These methods have no
+MPI counterpart and are enabled by LYAFORESTOMPON=1.
 .TP
 .B octree-3pcf-3d-omp, octree-3pcf-3d-mpi
 Physical-3D Legendre multipoles and data/random survey-window estimation.
@@ -103,6 +112,15 @@ Run only the requested compiled correlation order.
 .TP
 .B no-two-balls
 Disable dual-node cell aggregation and use the exact body-pair limit.
+This alone does not make the native octree 3PCF pivot scan exact.
+.TP
+.B no-one-ball,no-two-balls,no-smooth-pivot
+Exact unsmoothed body-level reference for scalar and spherical shear two-ball
+methods. BALLS4SCANLEVON may remain enabled: it controls scheduling.
+.TP
+.B legacy-one-ball
+Select the privately linked compatibility kernel behind an active two-ball
+method. Its smoothing behavior differs from native octree dual node traversal.
 .TP
 .B dual-node-bin-slop
 Enable bin-position-aware Log/Linear node acceptance.
@@ -118,6 +136,30 @@ Compute complex scalar or shear 3PCF window correction. This requires 3PCF.
 .TP
 .B weights-norm
 Use catalog weights in signal and normalization moments.
+.TP
+.B shear-pivot-reuse
+Opt-in native octree or ball-tree OpenMP 3PCF aggregate-pivot reuse with
+inherited unresolved neighbors and bounded spherical transport. Requires
+BALLS4SCANLEVON=1, no-smooth-pivot, positive theta and full pivot coverage.
+KD-tree and compatibility mode reject this option. The independent 2PCF path
+is unchanged. Validate against exact output before production use.
+.TP
+.B no-balltree-shear-member-cache
+Disable the transient source-frame construction cache (default cap 256 MiB).
+This diagnostic preserves direct member moments and conservative bounds.
+.TP
+.BI stepState= count
+With verbosity enabled, report completed body-pivot progress in the scalar
+octree, KD-tree and ball-tree OpenMP two-ball 3PCF scans.
+.SH ENVIRONMENT
+.TP
+.B CBALLS_SHEAR_PIVOT_TOL
+Finite phase budget in radians from 0 to 3, default 0.1. Not a relative-error
+guarantee. With reuse enabled, this budget controls 3PCF acceptance; theta's
+magnitude does not. Zero disables reuse, not ordinary neighbor approximation.
+.TP
+.B CBALLS_SHEAR_PROFILE
+Set to 1 for per-thread phase timers and SHEAR_REUSE counters.
 .SH PYTHON
 The compiled extension is imported as
 .BR cyballs .
@@ -125,6 +167,11 @@ The convergence, shear, and forest drivers are under
 .IR tests/python .
 They retain one NumPy catalog across selected engines and write timing and
 comparison summaries.
+Their timing tables separate setup and compute. MPI wall time is the maximum
+across participating ranks and CPU time is their sum. The forest driver reads
+DESI and eBOSS/PICCA delta FITS, compares compatible estimator families, and
+supports model distortion/covariance analysis. Consult its README for input
+contracts and separately scoped external reference timings.
 .SH MPI
 Use one MPI implementation for MPICC, the runtime launcher, the extension, and
 mpi4py. numberThreads is per rank. All ranks enter the same run and cleanup

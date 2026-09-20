@@ -12,6 +12,10 @@ The available search methods are:
 - `lya-2pcf-omp`: weighted 2PCF only.
 - `lya-3pcf-omp`: weighted anisotropic 3PCF only.
 - `lya-2pcf-3pcf-omp`: both estimators in one tree traversal.
+- `lya-los-tree-2pcf-omp`: exact 3D 2PCF using octree forest discovery and
+  per-forest radial trees.
+- `lya-los-tree-3pcf-omp`: the same hybrid search for the exact 5D 3PCF.
+- `lya-los-tree-2pcf-3pcf-omp`: both 3D estimators with shared forest discovery.
 - `lya-1d-2pcf-omp`: weighted radial-only 2PCF.
 - `lya-1d-tree-2pcf-omp`: exact interval-tree radial-only 2PCF.
 - `lya-1d-tree-same-los-2pcf-omp`: equal-LOS average of exact within-forest
@@ -24,10 +28,85 @@ All methods require `DEFDIMENSION=3`, OpenMP, `usePeriodic=false`, exactly one
 input file, and `infileformat=lya-ascii`.
 
 Set `LYAFORESTMPION=1` for an MPI+OpenMP counterpart of every method above
-except `lya-1d-tree-same-los-2pcf-omp`, replacing the final `-omp` with `-mpi`.
+except `lya-1d-tree-same-los-2pcf-omp` and the three `lya-los-tree-*` methods,
+replacing the final `-omp` with `-mpi`.
 See
 [`addons/lya_forest_mpi/README.md`](../lya_forest_mpi/README.md) for the
 replicated-catalog contract, example parameters, and rank-comparison tests.
+
+## Octree Discovery and LOS Trees
+
+The `lya-los-tree-*` methods implement a **1D search within each forest, not
+a radial-only estimator**. They retain transverse distances, the existing
+anisotropic bins, statistical weights, and all distinct-forest exclusions.
+Their output formats match `lya-2pcf-omp` and `lya-3pcf-omp`.
+
+![Forest discovery followed by radial queries](los_tree_schematic.png)
+
+The schematic is illustrative, not to scale; the equations below define the
+actual conservative interval used by the implementation.
+
+1. Build the native 3D octree, a compact threaded view tagged with homogeneous
+   forest IDs, and balanced radial interval trees for all forests. Each radial
+   leaf holds at most eight pixels. Trees are immutable during the search.
+2. For each pivot, walk the octree until one valid pixel inside the search
+   sphere witnesses a forest. Record that forest once. Skip homogeneous
+   branches of the pivot forest and already-discovered forests. Mixed-forest
+   branches still require traversal; discovery cost is not always one test per
+   forest. Thread-local generation stamps avoid clearing the full forest table
+   for every pivot.
+3. For a straight forest with unit sightline `n_f`, pivot observer-position
+   `x_p`, and search radius `R`, use
+   `a = dot(x_p, n_f)`, `b^2 = |x_p|^2 - a^2`, and
+   `chi_min,max = a +/- sqrt(R^2 - b^2)`. The radial coordinate `chi` is
+   measured from the observer, not from the pivot. The forest tree automatically
+   clips this interval to the pixel support.
+4. Query each discovered forest's radial tree, apply the exact 3D distance cut
+   to each candidate pixel, and feed the original 2PCF/3PCF accumulators.
+
+The 2PCF discovery radius is `hypot(lya2RpMax, lya2RtMax)`, which encloses the
+full rectangular pair domain. It is **not** either axis maximum alone. The
+3PCF uses `lya3RMax`; combined mode uses the larger radius and then applies
+each estimator's own cuts. The pivot forest is entirely excluded. For 3PCF,
+the two neighbor forests must also differ. Ordered pivot-side permutations
+and the existing `mu = cos(opening angle)` bins are unchanged.
+
+Interval calculations use a conservatively inflated sphere. A measured bound
+on each forest's departure from its reference sightline covers non-collinear
+pixels, recentering, and mixed-precision position storage; final distance/bin
+tests use the original stored geometry. No `theta`-controlled approximation
+or smooth-pivot aggregation is introduced. Arithmetic order differs from the
+old traversal, so agreement is to floating-point rounding, not necessarily
+byte-for-byte between different algorithms. Fixed 64-pivot publication blocks
+preserve determinism across OpenMP thread counts for the same method/build,
+while avoiding a synchronized merge and scratch clearing after every pivot.
+The old 3D methods keep their original per-pivot publication order.
+
+This accelerates neighbor discovery, not the quadratic neighbor-pair loop
+of the five-dimensional 3PCF. Dense 3PCF neighborhoods can therefore remain
+dominated by triangle accumulation. Index memory is linear in pixels and
+native octree nodes, with `O(forests * threads)` discovery scratch. Trees are
+rebuilt per correlation call and do not retain Python pointers after cleanup.
+With `verbose=2`, `LOS-tree:` reports index-build CPU time and discovery/radial
+visit counters. `build_CPU` excludes the preceding native octree construction.
+
+Example using a six-column forest catalog in comoving units:
+
+```sh
+./cballs search=lya-los-tree-2pcf-3pcf-omp \
+  infile=forests.txt infileformat=lya-ascii iCatalogs=1 \
+  usePeriodic=false numberThreads=8 rootDir=Output_lya_los_tree \
+  lya2RpMax=200 lya2RtMax=200 lya2RpBins=50 lya2RtBins=50 \
+  lya3RMax=80 lya3RBins=8 lya3ThetaBins=6 lya3MuBins=8
+```
+
+For only one statistic, change the search name to `lya-los-tree-2pcf-omp`
+or `lya-los-tree-3pcf-omp`. The old `lya-1d-tree-*` methods remain unchanged
+and measure different, radial-only statistics.
+
+Run `make test-lya-forest-los-tree` (requires pytest and NumPy) for independent
+oracle checks, old/new 3D histogram equality, forest exclusion, near-boundary
+and non-collinear geometry, combined/separate modes, and thread determinism.
 
 ## Input
 

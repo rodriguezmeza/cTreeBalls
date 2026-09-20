@@ -23,6 +23,10 @@ replace ``omp`` with ``mpi`` for its distributed sibling:
 * ``lya-1d-tree-same-los-2pcf-omp``: one exact interval tree per forest;
   within-forest radial 2PCFs are normalized separately and averaged with equal
   LOS weight in each occupied bin. This method currently has no MPI sibling.
+* ``lya-los-tree-2pcf-omp``, ``lya-los-tree-3pcf-omp`` and
+  ``lya-los-tree-2pcf-3pcf-omp``: exact anisotropic 3D statistics with an octree
+  for forest discovery and per-LOS radial trees for neighbor ranges. Unlike
+  radial-only methods, transverse distance matters. These have no MPI siblings.
 * ``octree-3pcf-3d-omp`` and ``octree-3pcf-3d-mpi``: scalar Legendre 3PCF
   multipoles with ``exclude-all-same-los`` enforcing three distinct forests.
 
@@ -63,7 +67,7 @@ From a checkout with the MPI addon enabled::
 
    mpiexec -n 2 ./cballs addons/lya_forest_mpi/parameters.ini
 
-The all-engines driver reads DESI delta FITS, NPZ, or six-column ASCII once,
+The all-engines driver reads DESI or eBOSS/PICCA delta FITS, NPZ, or six-column ASCII once,
 broadcasts arrays once for MPI, and retains registered catalogs between engines::
 
    python3 tests/python/lya_corr_all_engines.py --list-engines
@@ -72,9 +76,9 @@ broadcasts arrays once for MPI, and retains registered catalogs between engines:
        --fits /tmp/desi-lya/delta-1019.fits.gz --max-forests 6 \
        --pixel-stride 30 --engine all-omp --threads 2
 
-Use ``--engine all-tree --statistics both`` to select only the radial
-interval-tree 2PCF and 3PCF engines (OpenMP and MPI variants when available),
-including the OpenMP same-LOS estimator.
+Use ``--engine all-tree --statistics both`` to select tree-based forest engines,
+including radial interval trees, the same-LOS estimator and anisotropic LOS-tree
+methods. Comparisons remain separated by estimator family.
 Use ``--engine all-multipole --statistics 3pcf`` for the octree OpenMP/MPI
 estimators. Multipole and five-dimensional products are reported as
 different families and are never compared bin by bin.
@@ -92,6 +96,16 @@ workflows while keeping their estimator contracts distinct.
 
 Validation
 ----------
+
+The driver computes all pairwise comparisons within each compatible estimator
+family, plots correlation functions and relative errors, and can fail on
+specified tolerances. ``--fits-layout eboss`` selects eBOSS/PICCA delta HDUs;
+these are prepared forest deltas, not raw spectrograph exposures. Optional
+``--lya2pcf-source`` selects an external CPU 2PCF reference implementation.
+Distortion matrices act on a compatible model vector, not on the measured
+correlation as an inverse correction. Wedges, covariance and distortion
+analysis options are documented in the driver README; no 3PCF external
+reference is implied. Native and external timing scopes are recorded separately.
 
 Run ``make test-lya-forest-omp test-lya-forest-1d-omp`` and
 ``make test-lya-forest-mpi`` for enabled profiles.

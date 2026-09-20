@@ -10,6 +10,9 @@
 #define LYAFOREST1DTREE3PCFMETHOD 193
 #define LYAFOREST1DTREE3PCFMPIMETHOD 194
 #define LYAFOREST1DTREESAMELOS2PCFMETHOD 195
+#define LYAFORESTLOSTREE2PCFMETHOD 206
+#define LYAFORESTLOSTREE3PCFMETHOD 207
+#define LYAFORESTLOSTREE2PCF3PCFMETHOD 208
 
 global int inputdata_lya_ascii(struct cmdline_data *cmd,
                                struct global_data *gd,

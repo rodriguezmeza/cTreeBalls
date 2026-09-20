@@ -31,6 +31,7 @@ local int outputdata_cfitsio(struct cmdline_data* cmd, struct  global_data* gd,
         verb_print(cmd->verbose,
         "\toutputdata_cfitsio: only convergence (kappa) is %s\n\n",
                    "implemented. No file is saved...");
+        cBALLS_FAIL(cmd, "FITS output requires options=kappa");
     }
 
     return SUCCESS;
@@ -89,7 +90,10 @@ int writebintable_kappa(struct cmdline_data* cmd,
         goto cleanup;
     }
 
-    fits_create_img(fptr, SHORT_IMG, 0, naxes, &status);
+    if (fits_create_img(fptr, SHORT_IMG, 0, naxes, &status)) {
+        rc = fits_failure(cmd, status, "fits_create_img");
+        goto cleanup;
+    }
 
     if (fits_create_tbl(fptr, BINARY_TBL, nrows, tfields, ttype, tform,
                         tunit, extname, &status)) {
@@ -103,21 +107,29 @@ int writebintable_kappa(struct cmdline_data* cmd,
 
     fits_write_col(fptr, TDOUBLE, 1, firstrow, firstelem, nrows, arrayX,
                    &status);
-    fits_write_col(fptr, TDOUBLE, 2, firstrow, firstelem, nrows, arrayY,
-                   &status);
-    fits_write_col(fptr, TDOUBLE, 3, firstrow, firstelem, nrows, arrayZ,
-                   &status);
-    fits_write_col(fptr, TDOUBLE, 4, firstrow, firstelem, nrows, kappa,
-                   &status);
-    
-    if (fits_close_file(fptr, &status)) {
-        rc = fits_failure(cmd, status, "fits_close_file");
-        fptr = NULL;
+    if (status) {
+        rc = fits_failure(cmd, status, "fits_write_col");
         goto cleanup;
     }
-    fptr = NULL;
+    fits_write_col(fptr, TDOUBLE, 2, firstrow, firstelem, nrows, arrayY,
+                   &status);
+    if (status) {
+        rc = fits_failure(cmd, status, "fits_write_col");
+        goto cleanup;
+    }
+    fits_write_col(fptr, TDOUBLE, 3, firstrow, firstelem, nrows, arrayZ,
+                   &status);
+    if (status) {
+        rc = fits_failure(cmd, status, "fits_write_col");
+        goto cleanup;
+    }
+    fits_write_col(fptr, TDOUBLE, 4, firstrow, firstelem, nrows, kappa,
+                   &status);
+    if (status) {
+        rc = fits_failure(cmd, status, "fits_write_col");
+        goto cleanup;
+    }
     
-
 cleanup:
     if (fptr != NULL) {
         int close_status = 0;
@@ -189,6 +201,7 @@ local int outputdata_numpy_healpix(struct cmdline_data* cmd, struct  global_data
         verb_print(cmd->verbose,
         "\toutputdata_cfitsio: only convergence (kappa) is %s\n\n",
                    "implemented. No file is saved...");
+        cBALLS_FAIL(cmd, "FITS output requires options=kappa");
     }
 
     return SUCCESS;

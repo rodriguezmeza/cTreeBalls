@@ -46,12 +46,18 @@
 #include <stdarg.h>
 
 #ifndef SHEAR_ENGINE_NAME
-#error "An active full-sky shear wrapper must define SHEAR_ENGINE_NAME"
-#endif
-#ifndef OCTREE_SHEAR_SPHERICAL
-#error "The shared shear engine supports full-sky wrappers only"
-#endif
+#ifdef OCTREE_SHEAR_SPHERICAL
+#define SHEAR_ENGINE_NAME "octree-shear-sphere-omp"
 #define SHEAR_REQUIRED_DIMENSION 3
+#else
+#define SHEAR_ENGINE_NAME "octree-shear-omp"
+#define SHEAR_REQUIRED_DIMENSION 2
+#endif
+#elif defined(OCTREE_SHEAR_SPHERICAL)
+#define SHEAR_REQUIRED_DIMENSION 3
+#else
+#define SHEAR_REQUIRED_DIMENSION 2
+#endif
 
 #if NDIM < SHEAR_REQUIRED_DIMENSION
 
@@ -123,6 +129,8 @@ typedef struct {
     bodyptr pivot;
     int bins;
     int ring_max;
+    real angular_tolerance;
+    real max_cell_ratio;
     shear_complex *g_ring_first;
     shear_complex *w_ring_first;
     shear_complex *g_ring_second;
@@ -140,6 +148,14 @@ typedef struct {
     bool same_neighbor_catalog;
     bool allow_cells;
     shear_profile_counters *profile;
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+    bool aggregate_pivot;
+    const void *reuse_anchor;
+#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
+    shear_complex aggregate_gamma;
+    real aggregate_weight;
+#endif
+#endif
 #ifdef OCTREE_SHEAR_SPHERICAL
     compute_vector pivot_unit;
     compute_vector pivot_east;
@@ -496,6 +512,15 @@ static bool shear_interval_within_radial_bin(
 static shear_complex shear_pivot_weighted_gamma(
         const shear_pivot_workspace *work)
 {
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
+    if (work->aggregate_pivot) return work->aggregate_gamma;
+#else
+    if (work->aggregate_pivot)
+        return shear_scale(shear_make(Gamma1(work->pivot), Gamma2(work->pivot)),
+                           ShearWeightSum(work->pivot));
+#endif
+#endif
 #ifdef SMOOTHPIVOT
     if (cballs_opt_smooth_pivot(work->cmd))
         return shear_make(Gamma1Rmin(work->pivot), Gamma2Rmin(work->pivot));
@@ -506,6 +531,13 @@ static shear_complex shear_pivot_weighted_gamma(
 
 static real shear_pivot_weight(const shear_pivot_workspace *work)
 {
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
+    if (work->aggregate_pivot) return work->aggregate_weight;
+#else
+    if (work->aggregate_pivot) return ShearWeightSum(work->pivot);
+#endif
+#endif
 #ifdef SMOOTHPIVOT
     if (cballs_opt_smooth_pivot(work->cmd))
         return WeightRmin(work->pivot);
@@ -915,18 +947,16 @@ static real shear_physical_cell_radius(const shear_pivot_workspace *work,
 }
 
 #ifdef OCTREE_SHEAR_SPHERICAL
-static bool shear_spherical_node_frame(
+static bool shear_spherical_node_geometry(
         struct cmdline_data *cmd, nodeptr q, real qsize,
-        compute_vector unit, compute_vector east, compute_vector north,
-        real *effective_radius, real *angular_radius)
+        compute_vector unit, real *effective_radius)
 {
     shear_pivot_workspace radius_work;
     real norm2;
     real norm;
     real radius = 0.0;
 
-    if (q == NULL || !shear_unit3(Pos(q), unit)
-        || !shear_spherical_basis(unit, east, north))
+    if (q == NULL || !shear_unit3(Pos(q), unit))
         return FALSE;
     norm2 = shear_dot3(Pos(q), Pos(q));
     norm = rsqrt(norm2);
@@ -937,6 +967,20 @@ static bool shear_spherical_node_frame(
             + rabs(norm - 1.0);
     }
     if (!isfinite(radius) || radius < 0.0)
+        return FALSE;
+    *effective_radius = radius;
+    return TRUE;
+}
+
+static bool shear_spherical_node_frame(
+        struct cmdline_data *cmd, nodeptr q, real qsize,
+        compute_vector unit, compute_vector east, compute_vector north,
+        real *effective_radius, real *angular_radius)
+{
+    real radius;
+
+    if (!shear_spherical_node_geometry(cmd, q, qsize, unit, &radius)
+        || !shear_spherical_basis(unit, east, north))
         return FALSE;
     if (effective_radius != NULL)
         *effective_radius = radius;
@@ -1085,8 +1129,6 @@ static bool shear_cell_geometry(shear_pivot_workspace *work, nodeptr q,
     real distance2;
     real lower;
     real upper;
-    real angular_tolerance;
-    real max_ratio;
 
     *radius = shear_physical_cell_radius(work, q, qsize);
 #ifdef OCTREE_SHEAR_SPHERICAL
@@ -1115,22 +1157,12 @@ static bool shear_cell_geometry(shear_pivot_workspace *work, nodeptr q,
         return FALSE;
     }
     *distance = rsqrt(distance2);
-    *bin = shear_radial_bin_profiled(work, *distance);
-#ifdef OCTREE_SHEAR_SPHERICAL
-    if (*distance > 0.0 && shear_spherical_phase_node(work, q, phase)) {
-        /* phase was set in the pivot tangent basis */
-    } else {
-        *phase = shear_make(0.0, 0.0);
-    }
-#else
-    *phase = *distance > 0.0
-        ? shear_make(-dr[0]/(*distance), -dr[1]/(*distance))
-        : shear_make(0.0, 0.0);
-#endif
+    *bin = -1;
+    *phase = shear_make(0.0, 0.0);
+    /* Rejected cells need only distance/radius for the caller's pruning.
+     * Defer logarithms and bearing geometry until acceptance is possible. */
     if (*distance + *radius <= work->cmd->rminHist
         || *distance - *radius >= work->cmd->rangeN)
-        return FALSE;
-    if (*bin < 0 || !isfinite(phase->re) || !isfinite(phase->im))
         return FALSE;
     if (!work->allow_cells || !(work->cmd->theta > 0.0)
         || Nb(q) <= 0 || *distance <= *radius
@@ -1138,18 +1170,19 @@ static bool shear_cell_geometry(shear_pivot_workspace *work, nodeptr q,
             && Mask(q) != MASK_NODE_VALID))
         return FALSE;
 
+    if (!(*radius/(*distance) <= work->max_cell_ratio))
+        return FALSE;
     lower = *distance - *radius;
     upper = *distance + *radius;
     if (!(lower > work->cmd->rminHist && upper < work->cmd->rangeN))
+        return FALSE;
+    *bin = shear_radial_bin_profiled(work, *distance);
+    if (*bin < 0)
         return FALSE;
     if (!shear_interval_within_radial_bin(
             work->cmd, work->gd, lower, upper, *bin))
         return FALSE;
 
-    angular_tolerance = MIN(0.5*PI,
-        work->cmd->theta*PI/(2.0*(real)work->ring_max + 1.0));
-    max_ratio = angular_tolerance >= 0.5*PI
-        ? 1.0 : rsin(MAX(0.0, angular_tolerance));
 #ifdef OCTREE_SHEAR_SPHERICAL
     {
         const real cell_angle = 2.0*rasin(MIN(1.0, 0.5*(*radius)));
@@ -1158,11 +1191,17 @@ static bool shear_cell_geometry(shear_pivot_workspace *work, nodeptr q,
             + 2.0*cell_angle*separation;
 
         if (!isfinite(ShearTransportError(q))
-            || transport_error > angular_tolerance)
+            || transport_error > work->angular_tolerance)
             return FALSE;
     }
 #endif
-    return *radius/(*distance) <= max_ratio;
+#ifdef OCTREE_SHEAR_SPHERICAL
+    if (!shear_spherical_phase_node(work, q, phase))
+        *phase = shear_make(0.0, 0.0);
+#else
+    *phase = shear_make(-dr[0]/(*distance), -dr[1]/(*distance));
+#endif
+    return isfinite(phase->re) && isfinite(phase->im);
 }
 
 static void shear_accumulate_2pcf_sample(shear_pivot_workspace *work, int bin,
@@ -2594,13 +2633,16 @@ static int shear_mpi_reduce_results(struct cmdline_data *cmd,
 #endif
 
 #ifdef OCTREE_SHEAR_SPHERICAL
-#include "shear_sphere_dual_tree.h"
+#include "../shear_sphere_shared/shear_sphere_dual_tree.h"
 #endif
 #ifdef SHEAR_SPHERE_NATIVE_FRONTIER_SCHEDULER
-#include "shear_sphere_frontier_scheduler.h"
+#include "../shear_sphere_shared/shear_sphere_frontier_scheduler.h"
 #endif
 #ifdef SHEAR_SPHERE_BINARY_TWO_BALLS
 #include "../shear_sphere_binary_2balls/shear_sphere_binary_scan.h"
+#endif
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+#include "../octree_shear_sphere_2balls_omp/shear_pivot_reuse.h"
 #endif
 
 #if defined(SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER) \
@@ -2650,6 +2692,11 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     real *xi_weight_all = NULL;
     shear_profile_counters *profile_all = NULL;
     const bool profile_enabled = getenv("CBALLS_SHEAR_PROFILE") != NULL;
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+    bool reuse_enabled = FALSE;
+    real reuse_tolerance = 0.0;
+    int reuse_failed = 0;
+#endif
     INTEGER ip;
 #ifdef SHEAR_SPHERE_BINARY_TWO_BALLS
     fcfc_balltreeptr kd_pivot_tree = NULL;
@@ -2679,6 +2726,32 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     if (cmd == NULL)
         return FAILURE;
     cmd->error_message[0] = '\0';
+    if (scanopt(cmd->options, "shear-pivot-reuse")) {
+#ifndef SHEAR_SPHERE_PIVOT_REUSE
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "shear-pivot-reuse requires octree-shear-sphere-2balls-omp "
+                 "or balltree-shear-sphere-2balls-omp "
+                 "with BALLS4SCANLEVON=1");
+        return FAILURE;
+#else
+        if (cballs_opt_legacy_one_ball(cmd)) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "shear-pivot-reuse is unavailable in legacy-one-ball mode");
+            return FAILURE;
+        }
+        if (shear_reuse_tolerance(cmd, &reuse_tolerance) == FAILURE)
+            return FAILURE;
+#endif
+    }
+#ifdef OCTREE_SHEAR_SPHERICAL_TWO_BALLS
+    if (cballs_opt_legacy_one_ball(cmd)) {
+        verb_print(cmd->verbose,
+                   SHEAR_ENGINE_NAME ": dispatching to the "
+                   "octree-shear-sphere-omp compatibility kernel\n");
+        return searchcalc_octree_shear_sphere_omp(
+            cmd, gd, btable, nbody, ipmin, ipmax, cat1, cat2, cat3);
+    }
+#endif
     if (shear_validate(cmd, gd, btable, nbody, ipmin, ipmax,
                        cat1, cat2, cat3)
         == FAILURE)
@@ -2688,6 +2761,28 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     run_2pcf = !cballs_opt_only_3pcf(cmd);
     run_3pcf = !cballs_opt_only_2pcf(cmd);
     scan_2pcf = run_2pcf;
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+    reuse_enabled = scanopt(cmd->options, "shear-pivot-reuse")
+        && reuse_tolerance > 0.0 && run_3pcf
+        && !cballs_opt_no_one_ball(cmd) && !cballs_opt_no_two_balls(cmd)
+        && cmd->theta > 0.0 && !cballs_opt_smooth_pivot(cmd)
+        && ipmin == 1 && ipmax[cat1] == nbody[cat1];
+    if (reuse_enabled) {
+        for (INTEGER point = 0; point < nbody[cat1]; point++) {
+            bodyptr pivot = btable[cat1] + point;
+            if (!Update(pivot) && (!cballs_opt_read_mask(cmd)
+                                  || Mask(pivot) == MASK_NODE_VALID)) {
+                reuse_enabled = FALSE;
+                break;
+            }
+        }
+    }
+    if (scanopt(cmd->options, "shear-pivot-reuse"))
+        verb_print(cmd->verbose, SHEAR_ENGINE_NAME
+                   ": pivot reuse %s, phase budget %.6g rad\n",
+                   reuse_enabled ? "enabled" : "disabled (body-pivot fallback)",
+                   reuse_tolerance);
+#endif
 #ifdef OCTREE_SHEAR_SPHERICAL
 #ifndef SHEAR_SPHERE_BINARY_TWO_BALLS
     {
@@ -2726,10 +2821,18 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     }
 #endif
 #ifdef SHEAR_SPHERE_BINARY_TWO_BALLS
+    const double kd_build_started = profile_enabled ? shear_profile_wall_time() : 0.0;
     if (SHEAR_SPHERE_BINARY_TREE_BUILD(
             cmd, gd, btable[cat1], nbody[cat1], cmd->nsmooth,
-            TRUE, &kd_pivot_tree) == FAILURE
-        || SHEAR_SPHERE_BINARY_TREE_BUILD(
+            TRUE, &kd_pivot_tree) == FAILURE) {
+        kd_shear_release_trees(kd_pivot_tree, kd_first_tree, kd_second_tree);
+        return FAILURE;
+    }
+    /* With smoothing disabled, pivot and neighbor roles have identical
+     * members and moments. Share only within this call, never across models. */
+    if (cat1 == cat2 && !cballs_opt_smooth_pivot(cmd)) {
+        kd_first_tree = kd_pivot_tree;
+    } else if (SHEAR_SPHERE_BINARY_TREE_BUILD(
             cmd, gd, btable[cat2], nbody[cat2], cmd->nsmooth,
             FALSE, &kd_first_tree) == FAILURE) {
         kd_shear_release_trees(kd_pivot_tree, kd_first_tree, kd_second_tree);
@@ -2742,6 +2845,9 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
         && ipmin == 1 && ipmax[cat1] == nbody[cat1]) {
         int dual_status;
 
+        if (profile_enabled)
+            kd_shear_print_tree_profile(kd_build_started, kd_pivot_tree,
+                                        kd_first_tree, kd_second_tree);
         bins = cmd->sizeHistN;
         dual_status = shear_allocate_results(
             cmd, gd, (size_t)bins, 0, 0, 0, TRUE, FALSE);
@@ -2803,6 +2909,8 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
         kd_second_tree = kd_first_tree;
     } else if (cat3 == cat2) {
         kd_second_tree = kd_first_tree;
+    } else if (cat3 == cat1 && !cballs_opt_smooth_pivot(cmd)) {
+        kd_second_tree = kd_pivot_tree;
     } else if (SHEAR_SPHERE_BINARY_TREE_BUILD(
                    cmd, gd, btable[cat3], nbody[cat3], cmd->nsmooth,
                    FALSE, &kd_second_tree) == FAILURE) {
@@ -2811,6 +2919,9 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     }
     if (run_3pcf)
         gd->ncellTable[cat3] = kd_second_tree->nnode;
+    if (profile_enabled)
+        kd_shear_print_tree_profile(kd_build_started, kd_pivot_tree,
+                                    kd_first_tree, kd_second_tree);
 #endif
 #ifndef SHEAR_SPHERE_BINARY_TWO_BALLS
     if (run_2pcf && !run_3pcf
@@ -3190,6 +3301,10 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
         int thread_id = 0;
         shear_pivot_workspace work;
         shear_result_accumulator accumulator;
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+        shear_reuse_context reuse = {0};
+        work.aggregate_pivot = FALSE;
+#endif
 #ifdef OPENMPCODE
         thread_id = omp_get_thread_num();
 #endif
@@ -3197,6 +3312,10 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
         work.gd = gd;
         work.bins = bins;
         work.ring_max = ring_max;
+        work.angular_tolerance = MIN(0.5*PI,
+            cmd->theta*PI/(2.0*(real)ring_max + 1.0));
+        work.max_cell_ratio = work.angular_tolerance >= 0.5*PI
+            ? 1.0 : rsin(MAX(0.0, work.angular_tolerance));
         work.g_ring_first = run_3pcf
             ? g_ring_first_all + (size_t)thread_id*ring_count : NULL;
         work.w_ring_first = run_3pcf
@@ -3230,6 +3349,12 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
         work.profile = profile_all != NULL ? &profile_all[thread_id] : NULL;
         const double profile_thread_started = work.profile != NULL
             ? shear_profile_wall_time() : 0.0;
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+        reuse.tolerance = reuse_tolerance;
+        reuse.nmax = nmax;
+        reuse.ring_count = ring_count;
+        reuse.weight_ring_count = weight_ring_count;
+#endif
 
 #ifdef BALLS4SCANLEV
 #ifdef SHEAR_SPHERE_FRONTIER_SCHEDULER
@@ -3252,6 +3377,21 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
                 scan_2pcf, run_3pcf, &accumulator);
             shear_zero_accumulator(&accumulator, (size_t)bins, gamma_count,
                                    denominator_count);
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+            if (reuse_enabled && !scan_2pcf) {
+                if (!reuse.failed && shear_reuse_task(&reuse, &work, &accumulator,
+                                     task, &frontier_schedule
+#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
+                                     , kd_pivot_tree, kd_first_tree, kd_second_tree
+#endif
+                                     ) == FAILURE) {
+                    reuse.failed = TRUE;
+#pragma omp atomic write
+                    reuse_failed = 1;
+                }
+                continue;
+            }
+#endif
 #ifdef SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER
             for (INTEGER point = task->first; point <= task->last; point++) {
                 work.pivot = kd_pivot_tree->bptr[point];
@@ -3414,8 +3554,22 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
         if (work.profile != NULL)
             work.profile->elapsed_seconds =
                 shear_profile_wall_time() - profile_thread_started;
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+        if (reuse_enabled && profile_enabled)
+            shear_reuse_print_profile(&reuse, thread_id);
+        shear_reuse_free(&reuse);
+#endif
     }
 #undef SHEAR_SCAN_SHARED
+
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+    if (reuse_failed) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 SHEAR_ENGINE_NAME ": pivot-reuse workspace allocation "
+                 "or spherical frame transport failed");
+        goto fail;
+    }
+#endif
 
     shear_print_profiles(profile_all, threads);
 

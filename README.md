@@ -25,7 +25,7 @@ Major contributors:
 - Shear: full-sky spin-2 correlations, parallel transport, and angular window
   correction over octree, KD-tree, and ball-tree dual-node traversals.
 - Lyman-alpha forests: anisotropic 3D and radial-only 2PCF/3PCF with
-  forest-ID exclusions, plus an equal-LOS within-forest radial 2PCF.
+  forest-ID exclusions, octree-discovered LOS trees, and an equal-LOS radial 2PCF.
 - Physical 3D scalar fields and ENCORE-style data/random survey estimators.
 
 OpenMP and MPI availability depends on the selected build. Not every engine
@@ -71,9 +71,9 @@ The import name is always `cyballs`. A pip installation does not install the
 checkout's `cballs` command, examples, or benchmark source trees.
 
 Configure `Makefile_settings`, `Makefile_machine`, and
-`addons/Makefile_addons_settings` before building. Bundled GSL is selected
-with `GSLINTERNAL=1`; CFITSIO is an external dependency discovered with
-`pkg-config cfitsio`. Keep C and Cython
+`addons/Makefile_addons_settings` before building. This public profile uses
+external GSL and CFITSIO, discovered with `gsl-config` and `pkg-config cfitsio`.
+Disabled bundled-library addons are not included. Keep C and Cython
 flags identical and rebuild both after changing a profile. Do not hand-edit
 the generated `python/ccyballs.pxd`.
 
@@ -107,8 +107,8 @@ Older affected multipoles must be recomputed.
 `SMOOTHPIVOTON=1` enables pivot smoothing by default on active engines that
 advertise support through `options=print-search-methods`. Add
 `options=no-smooth-pivot` to recover the unsmoothed estimator. The explicit
-`smooth-pivot` spelling remains accepted. Methods that do not advertise this
-feature always retain exact body pivots.
+`smooth-pivot` spelling remains accepted. Native octree scalar dual node mode
+retains body pivots; its `legacy-one-ball` compatibility mode supports smoothing.
 Validate approximate tree acceptance against exact small-catalog runs before
 interpreting speedups.
 
@@ -128,7 +128,7 @@ try:
     model.set(searchMethod="octree-2balls-omp", rootDir="Output_memory",
               rangeN=1.0, rminHist=0.05, sizeHistN=6, mChebyshev=3,
               numberThreads=2, useLogHist=True,
-              options="no-normalize-HistZeta,weights-norm,no-two-balls")
+              options="no-normalize-HistZeta,weights-norm,no-one-ball,no-smooth-pivot")
     model.set_catalog(xyz, kappa=rng.normal(size=len(xyz)))
     model.Run()
     xi = model.getHistXi2pcf()
@@ -145,6 +145,11 @@ registered catalogs, and `clean_all()` when finished.
 
 Ready-to-use examples:
 
+All catalog drivers and their README files are in `tests/python`; `python/`
+contains the Cython bindings only. The public profile excludes disabled addon
+directories and `addons/python_env`. Required internal kernels live in shared
+support directories and do not register extra search methods.
+
 - [In-memory Python example](examples/cyballs_in_memory_catalog.py) and
   [notebook](examples/cyballs_in_memory_catalog.ipynb)
 - [Kappa all-engines driver](tests/python/README_kappa_corr_all_engines.md):
@@ -152,12 +157,18 @@ Ready-to-use examples:
   ordinary/flattened 3PCF plots
 - [Forest all-engines driver](tests/python/README_lya_corr_all_engines.md) and
   [notebook](examples/lya_corr_all_engines.ipynb)
+- [Shear all-engines driver](tests/python/README_shear_corr_all_engines.md),
+  including opt-in, separately calibrated octree/ball-tree pivot reuse
 - [Physical 3D/ENCORE comparison](examples/compare_octree_3pcf_3d_encore.py)
   and [notebook](examples/compare_octree_3pcf_3d_encore.ipynb)
 
 MPI Python runs require `mpi4py` linked to the same MPI implementation.
 Every rank must enter the same run and cleanup sequence; read published
 histograms on rank 0. The all-engines drivers manage catalog broadcasting.
+Native benchmark CPU time is summed across participating MPI ranks; wall time
+is the slowest rank. Save the per-rank timings and numerical settings alongside
+results. Exact native-octree 3PCF needs `no-one-ball,no-smooth-pivot`; scheduling
+with `BALLS4SCANLEVON=1` can remain enabled.
 
 ## Tests and Documentation Builds
 

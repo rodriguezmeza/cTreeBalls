@@ -15,7 +15,9 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -51,19 +53,35 @@ def _default_cballs_executable() -> Path:
 
 DEFAULT_CBALLS = _default_cballs_executable()
 SHEAR_SPHERE_TWO_BALLS_ENGINE = "octree-shear-sphere-2balls-omp"
+SHEAR_SPHERE_TWO_BALLS_MPI_ENGINE = "octree-shear-sphere-2balls-mpi"
 SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE = "kdtree-shear-sphere-2balls-omp"
+SHEAR_SPHERE_KDTREE_TWO_BALLS_MPI_ENGINE = "kdtree-shear-sphere-2balls-mpi"
 SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE = "balltree-shear-sphere-2balls-omp"
-SHEAR_SPHERE_ENGINES = (
+SHEAR_SPHERE_BALLTREE_TWO_BALLS_MPI_ENGINE = "balltree-shear-sphere-2balls-mpi"
+SHEAR_SPHERE_OMP_ENGINES = (
     SHEAR_SPHERE_TWO_BALLS_ENGINE,
     SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE,
     SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE,
+)
+SHEAR_SPHERE_MPI_ENGINES = (
+    SHEAR_SPHERE_TWO_BALLS_MPI_ENGINE,
+    SHEAR_SPHERE_KDTREE_TWO_BALLS_MPI_ENGINE,
+    SHEAR_SPHERE_BALLTREE_TWO_BALLS_MPI_ENGINE,
+)
+SHEAR_SPHERE_ENGINES = tuple(
+    engine
+    for pair in zip(SHEAR_SPHERE_OMP_ENGINES, SHEAR_SPHERE_MPI_ENGINES)
+    for engine in pair
 )
 NATIVE_SHEAR_ENGINES = SHEAR_SPHERE_ENGINES
 ENGINE_ORDER = NATIVE_SHEAR_ENGINES
 SHEAR_ENGINE_SETTINGS = {
     SHEAR_SPHERE_TWO_BALLS_ENGINE: "OCTREESHEARSPHERE2BALLSOMPON",
+    SHEAR_SPHERE_TWO_BALLS_MPI_ENGINE: "OCTREESHEARSPHERE2BALLSMPION",
     SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE: "KDTREESHEARSPHERE2BALLSOMPON",
+    SHEAR_SPHERE_KDTREE_TWO_BALLS_MPI_ENGINE: "KDTREESHEARSPHERE2BALLSMPION",
     SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE: "BALLTREESHEARSPHERE2BALLSOMPON",
+    SHEAR_SPHERE_BALLTREE_TWO_BALLS_MPI_ENGINE: "BALLTREESHEARSPHERE2BALLSMPION",
 }
 COMPONENT_LABELS = ("Gamma0", "Gamma1", "Gamma2", "Gamma3")
 RUNTIME_HELP_OPTIONS = ("print-search-methods", "print-options", "make-info")
@@ -151,7 +169,12 @@ class RunConfig:
     multipoles: int = 3
     phi_bins: int = 32
     threads: int = max(1, (os.cpu_count() or 2) - 1)
+    mpi_ranks: int = 2
+    mpiexec: str = "mpiexec"
+    mpi_extra_args: Sequence[str] = field(default_factory=tuple)
+    timeout: float = 3600.0
     tree_theta: float = 1.0
+    nsmooth: int = 16
     smooth_radius: Optional[float] = None
     use_log_bins: bool = True
     options: Sequence[str] = field(default_factory=tuple)
@@ -187,6 +210,16 @@ class RunConfig:
             raise ValueError("phi_bins must be at least 4")
         if self.threads < 1:
             raise ValueError("threads must be positive")
+        if self.nsmooth < 1:
+            raise ValueError("nsmooth must be positive")
+        if not math.isfinite(self.tree_theta) or self.tree_theta < 0:
+            raise ValueError("tree_theta must be finite and non-negative")
+        if self.mpi_ranks < 1:
+            raise ValueError("mpi_ranks must be positive")
+        if not self.mpiexec.strip():
+            raise ValueError("mpiexec must not be empty")
+        if not math.isfinite(self.timeout) or self.timeout <= 0.0:
+            raise ValueError("timeout must be positive and finite")
         if (self.smooth_radius is not None
                 and (not math.isfinite(self.smooth_radius)
                      or self.smooth_radius < 0.0)):
@@ -197,6 +230,7 @@ class RunConfig:
             **{
                 **self.__dict__,
                 "options": tuple(split_options(self.options)),
+                "mpi_extra_args": tuple(self.mpi_extra_args),
                 "output_dir": Path(self.output_dir).expanduser().resolve(),
             }
         )
@@ -764,7 +798,9 @@ def resolve_engines(tokens: Sequence[str], available: Sequence[str],
     if any(name in {"all", "all-shear"} for name in requested):
         requested = [name for name in native_engines if name in available]
     elif "all-omp" in requested:
-        requested = [name for name in native_engines if name in available]
+        requested = [name for name in SHEAR_SPHERE_OMP_ENGINES if name in available]
+    elif "all-mpi" in requested:
+        requested = [name for name in SHEAR_SPHERE_MPI_ENGINES if name in available]
     unknown = [name for name in requested if name not in ENGINE_ORDER]
     if unknown:
         raise ValueError("unknown shear engine(s): " + ", ".join(unknown))
@@ -841,8 +877,11 @@ def _timing_metadata(setup_wall: float, setup_cpu: float,
 
 
 def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
-                   engine: Optional[str] = None) -> dict[str, Any]:
+                   engine: Optional[str] = None, *,
+                   _mpi_rank: Optional[int] = None) -> dict[str, Any]:
     engine = engine or SHEAR_SPHERE_TWO_BALLS_ENGINE
+    if engine in SHEAR_SPHERE_MPI_ENGINES and _mpi_rank is None:
+        return run_ctreeballs_mpi(catalog, config, engine)
     try:
         from cyballs import cballs
     except (ImportError, OSError) as exc:
@@ -878,6 +917,7 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
                 "lengthBox": length_box,
                 "numberThreads": config.threads,
                 "theta": config.tree_theta,
+                "nsmooth": config.nsmooth,
                 "verbose": config.verbose,
                 "verbose_log": config.verbose_log,
                 "rootDir": output,
@@ -900,16 +940,25 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
             elapsed_cpu = time.process_time() - started_cpu
             result: dict[str, Any] = {
                 "engine": engine,
+                "provenance": model.getRunMetadata(),
                 "geometry": catalog.geometry,
+                "ranks": 1 if _mpi_rank is None else config.mpi_ranks,
+                "threads_per_rank": config.threads,
                 f"elapsed_{config.statistics}": elapsed,
                 f"cpu_{config.statistics}": elapsed_cpu,
                 "native_reported_cpu_time": float(model.getCPUTime()),
+                "parameters": {key: value for key, value in parameters.items()
+                               if key != "rootDir"},
+                "shear_pivot_phase_budget": os.environ.get("CBALLS_SHEAR_PIVOT_TOL", "0.1")
+                    if "shear-pivot-reuse" in options else None,
             }
             result.update(_timing_metadata(
                 setup_wall, setup_cpu, elapsed, elapsed_cpu,
                 "cTreeBalls object/catalog/thread setup plus one native MainLoop; "
                 f"{engine} native {config.statistics} execution path",
             ))
+            if _mpi_rank not in (None, 0):
+                return result
             result["radius"] = model.getrBins().copy()
             if config.statistics in {"2pcf", "both"}:
                 result.update(
@@ -936,6 +985,151 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
             return result
         finally:
             model.struct_cleanup()
+
+
+def _config_packet(config: RunConfig) -> dict[str, Any]:
+    packet = dict(config.__dict__)
+    packet["output_dir"] = os.fspath(config.output_dir)
+    packet["options"] = list(config.options)
+    packet["mpi_extra_args"] = list(config.mpi_extra_args)
+    return packet
+
+
+def run_ctreeballs_mpi(catalog: ShearCatalog, config: RunConfig,
+                       engine: str) -> dict[str, Any]:
+    """Run one MPI addon and return max-rank wall and summed CPU timings."""
+    with tempfile.TemporaryDirectory(prefix="ctreeballs-shear-mpi-") as temporary:
+        root = Path(temporary)
+        np.savez_compressed(
+            root / "catalog.npz",
+            positions=catalog.positions,
+            gamma1=catalog.gamma1,
+            gamma2=catalog.gamma2,
+            weights=catalog.weights,
+        )
+        packet = {
+            "engine": engine,
+            "geometry": catalog.geometry,
+            "metadata": catalog.metadata,
+            "config": _config_packet(config),
+        }
+        (root / "packet.json").write_text(
+            json.dumps(packet, default=str), encoding="utf-8"
+        )
+        command = [
+            *shlex.split(config.mpiexec), *config.mpi_extra_args,
+            "-n", str(config.mpi_ranks), sys.executable,
+            os.fspath(Path(__file__).resolve()), "--mpi-worker", os.fspath(root),
+        ]
+        launched = time.perf_counter()
+        with (root / "worker.log").open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                command, stdout=log, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            try:
+                returncode = process.wait(timeout=config.timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+                raise RuntimeError(
+                    f"MPI shear worker exceeded {config.timeout:g} seconds"
+                ) from None
+        if returncode:
+            detail = (root / "worker.log").read_text(encoding="utf-8")[-8000:]
+            raise RuntimeError(
+                f"MPI shear worker exited with status {returncode}:\n{detail}"
+            )
+        metadata = json.loads((root / "result.json").read_text(encoding="utf-8"))
+        with np.load(root / "result.npz", allow_pickle=False) as saved:
+            result = {name: saved[name].copy() for name in saved.files}
+        rank_timings = [
+            json.loads((root / f"rank-{rank}.json").read_text(encoding="utf-8"))
+            for rank in range(config.mpi_ranks)
+        ]
+        result.update(metadata)
+        result["setup_wall_time"] = max(
+            row["setup_wall_time"] for row in rank_timings
+        )
+        result["setup_cpu_time"] = sum(
+            row["setup_cpu_time"] for row in rank_timings
+        )
+        result["compute_wall_time"] = max(
+            row["compute_wall_time"] for row in rank_timings
+        )
+        result["compute_cpu_time"] = sum(
+            row["compute_cpu_time"] for row in rank_timings
+        )
+        result["total_wall_time"] = max(
+            row["total_wall_time"] for row in rank_timings
+        )
+        result["total_cpu_time"] = sum(
+            row["total_cpu_time"] for row in rank_timings
+        )
+        result["native_reported_cpu_time"] = sum(
+            row["native_reported_cpu_time"] for row in rank_timings
+        )
+        result[f"elapsed_{config.statistics}"] = result["compute_wall_time"]
+        result[f"cpu_{config.statistics}"] = result["compute_cpu_time"]
+        result["ranks"] = config.mpi_ranks
+        result["rank_timings"] = rank_timings
+        result["timing_scope"] = (
+            "MPI max-rank MainLoop wall and summed rank CPU; launcher and "
+            "catalog packet transfer excluded"
+        )
+        result["launcher_wall_time"] = time.perf_counter() - launched
+        return result
+
+
+def mpi_worker(root: Path) -> int:
+    """Execute one native MPI addon inside a launcher-created worker group."""
+    rank = next((
+        int(os.environ[name])
+        for name in ("OMPI_COMM_WORLD_RANK", "PMI_RANK", "MPI_LOCALRANKID")
+        if name in os.environ
+    ), 0)
+    packet = json.loads((root / "packet.json").read_text(encoding="utf-8"))
+    with np.load(root / "catalog.npz", allow_pickle=False) as saved:
+        catalog = ShearCatalog(
+            positions=saved["positions"].copy(),
+            gamma1=saved["gamma1"].copy(),
+            gamma2=saved["gamma2"].copy(),
+            weights=saved["weights"].copy(),
+            geometry=packet["geometry"],
+            metadata=packet["metadata"],
+        ).normalized()
+    config_data = packet["config"]
+    config_data["output_dir"] = Path(config_data["output_dir"])
+    config = RunConfig(**config_data).normalized()
+    result = run_ctreeballs(
+        catalog, config, packet["engine"], _mpi_rank=rank
+    )
+    timing_keys = (
+        "setup_wall_time", "setup_cpu_time", "compute_wall_time",
+        "compute_cpu_time", "total_wall_time", "total_cpu_time",
+        "native_reported_cpu_time",
+    )
+    rank_timing = {name: float(result[name]) for name in timing_keys}
+    rank_timing["rank"] = rank
+    (root / f"rank-{rank}.json").write_text(
+        json.dumps(rank_timing, indent=2), encoding="utf-8"
+    )
+    if rank != 0:
+        return 0
+
+    arrays = {
+        name: value for name, value in result.items()
+        if isinstance(value, np.ndarray)
+    }
+    np.savez_compressed(root / "result.npz", **arrays)
+    metadata = {
+        name: value for name, value in result.items()
+        if not isinstance(value, np.ndarray)
+    }
+    (root / "result.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
+    return 0
 
 
 def symmetric_relative_difference(candidate: np.ndarray, reference: np.ndarray,
@@ -1012,6 +1206,8 @@ def _save_result(path: Path, result: dict[str, Any]) -> None:
     arrays = {name: value for name, value in result.items()
               if isinstance(value, np.ndarray)}
     np.savez_compressed(path, **arrays)
+    metadata = {name: value for name, value in result.items() if not isinstance(value, np.ndarray)}
+    path.with_suffix(".json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
 
 def timing_summary(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -1022,6 +1218,8 @@ def timing_summary(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, An
         compute_cpu = float(result.get("compute_cpu_time", 0.0))
         summary[engine] = {
             "backend": "ctreeballs",
+            "ranks": int(result.get("ranks", 1)),
+            "threads_per_rank": int(result.get("threads_per_rank", 1)),
             "setup_wall_time": float(result.get("setup_wall_time", 0.0)),
             "setup_cpu_time": float(result.get("setup_cpu_time", 0.0)),
             "compute_wall_time": compute_wall,
@@ -1039,7 +1237,8 @@ def timing_summary(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, An
 
 def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
     columns = (
-        ("engine", 41), ("setup_wall_s", 14),
+        ("engine", 41), ("ranks", 7), ("threads", 8),
+        ("setup_wall_s", 14),
         ("compute_wall_s", 16), ("total_wall_s", 14),
         ("setup_cpu_s", 13), ("compute_cpu_s", 15), ("total_cpu_s", 13),
         ("native_cpu_s", 14), ("cpu/wall", 10),
@@ -1050,7 +1249,7 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
         ratio = values["compute_cpu_wall_ratio"]
         native_cpu = values["native_reported_cpu_time"]
         fields = (
-            engine,
+            engine, str(values["ranks"]), str(values["threads_per_rank"]),
             f'{values["setup_wall_time"]:.6f}',
             f'{values["compute_wall_time"]:.6f}',
             f'{values["total_wall_time"]:.6f}',
@@ -1063,7 +1262,7 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
         lines.append(" ".join(str(value).ljust(width) for value, (_, width) in zip(fields, columns)))
     lines.extend((
         "",
-        "CPU values are process CPU seconds; they may exceed wall time for threaded work.",
+        "CPU values are process CPU seconds; MPI rows sum them over ranks.",
         "The selected only-2pcf/only-3pcf option isolates the requested statistic.",
     ))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1088,9 +1287,12 @@ def make_plots(results: dict[str, dict[str, Any]], config: RunConfig) -> list[st
 
     paths: list[str] = []
     colors = {
-        SHEAR_SPHERE_TWO_BALLS_ENGINE: "C1",
-        SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE: "C4",
-        SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE: "C5",
+        SHEAR_SPHERE_TWO_BALLS_ENGINE: "C0",
+        SHEAR_SPHERE_TWO_BALLS_MPI_ENGINE: "C1",
+        SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE: "C2",
+        SHEAR_SPHERE_KDTREE_TWO_BALLS_MPI_ENGINE: "C3",
+        SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE: "C4",
+        SHEAR_SPHERE_BALLTREE_TWO_BALLS_MPI_ENGINE: "C5",
     }
     if any("xi_plus" in result for result in results.values()):
         figure, axes = plt.subplots(2, 2, figsize=(11.0, 7.8), sharex=True)
@@ -1193,7 +1395,11 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
     config.output_dir.mkdir(parents=True, exist_ok=True)
     results: dict[str, dict[str, Any]] = {}
     for engine in engines:
-        print(f"[run] {engine}: N={catalog.nbody}, threads={config.threads}")
+        ranks = config.mpi_ranks if engine in SHEAR_SPHERE_MPI_ENGINES else 1
+        print(
+            f"[run] {engine}: N={catalog.nbody}, "
+            f"ranks={ranks}, threads/rank={config.threads}"
+        )
         try:
             result = run_ctreeballs(catalog, config, engine)
         except Exception as exc:
@@ -1222,7 +1428,12 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
             "multipoles": config.multipoles,
             "phi_bins": config.phi_bins,
             "threads": config.threads,
+            "mpi_ranks": config.mpi_ranks,
+            "mpiexec": config.mpiexec,
+            "mpi_extra_args": list(config.mpi_extra_args),
+            "timeout": config.timeout,
             "tree_theta": config.tree_theta,
+            "nsmooth": config.nsmooth,
             "smooth_radius": config.smooth_radius,
             "use_log_bins": config.use_log_bins,
             "options": list(config.options),
@@ -1291,8 +1502,8 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--engine", "--engines", dest="engines", action="append", default=[],
         help=(
-            "repeat or pass comma lists; all or all-omp selects every enabled "
-            "full-sky shear engine"
+            "repeat or pass comma lists; all, all-omp, and all-mpi select "
+            "enabled engine groups"
         ),
     )
     parser.add_argument("--list-engines", action="store_true")
@@ -1315,6 +1526,16 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--phi-bins", type=int, default=32)
     parser.add_argument("--threads", type=int,
                         default=max(1, (os.cpu_count() or 2) - 1))
+    parser.add_argument("--mpi-ranks", type=int, default=2)
+    parser.add_argument("--mpiexec", default="mpiexec")
+    parser.add_argument(
+        "--mpi-extra-arg", action="append", default=[],
+        help="extra MPI launcher argument; repeat once per argument",
+    )
+    parser.add_argument(
+        "--timeout", type=float, default=3600.0,
+        help="timeout in seconds for each MPI addon",
+    )
     parser.add_argument(
         "--tree-theta", type=float, default=1.0,
         help="cTreeBalls accepted-node angular tolerance; use --exact-tree for body traversal",
@@ -1323,6 +1544,8 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--exact-tree", action="store_true",
         help="add no-one-ball to native octree/KD-tree/ball-tree shear scans",
     )
+    parser.add_argument("--nsmooth", type=int, default=16,
+                        help="native leaf/smoothing capacity; record and calibrate with the opening controls")
     parser.add_argument(
         "--no-smooth-pivot", action="store_true",
         help="disable the default SMOOTHPIVOT behavior in every capable shear engine",
@@ -1350,6 +1573,10 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
+    if raw and raw[0] == "--mpi-worker":
+        if len(raw) != 2:
+            raise SystemExit("--mpi-worker requires one packet directory")
+        return mpi_worker(Path(raw[1]))
     args = parse_arguments(raw)
     try:
         runtime_info = inspect_cballs_runtime(args.cballs)
@@ -1368,7 +1595,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 setting = SHEAR_ENGINE_SETTINGS[name]
                 print(
                     f"- {name}: {'available' if name in available else 'unavailable'}; "
-                    "parallel=OpenMP; "
+                    f"parallel={'MPI+OpenMP' if name.endswith('-mpi') else 'OpenMP'}; "
                     f"build={setting}; mask=preselect; edge=3PCF mode-coupling; "
                     f"smooth=supported; {note}"
                 )
@@ -1388,7 +1615,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             multipoles=args.multipoles,
             phi_bins=args.phi_bins,
             threads=args.threads,
+            mpi_ranks=args.mpi_ranks,
+            mpiexec=args.mpiexec,
+            mpi_extra_args=tuple(args.mpi_extra_arg),
+            timeout=args.timeout,
             tree_theta=args.tree_theta,
+            nsmooth=args.nsmooth,
             smooth_radius=args.smooth_radius,
             use_log_bins=not args.linear_bins,
             options=tuple(native_options),

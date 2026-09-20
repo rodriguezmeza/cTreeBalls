@@ -22,6 +22,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+/Output*/
+/addons/python_env/
 
 # Platform metadata
 .DS_Store

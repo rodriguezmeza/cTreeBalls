@@ -8,8 +8,12 @@ static inline bool cballs_observer_frame(const struct cmdline_data *cmd)
 #if NDIM == 3
     const char *method = cmd->searchMethod;
     return !cmd->usePeriodic && method != NULL
+        /* The physical 3D estimator's legacy name shares the ggg prefix,
+         * but uses Euclidean opening angles, just like its canonical name. */
+        && strncmp(method, "octree-ggg-3d-", 14) != 0
         && (!strcmp(method, "octree-sincos-omp")
             || !strncmp(method, "octree-ggg-", 11)
+            || !strncmp(method, "octree-balls4-", 14)
             || !strncmp(method, "octree-2balls-", 14)
             || !strncmp(method, "kdtree-", 7)
             || !strncmp(method, "balltree-", 9));

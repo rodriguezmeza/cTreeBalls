@@ -86,7 +86,8 @@ and whether the requested output was actually computed. Coincident/radial/
 antipodal legs have undefined angular bearings and are excluded from angular
 3PCF while ordinary pairs still count.
 
-Empty/singular angular edge systems return zero. Physical-3D survey products
+Empty/singular scalar angular edge systems return NaN with validity diagnostics.
+Do not interpret unsupported bins as measured zeros. Physical-3D survey products
 also expose validity and conditioning diagnostics. These zeros are not
 automatically evidence of a measured null signal. Narrow windows can amplify
 noise even when a solver succeeds.

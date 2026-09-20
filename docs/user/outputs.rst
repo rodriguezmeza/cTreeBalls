@@ -67,7 +67,8 @@ For complex edge correction, ``histZetaM_EE_N.txt`` contains the real part and
 ``histZetaM_EE_Im_N.txt`` the imaginary part. The kappa driver saves
 ``zeta_edge_complex_N`` in its NPZ products. Read
 ``getHistZetaM_EE_complex(N)`` after a successful compatible run.
-Empty/singular windows yield zero; physical-3D survey validity/conditioning
+Empty/singular scalar angular windows yield NaN and status diagnostics;
+physical-3D survey validity/conditioning
 columns are separate products. MPI output is owned by rank 0.
 
 Use fresh directories after changing a build or estimator. Older affected

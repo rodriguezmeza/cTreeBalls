@@ -9,15 +9,42 @@ static inline bool cballs_method_needs_balls4_scan(int search_method)
 {
     bool needed = false;
 #ifdef BALLS4SCANLEV
+#ifdef OCTREEGGGOMP
+    needed |= search_method == OCTREEGGGOMPMETHOD;
+#endif
+#ifdef OCTREEGGGMPI
+    needed |= search_method == OCTREEGGGMPIMETHOD;
+#endif
 #ifdef OCTREE3PCF3DOMP
     needed |= search_method == OCTREE3PCF3DOMPMETHOD;
 #endif
 #ifdef OCTREE3PCF3DMPI
     needed |= search_method == OCTREE3PCF3DMPIMETHOD;
 #endif
+#ifdef OCTREESHEAROMP
+    needed |= search_method == OCTREESHEARMETHOD;
+#endif
+#ifdef OCTREESHEARSPHEREOMP
+    needed |= search_method == OCTREESHEARSPHEREMETHOD;
+#endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
     needed |= search_method == OCTREESHEARSPHERE2BALLSOMPMETHOD;
 #endif
+#ifdef OCTREESHEARSPHERE2BALLSMPI
+    needed |= search_method == OCTREESHEARSPHERE2BALLSMPIMETHOD;
+#endif
+#ifdef KDTREESHEARSPHERE2BALLSMPI
+    needed |= search_method == KDTREESHEARSPHERE2BALLSMPIMETHOD;
+#endif
+#ifdef BALLTREESHEARSPHERE2BALLSMPI
+    needed |= search_method == BALLTREESHEARSPHERE2BALLSMPIMETHOD;
+#endif
+#endif
+#ifdef OCTREEBALLS4OMP
+    needed |= search_method == OCTREEBALLS4OMPMETHOD;
+#endif
+#ifdef OCTREEBALLS4MPI
+    needed |= search_method == OCTREEBALLS4MPIMETHOD;
 #endif
     (void)search_method;
     return needed;
@@ -27,8 +54,25 @@ static inline bool cballs_run_needs_balls4_scan(
         const struct cmdline_data *cmd, int search_method)
 {
     bool needed = cballs_method_needs_balls4_scan(search_method);
+#ifdef OCTREE2BALLSOMP
+    needed |= search_method == OCTREE2BALLSMETHOD
+        && cmd != NULL && cballs_opt_legacy_one_ball(cmd);
+#endif
+#ifdef OCTREE2BALLSMPI
+    needed |= search_method == OCTREE2BALLSMPIMETHOD
+        && cmd != NULL && cballs_opt_legacy_one_ball(cmd);
+#endif
     if (!needed)
         return false;
+#ifdef OCTREESHEARSPHEREOMP
+    /* The unsmoothed spherical only-2pcf dual-tree owns a fixed node-pair
+     * frontier and never consumes the body-pivot scan table. Smoothing needs
+     * representative body pivots, as do exact and mixed-order runs. */
+    if (search_method == OCTREESHEARSPHEREMETHOD
+        && cmd != NULL && cballs_opt_only_2pcf(cmd) && cmd->theta > 0.0
+        && !cballs_opt_no_one_ball(cmd) && !cballs_opt_smooth_pivot(cmd))
+        return false;
+#endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
     if (search_method == OCTREESHEARSPHERE2BALLSOMPMETHOD
         && cmd != NULL && cballs_opt_only_2pcf(cmd)
@@ -59,7 +103,24 @@ static inline bool cballs_run_uses_compact_native_pair(
     bool uses_compact_pair =
         cballs_method_uses_compact_native_octree(search_method);
 
+#ifdef OCTREE2BALLSOMP
+    if (search_method == OCTREE2BALLSMETHOD
+        && cmd != NULL && cballs_opt_legacy_one_ball(cmd))
+        return false;
+#endif
+#ifdef OCTREE2BALLSMPI
+    if (search_method == OCTREE2BALLSMPIMETHOD
+        && cmd != NULL && cballs_opt_legacy_one_ball(cmd))
+        return false;
+#endif
+
     if (!cballs_opt_only_2pcf(cmd)) return uses_compact_pair;
+#ifdef OCTREEBALLS4OMP
+    uses_compact_pair |= search_method == OCTREEBALLS4OMPMETHOD;
+#endif
+#ifdef OCTREEBALLS4MPI
+    uses_compact_pair |= search_method == OCTREEBALLS4MPIMETHOD;
+#endif
     return uses_compact_pair;
 }
 

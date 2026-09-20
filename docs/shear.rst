@@ -111,6 +111,32 @@ neighbor-node traversal, so masks, normalization, edge correction, runtime
 order selection, smoothing, and deterministic reduction have the same
 contract. ``nsmooth`` sets the ball-tree leaf capacity.
 
+Pivot-Cell Reuse
+----------------
+
+The native octree and PCA ball-tree OpenMP methods support
+``options=shear-pivot-reuse,no-smooth-pivot,only-3pcf`` with
+``BALLS4SCANLEVON=1``. They inherit sparse unresolved neighbor lists, keep
+accepted rings in their original frames, and transport directly to the final
+pivot frame. Safe completed cells use aggregate pivot moments. The separate
+2PCF path is unchanged. KD-tree does not implement pivot reuse.
+
+``CBALLS_SHEAR_PIVOT_TOL`` is a finite phase budget in radians in ``[0,3]``
+(default ``0.1``), not a relative-error bound on a correlation coefficient.
+Full radial-bin containment and spherical transport bounds are still required.
+With reuse active, positive ``theta`` enables the path but its magnitude does
+not replace this phase budget. Zero budget only disables reuse. Exact
+validation uses ``no-one-ball,no-smooth-pivot``. Smoothing, partial pivot
+coverage and nonpositive ``theta`` disable reuse; compatibility mode rejects it.
+
+Calibrate every tree/catalog/bin/multipole combination against its own exact
+reference. Cancellations and window conditioning can amplify errors, and sparse
+catalogs may not benefit. ``CBALLS_SHEAR_PROFILE=1`` prints per-thread phase
+times and ``SHEAR_REUSE`` counters. The ball-tree builder fuses deterministic
+center/PCA statistics and can temporarily cache source tangent frames (at most
+256 MiB, freed before traversal); ``no-balltree-shear-member-cache`` tests the
+equivalent uncached path. These construction changes do not loosen accuracy.
+
 Python Example
 --------------
 

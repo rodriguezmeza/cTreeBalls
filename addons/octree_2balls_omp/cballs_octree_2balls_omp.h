@@ -14,7 +14,8 @@
                 Update(p) = TRUE;
             leaf_capacity = cballs_native_pair_leaf_capacity(
                 cmd, gd, gd->nbodyTable[ifile]);
-            cached_tree = !scanopt(cmd->options, "no-native-tree-cache")
+            cached_tree = !cballs_opt_legacy_one_ball(cmd)
+                && !scanopt(cmd->options, "no-native-tree-cache")
                 && octree_2balls_tree_cache_contains(
                     cmd, bodytable[ifile], gd->nbodyTable[ifile],
                     leaf_capacity);
@@ -36,7 +37,8 @@
                     Update(p) = TRUE;
                 leaf_capacity = cballs_native_pair_leaf_capacity(
                     cmd, gd, gd->nbodyTable[ifile]);
-                cached_tree = !scanopt(cmd->options, "no-native-tree-cache")
+                cached_tree = !cballs_opt_legacy_one_ball(cmd)
+                    && !scanopt(cmd->options, "no-native-tree-cache")
                     && octree_2balls_tree_cache_contains(
                         cmd, bodytable[ifile], gd->nbodyTable[ifile],
                         leaf_capacity);

@@ -8,6 +8,7 @@
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
 #include "lya_forest_parallel.h"
+#include "lya_forest_los_tree.h"
 
 #include <errno.h>
 #include <float.h>
@@ -308,6 +309,25 @@ local void lya_accumulate_3pcf(struct cmdline_data *cmd, bodyptr p,
     }
 }
 
+typedef struct {
+    struct cmdline_data *cmd;
+    bodyptr pivot;
+    lya_worker_hist *worker;
+    int compute_2pcf, compute_3pcf;
+} lya_los_accumulator;
+
+local int lya_los_accumulate(bodyptr q, REAL distance, void *context,
+                              ErrorMsg error_message)
+{
+    lya_los_accumulator *acc = context;
+    acc->worker->accepted_visits++;
+    if (acc->compute_2pcf)
+        lya_accumulate_2pcf(acc->cmd, acc->pivot, q, acc->worker);
+    if (acc->compute_3pcf && distance < acc->cmd->lya3RMax)
+        return lya_append_neighbor(acc->worker, q, error_message);
+    return SUCCESS;
+}
+
 local void lya_commit_worker(lya_worker_hist *worker,
                              REAL *num2, REAL *den2,
                              REAL *num3, REAL *den3,
@@ -473,6 +493,10 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
     int allocation_failed = FALSE;
     ErrorMsg worker_error = "";
     int status = FAILURE;
+    const int use_los_tree = lya_forest_is_los_tree_method(cmd->searchMethod);
+    lya_los_index *los_index = NULL;
+    lya_los_workspace los_totals = {0};
+    double los_build_cpu = 0.0;
 
 #if NDIM != 3
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -523,6 +547,14 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
     }
     cutoff = MAX(cutoff2, compute_3pcf ? cmd->lya3RMax : 0.0);
 
+    if (use_los_tree) {
+        double start = CPUTIME;
+        if (lya_los_build(&los_index, btable[cat], nbody[cat],
+                          (nodeptr)roottable[cat], cmd->error_message) == FAILURE)
+            goto setup_done;
+        los_build_cpu = CPUTIME - start;
+    }
+
     status = SUCCESS;
 setup_done:
     status = lya_parallel_consensus(cmd, status, "Ly-alpha 3D setup");
@@ -531,6 +563,12 @@ setup_done:
     ThreadCount(cmd, gd, nbody[cat], cat);
     const INTEGER first_task = (INTEGER)lya_parallel_first(cmd);
     const INTEGER task_stride = (INTEGER)lya_parallel_stride(cmd);
+    /* Fixed logical blocks retain thread-count determinism without publishing
+     * every inexpensive pivot. Keep existing 3D/MPI summation order unchanged. */
+    const INTEGER pivot_block = use_los_tree ? 64 : 1;
+    const INTEGER pivot_count = ipmax[cat] - (ipmin - 1);
+    const INTEGER blocks = pivot_count / pivot_block
+                         + (pivot_count % pivot_block != 0);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: exact Ly-alpha estimator; 2PCF=%d 3PCF=%d cutoff=%g\n",
         cmd->searchMethod, compute_2pcf, compute_3pcf, cutoff);
@@ -538,12 +576,19 @@ setup_done:
 #pragma omp parallel shared(allocation_failed,worker_error,num2,den2,num3,den3,accepted_visits,pair_count,ordered_triplet_count)
     {
         lya_worker_hist worker;
+        lya_los_workspace los_workspace = {0};
         ErrorMsg local_error = "";
         int worker_ready = lya_worker_init(cmd, &worker, bins2, bins3,
                                            compute_2pcf, compute_3pcf,
                                            local_error) == SUCCESS;
+        if (worker_ready && use_los_tree
+            && lya_los_workspace_init(los_index, &los_workspace,
+                                      local_error) == FAILURE) {
+            lya_worker_free(&worker);
+            worker_ready = FALSE;
+        }
         int worker_failed = !worker_ready;
-        INTEGER pivot;
+        INTEGER block;
         if (!worker_ready) {
 #pragma omp critical(lya_failure)
             {
@@ -555,28 +600,37 @@ setup_done:
 
 #pragma omp barrier
 #pragma omp for schedule(static,1) ordered
-        for (pivot = ipmin - 1 + first_task; pivot < ipmax[cat];
-             pivot += task_stride) {
-            bodyptr p = btable[cat] + pivot;
+        for (block = first_task; block < blocks; block += task_stride) {
+            INTEGER first = ipmin - 1 + block * pivot_block;
+            INTEGER end = first + MIN(pivot_block, ipmax[cat] - first);
+            INTEGER pivot;
             worker.accepted_visits = 0;
             worker.pair_count = 0;
             worker.ordered_triplet_count = 0;
-            worker.neighbor_count = 0;
-            if (!worker_failed && Update(p) != FALSE
-                && Mask(p) == MASK_NODE_VALID) {
-                if (lya_walktree(cmd, p, (nodeptr)roottable[cat], cutoff,
-                                 compute_2pcf, compute_3pcf, &worker,
-                                 local_error) == FAILURE) {
-                    worker_failed = TRUE;
+            for (pivot = first; pivot < end; pivot++) {
+                bodyptr p = btable[cat] + pivot;
+                worker.neighbor_count = 0;
+                if (!worker_failed && Update(p) != FALSE
+                    && Mask(p) == MASK_NODE_VALID) {
+                    lya_los_accumulator acc = {cmd, p, &worker,
+                                               compute_2pcf, compute_3pcf};
+                    int walk_status = use_los_tree
+                        ? lya_los_query(los_index, &los_workspace, p, cutoff,
+                                         lya_los_accumulate, &acc, local_error)
+                        : lya_walktree(cmd, p, (nodeptr)roottable[cat], cutoff,
+                                        compute_2pcf, compute_3pcf, &worker, local_error);
+                    if (walk_status == FAILURE) {
+                        worker_failed = TRUE;
 #pragma omp critical(lya_failure)
-                    {
-                        if (!allocation_failed)
-                            snprintf(worker_error, sizeof(worker_error), "%s",
-                                     local_error);
-                        allocation_failed = TRUE;
+                        {
+                            if (!allocation_failed)
+                                snprintf(worker_error, sizeof(worker_error), "%s",
+                                         local_error);
+                            allocation_failed = TRUE;
+                        }
+                    } else if (compute_3pcf) {
+                        lya_accumulate_3pcf(cmd, p, &worker);
                     }
-                } else if (compute_3pcf) {
-                    lya_accumulate_3pcf(cmd, p, &worker);
                 }
             }
 
@@ -592,6 +646,17 @@ setup_done:
             }
         }
         if (worker_ready) lya_worker_free(&worker);
+        if (use_los_tree) {
+#pragma omp critical(lya_los_counters)
+            {
+                los_totals.octree_nodes += los_workspace.octree_nodes;
+                los_totals.forest_skips += los_workspace.forest_skips;
+                los_totals.forest_hits += los_workspace.forest_hits;
+                los_totals.radial_nodes += los_workspace.radial_nodes;
+                los_totals.pixel_tests += los_workspace.pixel_tests;
+            }
+            lya_los_workspace_free(&los_workspace);
+        }
     }
 
     if (allocation_failed) {
@@ -634,6 +699,13 @@ setup_done:
     }
 
     gd->cpusearch = CPUTIME - cpustart;
+    if (use_los_tree)
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            "LOS-tree: forests=%zu build_CPU=%g octree_nodes=%llu "
+            "forest_skips=%llu forest_hits=%llu radial_nodes=%llu pixel_tests=%llu\n",
+            lya_los_forest_count(los_index), los_build_cpu,
+            los_totals.octree_nodes, los_totals.forest_skips,
+            los_totals.forest_hits, los_totals.radial_nodes, los_totals.pixel_tests);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "%s: accepted=%" INTEGER_FMT " pairs=%" INTEGER_FMT
         " ordered_triplets=%" INTEGER_FMT " CPU=%g\n",
@@ -651,6 +723,7 @@ size_error:
 publication:
     status = lya_parallel_consensus(cmd, status, "Ly-alpha 3D output");
 cleanup:
+    lya_los_free(los_index);
     gd->cpusearch = CPUTIME - cpustart;
     free(num2);
     free(den2);

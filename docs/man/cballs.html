@@ -1,219 +1,271 @@
-<HTML>
-<BODY>
-<PRE>
-<!-- Manpage converted by man2html 3.0.1 -->
-<B><A HREF="CBALLS.html">CBALLS(1)</A></B>                        User Commands                       <B><A HREF="CBALLS.html">CBALLS(1)</A></B>
-
-
-</PRE>
-<H2>NAME</H2><PRE>
-       cballs - compute two- and three-point correlation functions
-
-
-</PRE>
-<H2>SYNOPSIS</H2><PRE>
-       <B>cballs</B> [<I>parameter-file</I>] [<I>name=value</I>...<I>]</I>
-
-
-</PRE>
-<H2>DESCRIPTION</H2><PRE>
-       <B>cballs</B> computes correlation functions for scalar fields, point counts,
-       full-sky spin-2 shear, Lyman-alpha forests, and physical three-
-       dimensional catalogs.  Available search methods are selected at compile
-       time.
-
-       Command-line assignments must not contain spaces around the equals
-       sign.  Parameter files use one name/value assignment per line and may
-       contain comments.
-
-
-</PRE>
-<H2>DISCOVERY</H2><PRE>
-       <B>options=make-info</B>
-              Print the Makefile settings, resolved toolchain, precision,
-              library, OpenMP, and MPI profile embedded in the executable.
-
-       <B>options=print-options</B>
-              Print registered runtime option names, scope, and a short
-              description.
-
-       <B>options=print-search-methods</B>
-              Print only search methods registered in this executable, with
-              geometry, statistics, build switch, and usage notes.
-
-
-</PRE>
-<H2>ACTIVE SEARCH METHODS</H2><PRE>
-       The maintained profile enables these families:
-
-       <B>octree-sincos-omp</B>
-              Core OpenMP octree method for scalar 2PCF and sine/cosine 3PCF
-              multipoles.
-
-       <B>kdtree-2balls-omp,</B> <B>kdtree-2balls-mpi</B>
-              Median KD-tree dual-node 2PCF and LogMultipole 3PCF.
-
-       <B>balltree-2balls-omp,</B> <B>balltree-2balls-mpi</B>
-              PCA ball-tree dual-node 2PCF and LogMultipole 3PCF.
-
-       <B>octree-2balls-omp,</B> <B>octree-2balls-mpi</B>
-              Native-octree dual-node 2PCF and LogMultipole 3PCF.
-
-       <B>octree-shear-sphere-2balls-omp</B>
-              Full-sky spin-2 correlation functions over the native octree.
-
-       <B>kdtree-shear-sphere-2balls-omp</B>
-              Full-sky spin-2 correlation functions over a median KD tree.
-
-       <B>balltree-shear-sphere-2balls-omp</B>
-              Full-sky spin-2 correlation functions over a PCA ball tree.
-
-       <B>lya-*-omp,</B> <B>lya-*-mpi</B>
-              Anisotropic, radial, and radial interval-tree forest estimators.
-              Run options=print-search-methods for the complete names.
-
-       <B>octree-3pcf-3d-omp,</B> <B>octree-3pcf-3d-mpi</B>
-              Physical-3D Legendre multipoles and data/random survey-window
-              estimation.
-
-       <B>kdtree-box-omp,</B> <B>neighbor-boxes-omp</B>
-              Periodic Cartesian 2PCF methods.
-
-
-</PRE>
-<H2>COMMON PARAMETERS</H2><PRE>
-       <B>searchMethod=</B><I>name</I>
-              Select a method printed by options=print-search-methods. Alias:
-              search.
-
-       <B>infile=</B><I>path</I>
-              Input catalog. Alias: in.
-
-       <B>infileformat=</B><I>format</I>
-              Catalog format. Alias: infmt. Common values include columns-
-              ascii, binary, fits-healpix, gadget, and lya-ascii when their
-              input add-ons are enabled.
-
-       <B>iCatalogs=</B><I>list</I>
-              One-based catalog selectors used by auto- and cross-correlation
-              methods.
-
-       <B>rootDir=</B><I>path</I>
-              Output directory. Alias: root.
-
-       <B>rminHist=</B><I>value</I>
-              Minimum measured separation.
-
-       <B>rangeN=</B><I>value</I>
-              Maximum measured separation.
-
-       <B>sizeHistN=</B><I>bins</I>
-              Number of radial bins.
-
-       <B>mChebyshev=</B><I>order</I>
-              Largest positive 3PCF multipole order.
-
-       <B>useLogHist=</B><I>bool</I>
-              Choose logarithmic or linear radial bins.
-
-       <B>numberThreads=</B><I>count</I>
-              OpenMP threads per process or per MPI rank.
-
-       <B>options=</B><I>list</I>
-              Comma-separated behavior controls.
-
-
-</PRE>
-<H2>SEARCH CONTROLS</H2><PRE>
-       <B>only-2pcf,</B> <B>only-3pcf</B>
-              Run only the requested compiled correlation order.
-
-       <B>no-two-balls</B>
-              Disable dual-node cell aggregation and use the exact body-pair
-              limit.
-
-       <B>dual-node-bin-slop</B>
-              Enable bin-position-aware Log/Linear node acceptance.
-
-       <B>no-smooth-pivot</B>
-              Disable the build-default pivot smoothing on methods that
-              support it.
-
-       <B>read-mask</B>
-              Apply a supported companion or in-memory binary mask.
-
-       <B>edge-corrections,no-normalize-HistZeta</B>
-              Compute complex scalar or shear 3PCF window correction. This
-              requires 3PCF.
-
-       <B>weights-norm</B>
-              Use catalog weights in signal and normalization moments.
-
-
-</PRE>
-<H2>PYTHON</H2><PRE>
-       The compiled extension is imported as <B>cyballs</B>.  The convergence, shear,
-       and forest drivers are under <I>tests/python</I>.  They retain one NumPy
-       catalog across selected engines and write timing and comparison
-       summaries.
-
-
-</PRE>
-<H2>MPI</H2><PRE>
-       Use one MPI implementation for MPICC, the runtime launcher, the
-       extension, and mpi4py. numberThreads is per rank. All ranks enter the
-       same run and cleanup sequence; rank zero writes results.
-
-
-</PRE>
-<H2>EXAMPLES</H2><PRE>
-       Inspect the executable:
-
-         cballs options=make-info
-         cballs options=print-options
-         cballs options=print-search-methods
-
-       Run a scalar angular 2PCF:
-
-         cballs search=octree-2balls-omp infile=catalog.fits     infmt=fits-healpix options=only-2pcf rootDir=Output
-
-       Run masked edge-corrected 3PCF:
-
-         cballs search=kdtree-2balls-omp infile=map.fits,mask.fits     infmt=fits-healpix,fits-healpix     options=read-mask,only-3pcf,edge-corrections,no-normalize-HistZeta     rootDir=Output_edge
-
-       Run an MPI forest estimator:
-
-         mpiexec -n 2 cballs addons/lya_forest_mpi/parameters.ini
-
-
-</PRE>
-<H2>FILES</H2><PRE>
-       <I>addons/Makefile</I><B>_</B><I>addons</I><B>_</B><I>settings</I>
-              Compile-time addon switches.
-
-       <I>tests/python</I>
-              Catalog drivers, plots, and README examples.
-
-       <I>docs</I>   Sphinx documentation.
-
-
-</PRE>
-<H2>SEE ALSO</H2><PRE>
-       The project README and Sphinx guide document input schemas,
-       normalization, scientific conventions, and validation tests.
-
-
-</PRE>
-<H2>COPYRIGHT</H2><PRE>
-       Copyright 2023-2026 Mario A. Rodriguez-Meza. Distributed under the MIT
-       license.
-
-cTreeBalls 1.1.0                September 2026                       <B><A HREF="CBALLS.html">CBALLS(1)</A></B>
-</PRE>
-<HR>
-<ADDRESS>
-Man(1) output converted with
-<a href="http://www.oac.uci.edu/indiv/ehood/man2html.html">man2html</a>
-</ADDRESS>
-</BODY>
-</HTML>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    table.head, table.foot { width: 100%; }
+    td.head-rtitle, td.foot-os { text-align: right; }
+    td.head-vol { text-align: center; }
+    .Nd, .Bf, .Op { display: inline; }
+    .Pa, .Ad { font-style: italic; }
+    .Ms { font-weight: bold; }
+    .Bl-diag > dt { font-weight: bold; }
+    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;
+      font-family: inherit; }
+  </style>
+  <title>CBALLS(1)</title>
+</head>
+<body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">CBALLS(1)</td>
+    <td class="head-vol">User Commands</td>
+    <td class="head-rtitle">CBALLS(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">cballs - compute two- and three-point correlation functions</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>cballs</b> [<i>parameter-file</i>]
+    [<i>name=value</i>...<i>]</i></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp"><b>cballs</b> computes correlation functions for scalar fields,
+    point counts, full-sky spin-2 shear, Lyman-alpha forests, and physical
+    three-dimensional catalogs. Available search methods are selected at compile
+    time.</p>
+<p class="Pp">Command-line assignments must not contain spaces around the equals
+    sign. Parameter files use one name/value assignment per line and may contain
+    comments.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DISCOVERY"><a class="permalink" href="#DISCOVERY">DISCOVERY</a></h1>
+<dl class="Bl-tag">
+  <dt id="options=make-info"><a class="permalink" href="#options=make-info"><b>options=make-info</b></a></dt>
+  <dd>Print the Makefile settings, resolved toolchain, precision, library,
+      OpenMP, and MPI profile embedded in the executable.</dd>
+  <dt id="options=print-options"><a class="permalink" href="#options=print-options"><b>options=print-options</b></a></dt>
+  <dd>Print registered runtime option names, scope, and a short
+    description.</dd>
+  <dt id="options=print-search-methods"><a class="permalink" href="#options=print-search-methods"><b>options=print-search-methods</b></a></dt>
+  <dd>Print only search methods registered in this executable, with geometry,
+      statistics, build switch, and usage notes.</dd>
+  <dt id="options=build-fingerprint"><a class="permalink" href="#options=build-fingerprint"><b>options=build-fingerprint</b></a></dt>
+  <dd>Print the source/profile/toolchain JSON identity. The Python extension
+      exposes the corresponding identity through cyballs.build_info().</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ACTIVE_SEARCH_METHODS"><a class="permalink" href="#ACTIVE_SEARCH_METHODS">ACTIVE
+  SEARCH METHODS</a></h1>
+<p class="Pp">The maintained profile enables these families:</p>
+<dl class="Bl-tag">
+  <dt id="octree-sincos-omp"><a class="permalink" href="#octree-sincos-omp"><b>octree-sincos-omp</b></a></dt>
+  <dd>Core OpenMP octree method for scalar 2PCF and sine/cosine 3PCF
+    multipoles.</dd>
+  <dt id="kdtree-2balls-omp,"><a class="permalink" href="#kdtree-2balls-omp,"><b>kdtree-2balls-omp,
+    kdtree-2balls-mpi</b></a></dt>
+  <dd>Median KD-tree dual-node 2PCF and LogMultipole 3PCF.</dd>
+  <dt id="balltree-2balls-omp,"><a class="permalink" href="#balltree-2balls-omp,"><b>balltree-2balls-omp,
+    balltree-2balls-mpi</b></a></dt>
+  <dd>PCA ball-tree dual-node 2PCF and LogMultipole 3PCF.</dd>
+  <dt id="octree-2balls-omp,"><a class="permalink" href="#octree-2balls-omp,"><b>octree-2balls-omp,
+    octree-2balls-mpi</b></a></dt>
+  <dd>Native-octree dual-node 2PCF and LogMultipole 3PCF.</dd>
+  <dt id="octree-shear-sphere-2balls-omp"><a class="permalink" href="#octree-shear-sphere-2balls-omp"><b>octree-shear-sphere-2balls-omp</b></a></dt>
+  <dd>Full-sky spin-2 correlation functions over the native octree.</dd>
+  <dt id="kdtree-shear-sphere-2balls-omp"><a class="permalink" href="#kdtree-shear-sphere-2balls-omp"><b>kdtree-shear-sphere-2balls-omp</b></a></dt>
+  <dd>Full-sky spin-2 correlation functions over a median KD tree.</dd>
+  <dt id="balltree-shear-sphere-2balls-omp"><a class="permalink" href="#balltree-shear-sphere-2balls-omp"><b>balltree-shear-sphere-2balls-omp</b></a></dt>
+  <dd>Full-sky spin-2 correlation functions over a PCA ball tree.</dd>
+  <dt id="lya-*-omp,"><a class="permalink" href="#lya-*-omp,"><b>lya-*-omp,
+    lya-*-mpi</b></a></dt>
+  <dd>Anisotropic, radial, and radial interval-tree forest estimators. Run
+      options=print-search-methods for the complete names.</dd>
+  <dt id="lya-los-tree-2pcf-omp,"><a class="permalink" href="#lya-los-tree-2pcf-omp,"><b>lya-los-tree-2pcf-omp,
+    lya-los-tree-3pcf-omp, lya-los-tree-2pcf-3pcf-omp</b></a></dt>
+  <dd>Exact anisotropic 3D forest estimators using octree forest discovery and
+      per-LOS radial trees. Transverse distance is retained. These methods have
+      no MPI counterpart and are enabled by LYAFORESTOMPON=1.</dd>
+  <dt id="octree-3pcf-3d-omp,"><a class="permalink" href="#octree-3pcf-3d-omp,"><b>octree-3pcf-3d-omp,
+    octree-3pcf-3d-mpi</b></a></dt>
+  <dd>Physical-3D Legendre multipoles and data/random survey-window
+    estimation.</dd>
+  <dt id="kdtree-box-omp,"><a class="permalink" href="#kdtree-box-omp,"><b>kdtree-box-omp,
+    neighbor-boxes-omp</b></a></dt>
+  <dd>Periodic Cartesian 2PCF methods.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COMMON_PARAMETERS"><a class="permalink" href="#COMMON_PARAMETERS">COMMON
+  PARAMETERS</a></h1>
+<dl class="Bl-tag">
+  <dt id="searchMethod="><a class="permalink" href="#searchMethod="><b>searchMethod=</b><i>name</i></a></dt>
+  <dd>Select a method printed by options=print-search-methods. Alias:
+    search.</dd>
+  <dt id="infile="><a class="permalink" href="#infile="><b>infile=</b><i>path</i></a></dt>
+  <dd>Input catalog. Alias: in.</dd>
+  <dt id="infileformat="><a class="permalink" href="#infileformat="><b>infileformat=</b><i>format</i></a></dt>
+  <dd>Catalog format. Alias: infmt. Common values include columns-ascii, binary,
+      fits-healpix, gadget, and lya-ascii when their input add-ons are
+    enabled.</dd>
+  <dt id="iCatalogs="><a class="permalink" href="#iCatalogs="><b>iCatalogs=</b><i>list</i></a></dt>
+  <dd>One-based catalog selectors used by auto- and cross-correlation
+    methods.</dd>
+  <dt id="rootDir="><a class="permalink" href="#rootDir="><b>rootDir=</b><i>path</i></a></dt>
+  <dd>Output directory. Alias: root.</dd>
+  <dt id="rminHist="><a class="permalink" href="#rminHist="><b>rminHist=</b><i>value</i></a></dt>
+  <dd>Minimum measured separation.</dd>
+  <dt id="rangeN="><a class="permalink" href="#rangeN="><b>rangeN=</b><i>value</i></a></dt>
+  <dd>Maximum measured separation.</dd>
+  <dt id="sizeHistN="><a class="permalink" href="#sizeHistN="><b>sizeHistN=</b><i>bins</i></a></dt>
+  <dd>Number of radial bins.</dd>
+  <dt id="mChebyshev="><a class="permalink" href="#mChebyshev="><b>mChebyshev=</b><i>order</i></a></dt>
+  <dd>Largest positive 3PCF multipole order.</dd>
+  <dt id="useLogHist="><a class="permalink" href="#useLogHist="><b>useLogHist=</b><i>bool</i></a></dt>
+  <dd>Choose logarithmic or linear radial bins.</dd>
+  <dt id="numberThreads="><a class="permalink" href="#numberThreads="><b>numberThreads=</b><i>count</i></a></dt>
+  <dd>OpenMP threads per process or per MPI rank.</dd>
+  <dt id="options="><a class="permalink" href="#options="><b>options=</b><i>list</i></a></dt>
+  <dd>Comma-separated behavior controls.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEARCH_CONTROLS"><a class="permalink" href="#SEARCH_CONTROLS">SEARCH
+  CONTROLS</a></h1>
+<dl class="Bl-tag">
+  <dt id="only-2pcf,"><a class="permalink" href="#only-2pcf,"><b>only-2pcf,
+    only-3pcf</b></a></dt>
+  <dd>Run only the requested compiled correlation order.</dd>
+  <dt id="no-two-balls"><a class="permalink" href="#no-two-balls"><b>no-two-balls</b></a></dt>
+  <dd>Disable dual-node cell aggregation and use the exact body-pair limit. This
+      alone does not make the native octree 3PCF pivot scan exact.</dd>
+  <dt id="no-one-ball,no-two-balls,no-smooth-pivot"><a class="permalink" href="#no-one-ball,no-two-balls,no-smooth-pivot"><b>no-one-ball,no-two-balls,no-smooth-pivot</b></a></dt>
+  <dd>Exact unsmoothed body-level reference for scalar and spherical shear
+      two-ball methods. BALLS4SCANLEVON may remain enabled: it controls
+      scheduling.</dd>
+  <dt id="legacy-one-ball"><a class="permalink" href="#legacy-one-ball"><b>legacy-one-ball</b></a></dt>
+  <dd>Select the privately linked compatibility kernel behind an active two-ball
+      method. Its smoothing behavior differs from native octree dual node
+      traversal.</dd>
+  <dt id="dual-node-bin-slop"><a class="permalink" href="#dual-node-bin-slop"><b>dual-node-bin-slop</b></a></dt>
+  <dd>Enable bin-position-aware Log/Linear node acceptance.</dd>
+  <dt id="no-smooth-pivot"><a class="permalink" href="#no-smooth-pivot"><b>no-smooth-pivot</b></a></dt>
+  <dd>Disable the build-default pivot smoothing on methods that support it.</dd>
+  <dt id="read-mask"><a class="permalink" href="#read-mask"><b>read-mask</b></a></dt>
+  <dd>Apply a supported companion or in-memory binary mask.</dd>
+  <dt id="edge-corrections,no-normalize-HistZeta"><a class="permalink" href="#edge-corrections,no-normalize-HistZeta"><b>edge-corrections,no-normalize-HistZeta</b></a></dt>
+  <dd>Compute complex scalar or shear 3PCF window correction. This requires
+      3PCF.</dd>
+  <dt id="weights-norm"><a class="permalink" href="#weights-norm"><b>weights-norm</b></a></dt>
+  <dd>Use catalog weights in signal and normalization moments.</dd>
+  <dt id="shear-pivot-reuse"><a class="permalink" href="#shear-pivot-reuse"><b>shear-pivot-reuse</b></a></dt>
+  <dd>Opt-in native octree or ball-tree OpenMP 3PCF aggregate-pivot reuse with
+      inherited unresolved neighbors and bounded spherical transport. Requires
+      BALLS4SCANLEVON=1, no-smooth-pivot, positive theta and full pivot
+      coverage. KD-tree and compatibility mode reject this option. The
+      independent 2PCF path is unchanged. Validate against exact output before
+      production use.</dd>
+  <dt id="no-balltree-shear-member-cache"><a class="permalink" href="#no-balltree-shear-member-cache"><b>no-balltree-shear-member-cache</b></a></dt>
+  <dd>Disable the transient source-frame construction cache (default cap 256
+      MiB). This diagnostic preserves direct member moments and conservative
+      bounds.</dd>
+  <dt id="stepState="><a class="permalink" href="#stepState="><b>stepState=</b><i>count</i></a></dt>
+  <dd>With verbosity enabled, report completed body-pivot progress in the scalar
+      octree, KD-tree and ball-tree OpenMP two-ball 3PCF scans.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<dl class="Bl-tag">
+  <dt id="CBALLS_SHEAR_PIVOT_TOL"><a class="permalink" href="#CBALLS_SHEAR_PIVOT_TOL"><b>CBALLS_SHEAR_PIVOT_TOL</b></a></dt>
+  <dd>Finite phase budget in radians from 0 to 3, default 0.1. Not a
+      relative-error guarantee. With reuse enabled, this budget controls 3PCF
+      acceptance; theta's magnitude does not. Zero disables reuse, not ordinary
+      neighbor approximation.</dd>
+  <dt id="CBALLS_SHEAR_PROFILE"><a class="permalink" href="#CBALLS_SHEAR_PROFILE"><b>CBALLS_SHEAR_PROFILE</b></a></dt>
+  <dd>Set to 1 for per-thread phase timers and SHEAR_REUSE counters.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="PYTHON"><a class="permalink" href="#PYTHON">PYTHON</a></h1>
+<p class="Pp">The compiled extension is imported as <b>cyballs</b>. The
+    convergence, shear, and forest drivers are under <i>tests/python</i>. They
+    retain one NumPy catalog across selected engines and write timing and
+    comparison summaries. Their timing tables separate setup and compute. MPI
+    wall time is the maximum across participating ranks and CPU time is their
+    sum. The forest driver reads DESI and eBOSS/PICCA delta FITS, compares
+    compatible estimator families, and supports model distortion/covariance
+    analysis. Consult its README for input contracts and separately scoped
+    external reference timings.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="MPI"><a class="permalink" href="#MPI">MPI</a></h1>
+<p class="Pp">Use one MPI implementation for MPICC, the runtime launcher, the
+    extension, and mpi4py. numberThreads is per rank. All ranks enter the same
+    run and cleanup sequence; rank zero writes results.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Inspect the executable:</p>
+<p class="Pp"></p>
+<pre>
+<br/>
+  cballs options=make-info
+<br/>
+  cballs options=print-options
+<br/>
+  cballs options=print-search-methods</pre>
+<p class="Pp">Run a scalar angular 2PCF:</p>
+<p class="Pp"></p>
+<pre>
+<br/>
+  cballs search=octree-2balls-omp infile=catalog.fits     infmt=fits-healpix options=only-2pcf rootDir=Output</pre>
+<p class="Pp">Run masked edge-corrected 3PCF:</p>
+<p class="Pp"></p>
+<pre>
+<br/>
+  cballs search=kdtree-2balls-omp infile=map.fits,mask.fits     infmt=fits-healpix,fits-healpix     options=read-mask,only-3pcf,edge-corrections,no-normalize-HistZeta     rootDir=Output_edge</pre>
+<p class="Pp">Run an MPI forest estimator:</p>
+<p class="Pp"></p>
+<pre>
+<br/>
+  mpiexec -n 2 cballs addons/lya_forest_mpi/parameters.ini</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
+<dl class="Bl-tag">
+  <dt id="addons/Makefile_addons_settings"><a class="permalink" href="#addons/Makefile_addons_settings"><i>addons/Makefile_addons_settings</i></a></dt>
+  <dd>Compile-time addon switches.</dd>
+  <dt id="tests/python"><a class="permalink" href="#tests/python"><i>tests/python</i></a></dt>
+  <dd>Catalog drivers, plots, and README examples.</dd>
+  <dt id="docs"><a class="permalink" href="#docs"><i>docs</i></a></dt>
+  <dd>Sphinx documentation.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">The project README and Sphinx guide document input schemas,
+    normalization, scientific conventions, and validation tests.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COPYRIGHT"><a class="permalink" href="#COPYRIGHT">COPYRIGHT</a></h1>
+<p class="Pp">Copyright 2023-2026 Mario A. Rodriguez-Meza. Distributed under the
+    MIT license.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">September 2026</td>
+    <td class="foot-os">cTreeBalls 1.1.0</td>
+  </tr>
+</table>
+</body>
+</html>

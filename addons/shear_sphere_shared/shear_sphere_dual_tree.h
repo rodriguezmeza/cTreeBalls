@@ -24,6 +24,22 @@ typedef struct {
     int bins;
 } shear_sphere_pair_context;
 
+typedef struct {
+    compute_vector unit;
+    compute_vector east;
+    compute_vector north;
+    real radius;
+    shear_complex weighted_gamma;
+    real weight;
+} shear_sphere_pair_frame;
+
+typedef struct {
+    shear_sphere_pair_frame first;
+    shear_sphere_pair_frame second;
+    real distance;
+    bool valid;
+} shear_sphere_pair_geometry;
+
 static bool shear_sphere_live_node(const shear_sphere_pair_context *context,
                                    nodeptr q)
 {
@@ -111,23 +127,32 @@ static bool shear_sphere_pair_phase(
     return isfinite(phase->re) && isfinite(phase->im);
 }
 
+static int shear_sphere_pair_radial_bin(
+        const shear_sphere_pair_context *context,
+        shear_sphere_pair_histogram *hist, real distance)
+{
+    int bin;
+    double started = 0.0;
+    bool active;
+
+    if (hist->profile == NULL)
+        return shear_radial_bin(context->cmd, context->gd, distance);
+    active = shear_profile_sample_begin(&hist->profile->radial, &started);
+    bin = shear_radial_bin(context->cmd, context->gd, distance);
+    shear_profile_sample_end(&hist->profile->radial, started, active);
+    return bin;
+}
+
 /* Return -2 outside the histogram, -1 when the pair must split, or a bin. */
 static int shear_sphere_pair_bin(
         const shear_sphere_pair_context *context, nodeptr first,
         nodeptr second, bool permit_cells,
-        shear_sphere_pair_histogram *hist)
+        shear_sphere_pair_histogram *hist,
+        shear_sphere_pair_geometry *geometry)
 {
-    compute_vector first_unit;
-    compute_vector first_east;
-    compute_vector first_north;
-    compute_vector second_unit;
-    compute_vector second_east;
-    compute_vector second_north;
+    shear_sphere_pair_frame *a = &geometry->first;
+    shear_sphere_pair_frame *b = &geometry->second;
     compute_vector difference;
-    real first_radius;
-    real second_radius;
-    real first_angle;
-    real second_angle;
     real distance2;
     real distance;
     real size;
@@ -140,37 +165,27 @@ static int shear_sphere_pair_bin(
     real error;
     int bin;
 
-    if (!shear_sphere_pair_node_frame(
-            context, first, first_unit, first_east, first_north,
-            &first_radius, &first_angle)
-        || !shear_sphere_pair_node_frame(
-            context, second, second_unit, second_east, second_north,
-            &second_radius, &second_angle))
+    geometry->valid = FALSE;
+    if (!shear_spherical_node_geometry(
+            context->cmd, first, Type(first) == CELL ? (real)Size(first) : 0.0,
+            a->unit, &a->radius)
+        || !shear_spherical_node_geometry(
+            context->cmd, second, Type(second) == CELL ? (real)Size(second) : 0.0,
+            b->unit, &b->radius))
         return -1;
-    (void)first_east;
-    (void)first_north;
-    (void)second_east;
-    (void)second_north;
-    DOTPSUBV(distance2, difference, first_unit, second_unit);
+    geometry->valid = TRUE;
+    DOTPSUBV(distance2, difference, a->unit, b->unit);
     if (!(distance2 > 0.0) || !isfinite(distance2))
         return -2;
-    distance = rsqrt(distance2);
-    size = first_radius + second_radius;
+    geometry->distance = distance = rsqrt(distance2);
+    size = a->radius + b->radius;
     if (distance + size <= context->cmd->rminHist
         || distance - size >= context->cmd->rangeN)
         return -2;
-    if (hist->profile == NULL) {
-        bin = shear_radial_bin(context->cmd, context->gd, distance);
-    } else {
-        double radial_started = 0.0;
-        bool radial_active = shear_profile_sample_begin(
-            &hist->profile->radial, &radial_started);
-        bin = shear_radial_bin(context->cmd, context->gd, distance);
-        shear_profile_sample_end(
-            &hist->profile->radial, radial_started, radial_active);
-    }
-    if (Type(first) != CELL && Type(second) != CELL)
+    if (Type(first) != CELL && Type(second) != CELL) {
+        bin = shear_sphere_pair_radial_bin(context, hist, distance);
         return bin < 0 ? -2 : bin;
+    }
     if (!permit_cells || !(context->cmd->theta > 0.0)
 #ifdef OCTREE_SHEAR_SPHERICAL_TWO_BALLS
         || cballs_opt_no_two_balls(context->cmd)
@@ -186,11 +201,6 @@ static int shear_sphere_pair_bin(
             && !isfinite(ShearTransportError(second))))
         return -1;
 #ifdef OCTREE_SHEAR_SPHERICAL_TWO_BALLS
-    if (bin < 0)
-        /* The center can lie outside while the node-radius interval still
-         * overlaps the histogram. Split until the descendants can be
-         * classified; only the interval test above is allowed to prune. */
-        return -1;
     if (context->cmd->useLogHist) {
         const real logarithmic_bin_width = context->cmd->rminHist > 0.0
             ? rlog(10.0)*context->gd->deltaR
@@ -204,7 +214,12 @@ static int shear_sphere_pair_bin(
                || size > context->cmd->theta*context->gd->deltaR) {
         return -1;
     }
+    bin = shear_sphere_pair_radial_bin(context, hist, distance);
+    if (bin < 0)
+        /* A center outside the histogram does not exclude its descendants. */
+        return -1;
 #else
+    bin = shear_sphere_pair_radial_bin(context, hist, distance);
     lower = distance - size;
     upper = distance + size;
     if (!(lower > context->cmd->rminHist
@@ -223,32 +238,9 @@ static int shear_sphere_pair_bin(
     separation = 2.0*rasin(MIN(1.0, 0.5*distance));
     error = (Type(first) == CELL ? ShearTransportError(first) : 0.0)
           + (Type(second) == CELL ? ShearTransportError(second) : 0.0)
-          + 2.0*(first_angle + second_angle)*separation;
+          + 2.0*(2.0*rasin(MIN(1.0, 0.5*a->radius))
+                 + 2.0*rasin(MIN(1.0, 0.5*b->radius)))*separation;
     return isfinite(error) && error <= tolerance ? bin : -1;
-}
-
-typedef struct {
-    compute_vector unit;
-    compute_vector east;
-    compute_vector north;
-    shear_complex weighted_gamma;
-    real weight;
-} shear_sphere_pair_frame;
-
-static bool shear_sphere_prepare_pair_frame(
-        const shear_sphere_pair_context *context, nodeptr node,
-        shear_sphere_pair_frame *frame)
-{
-    real radius;
-    real angle;
-
-    if (!shear_sphere_pair_node_frame(
-            context, node, frame->unit, frame->east, frame->north,
-            &radius, &angle))
-        return FALSE;
-    frame->weighted_gamma = shear_sphere_node_weighted_gamma(node);
-    frame->weight = shear_sphere_node_weight(node);
-    return TRUE;
 }
 
 static void shear_sphere_accumulate_oriented_frames(
@@ -282,37 +274,39 @@ static void shear_sphere_accumulate_oriented_frames(
 static void shear_sphere_accumulate_pair(
         const shear_sphere_pair_context *context,
         shear_sphere_pair_histogram *hist, nodeptr first, nodeptr second,
-        int bin, bool bidirectional)
+        int bin, bool bidirectional, shear_sphere_pair_geometry *geometry)
 {
-    shear_sphere_pair_frame first_frame;
-    shear_sphere_pair_frame second_frame;
+    shear_sphere_pair_frame *a = &geometry->first;
+    shear_sphere_pair_frame *b = &geometry->second;
     shear_complex rotation;
     bool rotation_valid;
 
     if (bin < 0 || bin >= context->bins
-        || !shear_sphere_prepare_pair_frame(context, first, &first_frame)
-        || !shear_sphere_prepare_pair_frame(context, second, &second_frame))
+        || !shear_spherical_basis(a->unit, a->east, a->north)
+        || !shear_spherical_basis(b->unit, b->east, b->north))
         return;
+    a->weighted_gamma = shear_sphere_node_weighted_gamma(first);
+    a->weight = shear_sphere_node_weight(first);
+    b->weighted_gamma = shear_sphere_node_weighted_gamma(second);
+    b->weight = shear_sphere_node_weight(second);
     if (hist->profile == NULL) {
         rotation_valid = shear_transport_rotation_between_frames(
-            first_frame.unit, first_frame.east, first_frame.north,
-            second_frame.unit, second_frame.east, &rotation);
+            a->unit, a->east, a->north, b->unit, b->east, &rotation);
     } else {
         double transport_started = 0.0;
         bool transport_active = shear_profile_sample_begin(
             &hist->profile->transport, &transport_started);
         rotation_valid = shear_transport_rotation_between_frames(
-            first_frame.unit, first_frame.east, first_frame.north,
-            second_frame.unit, second_frame.east, &rotation);
+            a->unit, a->east, a->north, b->unit, b->east, &rotation);
         shear_profile_sample_end(
             &hist->profile->transport, transport_started, transport_active);
     }
     if (!rotation_valid) return;
     shear_sphere_accumulate_oriented_frames(
-        hist, &first_frame, &second_frame, rotation, bin);
+        hist, a, b, rotation, bin);
     if (bidirectional)
         shear_sphere_accumulate_oriented_frames(
-            hist, &second_frame, &first_frame, shear_conj(rotation), bin);
+            hist, b, a, shear_conj(rotation), bin);
 }
 
 static void shear_sphere_process_pair(
@@ -320,6 +314,7 @@ static void shear_sphere_process_pair(
         shear_sphere_pair_histogram *hist, nodeptr first, nodeptr second,
         bool bidirectional)
 {
+    shear_sphere_pair_geometry geometry;
 #ifndef OCTREE_SHEAR_SPHERICAL_TWO_BALLS
     nodeptr children[NSUB];
 #endif
@@ -332,12 +327,12 @@ static void shear_sphere_process_pair(
     if (!shear_sphere_live_node(context, first)
         || !shear_sphere_live_node(context, second))
         return;
-    bin = shear_sphere_pair_bin(context, first, second, TRUE, hist);
+    bin = shear_sphere_pair_bin(context, first, second, TRUE, hist, &geometry);
     if (bin == -2)
         return;
     if (bin >= 0) {
         shear_sphere_accumulate_pair(
-            context, hist, first, second, bin, bidirectional);
+            context, hist, first, second, bin, bidirectional, &geometry);
         if (Type(first) == CELL || Type(second) == CELL)
             hist->cell_pairs++;
         else
@@ -357,33 +352,21 @@ static void shear_sphere_process_pair(
         int second_count = 0;
 
         if (split_first && split_second) {
-            compute_vector first_unit;
-            compute_vector second_unit;
-            compute_vector east;
-            compute_vector north;
-            compute_vector delta;
-            real first_radius = 0.0;
-            real second_radius = 0.0;
-            real ignored_angle;
-            real distance2;
-            real distance;
+            real first_radius;
+            real second_radius;
             real effective_width;
 
-            if (!shear_sphere_pair_node_frame(
-                    context, first, first_unit, east, north,
-                    &first_radius, &ignored_angle)
-                || !shear_sphere_pair_node_frame(
-                    context, second, second_unit, east, north,
-                    &second_radius, &ignored_angle))
+            if (!geometry.valid)
                 return;
-            DOTPSUBV(distance2, delta, first_unit, second_unit);
-            distance = distance2 > 0.0 ? rsqrt(distance2) : 0.0;
+            first_radius = geometry.first.radius;
+            second_radius = geometry.second.radius;
+            /* Reuse the acceptance geometry when deciding which nodes split. */
             effective_width = context->cmd->useLogHist
                 ? context->cmd->theta
                     * (context->cmd->rminHist > 0.0
                        ? rlog(10.0)*context->gd->deltaR
                        : rlog(10.0)/(real)context->cmd->logHistBinsPD)
-                    * distance
+                    * geometry.distance
                 : context->cmd->theta*context->gd->deltaR;
 
             if (second_radius > first_radius) {

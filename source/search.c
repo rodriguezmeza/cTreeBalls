@@ -327,9 +327,13 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 
     if (cballs_opt_compute_histn(cmd)) {
 #ifdef SMOOTHPIVOT
-            search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse);
+            if (search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse) == FAILURE) {
+                return FAILURE;
+            }
 #else
-            search_compute_HistN(cmd, gd, nbody[cat1]);
+            if (search_compute_HistN(cmd, gd, nbody[cat1]) == FAILURE) {
+                return FAILURE;
+            }
 #endif
     }
 

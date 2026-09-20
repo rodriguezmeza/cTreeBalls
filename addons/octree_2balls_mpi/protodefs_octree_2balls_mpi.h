@@ -4,6 +4,7 @@
 #define OCTREE2BALLSMPIMETHOD 177
 
 #include "fcfc_octree_2balls_mpi.h"
+#include "protodefs_octree_ggg_mpi.h"
 
 global int searchcalc_octree_2balls_mpi(struct cmdline_data *,
                                         struct global_data *, bodyptr *,

@@ -344,33 +344,6 @@ static void principal_axes_from_covariance(
     }
 }
 
-/* The spin-2 builder has different aggregate data, so retain a compact
- * geometry-only wrapper for that specialization. */
-static void principal_axes(bodyptr *points, INTEGER lo, INTEGER hi,
-                           real axes[NDIM][NDIM])
-{
-    double sum[NDIM] = {0};
-    double outer[NDIM][NDIM] = {{0}};
-    double covariance[NDIM][NDIM];
-    const double count = (double)(hi - lo + 1);
-    int j;
-    int k;
-
-    for (INTEGER i = lo; i <= hi; i++) {
-        DO_COORD(j) {
-            const double position = Pos(points[i])[j];
-
-            sum[j] += position;
-            DO_COORD(k)
-                outer[j][k] += position * (double)Pos(points[i])[k];
-        }
-    }
-    DO_COORD(j)
-        DO_COORD(k)
-            covariance[j][k] = outer[j][k] - sum[j] * sum[k] / count;
-    principal_axes_from_covariance(covariance, axes);
-}
-
 static real storage_distance_squared(const cballs_storage_real a[NDIM],
                                      const cballs_storage_real b[NDIM])
 {
@@ -1129,6 +1102,8 @@ int fcfc_balltree_build_scalar_role_cached(
 
 #ifdef BALLTREESHEARSPHERE2BALLSOMP
 
+#define FCFC_SHEAR_PARALLEL_BUILD_CUTOFF ((INTEGER)8192)
+
 typedef struct {
     real re;
     real im;
@@ -1191,15 +1166,12 @@ static bool fcfc_shear_basis(const real *unit, compute_vector east,
     return isfinite(north[0]) && isfinite(north[1]) && isfinite(north[2]);
 }
 
-static bool fcfc_shear_rotation(const real *target_unit,
+static bool fcfc_shear_rotation_prepared(const real *target_unit,
                                 const real *target_east,
                                 const real *target_north,
-                                const real *source_position,
+                                const real *source_unit, const real *source_east,
                                 fcfc_shear_complex *rotation)
 {
-    compute_vector source_unit;
-    compute_vector source_east;
-    compute_vector source_north;
     compute_vector transported_east;
     compute_vector transported_north;
     real denominator;
@@ -1208,10 +1180,6 @@ static bool fcfc_shear_rotation(const real *target_unit,
     real norm;
     int axis;
 
-    if (!fcfc_shear_unit3(source_position, source_unit)
-        || !fcfc_shear_basis(source_unit, source_east, source_north))
-        return FALSE;
-    (void)source_north;
     denominator = 1.0 + fcfc_shear_dot3(target_unit, source_unit);
     if (!(denominator > 64.0*DBL_EPSILON) || !isfinite(denominator))
         return FALSE;
@@ -1231,6 +1199,17 @@ static bool fcfc_shear_rotation(const real *target_unit,
     s /= norm;
     *rotation = fcfc_shear_make(c*c - s*s, 2.0*c*s);
     return isfinite(rotation->re) && isfinite(rotation->im);
+}
+
+static bool fcfc_shear_rotation(const real *target_unit,
+        const real *target_east, const real *target_north,
+        const real *source_position, fcfc_shear_complex *rotation)
+{
+    compute_vector unit, east, north;
+    return fcfc_shear_unit3(source_position, unit)
+        && fcfc_shear_basis(unit, east, north)
+        && fcfc_shear_rotation_prepared(target_unit, target_east, target_north,
+                                        unit, east, rotation);
 }
 
 static bool fcfc_shear_valid(const struct cmdline_data *cmd, bodyptr body,
@@ -1274,47 +1253,176 @@ static fcfc_shear_complex fcfc_shear_body_gamma(
         fcfc_shear_make(Gamma1(body), Gamma2(body)), Weight(body));
 }
 
-static int fcfc_shear_aggregate(struct cmdline_data *cmd,
-                                fcfc_balltreeptr tree, fcfc_ballnode *node,
-                                bool pivot_role)
+typedef struct {
+    real center[NDIM], center_weight;
+    double sum[NDIM], outer[NDIM][NDIM];
+} fcfc_shear_statistics;
+
+typedef struct {
+    compute_vector unit, east;
+    fcfc_shear_complex gamma;
+    real weight;
+    bool valid;
+} fcfc_shear_member;
+
+typedef struct {
+    bodyptr base;
+    fcfc_shear_member *members;
+} fcfc_shear_member_cache;
+
+static void fcfc_shear_prepare_member(const struct cmdline_data *cmd,
+        bodyptr body, bool pivot_role, const fcfc_shear_member_cache *cache)
 {
-    compute_vector center_sum;
+    fcfc_shear_member *member = &cache->members[body - cache->base];
+    compute_vector north;
+    member->weight = fcfc_shear_body_weight(cmd, body, pivot_role);
+    member->gamma = fcfc_shear_body_gamma(cmd, body, pivot_role);
+    member->valid = member->weight >= 0.0 && isfinite(member->weight)
+        && fcfc_shear_unit3(Pos(body), member->unit)
+        && fcfc_shear_basis(member->unit, member->east, north);
+}
+
+/* Fixed chunks and ordered publication are independent of worker count.
+ * Only upper nodes pay for task scheduling; leaves need no covariance. */
+#define FCFC_SHEAR_RANGE_CHUNK ((INTEGER)4096)
+#define FCFC_SHEAR_RANGE_PARTS 32
+
+static void fcfc_shear_statistics_range(const struct cmdline_data *cmd,
+        bodyptr *points, INTEGER first, INTEGER last, bool pivot_role,
+        bool covariance, fcfc_shear_statistics *part)
+{
+    memset(part, 0, sizeof(*part));
+    for (INTEGER i = first; i <= last; i++) {
+        const real weight = fcfc_shear_body_weight(cmd, points[i], pivot_role);
+        const real position_weight = weight > 0.0 ? weight : 1.0;
+        for (int j = 0; j < NDIM; j++) {
+            const double position = Pos(points[i])[j];
+            part->center[j] += position_weight*position;
+            if (covariance) {
+                part->sum[j] += position;
+                for (int k = 0; k < NDIM; k++)
+                    part->outer[j][k] += position*(double)Pos(points[i])[k];
+            }
+        }
+        part->center_weight += position_weight;
+    }
+}
+
+static int fcfc_shear_members_range(const struct cmdline_data *cmd,
+        bodyptr *points, INTEGER first, INTEGER last, bool pivot_role,
+        const real *center_unit, const real *center_east, const real *center_north,
+        const fcfc_shear_member_cache *cache, fcfc_ballnode *part)
+{
+    real radius2 = 0.0;
+    memset(part, 0, sizeof(*part));
+    for (INTEGER point = first; point <= last; point++) {
+        bodyptr body = points[point];
+        const fcfc_shear_member *member = cache->members
+            ? &cache->members[body - cache->base] : NULL;
+        const real weight = member ? member->weight
+            : fcfc_shear_body_weight(cmd, body, pivot_role);
+        fcfc_shear_complex weighted_gamma = member ? member->gamma
+            : fcfc_shear_body_gamma(cmd, body, pivot_role);
+        fcfc_shear_complex rotation, transported;
+        real distance2 = 0.0;
+
+        if (member) {
+            if (!member->valid || !fcfc_shear_rotation_prepared(center_unit,
+                    center_east, center_north, member->unit, member->east,
+                    &rotation)) return FAILURE;
+        } else if (!(weight >= 0.0) || !isfinite(weight)
+                   || !fcfc_shear_rotation(center_unit, center_east, center_north,
+                                           Pos(body), &rotation)) return FAILURE;
+        transported = fcfc_shear_mul(weighted_gamma, rotation);
+        part->weight += weight;
+        part->shear_gamma_re += transported.re;
+        part->shear_gamma_im += transported.im;
+        transported = fcfc_shear_mul(transported, transported);
+        part->shear_gamma2_re += transported.re;
+        part->shear_gamma2_im += transported.im;
+        part->shear_gamma_abs2 += weighted_gamma.re*weighted_gamma.re
+                                 + weighted_gamma.im*weighted_gamma.im;
+        part->shear_weight2 += weight*weight;
+        for (int axis = 0; axis < NDIM; axis++)
+            distance2 += rsqr(center_unit[axis] - (real)Pos(body)[axis]);
+        radius2 = MAX(radius2, distance2);
+    }
+    part->radius = cballs_store_search_bound(rsqrt(radius2));
+    return SUCCESS;
+}
+
+static int fcfc_shear_aggregate(struct cmdline_data *cmd,
+        fcfc_balltreeptr tree, fcfc_ballnode *node, bool pivot_role,
+        bool internal, bool parallel_build, const fcfc_shear_member_cache *cache,
+        real axes[NDIM][NDIM])
+{
     compute_vector center_unit;
     compute_vector center_east;
     compute_vector center_north;
-    real center_weight = 0.0;
-    real radius2 = 0.0;
-    INTEGER point;
+    const INTEGER count = node->last - node->first + 1;
+    const int chunks = count < 2*FCFC_SHEAR_PARALLEL_BUILD_CUTOFF ? 1
+        : (int)MIN((INTEGER)FCFC_SHEAR_RANGE_PARTS,
+                    1 + (count - 1)/FCFC_SHEAR_RANGE_CHUNK);
+    fcfc_shear_statistics total = {0};
+    fcfc_shear_statistics *parts = chunks > 1
+        ? calloc((size_t)chunks, sizeof(*parts)) : NULL;
+    fcfc_ballnode *moments = chunks > 1
+        ? calloc((size_t)chunks, sizeof(*moments)) : NULL;
+    int statuses[FCFC_SHEAR_RANGE_PARTS] = {0};
+    int status = FAILURE;
     int axis;
 
-    CLRV(center_sum);
-    for (point = node->first; point <= node->last; point++) {
-        bodyptr body = tree->bptr[point];
-        const real weight = fcfc_shear_body_weight(cmd, body, pivot_role);
-        const real position_weight = weight > 0.0 ? weight : 1.0;
-
-        DO_COORD(axis)
-            center_sum[axis] += position_weight*(real)Pos(body)[axis];
-        center_weight += position_weight;
+    if (chunks == 1) {
+        fcfc_shear_statistics_range(cmd, tree->bptr, node->first, node->last,
+                                   pivot_role, internal, &total);
+    } else {
+        if (parts == NULL || moments == NULL) goto cleanup;
+#ifdef OPENMPCODE
+#pragma omp taskgroup
+#endif
+        {
+            for (int chunk = 0; chunk < chunks; chunk++) {
+                INTEGER first, last;
+                fcfc_balltree_chunk_bounds(node->first, count, chunks, chunk, &first, &last);
+#ifdef OPENMPCODE
+#pragma omp task if(parallel_build) firstprivate(chunk, first, last) shared(parts)
+#endif
+                fcfc_shear_statistics_range(cmd, tree->bptr, first, last,
+                                           pivot_role, internal, &parts[chunk]);
+            }
+        }
+        for (int chunk = 0; chunk < chunks; chunk++) {
+            total.center_weight += parts[chunk].center_weight;
+            for (int j = 0; j < NDIM; j++) {
+                total.center[j] += parts[chunk].center[j];
+                total.sum[j] += parts[chunk].sum[j];
+                for (int k = 0; k < NDIM; k++)
+                    total.outer[j][k] += parts[chunk].outer[j][k];
+            }
+        }
     }
-    if (center_weight > 0.0)
+    if (internal) {
+        double covariance[NDIM][NDIM];
+        for (int j = 0; j < NDIM; j++)
+            for (int k = 0; k < NDIM; k++)
+                covariance[j][k] = total.outer[j][k] - total.sum[j]*total.sum[k]/count;
+        principal_axes_from_covariance(covariance, axes);
+    }
+    if (total.center_weight > 0.0)
         DO_COORD(axis)
-            center_sum[axis] /= center_weight;
-    if (!fcfc_shear_unit3(center_sum, center_unit)
+            total.center[axis] /= total.center_weight;
+    if (!fcfc_shear_unit3(total.center, center_unit)
         && !fcfc_shear_unit3(Pos(tree->bptr[node->first]), center_unit)) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "balltree-shear-sphere-2balls-omp: invalid node center");
-        return FAILURE;
-    }
-    if (!fcfc_shear_basis(center_unit, center_east, center_north)) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "balltree-shear-sphere-2balls-omp: node tangent frame is undefined");
-        return FAILURE;
+        goto cleanup;
     }
     DO_COORD(axis) {
         node->center[axis] = (cballs_storage_real)center_unit[axis];
         node->cmpos[axis] = (cballs_storage_real)center_unit[axis];
     }
+    /* Direct moments use the normalized stored-center frame. Expand the final
+     * bound for its rounding displacement from the stored geometric center. */
+    if (!fcfc_shear_unit3(node->center, center_unit)
+        || !fcfc_shear_basis(center_unit, center_east, center_north)) goto cleanup;
 
     node->weight = 0.0;
     node->shear_gamma_re = 0.0;
@@ -1324,79 +1432,110 @@ static int fcfc_shear_aggregate(struct cmdline_data *cmd,
     node->shear_gamma_abs2 = 0.0;
     node->shear_weight2 = 0.0;
     node->shear_transport_error = 0.0;
-    for (point = node->first; point <= node->last; point++) {
-        bodyptr body = tree->bptr[point];
-        const real weight = fcfc_shear_body_weight(cmd, body, pivot_role);
-        fcfc_shear_complex weighted_gamma =
-            fcfc_shear_body_gamma(cmd, body, pivot_role);
-        fcfc_shear_complex rotation;
-        fcfc_shear_complex transported;
-        real distance2 = 0.0;
-
-        if (!(weight >= 0.0) || !isfinite(weight)
-            || !fcfc_shear_rotation(center_unit, center_east, center_north,
-                                    Pos(body), &rotation)) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "balltree-shear-sphere-2balls-omp: invalid spin-2 node member");
-            return FAILURE;
+    if (chunks == 1) {
+        fcfc_ballnode part;
+        if (fcfc_shear_members_range(cmd, tree->bptr, node->first, node->last,
+                pivot_role, center_unit, center_east, center_north, cache, &part) == FAILURE)
+            goto cleanup;
+        node->weight = part.weight;
+        node->shear_gamma_re = part.shear_gamma_re;
+        node->shear_gamma_im = part.shear_gamma_im;
+        node->shear_gamma2_re = part.shear_gamma2_re;
+        node->shear_gamma2_im = part.shear_gamma2_im;
+        node->shear_gamma_abs2 = part.shear_gamma_abs2;
+        node->shear_weight2 = part.shear_weight2;
+        node->radius = part.radius;
+    } else {
+#ifdef OPENMPCODE
+#pragma omp taskgroup
+#endif
+        {
+            for (int chunk = 0; chunk < chunks; chunk++) {
+                INTEGER first, last;
+                fcfc_balltree_chunk_bounds(node->first, count, chunks, chunk, &first, &last);
+#ifdef OPENMPCODE
+#pragma omp task if(parallel_build) firstprivate(chunk, first, last) shared(moments, statuses, center_unit, center_east, center_north)
+#endif
+                statuses[chunk] = fcfc_shear_members_range(cmd, tree->bptr, first, last,
+                    pivot_role, center_unit, center_east, center_north, cache, &moments[chunk]);
+            }
         }
-        transported = fcfc_shear_mul(weighted_gamma, rotation);
-        node->weight += weight;
-        node->shear_gamma_re += transported.re;
-        node->shear_gamma_im += transported.im;
-        transported = fcfc_shear_mul(transported, transported);
-        node->shear_gamma2_re += transported.re;
-        node->shear_gamma2_im += transported.im;
-        node->shear_gamma_abs2 += weighted_gamma.re*weighted_gamma.re
-                                + weighted_gamma.im*weighted_gamma.im;
-        node->shear_weight2 += weight*weight;
-        DO_COORD(axis)
-            distance2 += rsqr(center_unit[axis] - (real)Pos(body)[axis]);
-        radius2 = MAX(radius2, distance2);
+        node->radius = 0.0;
+        for (int chunk = 0; chunk < chunks; chunk++) {
+            const fcfc_ballnode *part = &moments[chunk];
+            if (statuses[chunk] == FAILURE) goto cleanup;
+            node->weight += part->weight;
+            node->shear_gamma_re += part->shear_gamma_re;
+            node->shear_gamma_im += part->shear_gamma_im;
+            node->shear_gamma2_re += part->shear_gamma2_re;
+            node->shear_gamma2_im += part->shear_gamma2_im;
+            node->shear_gamma_abs2 += part->shear_gamma_abs2;
+            node->shear_weight2 += part->shear_weight2;
+            node->radius = MAX(node->radius, part->radius);
+        }
     }
-    node->radius = cballs_store_search_bound(rsqrt(radius2));
+    real center_shift2 = 0.0;
+    DO_COORD(axis)
+        center_shift2 += rsqr(center_unit[axis] - (real)node->center[axis]);
+    node->radius = cballs_store_search_bound(nextafter(
+        (real)node->radius + rsqrt(center_shift2)
+        + 8.0*DBL_EPSILON*(1.0 + (real)node->radius), INFINITY));
     node->aggregate_radius = node->radius;
-    return SUCCESS;
+    status = SUCCESS;
+cleanup:
+    free(moments);
+    free(parts);
+    return status;
 }
 
 static int fcfc_shear_build_node(struct cmdline_data *cmd,
                                  fcfc_balltreeptr tree, INTEGER first,
-                                 INTEGER last, int leaf_capacity, int depth,
-                                 bool pivot_role, INTEGER *result)
+                                 INTEGER last, int leaf_capacity, INTEGER index,
+                                 bool pivot_role, bool parallel_build,
+                                 const fcfc_shear_member_cache *cache)
 {
     real axes[NDIM][NDIM];
     fcfc_ballnode *node;
-    INTEGER index;
 
-    if (tree->nnode >= tree->capacity) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "balltree-shear-sphere-2balls-omp: node capacity exceeded");
-        return FAILURE;
-    }
-    index = tree->nnode++;
+    if (index < 0 || index >= tree->nnode) return FAILURE;
     node = &tree->nodes[index];
     node->first = first;
     node->last = last;
     node->left = -1;
     node->right = -1;
-    if (depth > tree->max_depth) tree->max_depth = depth;
 
-    principal_axes(tree->bptr, first, last, axes);
-    if (fcfc_shear_aggregate(cmd, tree, node, pivot_role) == FAILURE)
+    if (fcfc_shear_aggregate(cmd, tree, node, pivot_role,
+            last - first + 1 > leaf_capacity, parallel_build, cache, axes) == FAILURE)
         return FAILURE;
     if (last - first + 1 > leaf_capacity) {
         const INTEGER middle = first + (last - first + 1)/2;
+        int left_status = FAILURE, right_status = FAILURE;
 
         select_median(tree->bptr, first, last, middle, axes[0]);
-        if (fcfc_shear_build_node(cmd, tree, first, middle - 1,
-                                  leaf_capacity, depth + 1, pivot_role,
-                                  &node->left) == FAILURE
-            || fcfc_shear_build_node(cmd, tree, middle, last,
-                                     leaf_capacity, depth + 1, pivot_role,
-                                     &node->right) == FAILURE)
+        /* Preorder ranges preserve the serial layout. Siblings only mutate
+         * disjoint point/node ranges, with fixed-chunk summation order. */
+        node->left = index + 1;
+        node->right = node->left
+            + fcfc_balltree_subtree_nodes(middle - first, leaf_capacity);
+#ifdef OPENMPCODE
+        if (parallel_build && middle - first >= FCFC_SHEAR_PARALLEL_BUILD_CUTOFF) {
+#pragma omp task shared(left_status)
+            left_status = fcfc_shear_build_node(cmd, tree, first, middle - 1,
+                leaf_capacity, node->left, pivot_role, TRUE, cache);
+            right_status = fcfc_shear_build_node(cmd, tree, middle, last,
+                leaf_capacity, node->right, pivot_role, TRUE, cache);
+#pragma omp taskwait
+        } else
+#endif
+        {
+            left_status = fcfc_shear_build_node(cmd, tree, first, middle - 1,
+                leaf_capacity, node->left, pivot_role, FALSE, cache);
+            right_status = fcfc_shear_build_node(cmd, tree, middle, last,
+                leaf_capacity, node->right, pivot_role, FALSE, cache);
+        }
+        if (left_status == FAILURE || right_status == FAILURE)
             return FAILURE;
     }
-    *result = index;
     return SUCCESS;
 }
 
@@ -1408,7 +1547,8 @@ int fcfc_balltree_build_shear_sphere(
     fcfc_balltreeptr tree = NULL;
     INTEGER valid_count = 0;
     INTEGER source;
-    INTEGER root = -1;
+    int build_status = FAILURE;
+    fcfc_shear_member_cache cache = {body_table, NULL};
 #ifdef LONGINT
     const uintmax_t integer_max = (uintmax_t)LONG_MAX;
 #else
@@ -1442,7 +1582,9 @@ int fcfc_balltree_build_shear_sphere(
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
     tree->npoint = valid_count;
-    tree->capacity = 2*valid_count;
+    tree->capacity = fcfc_balltree_subtree_nodes(valid_count, leaf_capacity);
+    tree->nnode = tree->capacity;
+    tree->max_depth = fcfc_balltree_depth_for_count(valid_count, leaf_capacity);
     tree->bptr = malloc((size_t)valid_count*sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
     if (tree->bptr == NULL || tree->nodes == NULL)
@@ -1454,9 +1596,42 @@ int fcfc_balltree_build_shear_sphere(
         if (fcfc_shear_valid(cmd, body, pivot_role))
             tree->bptr[valid_count++] = body;
     }
-    if (fcfc_shear_build_node(cmd, tree, 0, valid_count - 1,
-                              leaf_capacity, 0, pivot_role, &root) == FAILURE
-        || root != FCFC_BALLTREE_ROOT) {
+    /* Transient source frames remove repeated normalizations at every level.
+     * Cap scratch at 256 MiB; allocation failure uses the identical direct
+     * source-frame calculation. Nothing survives this construction call. */
+    if (!scanopt(cmd->options, "no-balltree-shear-member-cache")
+        && (uintmax_t)body_count <= ((size_t)256 << 20)/sizeof(*cache.members))
+        cache.members = malloc((size_t)body_count*sizeof(*cache.members));
+#ifdef OPENMPCODE
+    if (valid_count >= 2*FCFC_SHEAR_PARALLEL_BUILD_CUTOFF
+        && cmd->numthreads > 1
+        && !scanopt(cmd->options, "no-balltree-parallel-build")) {
+#pragma omp parallel num_threads(cmd->numthreads)
+        {
+            if (cache.members != NULL) {
+#pragma omp for schedule(static)
+                for (INTEGER i = 0; i < valid_count; i++)
+                    fcfc_shear_prepare_member(cmd, tree->bptr[i], pivot_role, &cache);
+            }
+#pragma omp single nowait
+            build_status = fcfc_shear_build_node(cmd, tree, 0, valid_count - 1,
+                leaf_capacity, FCFC_BALLTREE_ROOT, pivot_role, TRUE, &cache);
+        }
+    } else
+#endif
+    {
+        if (cache.members != NULL)
+            for (INTEGER i = 0; i < valid_count; i++)
+                fcfc_shear_prepare_member(cmd, tree->bptr[i], pivot_role, &cache);
+        build_status = fcfc_shear_build_node(cmd, tree, 0, valid_count - 1,
+            leaf_capacity, FCFC_BALLTREE_ROOT, pivot_role, FALSE, &cache);
+    }
+    free(cache.members);
+    if (build_status == FAILURE) {
+        /* Report only after workers join; error paths must not race on cmd. */
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "balltree-shear-sphere-2balls-omp: invalid node geometry "
+                 "or spin-2 member during construction");
         fcfc_balltree_free(tree);
         return FAILURE;
     }

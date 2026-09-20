@@ -28,6 +28,11 @@ if ! grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
 fi
 grep -q -- '-DKDTREE2BALLSOMP\([[:space:]]\|$\)' <<<"$build_env" \
     || fail_with_log "the KDTREE2BALLSOMP exact reference engine is not enabled"
+has_public_legacy=false
+if grep -q -- '-DBALLTREEOMP\([[:space:]]\|$\)' <<<"$build_env"; then
+    has_public_legacy=true
+fi
+
 run_case()
 {
     local name=$1
@@ -63,6 +68,29 @@ run_case()
         || fail_with_log "$name failed" "$output/run.log"
 }
 
+run_rejected()
+{
+    local name=$1 options=$2 expected=$3
+    local output="$TMP_ROOT/$name"
+    local status
+
+    mkdir -p "$output"
+    set +e
+    "$CBALLS" search=balltree-2balls-omp testmodel=simple-cubic-random \
+        nbody=64 lengthBox=2 rootDir="$output" numberThreads=1 \
+        usePeriodic=false useLogHist=true rangeN=0.5 rminHist=0.005 \
+        sizeHistN=4 mChebyshev=2 nsmooth=4 rsmooth=0 theta=1 seed=123 \
+        stepState=1000000 verbose=2 verbose_log=0 options="$options" \
+        >"$output/run.log" 2>&1
+    status=$?
+    set -e
+    [ "$status" -ne 0 ] \
+        || fail_with_log "$name unexpectedly succeeded" "$output/run.log"
+    grep -Fq -- "$expected" "$output/run.log" \
+        || fail_with_log "$name did not report the expected error" \
+                         "$output/run.log"
+}
+
 compare_files_numeric()
 {
     "$PYTHON" - "$1" "$2" <<'PY'
@@ -89,6 +117,48 @@ for name in ("histNN.txt", "histXi2pcf.txt"):
 PY
 }
 
+legacy_options=compute-HistN,no-smooth-pivot
+run_case legacy-compat-one balltree-2balls-omp 1 \
+    "$legacy_options,legacy-one-ball"
+run_case legacy-compat-many balltree-2balls-omp "$MULTI_THREADS" \
+    "$legacy_options,legacy-one-ball"
+compare_files_numeric "$TMP_ROOT/legacy-compat-one" \
+                      "$TMP_ROOT/legacy-compat-many" \
+    || fail_with_log "legacy-one-ball is not thread deterministic" \
+                     "$TMP_ROOT/legacy-compat-many/run.log"
+grep -Fq -- 'dispatching to the balltree-omp legacy kernel' \
+    "$TMP_ROOT/legacy-compat-one/run.log" \
+    || fail_with_log "legacy-one-ball did not take the ball-tree dispatch" \
+                     "$TMP_ROOT/legacy-compat-one/run.log"
+if $has_public_legacy; then
+    run_case legacy-reference balltree-omp 1 "$legacy_options"
+    compare_files_numeric "$TMP_ROOT/legacy-reference" \
+                          "$TMP_ROOT/legacy-compat-one" \
+        || fail_with_log "legacy-one-ball differs from balltree-omp" \
+                         "$TMP_ROOT/legacy-compat-one/run.log"
+fi
+
+run_case legacy-cell-one balltree-2balls-omp 1 \
+    "$legacy_options,behavior-ball,legacy-one-ball"
+run_case legacy-cell-many balltree-2balls-omp "$MULTI_THREADS" \
+    "$legacy_options,behavior-ball,legacy-one-ball"
+compare_files_numeric "$TMP_ROOT/legacy-cell-one" \
+                      "$TMP_ROOT/legacy-cell-many" \
+    || fail_with_log "legacy behavior-ball is not thread deterministic" \
+                     "$TMP_ROOT/legacy-cell-many/run.log"
+if $has_public_legacy; then
+    run_case legacy-cell-reference balltree-omp 1 \
+        "$legacy_options,behavior-ball"
+    compare_files_numeric "$TMP_ROOT/legacy-cell-reference" \
+                          "$TMP_ROOT/legacy-cell-one" \
+        || fail_with_log "legacy-one-ball did not preserve behavior-ball" \
+                         "$TMP_ROOT/legacy-cell-one/run.log"
+fi
+
+run_rejected legacy-conflict \
+    'only-2pcf,no-smooth-pivot,legacy-one-ball,no-two-balls' \
+    'legacy-one-ball cannot be combined with'
+
 exact_options=compute-HistN,no-two-balls,no-smooth-pivot
 run_case kdtree-reference kdtree-2balls-omp 1 \
     compute-HistN,no-two-balls,no-smooth-pivot
@@ -96,7 +166,7 @@ run_case exact-one balltree-2balls-omp 1 "$exact_options"
 run_case exact-many balltree-2balls-omp "$MULTI_THREADS" "$exact_options"
 
 compare_files_numeric "$TMP_ROOT/kdtree-reference" "$TMP_ROOT/exact-one" \
-    || fail_with_log "exact dual-ball scan differs from active KD-tree reference" \
+    || fail_with_log "exact dual-ball scan differs from KDTREEOMP" \
                      "$TMP_ROOT/exact-one/run.log"
 for file in "$TMP_ROOT/exact-one"/*.txt; do
     name=${file##*/}
@@ -280,4 +350,4 @@ for label, actual, expected in (
                 f"{label} bin {index}: {got:.17g} != {want:.17g}")
 PY
 
-echo "PASS: balltree-2balls-omp parity, masks-ready roles, and determinism"
+echo "PASS: balltree-2balls-omp parity, compatibility, masks-ready roles, and determinism"

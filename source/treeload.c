@@ -162,15 +162,36 @@ global int MakeTree(struct  cmdline_data* cmd,
 // By now it is only working with boxes centered at (0,0,...)
     cpustartMiddle = CPUTIME;
     if (FindRootCenter(cmd, gd, btab, nbody, ifile, roottable[ifile]) == FAILURE) return FAILURE;
+#ifdef OCTREESHEAROMP
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREESHEARMETHOD;
+#endif
+#ifdef OCTREESHEARSPHEREOMP
+    preserve_catalog_frame |=
+        gd->searchMethod_int == OCTREESHEARSPHEREMETHOD;
+#endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
     preserve_catalog_frame |=
         gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD;
 #endif
+#ifdef OCTREESHEARSPHERE2BALLSMPI
+    preserve_catalog_frame |=
+        gd->searchMethod_int == OCTREESHEARSPHERE2BALLSMPIMETHOD;
+#endif
+#ifdef KDTREESHEARSPHERE2BALLSMPI
+    preserve_catalog_frame |=
+        gd->searchMethod_int == KDTREESHEARSPHERE2BALLSMPIMETHOD;
+#endif
+#ifdef BALLTREESHEARSPHERE2BALLSMPI
+    preserve_catalog_frame |=
+        gd->searchMethod_int == BALLTREESHEARSPHERE2BALLSMPIMETHOD;
+#endif
 #ifdef OCTREE2BALLSOMP
-    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD;
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMETHOD
+        && !cballs_opt_legacy_one_ball(cmd);
 #endif
 #ifdef OCTREE2BALLSMPI
-    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMPIMETHOD;
+    preserve_catalog_frame |= gd->searchMethod_int == OCTREE2BALLSMPIMETHOD
+        && !cballs_opt_legacy_one_ball(cmd);
 #endif
     if (!preserve_catalog_frame
         && centerBodies(btab, nbody, ifile, roottable[ifile]) == FAILURE)
@@ -525,8 +546,17 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                                      cmd->error_message, _ERRORMSGSIZE_,
                                      "rsmooth") == FAILURE)
                 return FAILURE;
+#if defined(OCTREESHEARSPHEREOMP) || defined(OCTREESHEARSPHERE2BALLSOMP)
+            if (
+#ifdef OCTREESHEARSPHEREOMP
+                gd->searchMethod_int == OCTREESHEARSPHEREMETHOD
+#else
+                FALSE
+#endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
-            if (gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD)
+                || gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD
+#endif
+               )
                 gd->rsmooth[0] = 2.0*rsin(
                     0.5*(real)rsmooth_arcmin*ARCMINTORAD);
             else
@@ -841,6 +871,11 @@ global int expandbox(struct  cmdline_data* cmd,
             if (d > dmax)
                 dmax = d;                       
         }
+    /* In-memory cross catalogs may not have a seed box size yet. Doubling
+     * zero would never enclose any nonzero observer-centered catalog. */
+    if (!(gd->rSizeTable[ifile] > 0.0)
+        || !isfinite(gd->rSizeTable[ifile]))
+        gd->rSizeTable[ifile] = 1.0;
     while (gd->rSizeTable[ifile] < 2 * dmax)
         gd->rSizeTable[ifile] = 2 * gd->rSizeTable[ifile];
 

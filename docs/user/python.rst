@@ -105,10 +105,11 @@ All compared arrays use the native cTreeBalls normalization contract.
 ``--edge-corrections``, active scalar engines build window modes through order
 ``2M`` and apply the per-bin scalar mode-coupling solve.
 
-Both all-engine drivers write ``timing_report.txt`` and structured
+The all-engine drivers write ``timing_report.txt`` and structured
 ``summary.json["timings"]`` entries with setup, compute, and total wall/process
-CPU seconds. Process CPU can exceed wall time under OpenMP; MPI native CPU
-figures describe rank 0 only.
+CPU seconds. Process CPU can exceed wall time under OpenMP. MPI CPU is summed
+across participating ranks, and wall time is their maximum; per-rank measurements
+are also retained. Check each driver's timing scope before comparing results.
 
 For forests, use ``set_forest_catalog(positions, delta, weights, forest_ids)``
 or ``tests/python/lya_corr_all_engines.py``. Forest IDs must remain integer arrays.

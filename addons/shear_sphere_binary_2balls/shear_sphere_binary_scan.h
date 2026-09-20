@@ -40,6 +40,11 @@ typedef struct {
     INTEGER body_pairs;
     INTEGER cell_pairs;
     shear_profile_counters *profile;
+    bool allow_nodes;
+    bool bin_slop;
+    real angular_tolerance;
+    real max_cell_ratio;
+    real bin_width;
 } kd_shear_pair_histogram;
 
 static kd_shear_ref kd_shear_node_ref(fcfc_balltreeptr tree, INTEGER index)
@@ -113,12 +118,29 @@ static kd_shear_ref kd_shear_child(kd_shear_ref parent, INTEGER child)
                              parent.tree->bptr[node->first + child]);
 }
 
-/* Return -2 outside the histogram, -1 when subdivision is required, or a bin. */
+static int kd_shear_pair_radial_bin(struct cmdline_data *cmd,
+                                   struct global_data *gd,
+                                   kd_shear_pair_histogram *hist,
+                                   real distance)
+{
+    double started = 0.0;
+    bool active;
+    int bin;
+
+    if (hist->profile == NULL) return shear_radial_bin(cmd, gd, distance);
+    active = shear_profile_sample_begin(&hist->profile->radial, &started);
+    bin = shear_radial_bin(cmd, gd, distance);
+    shear_profile_sample_end(&hist->profile->radial, started, active);
+    return bin;
+}
+
+/* Return -2 outside the histogram, -1 when subdivision is required, or a bin.
+ * Retain distance for the split heuristic instead of calculating it twice. */
 static int kd_shear_pair_bin(struct cmdline_data *cmd,
                              struct global_data *gd,
                              kd_shear_pair_histogram *hist,
                              kd_shear_ref first, kd_shear_ref second,
-                             bool permit_nodes)
+                             real *pair_distance)
 {
     compute_vector first_unit;
     compute_vector second_unit;
@@ -128,7 +150,6 @@ static int kd_shear_pair_bin(struct cmdline_data *cmd,
     real size;
     real lower;
     real upper;
-    real tolerance;
     real separation;
     real error;
     int bin;
@@ -137,53 +158,47 @@ static int kd_shear_pair_bin(struct cmdline_data *cmd,
         || !shear_load_unit3(kd_shear_position(second), second_unit))
         return -1;
     DOTPSUBV(distance2, delta, first_unit, second_unit);
-    if (!(distance2 > 0.0) || !isfinite(distance2)) return -2;
+    if (!isfinite(distance2)) return -2;
     distance = rsqrt(distance2);
+    *pair_distance = distance;
     size = kd_shear_radius(first) + kd_shear_radius(second);
     if (distance + size <= cmd->rminHist
         || distance - size >= cmd->rangeN)
         return -2;
-    if (hist->profile == NULL) {
-        bin = shear_radial_bin(cmd, gd, distance);
-    } else {
-        double radial_started = 0.0;
-        bool radial_active = shear_profile_sample_begin(
-            &hist->profile->radial, &radial_started);
-        bin = shear_radial_bin(cmd, gd, distance);
-        shear_profile_sample_end(
-            &hist->profile->radial, radial_started, radial_active);
-    }
-    if (first.kind == KD_SHEAR_BODY && second.kind == KD_SHEAR_BODY)
+    if (!(distance > 0.0))
+        /* Coincident cell centers do not imply coincident member pairs.
+         * Zero-radius groups have already been excluded by the range test. */
+        return first.kind == KD_SHEAR_BODY && second.kind == KD_SHEAR_BODY
+            ? -2 : -1;
+    if (first.kind == KD_SHEAR_BODY && second.kind == KD_SHEAR_BODY) {
+        bin = kd_shear_pair_radial_bin(cmd, gd, hist, distance);
         return bin < 0 ? -2 : bin;
-    if (!permit_nodes || !(cmd->theta > 0.0)
-        || cballs_opt_no_two_balls(cmd) || cballs_opt_no_one_ball(cmd)
+    }
+    if (!hist->allow_nodes
         || !isfinite(kd_shear_transport_error(first))
         || !isfinite(kd_shear_transport_error(second)))
         return -1;
+    if (distance <= size || size/distance > hist->max_cell_ratio)
+        return -1;
+    if (hist->bin_slop) {
+        real width = cmd->useLogHist ? hist->bin_width*distance : hist->bin_width;
+        if (!(width > 0.0) || size > width) return -1;
+    }
+    bin = kd_shear_pair_radial_bin(cmd, gd, hist, distance);
     if (bin < 0) return -1;
     lower = distance - size;
     upper = distance + size;
-    if (scanopt(cmd->options, "dual-node-bin-slop")) {
-        real width = cmd->useLogHist
-            ? cmd->theta*(cmd->rminHist > 0.0
-                ? rlog(10.0)*gd->deltaR
-                : rlog(10.0)/(real)cmd->logHistBinsPD)*distance
-            : cmd->theta*gd->deltaR;
-        if (!(width > 0.0) || size > width) return -1;
-    } else if (!shear_interval_within_radial_bin(
+    if (!hist->bin_slop && !shear_interval_within_radial_bin(
                    cmd, gd, lower, upper, bin)) {
         return -1;
     }
-    tolerance = MIN(0.5*PI, cmd->theta*PI/9.0);
-    if (distance <= size || size/distance > rsin(MAX(0.0, tolerance)))
-        return -1;
     separation = 2.0*rasin(MIN(1.0, 0.5*distance));
     error = kd_shear_transport_error(first)
           + kd_shear_transport_error(second)
           + 2.0*(2.0*rasin(MIN(1.0, 0.5*kd_shear_radius(first)))
                  + 2.0*rasin(MIN(1.0, 0.5*kd_shear_radius(second))))
             * separation;
-    return isfinite(error) && error <= tolerance ? bin : -1;
+    return isfinite(error) && error <= hist->angular_tolerance ? bin : -1;
 }
 
 typedef struct {
@@ -220,6 +235,53 @@ static bool kd_shear_prepare_pair_frame(kd_shear_ref ref,
     return TRUE;
 }
 
+#ifdef SHEAR_SPHERE_BINARY_GEODESIC_PAIRS
+/* Project both spin-2 values onto their connecting great circle. This is the
+ * same estimator as transport followed by projection, without a second
+ * oriented update for an auto pair. No opening or bin criterion changes. */
+static void kd_shear_accumulate_geodesic_pair(
+        kd_shear_pair_histogram *hist, const kd_shear_pair_frame *first,
+        const kd_shear_pair_frame *second, int bin, bool bidirectional)
+{
+    const real dot = shear_dot3(first->unit, second->unit);
+    const real sine2 = MAX(0.0, 1.0 - dot*dot);
+    shear_complex phase1, phase2, gamma1, gamma2, plus, minus;
+    double started = 0.0;
+    bool sampled = FALSE;
+
+    if (!(1.0 + dot > 64.0*DBL_EPSILON)
+        || !(sine2 > rsqr(64.0*DBL_EPSILON)) || !isfinite(sine2)) return;
+    if (hist->profile != NULL)
+        sampled = shear_profile_sample_begin(&hist->profile->transport, &started);
+    phase1 = shear_make(shear_dot3(second->unit, first->east),
+                        shear_dot3(second->unit, first->north));
+    phase2 = shear_make(shear_dot3(first->unit, second->east),
+                        shear_dot3(first->unit, second->north));
+    const real norm1 = shear_abs2(phase1), norm2 = shear_abs2(phase2);
+    if (!(norm1 > 0.0 && norm2 > 0.0)
+        || !isfinite(norm1) || !isfinite(norm2)) {
+        if (hist->profile != NULL)
+            shear_profile_sample_end(&hist->profile->transport, started, sampled);
+        return;
+    }
+    /* Normalize the squared bearings directly, avoiding cancellation in
+     * 1-dot^2 at small separation and two unnecessary square roots. */
+    gamma1 = shear_mul(first->weighted_gamma,
+        shear_scale(shear_conj(shear_mul(phase1, phase1)), 1.0/norm1));
+    gamma2 = shear_mul(second->weighted_gamma,
+        shear_scale(shear_conj(shear_mul(phase2, phase2)), 1.0/norm2));
+    plus = shear_mul(gamma1, shear_conj(gamma2));
+    minus = shear_mul(gamma1, gamma2);
+    if (hist->profile != NULL)
+        shear_profile_sample_end(&hist->profile->transport, started, sampled);
+    const real multiplicity = bidirectional ? 2.0 : 1.0;
+    hist->xi_plus_re[bin] += multiplicity*plus.re;
+    if (!bidirectional) hist->xi_plus_im[bin] += plus.im;
+    hist->xi_minus_re[bin] += multiplicity*minus.re;
+    hist->xi_minus_im[bin] += multiplicity*minus.im;
+    hist->weight[bin] += multiplicity*first->weight*second->weight;
+}
+#else
 static void kd_shear_accumulate_oriented_frames(
         kd_shear_pair_histogram *hist, const kd_shear_pair_frame *pivot,
         const kd_shear_pair_frame *neighbor, shear_complex rotation, int bin)
@@ -245,6 +307,7 @@ static void kd_shear_accumulate_oriented_frames(
     hist->xi_minus_im[bin] += value.im;
     hist->weight[bin] += pivot->weight*neighbor->weight;
 }
+#endif
 
 static void kd_shear_accumulate_pair(kd_shear_pair_histogram *hist,
                                      kd_shear_ref first,
@@ -253,11 +316,15 @@ static void kd_shear_accumulate_pair(kd_shear_pair_histogram *hist,
 {
     kd_shear_pair_frame first_frame;
     kd_shear_pair_frame second_frame;
-    shear_complex rotation;
 
     if (!kd_shear_prepare_pair_frame(first, &first_frame)
         || !kd_shear_prepare_pair_frame(second, &second_frame))
         return;
+#ifdef SHEAR_SPHERE_BINARY_GEODESIC_PAIRS
+    kd_shear_accumulate_geodesic_pair(hist, &first_frame, &second_frame,
+                                     bin, bidirectional);
+#else
+    shear_complex rotation;
     bool rotation_valid;
     if (hist->profile == NULL) {
         rotation_valid = shear_transport_rotation_between_frames(
@@ -279,6 +346,7 @@ static void kd_shear_accumulate_pair(kd_shear_pair_histogram *hist,
     if (bidirectional)
         kd_shear_accumulate_oriented_frames(
             hist, &second_frame, &first_frame, shear_conj(rotation), bin);
+#endif
 }
 
 static void kd_shear_process_pair(struct cmdline_data *cmd,
@@ -291,7 +359,8 @@ static void kd_shear_process_pair(struct cmdline_data *cmd,
     bool split_second = second.kind == KD_SHEAR_NODE;
     INTEGER first_count = 0;
     INTEGER second_count = 0;
-    int bin = kd_shear_pair_bin(cmd, gd, hist, first, second, TRUE);
+    real distance = 0.0;
+    int bin = kd_shear_pair_bin(cmd, gd, hist, first, second, &distance);
 
     if (bin == -2) return;
     if (bin >= 0) {
@@ -306,19 +375,10 @@ static void kd_shear_process_pair(struct cmdline_data *cmd,
     if (split_first && split_second) {
         const real first_radius = kd_shear_radius(first);
         const real second_radius = kd_shear_radius(second);
-        compute_vector delta;
-        real distance2;
-        real distance;
         real effective_width;
 
-        DOTPSUBV(distance2, delta, kd_shear_position(first),
-                 kd_shear_position(second));
-        distance = distance2 > 0.0 ? rsqrt(distance2) : 0.0;
         effective_width = cmd->useLogHist
-            ? cmd->theta*(cmd->rminHist > 0.0
-                ? rlog(10.0)*gd->deltaR
-                : rlog(10.0)/(real)cmd->logHistBinsPD)*distance
-            : cmd->theta*gd->deltaR;
+            ? hist->bin_width*distance : hist->bin_width;
         if (second_radius > first_radius) {
             split_first = !(second_radius > 2.0*first_radius)
                 && first_radius > KD_SHEAR_SPLIT_FACTOR*effective_width;
@@ -433,6 +493,16 @@ static int kd_shear_dual_tree_2pcf(
     size_t values;
     int threads = 1;
     int status = FAILURE;
+    const bool allow_nodes = cmd->theta > 0.0
+        && !cballs_opt_no_two_balls(cmd) && !cballs_opt_no_one_ball(cmd);
+    const bool bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
+    const real angular_tolerance = MIN(0.5*PI, cmd->theta*PI/9.0);
+    const real max_cell_ratio = rsin(MAX(0.0, angular_tolerance));
+    const real bin_width = cmd->useLogHist
+        ? cmd->theta*(cmd->rminHist > 0.0
+            ? rlog(10.0)*gd->deltaR
+            : rlog(10.0)/(real)cmd->logHistBinsPD)
+        : cmd->theta*gd->deltaR;
 
 #ifdef OPENMPCODE
     threads = omp_get_max_threads();
@@ -590,8 +660,12 @@ static int kd_shear_dual_tree_2pcf(
 
             base = task_storage + (size_t)local_task*5*stride;
             kd_shear_pair_histogram hist = {
-                base, base + stride, base + 2*stride, base + 3*stride,
-                base + 4*stride, 0, 0, profile
+                .xi_plus_re = base, .xi_plus_im = base + stride,
+                .xi_minus_re = base + 2*stride, .xi_minus_im = base + 3*stride,
+                .weight = base + 4*stride, .profile = profile,
+                .allow_nodes = allow_nodes, .bin_slop = bin_slop,
+                .angular_tolerance = angular_tolerance,
+                .max_cell_ratio = max_cell_ratio, .bin_width = bin_width
             };
             const INTEGER first_index = task_first[task];
             const INTEGER second_index = task_second[task];
@@ -673,6 +747,20 @@ static void kd_shear_release_trees(fcfc_balltreeptr pivot,
     SHEAR_SPHERE_BINARY_TREE_FREE(pivot);
 }
 
+static void kd_shear_print_tree_profile(double started,
+        fcfc_balltreeptr pivot, fcfc_balltreeptr first, fcfc_balltreeptr second)
+{
+    int rank = 0;
+    const int count = (pivot != NULL) + (first != NULL && first != pivot)
+        + (second != NULL && second != pivot && second != first);
+#ifdef SHEAR_MPI_ENABLED
+    rank = SHEAR_MPI_RANK();
+#endif
+    fprintf(stderr, "SHEAR_PROFILE engine=%s rank=%d binary_tree_build=%.6f"
+            " unique_trees=%d\n", SHEAR_ENGINE_NAME, rank,
+            shear_profile_wall_time() - started, count);
+}
+
 static bool kd_shear_cell_geometry(shear_pivot_workspace *work,
                                    fcfc_ballnode *node,
                                    real *distance, shear_complex *phase,
@@ -684,7 +772,6 @@ static bool kd_shear_cell_geometry(shear_pivot_workspace *work,
     const real radius = (real)node->radius;
     real lower;
     real upper;
-    real angular_tolerance;
     real cell_angle;
     real separation;
 
@@ -692,31 +779,30 @@ static bool kd_shear_cell_geometry(shear_pivot_workspace *work,
     DOTPSUBV(distance2, delta, work->pivot_unit, center_unit);
     if (!(distance2 >= 0.0) || !isfinite(distance2)) return FALSE;
     *distance = rsqrt(distance2);
-    *bin = shear_radial_bin_profiled(work, *distance);
-    if (*distance > 0.0
-        && !shear_spherical_phase(work, node->center, phase))
-        return FALSE;
+    *bin = -1;
     if (*distance + radius <= work->cmd->rminHist
         || *distance - radius >= work->cmd->rangeN)
         return FALSE;
-    if (*bin < 0 || !work->allow_cells || !(work->cmd->theta > 0.0)
+    if (!work->allow_cells || !(work->cmd->theta > 0.0)
         || cballs_opt_no_two_balls(work->cmd)
         || node->weight <= 0.0 || *distance <= radius)
         return FALSE;
+    if (radius/(*distance) > work->max_cell_ratio)
+        return FALSE;
+    *bin = shear_radial_bin_profiled(work, *distance);
+    if (*bin < 0) return FALSE;
     lower = *distance - radius;
     upper = *distance + radius;
     if (!shear_interval_within_radial_bin(
             work->cmd, work->gd, lower, upper, *bin))
         return FALSE;
-    angular_tolerance = MIN(0.5*PI,
-        work->cmd->theta*PI/(2.0*(real)work->ring_max + 1.0));
-    if (radius/(*distance) > rsin(MAX(0.0, angular_tolerance)))
-        return FALSE;
     cell_angle = 2.0*rasin(MIN(1.0, 0.5*radius));
     separation = 2.0*rasin(MIN(1.0, 0.5*(*distance)));
-    return isfinite(node->shear_transport_error)
-        && node->shear_transport_error + 2.0*cell_angle*separation
-           <= angular_tolerance;
+    if (!isfinite(node->shear_transport_error)
+        || node->shear_transport_error + 2.0*cell_angle*separation
+           > work->angular_tolerance)
+        return FALSE;
+    return shear_spherical_phase(work, node->center, phase);
 }
 
 static void kd_shear_accumulate_node_2pcf(shear_pivot_workspace *work,

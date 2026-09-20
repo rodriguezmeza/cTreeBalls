@@ -1,0 +1,9 @@
+{
+  "seed": 811,
+  "nbody": 65536,
+  "generator": "numpy.random.default_rng(seed).uniform(-1, 1, (nbody, 3))",
+  "rminHist": 0.02,
+  "rangeN": 0.2,
+  "sizeHistN": 4,
+  "unordered_pairs": [41037, 224782, 1222140, 6501418]
+}

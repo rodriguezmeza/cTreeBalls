@@ -1392,55 +1392,44 @@ int string_begins_with(char* thestring, char beginchar){
 #include <errno.h>
 #include <sys/stat.h>
 
-// to stop using this system()...
-// sprintf(outputDir,cmd->rootDir);
-// sprintf(buf,"if [ ! -d %s ]; then mkdir %s; fi", outputDir, outputDir);
-// system(buf);
-int mkdir_p(const char *path, mode_t mode) {
+/* mkdir -p semantics without passing path text to a command interpreter.
+   EEXIST is success only for a directory (including symlinks to directories). */
+static int mkdir_component(const char *path, mode_t mode)
+{
+    struct stat info;
+    if (mkdir(path, mode) == 0) return 0;
+    if (errno != EEXIST) return -1;
+    if (stat(path, &info) != 0) return -1;
+    if (!S_ISDIR(info.st_mode)) {
+        errno = ENOTDIR;
+        return -1;
+    }
+    return 0;
+}
+
+int mkdir_p(const char *path, mode_t mode)
+{
     char tmp[MAXLENGTHOFFILES];
-    char *p = NULL;
     size_t len;
-
-    int nwritten;
-
-    nwritten = snprintf(tmp, sizeof(tmp), "%s", path);
-    if (nwritten < 0 || (size_t)nwritten >= sizeof(tmp)) {
+    int written;
+    if (path == NULL || path[0] == '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    written = snprintf(tmp, sizeof(tmp), "%s", path);
+    if (written < 0 || (size_t)written >= sizeof(tmp)) {
         errno = ENAMETOOLONG;
         return -1;
     }
-    
-    len = strlen(tmp);
-    if (len == 0) {
-        return 0;
+    len = (size_t)written;
+    while (len > 1 && tmp[len - 1] == '/') tmp[--len] = '\0';
+    for (char *cursor = tmp + 1; *cursor; cursor++) {
+        if (*cursor != '/') continue;
+        *cursor = '\0';
+        if (mkdir_component(tmp, mode) != 0) return -1;
+        *cursor = '/';
     }
-
-    // Remove a trailing slash to avoid double-processing the final directory
-    if (tmp[len - 1] == '/') {
-        tmp[len - 1] = '\0';
-    }
-
-    // Traverse the path looking for directory delimiters
-    for (p = tmp + 1; *p; p++) {
-        if (*p == '/') {
-            *p = '\0'; // Temporarily truncate the string
-            
-            // Attempt to create the parent directory segment
-            if (mkdir(tmp, mode) != 0) {
-                if (errno != EEXIST) {
-                    return -1; // Fail if error is something other than "already exists"
-                }
-            }
-            
-            *p = '/'; // Restore the delimiter
-        }
-    }
-
-    // Create the final target directory
-    if (mkdir(tmp, mode) != 0 && errno != EEXIST) {
-        return -1;
-    }
-
-    return 0;
+    return mkdir_component(tmp, mode);
 }
 
 //B to test

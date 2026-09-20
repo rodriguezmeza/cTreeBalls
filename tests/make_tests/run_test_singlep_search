@@ -46,7 +46,7 @@ run_case()
         stepState=1000000 \
         verbose=1 \
         verbose_log=0 \
-        options=compute-HistN,out-m-HistZeta,no-two-balls,no-smooth-pivot \
+        options=compute-HistN,out-m-HistZeta,no-one-ball \
         >"$output/run.log" 2>&1 \
         || fail_with_log "$method ($profile) failed" "$output/run.log"
 }
@@ -133,7 +133,7 @@ print(
 PY
 }
 
-for method in octree-2balls-omp kdtree-2balls-omp balltree-2balls-omp; do
+for method in octree-ggg-omp kdtree-omp balltree-omp; do
     run_case "$DOUBLE_CBALLS" double "$method"
     run_case "$MIXED_CBALLS" mixed "$method"
     compare_case "$method"

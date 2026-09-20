@@ -2,6 +2,7 @@
 
 #include "globaldefs.h"
 #include "kdtree_2balls_tree.h"
+#include "protodefs_kdtree_omp.h"
 
 #ifndef KDTREE_2BALLS_METHOD_NAME
 #define KDTREE_2BALLS_METHOD_NAME "kdtree-2balls-omp"
@@ -79,6 +80,9 @@ static inline int kdtree_2balls_prepare_pivots(
 #define DUAL_NODE_LOG_MULTIPOLE_ENGINE 1
 #define DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE 1
 #define DUAL_NODE_PERSISTENT_PARTIAL_FRONTIER 1
+#ifndef DUAL_NODE_DISTRIBUTED_ENGINE
+#define DUAL_NODE_PIVOT_PROGRESS 1
+#endif
 #endif
 
 #include "../balltree_2balls_omp/search_balltree_2balls_omp.c"
@@ -91,6 +95,45 @@ global int KDTREE_2BALLS_SEARCH_FUNCTION(
         INTEGER pivot_minimum, INTEGER *pivot_maximum,
         int pivot_catalog, int neighbor_catalog)
 {
+#ifdef DUAL_NODE_DISTRIBUTED_ENGINE
+    if (cballs_opt_legacy_one_ball(cmd)) {
+        if (cballs_opt_no_two_balls(cmd)
+            || scanopt(cmd->options, "dual-node-bin-slop")
+            || scanopt(cmd->options, "dual-node-direct-triples")) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: legacy-one-ball cannot be combined with "
+                     "no-two-balls, dual-node-bin-slop, or "
+                     "dual-node-direct-triples",
+                     cmd->searchMethod);
+            return FAILURE;
+        }
+        verb_print(cmd->verbose,
+                   "%s: dispatching to the distributed kdtree legacy kernel\n",
+                   cmd->searchMethod);
+        return searchcalc_kdtree_omp(
+            cmd, gd, body_table, body_count, pivot_minimum, pivot_maximum,
+            pivot_catalog, neighbor_catalog);
+    }
+#else
+    if (cballs_opt_legacy_one_ball(cmd)) {
+        if (cballs_opt_no_two_balls(cmd)
+            || scanopt(cmd->options, "dual-node-bin-slop")
+            || scanopt(cmd->options, "dual-node-direct-triples")) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: legacy-one-ball cannot be combined with "
+                     "no-two-balls, dual-node-bin-slop, or "
+                     "dual-node-direct-triples",
+                     cmd->searchMethod);
+            return FAILURE;
+        }
+        verb_print(cmd->verbose,
+                   "%s: dispatching to the kdtree-omp legacy kernel\n",
+                   cmd->searchMethod);
+        return searchcalc_kdtree_omp(
+            cmd, gd, body_table, body_count, pivot_minimum, pivot_maximum,
+            pivot_catalog, neighbor_catalog);
+    }
+#endif
 #ifdef SMOOTHPIVOT
     if (cballs_opt_smooth_pivot(cmd)
         && scanopt(cmd->options, "dual-node-direct-triples")) {

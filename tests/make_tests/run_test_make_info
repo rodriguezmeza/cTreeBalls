@@ -91,7 +91,6 @@ if [[ "${smooth_setting}" == 1 ]]; then
         'smooth-pivot policy: compiled=yes' \
         'default=enabled' \
         'opt-out=options=no-smooth-pivot' \
-        'octree-sincos-omp' \
         'kdtree-2balls-omp' \
         'kdtree-2balls-mpi' \
         'balltree-shear-sphere-2balls-omp'; do
@@ -111,6 +110,20 @@ elif [[ "${smooth_setting}" == 0 ]]; then
 else
     printf 'FAIL: make-info did not publish a parseable SMOOTHPIVOTON value\n' >&2
     exit 1
+fi
+
+if grep -Eq '^[[:space:]]+OCTREEGGGOMPON[[:space:]]+= 1$' "${output}"; then
+    for expected in \
+        'GGG frontier policy: target_tasks=' \
+        'min_active=' \
+        'maximum_pivot_span=' \
+        'GGG window policy: raw no-output 3PCF skips count/window multipoles'; do
+        if ! grep -Fq -- "${expected}" "${output}"; then
+            printf 'FAIL: make-info is missing GGG policy text: %s\n' \
+                "${expected}" >&2
+            exit 1
+        fi
+    done
 fi
 
 printf 'PASS: make-info publishes every configurable Make switch.\n'

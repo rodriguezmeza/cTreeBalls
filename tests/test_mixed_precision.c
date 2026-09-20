@@ -5,7 +5,10 @@
 #include <string.h>
 
 #include "globaldefs.h"
-#if defined(KDTREE2BALLSOMP) || defined(BALLTREE2BALLSOMP)
+#ifdef KDTREEOMP
+#include "kdtree.h"
+#endif
+#ifdef BALLTREEOMP
 #include "fcfc_balltree.h"
 #endif
 
@@ -34,11 +37,17 @@ _Static_assert(sizeof(((cell *)0)->size) == sizeof(cballs_storage_real),
 #ifdef SINGLEP
 _Static_assert(sizeof(cballs_storage_real) == sizeof(float),
                "SINGLEP must select float geometry storage");
-#if defined(KDTREE2BALLSOMP) || defined(BALLTREE2BALLSOMP)
+#ifdef KDTREEOMP
+_Static_assert(sizeof(((kd_leaf_point *)0)->pos[0]) == sizeof(float),
+               "packed KD coordinates must use SINGLEP storage");
+_Static_assert(sizeof(((kd_leaf_point *)0)->kappa) == sizeof(real),
+               "packed KD fields must retain computation precision");
+#endif
+#ifdef BALLTREEOMP
 _Static_assert(sizeof(((fcfc_ballpoint *)0)->pos[0]) == sizeof(float),
-               "packed dual-node coordinates must use SINGLEP storage");
+               "packed ball coordinates must use SINGLEP storage");
 _Static_assert(sizeof(((fcfc_ballpoint *)0)->kappa) == sizeof(real),
-               "packed dual-node fields must retain computation precision");
+               "packed ball fields must retain computation precision");
 #endif
 #else
 _Static_assert(sizeof(cballs_storage_real) == sizeof(double),

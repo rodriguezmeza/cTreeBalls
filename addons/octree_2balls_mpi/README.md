@@ -38,6 +38,26 @@ mpiexec -n 4 ./cballs parameters.ini \
 The cubic `dual-node-direct-triples` validation path is intentionally not
 distributed; run it with `octree-2balls-omp` on a small catalog.
 
+## One-ball compatibility
+
+`options=legacy-one-ball` switches this search name to the privately linked
+distributed one-ball implementation. It builds the full threaded native octree and
+adaptive frontier and uses the dynamic MPI scheduler, histogram
+reductions, root-only output, and finalizer. The native two-ball MPI runtime is
+not initialized in this mode.
+
+`behavior-ball`/`no-one-ball`, `compute-HistN`, masks, normalization, complex
+edge correction, `ggg-full-window`, and `ggg-profile` retain their GGG
+meanings. With `SMOOTHPIVOTON=1`, smoothing is enabled by default and
+`no-smooth-pivot` disables it. `only-2pcf` is supported; `only-3pcf` is
+rejected because GGG does not provide a true skip-2PCF execution path. Do not
+combine compatibility mode with `no-two-balls`, `dual-node-bin-slop`, or
+`dual-node-direct-triples`.
+
+The compatibility objects are private dependencies of this addon, so a narrow
+build with `OCTREEGGGOMPON=0 OCTREEGGGMPION=0` still supports the alias without
+registering either public GGG search name.
+
 Run the regression test with:
 
 ```sh

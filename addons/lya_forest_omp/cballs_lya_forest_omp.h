@@ -4,6 +4,9 @@
 case 169:
 case 170:
 case 171:
+case LYAFORESTLOSTREE2PCFMETHOD:
+case LYAFORESTLOSTREE3PCFMETHOD:
+case LYAFORESTLOSTREE2PCF3PCFMETHOD:
     if (gd->ninfiles != 1) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s requires exactly one flattened Lyman-alpha catalog",
@@ -20,8 +23,8 @@ case 171:
         return FAILURE;
     if (searchcalc_lya_forest_omp(
             cmd, gd, bodytable, gd->nbodyTable, 1, gd->nbodyTable, ifile,
-            gd->searchMethod_int != 170,
-            gd->searchMethod_int != 169) == FAILURE)
+            lya_forest_method_kind(cmd->searchMethod) != 1,
+            lya_forest_method_kind(cmd->searchMethod) != 0) == FAILURE)
         return FAILURE;
     break;
 

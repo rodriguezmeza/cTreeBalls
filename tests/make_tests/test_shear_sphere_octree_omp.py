@@ -6,7 +6,9 @@ from __future__ import annotations
 import ctypes
 import os
 import re
+import sys
 import tempfile
+from unittest.mock import patch
 
 import numpy as np
 
@@ -23,7 +25,7 @@ FAST_OPTIONS = "no-out-Hist,no-smooth-pivot"
 SMOOTH_OPTIONS = "no-out-Hist,smooth-pivot,no-one-ball"
 SMOOTH_RMIN_ARCMIN = 40.0
 ENGINE = os.environ.get(
-    "CBALLS_SHEAR_SPHERE_ENGINE", "octree-shear-sphere-2balls-omp",
+    "CBALLS_SHEAR_SPHERE_ENGINE", "octree-shear-sphere-omp",
 )
 DUAL_NODE_TWO_BALLS = ENGINE in {
     "octree-shear-sphere-2balls-omp",
@@ -104,10 +106,11 @@ def geometry_and_transport(pivot, neighbor, gamma):
     return chord, phase, gamma*rotation
 
 
-def radial_bin(distance):
+def radial_bin(distance, use_log=False):
     if not RMIN < distance < RMAX:
         return None
-    result = int((distance - RMIN)/(RMAX - RMIN)*BINS)
+    result = int(np.log10(distance/RMIN)/(np.log10(RMAX)-np.log10(RMIN))*BINS) \
+        if use_log else int((distance - RMIN)/(RMAX - RMIN)*BINS)
     return result if 0 <= result < BINS else None
 
 
@@ -152,7 +155,7 @@ def smooth_pivot_state(positions, gamma, weights, smooth_radius):
     return active, pivot_gamma, pivot_weight
 
 
-def oracle(positions, gamma, weights, smooth_radius=None):
+def oracle(positions, gamma, weights, smooth_radius=None, use_log=False):
     multipoles = 2*NMAX + 1
     denominator_modes = 4*NMAX + 1
     ring_max = max(2*NMAX, NMAX + 3)
@@ -186,7 +189,7 @@ def oracle(positions, gamma, weights, smooth_radius=None):
             distance, phase, transported_gamma = geometry_and_transport(
                 positions[pivot], positions[neighbor], gamma[neighbor],
             )
-            bin_index = radial_bin(distance)
+            bin_index = radial_bin(distance, use_log)
             if bin_index is None:
                 continue
             weighted_gamma = weights[neighbor]*transported_gamma
@@ -255,14 +258,15 @@ def oracle(positions, gamma, weights, smooth_radius=None):
 
 
 def run_native_catalogs(catalogs, threads, options=OPTIONS, theta=1.0,
-                        rsmooth=None, masks=None, engine=None):
+                        rsmooth=None, masks=None, engine=None, use_log=False,
+                        catalog_order=None, collect_results=True, nsmooth=None):
     model = cballs()
     parameters = {
         "searchMethod": ENGINE if engine is None else engine,
-        "iCatalogs": ",".join(str(index + 1)
-                                for index in range(len(catalogs))),
+        "iCatalogs": catalog_order or ",".join(str(index + 1)
+                                               for index in range(len(catalogs))),
         "usePeriodic": "false",
-        "useLogHist": "false",
+        "useLogHist": "true" if use_log else "false",
         "rangeN": RMAX,
         "rminHist": RMIN,
         "sizeHistN": BINS,
@@ -278,6 +282,8 @@ def run_native_catalogs(catalogs, threads, options=OPTIONS, theta=1.0,
     }
     if rsmooth is not None:
         parameters["rsmooth"] = str(rsmooth)
+    if nsmooth is not None:
+        parameters["nsmooth"] = nsmooth
     model.set(parameters)
     for catalog, (positions, gamma, weights) in enumerate(catalogs):
         keyword_arguments = {
@@ -291,6 +297,8 @@ def run_native_catalogs(catalogs, threads, options=OPTIONS, theta=1.0,
         model.set_catalog(positions, **keyword_arguments)
     try:
         model.Run(level=["MainLoop"])
+        if not collect_results:
+            return {}
         option_tokens = set(options.split(","))
         result = {}
         if "only-3pcf" not in option_tokens:
@@ -311,10 +319,10 @@ def run_native_catalogs(catalogs, threads, options=OPTIONS, theta=1.0,
 
 
 def run_native(positions, gamma, weights, threads, options=OPTIONS, theta=1.0,
-               rsmooth=None, mask=None, engine=None):
+               rsmooth=None, mask=None, engine=None, use_log=False):
     return run_native_catalogs(
         [(positions, gamma, weights)], threads, options, theta, rsmooth,
-        None if mask is None else [mask], engine,
+        None if mask is None else [mask], engine, use_log,
     )
 
 
@@ -434,6 +442,77 @@ def test_spherical_oracle_and_determinism():
         )
 
 
+def test_spherical_log_bins_and_order_switches():
+    positions, gamma, weights = fixture(60)
+    expected = oracle(positions, gamma, weights, use_log=True)
+    for selector in ("", ",only-2pcf", ",only-3pcf"):
+        result = run_native(positions, gamma, weights, 1,
+                            options=OPTIONS+selector, use_log=True)
+        for name, values in result.items():
+            # Poorly conditioned, sparsely populated coupling matrices can
+            # amplify floating-point roundoff; raw moments test the traversal.
+            if name != "multipoles":
+                roundoff = max(4e-13, 64*np.finfo(float).eps
+                               * np.max(np.abs(expected[name])))
+                np.testing.assert_allclose(values, expected[name],
+                                           rtol=4e-12, atol=roundoff, err_msg=name)
+        threaded = run_native(positions, gamma, weights, 4,
+                              options=OPTIONS+selector, use_log=True)
+        assert_results_identical(result, threaded, "log-bin thread determinism")
+        narrow = run_native(positions, gamma, weights, 1, theta=0.001,
+                            options=FAST_OPTIONS+selector, use_log=True)
+        for name in result:
+            np.testing.assert_allclose(narrow[name], result[name],
+                                       rtol=4e-12, atol=4e-13, err_msg=name)
+
+
+def test_spherical_multipole_support_limits():
+    positions, gamma, weights = fixture(45)
+    for nmax in (2, 3, 4, 5, 8):
+        with patch.object(sys.modules[__name__], "NMAX", nmax):
+            expected = oracle(positions, gamma, weights)
+            result = run_native(positions, gamma, weights, 1,
+                                options=OPTIONS+",only-3pcf")
+            for name in ("upsilon", "window"):
+                roundoff = max(4e-13, 64*np.finfo(float).eps
+                               * np.max(np.abs(expected[name])))
+                np.testing.assert_allclose(result[name], expected[name],
+                                           rtol=4e-12, atol=roundoff,
+                                           err_msg=f"nmax={nmax}: {name}")
+
+
+def test_binary_coincident_centers_and_catalog_reuse():
+    if not ENGINE.startswith(("kdtree-", "balltree-")):
+        return
+    first = fixture(80)
+    for use_log in (False, True):
+        expected = oracle(*first, use_log=use_log)
+        for options in (OPTIONS, FAST_OPTIONS+",no-two-balls",
+                        FAST_OPTIONS+",dual-node-bin-slop"):
+            for threads in (1, 4):
+                cross = run_native_catalogs(
+                    [first, first], threads, options=options+",only-2pcf",
+                    theta=0.001, use_log=use_log)
+                for name in ("xi_plus", "xi_minus", "xi_weight"):
+                    np.testing.assert_allclose(cross[name], expected[name],
+                                               rtol=4e-12, atol=4e-13,
+                                               err_msg=name)
+    _, profile = run_native_with_profile(*first, 1, OPTIONS+",only-3pcf")
+    assert "unique_trees=1" in profile, profile
+
+    second = fixture(39)
+    distinct = run_native_catalogs([first, second, first], 1,
+                                  options=OPTIONS+",only-3pcf")
+    reused = run_native_catalogs([first, second, first], 1,
+                                options=OPTIONS+",only-3pcf",
+                                catalog_order="1,2,1")
+    for name in ("upsilon", "window"):
+        roundoff = max(4e-13, 64*np.finfo(float).eps
+                       * np.max(np.abs(distinct[name])))
+        np.testing.assert_allclose(reused[name], distinct[name],
+                                   rtol=4e-12, atol=roundoff, err_msg=name)
+
+
 def test_spherical_accepted_cell_transport():
     positions, gamma, weights = fixture(600)
     exact = run_native(
@@ -521,6 +600,76 @@ def test_spherical_runtime_order_switches():
             values, combined[name], rtol=4.0e-12, atol=4.0e-13,
             err_msg=f"only-3pcf changed {name}",
         )
+
+
+def test_spherical_two_ball_legacy_compatibility():
+    if ENGINE != "octree-shear-sphere-2balls-omp":
+        return
+
+    positions, gamma, weights = fixture(47)
+    standard_engine = "octree-shear-sphere-omp"
+    has_public_legacy = search_method_id(standard_engine) >= 0
+    cases = (
+        ("combined", OPTIONS, None),
+        ("only-2pcf", f"{FAST_OPTIONS},only-2pcf", None),
+        ("only-3pcf", f"{FAST_OPTIONS},only-3pcf", None),
+    )
+    for label, options, rsmooth in cases:
+        compatibility = run_native(
+            positions, gamma, weights, 1,
+            options=f"{options},legacy-one-ball", theta=0.05,
+            rsmooth=rsmooth,
+        )
+        if has_public_legacy:
+            reference = run_native(
+                positions, gamma, weights, 1, options=options, theta=0.05,
+                rsmooth=rsmooth, engine=standard_engine,
+            )
+            assert_results_identical(reference, compatibility, label)
+
+    smooth_positions, smooth_gamma, smooth_weights = smooth_fixture(12)
+    smooth_compatibility = run_native(
+        smooth_positions, smooth_gamma, smooth_weights, 1,
+        options=f"{SMOOTH_OPTIONS},legacy-one-ball", theta=0.05,
+        rsmooth=SMOOTH_RMIN_ARCMIN,
+    )
+    if has_public_legacy:
+        smooth_reference = run_native(
+            smooth_positions, smooth_gamma, smooth_weights, 1,
+            options=SMOOTH_OPTIONS, theta=0.05,
+            rsmooth=SMOOTH_RMIN_ARCMIN, engine=standard_engine,
+        )
+        assert_results_identical(
+            smooth_reference, smooth_compatibility, "smooth-pivot",
+        )
+
+    mask = np.ones(positions.shape[0], dtype=np.uint8)
+    mask[::4] = 0
+    edge_options = (
+        f"{OPTIONS},read-mask,edge-corrections,no-normalize-HistZeta"
+    )
+    edge_compatibility = run_native(
+        positions, gamma, weights, 1,
+        options=f"{edge_options},legacy-one-ball", theta=0.05, mask=mask,
+    )
+    if has_public_legacy:
+        edge_reference = run_native(
+            positions, gamma, weights, 1, options=edge_options, theta=0.05,
+            mask=mask, engine=standard_engine,
+        )
+        assert_results_identical(
+            edge_reference, edge_compatibility, "masked edge correction",
+        )
+
+    threaded = run_native(
+        positions, gamma, weights, min(4, os.cpu_count() or 1),
+        options=f"{OPTIONS},legacy-one-ball", theta=0.05,
+    )
+    serial = run_native(
+        positions, gamma, weights, 1,
+        options=f"{OPTIONS},legacy-one-ball", theta=0.05,
+    )
+    assert_results_identical(serial, threaded, "compatibility determinism")
 
 
 def test_spherical_smooth_pivot_transport():
@@ -711,14 +860,20 @@ def test_spherical_contract_failures():
 
 if __name__ == "__main__":
     test_spherical_oracle_and_determinism()
+    test_spherical_log_bins_and_order_switches()
+    test_spherical_multipole_support_limits()
+    test_binary_coincident_centers_and_catalog_reuse()
     test_spherical_accepted_cell_transport()
     test_spherical_octant_frontier_parallelism()
     test_spherical_runtime_order_switches()
+    test_spherical_two_ball_legacy_compatibility()
     test_spherical_smooth_pivot_transport()
     test_spherical_smooth_radius_contract()
     test_spherical_mask_equivalence()
     test_spherical_contract_failures()
+    compatibility = ", compatibility" \
+        if ENGINE == "octree-shear-sphere-2balls-omp" else ""
     print(
-        f"PASS: {ENGINE} full-sky spin-2 oracle, smoothing, "
+        f"PASS: {ENGINE} full-sky spin-2 oracle{compatibility}, smoothing, "
         "contracts, and determinism"
     )

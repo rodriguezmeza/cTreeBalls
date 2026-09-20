@@ -39,16 +39,25 @@ For the addon methods, ``TWOPCFON`` and ``TPCFON`` compile the two correlation o
 ``only-2pcf`` and ``only-3pcf`` select work at runtime. The default dual-node
 acceptance requires the complete pair-distance interval to remain inside one
 radial bin. ``dual-node-bin-slop`` enables the less conservative Log/Linear
-bin-position policy, and ``no-two-balls`` requests exact body pairs.
+bin-position policy, and ``no-two-balls`` requests exact body pairs for 2PCF.
+For exact unsmoothed scalar 3PCF across engines use
+``no-one-ball,no-two-balls,no-smooth-pivot``: native octree
+3PCF can still accept neighbor cells with ``no-two-balls`` alone.
+``BALLS4SCANLEVON=1`` controls scheduling and does not need to be disabled for
+exact work. Positive ``stepState`` with verbosity enabled reports completed
+body pivots for all three scalar OpenMP two-ball engines.
 
 All six methods accept masks and complex scalar 3PCF edge correction. Use::
 
    options=read-mask,edge-corrections,no-normalize-HistZeta
 
 ``weights-norm`` applies catalog weights to signal and window moments. Empty or
-singular correction systems publish finite zero. The KD and PCA ball-tree
+singular scalar correction systems publish NaN with validity diagnostics,
+not a measured zero. The KD and PCA ball-tree
 methods support the compiled smooth-pivot default; ``no-smooth-pivot`` disables
-it. Native octree dual-node mode does not use smooth pivots.
+it. Native octree dual node mode does not use smooth pivots; its
+``legacy-one-ball`` compatibility mode does. Compatibility kernels are shared
+implementation support, not additional registered addons.
 
 Full-Sky Shear Methods
 ----------------------
@@ -87,8 +96,8 @@ spatial order after the parallel region for deterministic results.  The
 Lyman-alpha Forest Methods
 --------------------------
 
-``LYAFORESTOMPON=1`` enables nine OpenMP names. ``LYAFORESTMPION=1`` enables
-the eight MPI counterparts; the same-LOS 2PCF is OpenMP only.
+``LYAFORESTOMPON=1`` enables twelve OpenMP names. ``LYAFORESTMPION=1`` enables
+eight MPI names; the same-LOS and three LOS-tree methods are OpenMP only.
 
 The families are:
 
@@ -100,6 +109,11 @@ The families are:
   scans;
 * ``lya-1d-tree-same-los-2pcf-omp`` for an equal-forest average of within-LOS
   pairs.
+* ``lya-los-tree-2pcf-omp``, ``lya-los-tree-3pcf-omp`` and
+  ``lya-los-tree-2pcf-3pcf-omp`` use 3D forest discovery followed by per-forest
+  radial trees. They preserve transverse separation and return the same
+  estimators as the corresponding anisotropic 3D methods, not radial-only
+  statistics.
 
 Input is ``x y z delta weight forest_id`` or an in-memory
 ``set_forest_catalog`` call. General forest pairs exclude equal IDs and forest

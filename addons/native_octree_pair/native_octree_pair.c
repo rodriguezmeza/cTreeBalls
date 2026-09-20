@@ -930,15 +930,7 @@ static int native_pair_run_tasks(
             goto cleanup;
         }
         for (int bin = 1; bin <= cmd->sizeHistN; bin++) gd->histNN[bin] *= 2.0;
-#ifdef LONGINT
-        if (tree1->npoint > INT_MAX) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s: and-CF body count exceeds int",
-                     native_pair_method(cmd));
-            goto cleanup;
-        }
-#endif
-        if (search_compute_HistN(cmd, gd, (int)tree1->npoint) == FAILURE)
+        if (search_compute_HistN(cmd, gd, tree1->npoint) == FAILURE)
             goto cleanup;
     }
     status = SUCCESS;

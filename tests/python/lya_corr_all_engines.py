@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run active cTreeBalls Ly-alpha forest engines on one retained catalog.
 
-DESI/PICCA FITS, six-column lya-ascii, NPZ and synthetic input are supported.
+DESI and eBOSS/PICCA FITS, six-column lya-ascii, NPZ and synthetic input are supported.
 MPI rank zero reads once, broadcasts arrays once, and all ranks register a
 forest catalog with cyballs. Radial, anisotropic 3D, and multipole estimators
 are distinct.
@@ -25,8 +25,9 @@ import time
 import numpy as np
 
 from kappa_corr_all_engines import (
-    DEFAULT_CBALLS, broadcast_array, discover_cython_methods, get_mpi_comm,
-    flatten_radial_matrix, inspect_cballs_runtime, mpi_environment_size,
+    broadcast_array, discover_cython_methods, get_mpi_comm,
+    flatten_radial_matrix, mpi_environment_size, aggregate_rank_timings,
+    _timing_metadata, timing_summary, write_timing_report,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -62,6 +63,9 @@ LYA_ENGINES = {
     )
 }
 LYA_ENGINES.update({
+    "lya-los-tree-2pcf-omp": EngineSpec(False, (2,), False, tree=True),
+    "lya-los-tree-3pcf-omp": EngineSpec(False, (3,), False, tree=True),
+    "lya-los-tree-2pcf-3pcf-omp": EngineSpec(False, (2, 3), False, tree=True),
     "octree-3pcf-3d-omp": EngineSpec(False, (3,), False, family="multipole"),
     "octree-3pcf-3d-mpi": EngineSpec(False, (3,), True, family="multipole"),
     "lya-1d-tree-same-los-2pcf-omp": EngineSpec(
@@ -150,6 +154,22 @@ class RunConfig:
     max_hist_mib: float = 1024.0
     plots: bool = True
     flatten_plots: bool = True
+    lya2pcf_source: Path | None = None
+    reference_covariance: bool = False
+    reference_nside: int = 32
+    reference_timeout: float = 0.0
+    rtol: float = 1e-8
+    atol: float = 1e-12
+    relative_floor: float = 1e-12
+    fail_on_mismatch: bool = False
+    analysis: bool = True
+    covariance: Path | None = None
+    distortion_matrix: Path | None = None
+    model_correlation: Path | None = None
+    wedge_bins: int = 50
+    wedge_mu_edges: tuple[float, ...] = (0., .5, .8, .95, 1.)
+    wedge_subsamples: int = 10
+    wedge_r_max: float | None = None
 
     def validate(self):
         if not self.engines or any(e not in LYA_ENGINES for e in self.engines):
@@ -168,6 +188,44 @@ class RunConfig:
             raise ValueError("require 0 <= multipole_rmin < r3_max")
         if not math.isfinite(math.hypot(self.rp_max, self.rt_max)):
             raise ValueError("separation limits overflow")
+        for name in ("rtol", "atol", "relative_floor", "reference_timeout"):
+            if not math.isfinite(getattr(self, name)) or getattr(self, name) < 0:
+                raise ValueError(f"{name} must be finite and non-negative")
+        if self.reference_nside < 1 or self.reference_nside > 8192 or self.reference_nside & (self.reference_nside-1):
+            raise ValueError("reference_nside must be a power of two in [1, 8192]")
+        if not 1 <= self.wedge_bins <= 10000 or not 1 <= self.wedge_subsamples <= 100:
+            raise ValueError("require wedge_bins in [1, 10000] and wedge_subsamples in [1, 100]")
+        edges = np.asarray(self.wedge_mu_edges)
+        if (edges.ndim != 1 or not 2 <= len(edges) <= 17 or not np.isfinite(edges).all()
+                or edges[0] != 0 or edges[-1] != 1 or np.any(np.diff(edges) <= 0)):
+            raise ValueError("wedge_mu_edges must increase strictly from 0 to 1 (at most 16 wedges)")
+        if self.wedge_r_max is not None and (not math.isfinite(self.wedge_r_max) or self.wedge_r_max <= 0):
+            raise ValueError("wedge_r_max must be positive and finite")
+        has_2pcf = any(2 in LYA_ENGINES[e].orders for e in self.engines)
+        has_3d_2pcf = any(2 in LYA_ENGINES[e].orders and not LYA_ENGINES[e].radial for e in self.engines)
+        if self.lya2pcf_source:
+            if not has_2pcf:
+                raise ValueError("lya2pcf reference requires a selected 2PCF engine; no upstream 3PCF reference is available")
+            self.lya2pcf_source = Path(self.lya2pcf_source).expanduser().resolve()
+            for name in ("parameters.py", "correlation_procedures_cpu.py", "post_processing.py"):
+                if not (self.lya2pcf_source/name).is_file():
+                    raise ValueError(f"--lya2pcf-source is missing {name}")
+        if self.reference_covariance and (not self.lya2pcf_source or not has_3d_2pcf):
+            raise ValueError("reference covariance requires --lya2pcf-source and a 3D 2PCF engine")
+        if bool(self.distortion_matrix) != bool(self.model_correlation):
+            raise ValueError("use --distortion-matrix together with --model-correlation (forward modelling)")
+        if (self.covariance or self.distortion_matrix or self.reference_covariance) and (not self.analysis or not has_3d_2pcf):
+            raise ValueError("covariance/distortion analysis requires a 3D 2PCF engine and enabled analysis")
+        if self.analysis and has_3d_2pcf:
+            from lya_analysis import analysis_workspace_bytes
+            if analysis_workspace_bytes(self) > self.max_hist_mib*2**20:
+                raise ValueError("2PCF analysis workspace exceeds --max-hist-mib; reduce bins or increase budget")
+        for name in ("covariance", "distortion_matrix", "model_correlation"):
+            if getattr(self, name):
+                path = Path(getattr(self, name)).expanduser().resolve()
+                if not path.is_file():
+                    raise ValueError(f"{name}: input file does not exist: {path}")
+                setattr(self, name, path)
         for engine in self.engines:
             spec = LYA_ENGINES[engine]
             bins2 = self.rp_bins * (1 if spec.radial else self.rt_bins)
@@ -236,7 +294,8 @@ def expand_inputs(patterns):
 
 
 def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
-              max_forests=None, pixel_stride=1, delta_field="auto"):
+              max_forests=None, pixel_stride=1, delta_field="auto", project_delta=False,
+              redshift_weight_exponent=0., weight_z_ref=2.25):
     """Read the DESI DR1 image layout; preserve delta and supplied weights.
 
     Flat LambdaCDM with Tcmb0=0 converts absorption redshift to Mpc/h. This is
@@ -246,6 +305,7 @@ def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
     from astropy.cosmology import FlatLambdaCDM
     from astropy.io import fits
     from astropy import units as u
+    from lya_fits import preprocess_forest
 
     if not (0 < omega_m < 1 and math.isfinite(h) and h > 0):
         raise ValueError("require 0 < omega_m < 1 and finite h > 0")
@@ -307,8 +367,11 @@ def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
                 if not len(indices):
                     continue
                 los = np.array([np.cos(dec)*np.cos(ra), np.cos(dec)*np.sin(ra), np.sin(dec)])
-                pieces.append((chi[indices, None]*los, np.array(data[indices]),
-                               np.array(weight[indices]),
+                retained_delta, retained_weight = preprocess_forest(
+                    data[indices], weight[indices], np.log10(wave[indices]),
+                    project_delta=project_delta, redshift_weight_exponent=redshift_weight_exponent,
+                    weight_z_ref=weight_z_ref)
+                pieces.append((chi[indices, None]*los, retained_delta, retained_weight,
                                np.full(len(indices), identifier, dtype=np.int64)))
                 loaded += 1
             provenance.append(dict(path=str(path), delta_field=field_name,
@@ -322,7 +385,10 @@ def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
         cosmology=dict(model="FlatLambdaCDM", omega_m=omega_m, h=h, Tcmb0=0),
         wavelength_lya_angstrom=LYA_WAVELENGTH, z_min=z_min, z_max=z_max,
         max_forests=max_forests, pixel_stride=pixel_stride,
-        weights="input WEIGHT unchanged; zero/negative/nonfinite pixels excluded",
+        project_delta=project_delta, projection_domain="retained pixels after cuts/stride",
+        redshift_weight_exponent=redshift_weight_exponent, weight_z_ref=weight_z_ref,
+        weights=("input WEIGHT unchanged; zero/negative/nonfinite pixels excluded" if redshift_weight_exponent == 0
+                 else "input WEIGHT times ((1+z)/(1+z_ref))**exponent"),
     )).normalized()
 
 
@@ -428,30 +494,41 @@ def read_products(root, engine):
     return result
 
 
-def compare_products(reference, candidate, key):
+def compare_products(reference, candidate, key, *, relative_floor=0., rtol=1e-8, atol=1e-12):
     ndim = PRODUCTS[key][1]
     def keyed(table):
-        return {tuple(row[:ndim].astype(int)): row[-3:] for row in table}
+        values = {tuple(row[:ndim].astype(int)): row[-3:] for row in table}
+        if len(values) != len(table):
+            raise ValueError(f"{key}: duplicate histogram bin indices")
+        return values
     left, right = keyed(reference), keyed(candidate)
     keys = sorted(set(left) | set(right))
     a = np.array([left.get(k, np.zeros(3)) for k in keys]).reshape(-1, 3)
     b = np.array([right.get(k, np.zeros(3)) for k in keys]).reshape(-1, 3)
     difference = b - a
     relative = np.divide(difference[:, 0], a[:, 0], out=np.full(len(keys), np.nan),
-                         where=a[:, 0] != 0)
+                         where=np.abs(a[:, 0]) > relative_floor)
     finite = np.isfinite(relative)
     metrics = dict(max_abs_correlation=float(np.max(abs(difference[:, 0]), initial=0)),
                    max_abs_numerator=float(np.max(abs(difference[:, 1]), initial=0)),
                    max_abs_denominator=float(np.max(abs(difference[:, 2]), initial=0)),
                    max_abs_relative=float(np.max(abs(relative[finite]))) if finite.any() else None,
                    undefined_relative_bins=int((~finite).sum()),
-                   occupied_bins=int(np.count_nonzero((a[:, 2] > 0) | (b[:, 2] > 0))))
+                   occupied_bins=int(np.count_nonzero((a[:, 2] > 0) | (b[:, 2] > 0))),
+                   occupancy_mismatches=int(np.count_nonzero((a[:, 2] > 0) != (b[:, 2] > 0))),
+                   passed_correlation=bool(np.allclose(b[:, 0], a[:, 0], rtol=rtol, atol=atol)),
+                   passed_raw_sums=bool(np.allclose(b[:, 1:], a[:, 1:], rtol=rtol, atol=atol)),
+                   rtol=rtol, atol=atol, relative_floor=relative_floor)
+    metrics["passed"] = (metrics["passed_correlation"] and metrics["passed_raw_sums"]
+                         and metrics["occupancy_mismatches"] == 0)
     rows = np.column_stack((np.asarray(keys).reshape(-1, ndim), a[:, 0], b[:, 0],
                             difference[:, 0], relative))
     return metrics, rows
 
 
 def projected_plot_data(table, key, config):
+    if key == "multipole_3pcf":
+        table = table[table[:, 0] == 0]
     if key in ("1d_2pcf", "1d_same_los_2pcf"):
         shape = (config.rp_bins,)
     elif key == "3d_2pcf":
@@ -483,12 +560,14 @@ def make_plots(results, config):
                    if key in r["products"]]
         if not members:
             continue
-        fig, axes = plt.subplots(1, len(members), figsize=(5*len(members), 4), squeeze=False)
+        columns = min(3, len(members))
+        rows = math.ceil(len(members)/columns)
+        fig, axes = plt.subplots(rows, columns, figsize=(5*columns, 4*rows), squeeze=False)
         fields = [projected_plot_data(table, key, config) for _, table in members]
         finite_parts = [v[np.isfinite(v)] for v in fields if np.any(np.isfinite(v))]
         finite = np.concatenate(finite_parts) if finite_parts else np.array([1e-15])
         limit = float(np.max(abs(finite), initial=1e-15))
-        for ax, (name, _), values in zip(axes[0], members, fields):
+        for ax, (name, _), values in zip(axes.flat, members, fields):
             if values.ndim == 1:
                 ax.plot((np.arange(config.rp_bins)+.5)*config.rp_max/config.rp_bins, values)
                 ax.set(xlabel="|chi_j - chi_i| [Mpc/h]", ylabel="xi")
@@ -508,8 +587,10 @@ def make_plots(results, config):
                 ax.set(xlabel=labels[0]+" [Mpc/h]", ylabel=labels[1]+" [Mpc/h]")
                 fig.colorbar(plot, ax=ax, label="xi" if "2pcf" in key else "zeta")
             ax.set_title(name, fontsize=10)
-        title = key + (" (angular/multipole-summed numerator / denominator)"
-                       if key in ("3d_3pcf", "multipole_3pcf") else "")
+        for ax in list(axes.flat)[len(members):]:
+            ax.set_visible(False)
+        title = key + (" (angular-summed numerator / denominator)" if key == "3d_3pcf"
+                       else " (ell=0 monopole)" if key == "multipole_3pcf" else "")
         fig.suptitle(title)
         fig.tight_layout()
         path = config.output_dir / f"{key}.png"
@@ -526,7 +607,7 @@ def make_plots(results, config):
                 ax.axvline(boundary - 0.5, color="0.82", linewidth=0.55)
             ax.set(
                 xlabel="flattened radial-bin index (bin 1 major, bin 2 minor)",
-                ylabel="zeta", title=f"{key}: flattened radial-bin matrix",
+                ylabel="zeta", title=title+": flattened radial-bin matrix",
             )
             ax.grid(True, axis="y", linestyle=":", alpha=0.45)
             ax.legend(fontsize=8)
@@ -538,7 +619,7 @@ def make_plots(results, config):
     return paths
 
 
-def run_engine_suite(catalog, config, comm=None, runtime_info=None):
+def run_engine_suite(catalog, config, comm=None):
     """Retain one NumPy catalog per process; return root-only result tables."""
     if comm is None:
         comm = get_mpi_comm(
@@ -575,57 +656,93 @@ def run_engine_suite(catalog, config, comm=None, runtime_info=None):
             collective(comm, prepare, root_only=True)
             spec = LYA_ENGINES[engine]
             participates = spec.mpi or comm.rank == 0
-            collective(comm, lambda: balls.set(engine_parameters(config, engine, root))
-                       if participates else None)
+            setup_wall = setup_cpu = compute_wall = compute_cpu = native_cpu = 0.0
+            def setup():
+                nonlocal setup_wall, setup_cpu
+                if participates:
+                    wall, cpu = time.perf_counter(), time.process_time()
+                    balls.set(engine_parameters(config, engine, root))
+                    balls.Run(level=["SetNumberThreads"])
+                    setup_wall, setup_cpu = time.perf_counter()-wall, time.process_time()-cpu
+            collective(comm, setup)
             comm.barrier()
             if comm.rank == 0:
                 print(f"Running {engine}: {catalog.nbody} pixels, {forest_count} forests, "
                       f"{comm.size if spec.mpi else 1} rank(s) x {config.threads} threads",
                       flush=True)
             started = time.perf_counter()
+            def compute():
+                nonlocal compute_wall, compute_cpu, native_cpu
+                if participates:
+                    wall, cpu = time.perf_counter(), time.process_time()
+                    balls.Run(level=["MainLoop"])
+                    compute_wall, compute_cpu = time.perf_counter()-wall, time.process_time()-cpu
+                    native_cpu = float(balls.getCPUTime())
             try:
-                collective(comm, lambda: balls.Run(level=["MainLoop"]) if participates else None)
+                collective(comm, compute)
             finally:
                 collective(comm, lambda: balls.struct_cleanup() if participates else None)
             elapsed = max(comm.allgather(time.perf_counter() - started))
+            rank_timing = _timing_metadata(
+                setup_wall, setup_cpu, compute_wall, compute_cpu,
+                "cTreeBalls parameter/thread setup plus MainLoop including native output; "
+                "catalog registration, Python result loading and cleanup excluded")
+            rank_timing.update(rank=comm.rank, native_reported_cpu_time=native_cpu)
+            rows = comm.allgather(rank_timing if participates else None)
+            timings = aggregate_rank_timings([row for row in rows if row is not None])
             product = collective(comm, lambda: read_products(root, engine), root_only=True)
             if comm.rank == 0:
                 results[engine] = dict(wall_seconds=elapsed, products=product,
                                        ranks=comm.size if spec.mpi else 1,
-                                       smooth_pivot="unsupported")
+                                       smooth_pivot="unsupported",
+                                       provenance=balls.getRunMetadata(),
+                                       threads_per_rank=config.threads,
+                                       parameters=engine_parameters(config, engine, root))
+                results[engine].update(timings)
+                print(f"  completed: compute wall {timings['compute_wall_time']:.6f}s, "
+                      f"summed process CPU {timings['compute_cpu_time']:.6f}s", flush=True)
         def finish():
+            from lya_analysis import write_comparisons, analyse_2pcf
+            native_timings = timing_summary(results)
+            write_timing_report(config.output_dir / "timing_report.txt", native_timings)
+            if config.lya2pcf_source:
+                from lya_reference import run_references
+                families = {key for result in results.values() for key in result["products"]}
+                results.update(run_references(catalog, config, families))
             config_json = {
                 key: str(value) if isinstance(value, Path) else value
                 for key, value in config.__dict__.items()
             }
-            summary = dict(ctreeballs_runtime=runtime_info,
-                           catalog={**catalog.metadata, "pixels": catalog.nbody,
+            summary = dict(catalog={**catalog.metadata, "pixels": catalog.nbody,
                                     "forests": forest_count},
                            config=config_json,
                            catalog_registrations_per_rank=1,
-                           timing=("native wall time includes C startup, tree, search, output and "
-                                   "cleanup; FITS conversion is excluded"),
+                           timings=native_timings,
+                           timing=("native wall_seconds includes MainLoop, output, synchronization and "
+                                   "cleanup; FITS conversion is excluded. Reference wall_seconds is "
+                                   "warmed CPU pair traversal/reduction; worker_wall_seconds includes "
+                                   "imports, JIT, analysis and I/O. These are different scopes, not a speedup ratio."),
                            selection_contract=FOREST_SELECTION_NOTE,
                            engines={e: {k: v for k, v in r.items() if k != "products"}
                                     for e, r in results.items()}, comparisons={})
-            for key in PRODUCTS:
-                members = [(e, r["products"][key]) for e, r in results.items()
-                           if key in r["products"]]
-                if not members:
-                    continue
-                base_name, baseline = members[0]
-                for name, table in members[1:]:
-                    metrics, rows = compare_products(baseline, table, key)
-                    tag = f"{key}__{name}__vs__{base_name}"
-                    summary["comparisons"][tag] = metrics
-                    np.savetxt(config.output_dir / (tag+".csv"), rows, delimiter=",",
-                               header=",".join([f"bin{i}" for i in range(PRODUCTS[key][1])]
-                                               + ["reference", "candidate", "difference", "relative"]),
-                               comments="")
-            summary["plots"] = make_plots(results, config) if config.plots else []
+            summary["comparisons"], difference_paths = write_comparisons(results, config)
+            summary["comparison_contract"] = (
+                "All pairs within each estimator family only; 3D, radial-only, same-LOS and "
+                "multipole products are not interchangeable. No upstream 3PCF reference is run.")
+            summary["plots"] = (make_plots(results, config) if config.plots else []) + difference_paths
+            if config.analysis:
+                summary["analysis_2pcf"], analysis_paths = analyse_2pcf(results, config)
+                summary["plots"].extend(analysis_paths)
+            failed = [tag for tag, result in summary["comparisons"].items() if not result["passed"]]
+            summary["validation"] = dict(passed=not failed, failed_comparisons=failed,
+                                         comparisons=len(summary["comparisons"]))
             with (config.output_dir / "summary.json").open("w") as stream:
                 json.dump(summary, stream, indent=2, allow_nan=False)
                 stream.write("\n")
+            print(f"Comparisons: {len(summary['comparisons'])-len(failed)}/{len(summary['comparisons'])} passed "
+                  f"(rtol={config.rtol:g}, atol={config.atol:g})", flush=True)
+            if failed and config.fail_on_mismatch:
+                raise ValueError(f"{len(failed)} comparison(s) failed; inspect {config.output_dir/'summary.json'}")
             return summary
         collective(comm, finish, root_only=True)
     finally:
@@ -636,7 +753,7 @@ def run_engine_suite(catalog, config, comm=None, runtime_info=None):
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group()
-    source.add_argument("--fits", nargs="+", help="DESI DR1 image-layout delta FITS files/globs")
+    source.add_argument("--fits", nargs="+", help="DESI image-layout or eBOSS/PICCA forest-HDU delta FITS files/globs")
     source.add_argument("--catalog", type=Path, help="NPZ with positions, delta, weights, forest_ids")
     source.add_argument("--ascii", type=Path, help="six columns: x y z delta weight forest_id")
     source.add_argument("--synthetic", action="store_true", help="small generated catalog (default)")
@@ -664,6 +781,27 @@ def parse_arguments(argv=None):
     parser.add_argument("--max-forests", type=int, help="FITS demonstration subset")
     parser.add_argument("--pixel-stride", type=int, default=1, help="FITS subsampling, not rebinning")
     parser.add_argument("--delta-field", choices=["auto", "DELTA", "DELTA_BLIND"], default="auto")
+    parser.add_argument("--fits-layout", choices=["auto", "desi", "eboss"], default="auto")
+    parser.add_argument("--eboss-angle-unit", choices=["rad", "deg"], default="rad")
+    parser.add_argument("--project-delta", action="store_true", help="remove weighted mean and log-wavelength slope on retained FITS pixels")
+    parser.add_argument("--redshift-weight-exponent", type=float, default=0., help="optional WEIGHT multiplier ((1+z)/(1+z_ref))**exponent")
+    parser.add_argument("--weight-z-ref", type=float, default=2.25)
+    parser.add_argument("--lya2pcf-source", type=Path, help="enable external CPU pair-kernel references for every selected 2PCF family")
+    parser.add_argument("--reference-covariance", action="store_true", help="use upstream weighted sky-subsampling covariance for 3D 2PCF")
+    parser.add_argument("--reference-nside", type=int, default=32)
+    parser.add_argument("--reference-timeout", type=float, default=0., help="seconds per reference worker; 0 means no timeout")
+    parser.add_argument("--rtol", type=float, default=1e-8)
+    parser.add_argument("--atol", type=float, default=1e-12)
+    parser.add_argument("--relative-floor", type=float, default=1e-12, help="omit relative errors for smaller absolute reference correlations")
+    parser.add_argument("--fail-on-mismatch", action="store_true")
+    parser.add_argument("--no-analysis", action="store_true", help="omit 3D 2PCF archives, wedges and covariance/model analysis")
+    parser.add_argument("--covariance", type=Path, help="shared 3D 2PCF covariance: NPY/NPZ or FITS CO")
+    parser.add_argument("--distortion-matrix", type=Path, help="forward-model matrix: NPY/NPZ or FITS DM (not an inverse correction)")
+    parser.add_argument("--model-correlation", type=Path, help="unprojected 3D model on matching bins: NPY/NPZ or FITS DA")
+    parser.add_argument("--wedge-bins", type=int, default=50)
+    parser.add_argument("--wedge-mu-edges", default="0,0.5,0.8,0.95,1")
+    parser.add_argument("--wedge-subsamples", type=int, default=10, help="sub-bin samples per dimension; 100 reproduces notebook resolution")
+    parser.add_argument("--wedge-r-max", type=float, help="Mpc/h; default min(rp_max, rt_max)")
     parser.add_argument("--synthetic-forests", type=int, default=8)
     parser.add_argument("--synthetic-pixels", type=int, default=12)
     parser.add_argument("--seed", type=int, default=1234)
@@ -695,18 +833,10 @@ def main(argv=None):
         return subprocess.run(command, env={**os.environ, MPI_CHILD: "1"}, check=False).returncode
     # Importing cyballs does not initialize MPI; multi-rank execution does.
     comm = get_mpi_comm(mpi_environment_size() > 1)
-    runtime_info = collective(
-        comm, lambda: inspect_cballs_runtime(DEFAULT_CBALLS), root_only=True
-    )
-    runtime_info = comm.bcast(runtime_info, root=0)
     native_candidates = list(LYA_ENGINES)
     probe_candidates = [*native_candidates, *INCOMPATIBLE_ENGINE_REASONS]
     discovered = collective(comm, lambda: discover_cython_methods(probe_candidates))
-    executable_methods = set(runtime_info["search_methods"])
-    available = [
-        name for name in native_candidates
-        if name in discovered and name in executable_methods
-    ]
+    available = [name for name in native_candidates if name in discovered]
     if args.list_engines:
         if comm.rank == 0:
             for name, spec in LYA_ENGINES.items():
@@ -734,19 +864,33 @@ def main(argv=None):
                        multipole_rmin=args.multipole_rmin,
                        max_hist_mib=args.max_hist_mib,
                        plots=not args.no_plots,
-                       flatten_plots=not args.no_flatten_plots)
+                       flatten_plots=not args.no_flatten_plots,
+                       lya2pcf_source=args.lya2pcf_source, reference_covariance=args.reference_covariance,
+                       reference_nside=args.reference_nside, reference_timeout=args.reference_timeout,
+                       rtol=args.rtol, atol=args.atol, relative_floor=args.relative_floor,
+                       fail_on_mismatch=args.fail_on_mismatch, analysis=not args.no_analysis,
+                       covariance=args.covariance, distortion_matrix=args.distortion_matrix,
+                       model_correlation=args.model_correlation, wedge_bins=args.wedge_bins,
+                       wedge_mu_edges=tuple(float(x) for x in args.wedge_mu_edges.split(",")),
+                       wedge_subsamples=args.wedge_subsamples, wedge_r_max=args.wedge_r_max)
     collective(comm, config.validate)
     def load():
         if not args.fits and (args.max_forests is not None or args.pixel_stride != 1
                               or args.z_min != 0 or args.z_max != 10
                               or args.omega_m != .315 or args.h != .674
-                              or args.delta_field != "auto"):
+                              or args.delta_field != "auto" or args.fits_layout != "auto"
+                              or args.eboss_angle_unit != "rad" or args.project_delta
+                              or args.redshift_weight_exponent != 0 or args.weight_z_ref != 2.25):
             raise ValueError("FITS selection/cosmology options require --fits; "
                              "ASCII and NPZ coordinates are already comoving")
         if args.fits:
-            catalog = read_desi(args.fits, omega_m=args.omega_m, h=args.h,
+            from lya_fits import read_fits
+            catalog = read_fits(args.fits, omega_m=args.omega_m, h=args.h,
                                 z_min=args.z_min, z_max=args.z_max, max_forests=args.max_forests,
-                                pixel_stride=args.pixel_stride, delta_field=args.delta_field)
+                                pixel_stride=args.pixel_stride, delta_field=args.delta_field,
+                                fits_layout=args.fits_layout, eboss_angle_unit=args.eboss_angle_unit,
+                                project_delta=args.project_delta,
+                                redshift_weight_exponent=args.redshift_weight_exponent, weight_z_ref=args.weight_z_ref)
         elif args.catalog:
             catalog = read_npz(args.catalog)
         elif args.ascii:
@@ -764,10 +908,10 @@ def main(argv=None):
         print("Smooth-pivot: unsupported by forest/multipole engines; native runs use no-smooth-pivot.")
         print(FOREST_SELECTION_NOTE)
         for source in catalog.metadata.get("files", []):
-            print(f"DESI field={source['delta_field']}, BLINDING={source['blinding']}")
+            print(f"FITS field={source['delta_field']}, BLINDING={source['blinding']}")
         if any(3 in LYA_ENGINES[e].orders for e in engines):
             print("3PCF can be expensive on dense forests; start with --max-forests and --pixel-stride.")
-    run_engine_suite(catalog, config, comm, runtime_info=runtime_info)
+    run_engine_suite(catalog, config, comm)
     if comm.rank == 0:
         print(f"Results: {config.output_dir / 'summary.json'}")
     return 0

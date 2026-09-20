@@ -3,6 +3,7 @@
 
 import argparse
 import itertools
+import json
 import os
 from pathlib import Path
 import re
@@ -75,6 +76,46 @@ def pair_oracle(data, weighted):
                              out=np.zeros(4), where=denominator != 0)
 
 
+def has_tangent_bearing(pivot, neighbor):
+    """Independent cross-product test for an observer-relative bearing.
+
+    No native tangent basis or phase helper is used. The 32-epsilon relative
+    threshold is the documented numerical definition of an undefined leg.
+    """
+    radius = np.linalg.norm(pivot)
+    leg = neighbor-pivot
+    distance = np.linalg.norm(leg)
+    if radius == 0 or distance == 0:
+        return False
+    transverse = np.linalg.norm(np.cross(pivot/radius, leg))
+    return transverse > 32*np.finfo(float).eps*distance
+
+
+def angular_fixtures():
+    # Four unit directions give 16 bearing-valid ordered triples, versus 24
+    # ordinary triples. Adding the origin adds ordinary pairs but no bearings.
+    path = Path(__file__).resolve().parents[1] / "fixtures/provenance_window/recorded_cases.json"
+    recorded = json.loads(path.read_text())
+    degenerate = np.asarray(recorded["degenerate_positions"], dtype=float)
+    ordinary = np.asarray(recorded["ordinary_positions"], dtype=float)
+    def data(points):
+        return points, np.ones(len(points)), np.ones(len(points)), np.ones(len(points), dtype=np.uint8)
+    return data(degenerate), data(ordinary)
+
+
+def check_angular_oracles():
+    degenerate, ordinary = angular_fixtures()
+    expected = np.zeros((4, 4))
+    expected[2, 2] = 16
+    np.testing.assert_array_equal(monopole_oracle(degenerate, raw=True), expected)
+    assert pair_oracle(degenerate, False)[0].sum() == 10
+    # Every ordered distinct triple is supported on the nondegenerate fixture.
+    assert all(has_tangent_bearing(ordinary[0][i], ordinary[0][j])
+               for i, j in itertools.permutations(range(4), 2))
+    assert monopole_oracle(ordinary, raw=True).sum() == 4*3*2
+    assert pair_oracle(ordinary, False)[0].sum() == 6
+
+
 def monopole_oracle(data, raw=False):
     positions, kappa, weights, mask = data
     selected = np.flatnonzero(mask)
@@ -84,7 +125,8 @@ def monopole_oracle(data, raw=False):
         neighbors = []
         for neighbor in selected:
             distance = np.linalg.norm(positions[pivot] - positions[neighbor])
-            if neighbor != pivot and 0.001 < distance < 2.5:
+            if (neighbor != pivot and 0.001 < distance < 2.5
+                    and has_tangent_bearing(positions[pivot], positions[neighbor])):
                 radial = int((distance - 0.001) / ((2.5 - 0.001) / 4))
                 neighbors.append((neighbor, radial))
         for (q, nq), (r, nr) in itertools.permutations(neighbors, 2):
@@ -210,6 +252,7 @@ def cli_suite(executable, mpi_command=None):
 def cython_suite():
     from cyballs import cballs
 
+    check_angular_oracles()
     data = catalog()
     selected = data[3].astype(bool)
     with tempfile.TemporaryDirectory(prefix="ctreeballs-2balls-mask-cython-") as tmp:
@@ -236,6 +279,13 @@ def cython_suite():
                 return result
             finally:
                 balls.struct_cleanup()
+
+        for fixture in angular_fixtures():
+            for raw in (False, True):
+                actual = run(fixture, True, raw=raw)
+                np.testing.assert_array_equal(actual["NN"], pair_oracle(fixture, True)[0])
+                np.testing.assert_allclose(actual["KKK_1_1"],
+                    monopole_oracle(fixture, raw=raw), rtol=2e-12, atol=2e-13)
 
         reference = run(tuple(array[selected] for array in data), False)
         masked = run(data, True)

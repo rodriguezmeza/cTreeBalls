@@ -4,7 +4,12 @@
 static inline bool cballs_raw_legacy_multipoles(const struct cmdline_data *cmd)
 {
     return cballs_opt_no_normalize_histzeta(cmd)
-        && !strncmp(cmd->searchMethod, "kdtree-", 7);
+        && (!strncmp(cmd->searchMethod, "kdtree-", 7)
+            || !strcmp(cmd->searchMethod, "balltree-omp")
+            || !strcmp(cmd->searchMethod, "balltree-mpi")
+            || ((!strcmp(cmd->searchMethod, "balltree-2balls-omp")
+                 || !strcmp(cmd->searchMethod, "balltree-2balls-mpi"))
+                && cballs_opt_legacy_one_ball(cmd)));
 }
 
 /* Subtract each neighbor's second moment before the pivot outer product.

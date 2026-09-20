@@ -385,10 +385,24 @@ int get_HistZetaM_EE(struct  cmdline_data* cmd,
     int n1, n2;
 
     class_test((cmd->searchMethod != NULL
-                && strstr(cmd->searchMethod, "2balls") != NULL
+                && (strstr(cmd->searchMethod, "2balls") != NULL
+                    || strstr(cmd->searchMethod, "octree-balls4-") != NULL
+                    || strcmp(cmd->searchMethod, "kdtree-omp") == 0
+                    || strcmp(cmd->searchMethod, "kdtree-mpi") == 0
+                    || strcmp(cmd->searchMethod, "kdtree-2balls-omp") == 0
+                    || strcmp(cmd->searchMethod, "kdtree-2balls-mpi") == 0)
                 && !cballs_opt_edge_corrections(cmd)),
                errmsg, "%s: enable edge-corrections before requesting corrected multipoles",
                routineName);
+    class_test(!gd->computeTPCF, errmsg,
+               "%s: corrected scalar 3PCF was not computed", routineName);
+    class_test(cmd->searchMethod != NULL
+               && (strstr(cmd->searchMethod, "2balls") != NULL
+                   || strncmp(cmd->searchMethod, "kdtree-", 7) == 0
+                   || strncmp(cmd->searchMethod, "octree-ggg-", 11) == 0)
+               && (!gd->scalar_window_ready
+                   || gd->scalar_window_bins != cmd->sizeHistN), errmsg,
+               "%s: scalar window results are unavailable", routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
@@ -419,10 +433,24 @@ int get_HistZetaM_EE_Im(struct cmdline_data* cmd,
     int n1, n2;
 
     class_test((cmd->searchMethod != NULL
-                && strstr(cmd->searchMethod, "2balls") != NULL
+                && (strstr(cmd->searchMethod, "2balls") != NULL
+                    || strstr(cmd->searchMethod, "octree-balls4-") != NULL
+                    || strcmp(cmd->searchMethod, "kdtree-omp") == 0
+                    || strcmp(cmd->searchMethod, "kdtree-mpi") == 0
+                    || strcmp(cmd->searchMethod, "kdtree-2balls-omp") == 0
+                    || strcmp(cmd->searchMethod, "kdtree-2balls-mpi") == 0)
                 && !cballs_opt_edge_corrections(cmd)),
                errmsg, "%s: enable edge-corrections before requesting corrected multipoles",
                routineName);
+    class_test(!gd->computeTPCF, errmsg,
+               "%s: corrected scalar 3PCF was not computed", routineName);
+    class_test(cmd->searchMethod != NULL
+               && (strstr(cmd->searchMethod, "2balls") != NULL
+                   || strncmp(cmd->searchMethod, "kdtree-", 7) == 0
+                   || strncmp(cmd->searchMethod, "octree-ggg-", 11) == 0)
+               && (!gd->scalar_window_ready
+                   || gd->scalar_window_bins != cmd->sizeHistN), errmsg,
+               "%s: scalar window results are unavailable", routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);

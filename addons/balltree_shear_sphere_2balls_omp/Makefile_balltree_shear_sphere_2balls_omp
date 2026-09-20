@@ -8,6 +8,7 @@ vpath %.c $(BALLTREESHEARSPHERE2BALLSOMP)
 INCLUDES += -I$(BALLTREESHEARSPHERE2BALLSOMP) \
 	-I$(MDIR)/addons/shear_sphere_binary_2balls \
 	-I$(MDIR)/addons/shear_sphere_shared \
+	-I$(MDIR)/addons/shear_sphere_shared \
 	-I$(MDIR)/addons/balltree_shared
 HEADERFILES += $(wildcard $(BALLTREESHEARSPHERE2BALLSOMP)/*.h)
 EXTERNAL += search_balltree_shear_sphere_2balls_omp.o
@@ -15,6 +16,5 @@ search_balltree_shear_sphere_2balls_omp.o: \
 	$(BALLTREESHEARSPHERE2BALLSOMP)/search_balltree_shear_sphere_2balls_omp.c \
 	$(MDIR)/addons/shear_sphere_binary_2balls/shear_sphere_binary_scan.h \
 	$(MDIR)/addons/balltree_shared/fcfc_balltree.h \
-	$(MDIR)/addons/shear_sphere_shared/shear_sphere_engine.c \
-	$(MDIR)/addons/shear_sphere_shared/shear_sphere_frontier_scheduler.h
+	$(MDIR)/addons/shear_sphere_shared/shear_sphere_engine.c
 endif

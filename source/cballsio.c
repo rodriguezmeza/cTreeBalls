@@ -15,6 +15,7 @@
 //
 
 #include "globaldefs.h"
+#include <errno.h>
 
 #ifdef CLASSLIB
 #define cBALLS_FAIL(cmd, ...)                                           \
@@ -2151,7 +2152,6 @@ global int setFilesDirs_log(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
     string routineName = "setFilesDirs_log";
-    char buf[BUFFERSIZE];
 
     if (cmd->verbose_log>0) {           // gd->logfilePath is defined
         if (format_checked(gd->tmpDir, sizeof(gd->tmpDir),
@@ -2160,13 +2160,12 @@ global int setFilesDirs_log(struct cmdline_data* cmd,
 
         double cpustart = CPUTIME;
 
-        if (format_checked(buf, sizeof(buf),
-                           "buf", "if [ ! -d %s ]; then mkdir %s; fi",
-                           gd->tmpDir,gd->tmpDir) != 0)
+        if (mkdir_p(gd->tmpDir, 0777) != 0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: cannot create directory '%s': %s",
+                     routineName, gd->tmpDir, strerror(errno));
             return FAILURE;
-
-        if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
-            return FAILURE;
+        }
 
         gd->cputotalinout += CPUTIME - cpustart;
 
@@ -2182,96 +2181,15 @@ global int setFilesDirs_log(struct cmdline_data* cmd,
 global int setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
 {
     string routineName = "setFilesDirs";
-    char buf[BUFFERSIZE];
-
-    char outputDir[MAXLENGTHOFFILES];
-
     double cpustart = CPUTIME;
-
-    int ndefault = 0;
-    int lenDir = strlen(cmd->rootDir);
-    int i;
-
-    //B
-    int *ipos = NULL;
-    char *dp1 = NULL, *dp2 = NULL;
     int rc = FAILURE;
-    //E
-    
-    if (gd->rootDirFlag==TRUE) {
-        
-        int nslashs = MAXNSLASHS;
 
-        //B
-        ipos = (int *) malloc(nslashs * sizeof(int));
-        dp1 = (char *) malloc(MAXLENGTHOFSTRSCMD * sizeof(char));
-
-        if (ipos == NULL || dp1 == NULL) {
+    if (gd->rootDirFlag == TRUE) {
+        if (mkdir_p(cmd->rootDir, 0777) != 0) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s: memory allocation failed\n", routineName);
+                     "%s: cannot create directory '%s': %s",
+                     routineName, cmd->rootDir, strerror(errno));
             goto fail;
-        }
-        //E
-        
-        for (i=0; i< lenDir; i++) {
-            //B
-            if (cmd->rootDir[i] == '/') {
-                if (ndefault >= nslashs) {
-                    snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                             "%s: more '/' than %d in 'rootDir=%s'. Use only %d or none\n",
-                             routineName, nslashs, cmd->rootDir, nslashs);
-                    goto fail;
-                }
-                ipos[ndefault] = i + 1;
-                ndefault++;
-            }
-            //E
-        }
-
-        if (ndefault == 0) {
-            if (format_checked(outputDir, sizeof(outputDir),
-                               "outputDir", "%s", cmd->rootDir) != 0) {
-                snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                         "%s: rootDir path too long: '%s'",
-                         routineName, cmd->rootDir);
-                goto fail;
-            }
-            
-            if (format_checked(buf, sizeof(buf),
-                "buf", "if [ ! -d %s ]; then mkdir %s; fi",
-                               outputDir,outputDir) != 0) {
-                goto fail;
-            }
-            if (cmd->verbose >= 3)
-                verb_print_q(3, cmd->verbose_log,"\nsystem: %s\n",buf);
-
-            if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
-                goto fail;
-
-        } else {
-            for (i=0; i<ndefault; i++) {
-                snprintf(dp1, ipos[i]+1, "%s", cmd->rootDir);
-                if (format_checked(buf, sizeof(buf),
-                                   "buf", "if [ ! -d %s ]; then mkdir -p %s; fi",
-                                   dp1,dp1) != 0) {
-                    goto fail;
-                }
-                verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
-
-                if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
-                    goto fail;
-            }
-            snprintf(dp1, lenDir+1, "%s", cmd->rootDir);
-            if (format_checked(buf, sizeof(buf),
-                               "buf", "if [ ! -d %s ]; then mkdir -p %s; fi",
-                               dp1,dp1) != 0) {
-                goto fail;
-            }
-            verb_print_q(3,cmd->verbose_log,"\nsystem: %d: %s\n",i,buf);
-
-            if (cballs_system_checked(cmd, routineName, buf) == FAILURE)
-                goto fail;
-
         }
         gd->cputotalinout += CPUTIME - cpustart;
         
@@ -2334,10 +2252,8 @@ global int setFilesDirs(struct cmdline_data* cmd, struct  global_data* gd)
     
     rc = SUCCESS;
 
-    fail:
-        free(ipos);
-        free(dp1);
-        return rc;
+fail:
+    return rc;
 
 
 }
@@ -2476,7 +2392,10 @@ global int EndRun_FreeMemory_tree(struct cmdline_data* cmd,
     #endif
     }
 
-    if (!scanopt(cmd->searchMethod, "kdtree-box-omp")
+    if (!scanopt(cmd->searchMethod, "kdtree-omp")
+        && !scanopt(cmd->searchMethod, "kdtree-box-omp")
+        && !scanopt(cmd->searchMethod, "balltree-omp")
+        && !scanopt(cmd->searchMethod, "balltree-mpi")
         && !scanopt(cmd->searchMethod, "balltree-2balls-omp")) {
         freeTree(cmd, gd);
     }
@@ -2515,6 +2434,7 @@ global int EndRun_FreeMemory_bodytable(struct cmdline_data* cmd,
 global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
                              struct  global_data* gd)
 {
+    cballs_scalar_window_free(gd);
     //B added by cBalls
 #define FREE_DVECTOR_NULL(p,nl,nh) \
     do { if ((p) != NULL) { free_dvector((p),(nl),(nh)); (p) = NULL; } } while (0)

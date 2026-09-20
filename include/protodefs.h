@@ -184,8 +184,12 @@ global int computeBodyProperties_sincos(struct cmdline_data* cmd,
 
 global int search_init_gd_hist(struct cmdline_data* cmd, struct  global_data* gd);
 global int search_init_gd_hist_sincos(struct cmdline_data* cmd, struct  global_data* gd);
-global int search_compute_HistN(struct cmdline_data* cmd, struct  global_data* gd,
-                                int nbody);
+global int search_compute_HistN(struct cmdline_data* cmd, struct global_data* gd,
+                                INTEGER nbody);
+global int search_normalize_count_histograms(struct cmdline_data *cmd,
+                                             struct global_data *gd,
+                                             INTEGER nbody,
+                                             real *histNN, real *histCF);
 //E
 
 
@@ -223,6 +227,12 @@ global int cballs_stream_close_checked(struct cmdline_data *cmd,
                                        stream *stream_ptr,
                                        string filename);
 global real cballs_normalize_or_zero(real numerator, real denominator);
+/* Build identity and result provenance, shared by native and Cython. */
+const char *cballs_build_id(void);
+const char *cballs_build_json(void);
+int cballs_run_metadata(struct cmdline_data *, struct global_data *, char **);
+int cballs_write_run_metadata(struct cmdline_data *, struct global_data *);
+
 #ifdef __cplusplus
 }
 #endif

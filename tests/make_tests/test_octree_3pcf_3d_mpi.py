@@ -110,8 +110,8 @@ def c_tests(binary, mpi, mpi_only, fits=False):
         for mode, oracle in ((False, check_scalar), (True, survey.check_oracle)):
             one = run(mode, 1)
             oracle(one)
-            compare(one, run(mode, 3))
-            compare(one, run(mode, 1, {"searchMethod": "octree-ggg-3d-mpi"}))
+            compare(one, run(mode, 3), exact=True)
+            compare(one, run(mode, 2, {"searchMethod": "octree-ggg-3d-mpi"}), exact=True)
             if not mpi_only:
                 compare(one, run(mode, 3, {"searchMethod": "octree-3pcf-3d-omp"}))
             for option, prefix in (("only-2pcf-3d", "histXi2pcf"),

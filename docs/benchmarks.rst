@@ -26,6 +26,26 @@ Use ``--statistics 2pcf`` to keep pair timings free of compiled 3PCF work.
 ``--max-points`` performs deterministic input thinning for scaling tests; zero
 retains every selected point.
 
+Each native driver separates setup and MainLoop wall time from process CPU
+time. MPI wall is the maximum across participating ranks, while CPU is summed.
+Per-rank measurements and native numerical parameters are retained. The kappa
+and forest drivers exclude catalog registration; the shear setup timer includes
+it. MainLoop includes any requested native histogram writing; Python extraction,
+plots and final cleanup are excluded. Forest ``wall_seconds`` retains its older
+cleanup-inclusive scope. Compare the explicitly labeled compute columns only
+after checking that requested outputs and statistics also match.
+
+The public ``tests/python/benchmark_kappa_corr.py`` is an entry-point alias for
+the convergence all-engines driver and uses that driver's command-line options.
+It does not depend on the private CPU suite.
+
+For exact unsmoothed scalar references across engines, use
+``no-one-ball,no-two-balls,no-smooth-pivot``.
+Native octree 3PCF is not necessarily exact with ``no-two-balls`` alone.
+For shear pivot reuse, record ``CBALLS_SHEAR_PIVOT_TOL``, ``theta``, leaf
+capacity, bins, multipole order and window conditioning. A phase tolerance in
+radians is not a 5% coefficient guarantee; validate before reporting speedups.
+
 Masks and Edge Correction
 -------------------------
 
@@ -71,8 +91,9 @@ their estimators matched.
 MPI Timing
 ----------
 
-The parent benchmark launches MPI workers; do not launch the parent itself
-under ``mpiexec``. Use ``--mpi-ranks`` and repeated ``--mpi-extra-arg`` values.
+The drivers can launch MPI workers using ``--mpi-ranks`` and repeated
+``--mpi-extra-arg`` values. Kappa and forest drivers also recognize an existing
+MPI launch; do not nest MPI launchers. The shear driver launches workers itself.
 The C extension, ``mpi4py``, compiler wrapper, and launcher must use the same
 MPI implementation. Record ranks and threads per rank because catalog/tree
 memory is generally replicated.

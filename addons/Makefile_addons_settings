@@ -33,6 +33,8 @@ GADGETIOON = 1
 CLASSLIBON = 1
 IOLIBON = 1
 CFITSIOON = 1
+# Link external CFITSIO; the bundled library addon is not distributed.
+CFITSIOLIBON = 0
 ifeq ($(CLASSLIBON),1)
 PXDON = 1
 else
@@ -49,6 +51,11 @@ TPCFON = 1
 PRUNEON = 1
 BALLS4SCANLEVON = 1
 THETA = 1.25
+# Privately linked scalar compatibility kernels; these are not public addons.
+GGG_OMP_FRONTIER_TARGET_TASKS ?= 256
+GGG_OMP_FRONTIER_MIN_ACTIVE ?= 64
+GGG_OMP_PIVOT_CHUNK_SIZE ?= 4096
+GGG_MPI_PIVOT_CLAIM_SIZE ?= 65536
 DEFINEFLAGS =
 _DEBUGON_ = 0
 LOGBINON = 0

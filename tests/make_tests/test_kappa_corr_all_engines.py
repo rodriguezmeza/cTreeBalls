@@ -23,6 +23,7 @@ from kappa_corr_all_engines import (  # noqa: E402
     discover_make_settings,
     engine_parameters,
     flatten_radial_matrix,
+    compare_result_arrays,
     make_plots,
     merge_statistics_options,
     print_engine_table,
@@ -122,8 +123,35 @@ def test_scalar_mode_coupling_identity_and_empty_bin_policy():
     corrected, diagnostics = solve_scalar_mode_coupling(signal, window, 1)
     np.testing.assert_array_equal(corrected[0], signal[0]/4.0)
     np.testing.assert_array_equal(corrected[1, 0], signal[1, 0]/4.0)
-    np.testing.assert_array_equal(corrected[1, 1], 0.0)
-    assert diagnostics == {"empty_bins": 1, "singular_bins": 0}
+    assert np.all(np.isnan(corrected[1, 1]))
+    assert diagnostics["empty_bins"] == 1
+    assert diagnostics["singular_bins"] == diagnostics["nonfinite_bins"] == 0
+    np.testing.assert_array_equal(diagnostics["status"], [[1, 1], [1, 2]])
+    np.testing.assert_array_equal(diagnostics["valid"], [[True, True], [True, False]])
+    assert diagnostics["pivot_ratio"][0, 0] == 1.0
+
+
+def test_scalar_window_singular_and_valid_zero_are_distinct():
+    signal = np.zeros((2, 2, 3), dtype=complex)
+    window = np.ones((2, 2, 5), dtype=complex)
+    window[0, 0] = [0, 0, 1, 0, 0]
+    corrected, diagnostics = solve_scalar_mode_coupling(signal, window, 1)
+    np.testing.assert_array_equal(corrected[0, 0], 0)
+    assert diagnostics["valid"][0, 0]
+    assert diagnostics["status"][1, 1] == 3
+    assert diagnostics["pivot_ratio"][1, 1] == 0
+    assert np.all(np.isnan(corrected[1, 1]))
+    assert diagnostics["singular_bins"] == 3
+
+
+def test_empty_comparisons_are_unavailable_not_perfect_agreement():
+    results = {name: {"zeta_m_0": np.full((2, 2), np.nan)} for name in ("a", "b")}
+    compared = compare_result_arrays(results)["b__vs__a__zeta_m_0"]
+    assert compared["compared_bins"] == 0
+    assert compared["max_absolute"] is None
+    assert compared["rms_absolute"] is None
+    assert compared["max_symmetric_relative"] is None
+    assert compared["unsupported_reference_bins"] == 4
 
 
 def test_flatten_and_plot_contract(tmp_path):

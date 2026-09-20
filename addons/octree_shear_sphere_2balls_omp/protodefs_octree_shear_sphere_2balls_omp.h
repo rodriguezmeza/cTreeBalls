@@ -1,6 +1,8 @@
 #ifndef _protodefs_octree_shear_sphere_2balls_omp_h
 #define _protodefs_octree_shear_sphere_2balls_omp_h
 
+#include "protodefs_octree_shear_sphere_omp.h"
+
 #define OCTREESHEARSPHERE2BALLSOMPMETHOD 200
 
 global int prepare_octree_shear_sphere_2balls_catalogs(

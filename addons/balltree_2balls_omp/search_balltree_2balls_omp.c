@@ -3,8 +3,8 @@
  *
  * The node-pair recursion and split heuristic are adapted from dual-node:
  * Copyright (c) 2003-2024 Mike Jarvis, used under its BSD-style license.
- * The ball-tree builder is the shared FCFC-derived implementation; its source
- * file carries the full FCFC MIT notice.
+ * The ball-tree builder is the FCFC-derived implementation shared with
+ * balltree-omp; its source file carries the full FCFC MIT notice.
  */
 
 #include <float.h>
@@ -36,6 +36,11 @@ extern void vvlogf(float *, const float *, const int *);
 #define BALLTREE_2BALLS_PRIMARY_FEATURES 1
 #define BALLTREE_2BALLS_FULL_FUNCTION searchcalc_balltree_2balls_full_omp
 #define BALLTREE_2BALLS_SEARCH_FUNCTION searchcalc_balltree_2balls_omp
+#define BALLTREE_2BALLS_LEGACY_FUNCTION searchcalc_balltree_omp
+#endif
+
+#ifdef BALLTREE_2BALLS_LEGACY_FUNCTION
+#include "protodefs_balltree_omp.h"
 #endif
 
 #ifdef BALLTREE_2BALLS_SEARCH_FUNCTION
@@ -105,6 +110,9 @@ static inline int balltree_2balls_prepare_pivots(
 #define DUAL_NODE_LOG_MULTIPOLE_ENGINE 1
 #define DUAL_NODE_BODY_PIVOT_LOG_MULTIPOLE 1
 #define DUAL_NODE_PERSISTENT_NEIGHBOR_FRONTIER 1
+#ifndef DUAL_NODE_DISTRIBUTED_ENGINE
+#define DUAL_NODE_PIVOT_PROGRESS 1
+#endif
 #endif
 #endif
 
@@ -165,6 +173,18 @@ typedef struct {
     double reduction;
 } dual_node_phase_timers;
 
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+typedef struct {
+    bool enabled;
+    INTEGER total;
+    INTEGER completed;
+    INTEGER reported;
+    INTEGER interval;
+    INTEGER batch;
+    double started;
+} dual_node_pivot_progress;
+#endif
+
 static inline double dual_node_timer_now(void)
 {
 #ifdef OPENMPCODE
@@ -206,7 +226,45 @@ typedef struct {
     real half_bin_plus_slop2;
     bool profile;
     dual_node_phase_timers *timers;
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    dual_node_pivot_progress *progress;
+#endif
 } dual_node_search_context;
+
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+static void dual_node_print_pivot_progress(
+        const dual_node_search_context *context)
+{
+    const dual_node_pivot_progress *progress = context->progress;
+
+    verb_print_min_info(
+        context->cmd->verbose, context->cmd->verbose_log, context->gd->outlog,
+        "%s: 3PCF progress: completed pivots %" INTEGER_FMT
+        " / %" INTEGER_FMT " (%.1f%%); elapsed %.2f s\n",
+        DUAL_NODE_METHOD_NAME, progress->completed, progress->total,
+        100.0 * (double)progress->completed / (double)progress->total,
+        dual_node_timer_now() - progress->started);
+}
+
+static void dual_node_publish_pivot_progress(
+        const dual_node_search_context *context, INTEGER count)
+{
+    dual_node_pivot_progress *progress = context->progress;
+
+    if (progress == NULL || !progress->enabled || count == 0) return;
+    /* Publish small local batches, serializing counters and flushed output
+     * together so dynamic OpenMP scheduling cannot reorder progress lines. */
+#pragma omp critical(cballs_two_balls_progress)
+    {
+        progress->completed += count;
+        if (progress->completed - progress->reported >= progress->interval
+            || progress->completed == progress->total) {
+            dual_node_print_pivot_progress(context);
+            progress->reported = progress->completed;
+        }
+    }
+}
+#endif
 
 static void dual_node_initialize_radial_context(
         dual_node_search_context *context, struct cmdline_data *cmd,
@@ -1877,10 +1935,27 @@ typedef struct {
     INTEGER pair_tests;
     INTEGER pivot_restarts;
     INTEGER pivot_finishes;
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    INTEGER progress_pending;
+#endif
     double pivot_transport_seconds;
     double scratch_clear_seconds;
     double multipole_product_seconds;
 } dual_node_multipole_scratch;
+
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+static inline void dual_node_record_completed_pivots(
+        const dual_node_search_context *context,
+        dual_node_multipole_scratch *statistics, INTEGER count)
+{
+    if (context->progress == NULL || !context->progress->enabled) return;
+    statistics->progress_pending += count;
+    if (statistics->progress_pending >= context->progress->batch) {
+        dual_node_publish_pivot_progress(context, statistics->progress_pending);
+        statistics->progress_pending = 0;
+    }
+}
+#endif
 
 typedef struct {
     INTEGER *nodes;
@@ -2410,6 +2485,9 @@ static void dual_node_multipole_finish_pivot(
     if (context->profile)
         scratch->multipole_product_seconds += dual_node_timer_now() - started;
     scratch->pivot_finishes++;
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    dual_node_record_completed_pivots(context, scratch, 1);
+#endif
 }
 
 static void dual_node_multipole_finish_pivot_range_profiled(
@@ -3096,7 +3174,15 @@ static int dual_node_multipole_process_pivots_partial(
             radial_bin_limit, context->cmd->sizeHistN);
         statistics->pivot_finishes++;
     }
-    if (unresolved_bin == 0) return SUCCESS;
+    if (unresolved_bin == 0) {
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+        /* Outer rings may finish at several ancestors. Count the represented
+         * active pivots only once, when no radial work remains in this node. */
+        dual_node_record_completed_pivots(
+            context, statistics, dual_node_node_count(pivot_node));
+#endif
+        return SUCCESS;
+    }
 
     statistics->pivot_restarts++;
     dual_node_multipole_clear_radial_through(
@@ -3167,6 +3253,9 @@ static int dual_node_multipole_process_pivots_partial(
                 context, hist, &body_pivot, &body_scratch, statistics,
                 1, radial_bin_limit, context->cmd->sizeHistN);
             statistics->pivot_finishes++;
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+            dual_node_record_completed_pivots(context, statistics, 1);
+#endif
         }
     }
     return SUCCESS;
@@ -3243,6 +3332,9 @@ static void dual_node_initialize_multipole_scratch(
     scratch->pair_tests = 0;
     scratch->pivot_restarts = 0;
     scratch->pivot_finishes = 0;
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    scratch->progress_pending = 0;
+#endif
     scratch->pivot_transport_seconds = 0.0;
     scratch->scratch_clear_seconds = 0.0;
     scratch->multipole_product_seconds = 0.0;
@@ -3349,6 +3441,9 @@ static int dual_node_search_log_multipole(
     double scratch_clear_total = 0.0;
     double multipole_product_total = 0.0;
     dual_node_phase_timers phase_timers = {0};
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    dual_node_pivot_progress progress = {0};
+#endif
     double phase_started = 0.0;
     int operation_status;
     int reduction_status = SUCCESS;
@@ -3546,6 +3641,18 @@ static int dual_node_search_log_multipole(
             "two-ball multipole scratch allocation") == FAILURE)
         goto cleanup;
 
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    progress.enabled = cmd->verbose >= VERBOSEMININFO
+        || (cmd->verbose_log >= VERBOSEMININFO && gd->outlog != NULL);
+    progress.total = tree1->npoint;
+    progress.interval = MAX((INTEGER)1, cmd->stepState);
+    progress.batch = MIN((INTEGER)64, progress.interval);
+    context.progress = &progress;
+    if (progress.enabled) {
+        progress.started = dual_node_timer_now();
+        dual_node_print_pivot_progress(&context);
+    }
+#endif
     if (context.profile) phase_started = dual_node_timer_now();
 #pragma omp parallel for schedule(dynamic,1) \
     reduction(+:pair_test_total,pivot_restart_total,pivot_finish_total,frontier_failure_total,pivot_transport_total,scratch_clear_total,multipole_product_total)
@@ -3636,6 +3743,9 @@ static int dual_node_search_log_multipole(
                 auto_correlation, &scratch, &hist);
         }
 #endif
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+        dual_node_publish_pivot_progress(&context, scratch.progress_pending);
+#endif
         pair_test_total += scratch.pair_tests;
         pivot_restart_total += scratch.pivot_restarts;
         pivot_finish_total += scratch.pivot_finishes;
@@ -3648,6 +3758,13 @@ static int dual_node_search_log_multipole(
     if (context.profile)
         phase_timers.pair_traversal += dual_node_timer_now() - phase_started;
 
+#ifdef DUAL_NODE_PIVOT_PROGRESS
+    if (progress.enabled && progress.completed == progress.total)
+        verb_print_min_info(
+            cmd->verbose, cmd->verbose_log, gd->outlog,
+            "%s: 3PCF pivots complete; reducing histograms and finalizing outputs\n",
+            DUAL_NODE_METHOD_NAME);
+#endif
     operation_status = frontier_failure_total == 0 ? SUCCESS : FAILURE;
     if (operation_status == FAILURE)
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -4012,15 +4129,7 @@ static int dual_node_run_pair_tasks(
 
     if (cballs_opt_compute_histn(cmd) && cballs_opt_and_cf(cmd)) {
         for (int n = 1; n <= cmd->sizeHistN; n++) gd->histNN[n] *= 2.0;
-#ifdef LONGINT
-        if (tree1->npoint > INT_MAX) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s: and-CF body count exceeds int",
-                     DUAL_NODE_METHOD_NAME);
-            goto cleanup;
-        }
-#endif
-        if (search_compute_HistN(cmd, gd, (int)tree1->npoint) == FAILURE)
+        if (search_compute_HistN(cmd, gd, tree1->npoint) == FAILURE)
             goto cleanup;
     }
     if (context->profile)
@@ -4760,6 +4869,60 @@ global int BALLTREE_2BALLS_SEARCH_FUNCTION(
         bodyptr *btab, INTEGER *nbody, INTEGER ipmin, INTEGER *ipmax,
         int cat1, int cat2)
 {
+    /* The legacy ball kernel has no scalar angular-window solver. */
+    if (cballs_opt_legacy_one_ball(cmd) && cballs_opt_edge_corrections(cmd)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: legacy-one-ball does not support edge-corrections; "
+                 "remove legacy-one-ball to use the two-ball window solver",
+                 cmd->searchMethod);
+        return FAILURE;
+    }
+#ifdef DUAL_NODE_DISTRIBUTED_ENGINE
+    if (cballs_opt_legacy_one_ball(cmd)) {
+#ifdef BALLTREE_2BALLS_LEGACY_FUNCTION
+        if (cballs_opt_no_two_balls(cmd)
+            || scanopt(cmd->options, "dual-node-bin-slop")
+            || scanopt(cmd->options, "dual-node-direct-triples")) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: legacy-one-ball cannot be combined with "
+                     "no-two-balls, dual-node-bin-slop, or "
+                     "dual-node-direct-triples",
+                     cmd->searchMethod);
+            return FAILURE;
+        }
+        verb_print(cmd->verbose,
+                   "%s: dispatching to the distributed balltree legacy "
+                   "kernel\n",
+                   cmd->searchMethod);
+        return BALLTREE_2BALLS_LEGACY_FUNCTION(
+            cmd, gd, btab, nbody, ipmin, ipmax, cat1, cat2);
+#else
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s does not support legacy-one-ball; use "
+                 "search=balltree-mpi for the distributed legacy kernel",
+                 cmd->searchMethod);
+        return FAILURE;
+#endif
+    }
+#else
+    if (cballs_opt_legacy_one_ball(cmd)) {
+        if (cballs_opt_no_two_balls(cmd)
+            || scanopt(cmd->options, "dual-node-bin-slop")
+            || scanopt(cmd->options, "dual-node-direct-triples")) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "%s: legacy-one-ball cannot be combined with "
+                     "no-two-balls, dual-node-bin-slop, or "
+                     "dual-node-direct-triples",
+                     cmd->searchMethod);
+            return FAILURE;
+        }
+        verb_print(cmd->verbose,
+                   "%s: dispatching to the balltree-omp legacy kernel\n",
+                   cmd->searchMethod);
+        return BALLTREE_2BALLS_LEGACY_FUNCTION(
+            cmd, gd, btab, nbody, ipmin, ipmax, cat1, cat2);
+    }
+#endif
 #ifdef SMOOTHPIVOT
     if (cballs_opt_smooth_pivot(cmd)
         && scanopt(cmd->options, "dual-node-direct-triples")) {

@@ -105,9 +105,9 @@ def test_catalog_validation(mutation):
 
 def test_engine_contracts():
     available = list(driver.LYA_ENGINES)
-    assert len(available) == 19
-    assert len(driver.resolve_engines(["all"], available, "both")) == 19
-    assert len(driver.resolve_engines(["all-omp"], available, "2pcf")) == 4
+    assert len(available) == 22
+    assert len(driver.resolve_engines(["all"], available, "both")) == 22
+    assert len(driver.resolve_engines(["all-omp"], available, "2pcf")) == 5
     assert len(driver.resolve_engines(["all-mpi"], available, "3pcf")) == 4
     assert driver.resolve_engines(["all-multipole"], available, "3pcf") == (
         "octree-3pcf-3d-omp", "octree-3pcf-3d-mpi",
@@ -115,6 +115,8 @@ def test_engine_contracts():
     assert driver.resolve_engines(["all-tree"], available, "both") == (
         "lya-1d-tree-2pcf-omp", "lya-1d-tree-3pcf-omp",
         "lya-1d-tree-2pcf-mpi", "lya-1d-tree-3pcf-mpi",
+        "lya-los-tree-2pcf-omp", "lya-los-tree-3pcf-omp",
+        "lya-los-tree-2pcf-3pcf-omp",
         "lya-1d-tree-same-los-2pcf-omp",
     )
     assert driver.resolve_engines(
@@ -334,7 +336,9 @@ def test_mpi_multi_engine_driver(tmp_path):
             pytest.fail("MPI driver timeout: " + log_path.read_text()[-4000:])
     assert status == 0, log_path.read_text()[-4000:]
     summary = json.loads((output/"summary.json").read_text())
-    assert sum(name.endswith("-mpi") for name in summary["engines"]) == 8
+    available = driver.discover_cython_methods(list(driver.LYA_ENGINES))
+    expected_mpi = [name for name in available if driver.LYA_ENGINES[name].mpi]
+    assert sum(name.endswith("-mpi") for name in summary["engines"]) == len(expected_mpi)
     assert summary["catalog"]["pixels"] == 288
     assert summary["comparisons"]
     assert all(m["max_abs_correlation"] < 2e-12

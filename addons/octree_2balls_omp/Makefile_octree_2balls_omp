@@ -6,11 +6,17 @@ OCTREE2BALLSOMP = $(MDIR)/addons/octree_2balls_omp/
 vpath %.c $(OCTREE2BALLSOMP)
 INCLUDES += -I$(OCTREE2BALLSOMP) \
             -I$(MDIR)/addons/balltree_2balls_omp \
-            -I$(MDIR)/addons/balltree_shared
+            -I$(MDIR)/addons/balltree_shared \
+            -I$(MDIR)/addons/scalar_compat_shared
 HEADERFILES += $(wildcard $(OCTREE2BALLSOMP)/*.h)
 EXTERNAL += search_octree_2balls_omp.o
+ifeq ($(filter 1,$(OCTREEGGGOMPON) $(OCTREEGGGMPION)),)
+vpath %.c $(MDIR)/addons/scalar_compat_shared
+EXTERNAL += search_octree_ggg_omp.o
+endif
 search_octree_2balls_omp.o: \
 	$(OCTREE2BALLSOMP)/search_octree_2balls_omp.c \
 	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c \
-	$(MDIR)/addons/native_octree_pair/native_octree_pair.h
+	$(MDIR)/addons/native_octree_pair/native_octree_pair.h \
+	$(MDIR)/addons/scalar_compat_shared/protodefs_octree_ggg_omp.h
 endif

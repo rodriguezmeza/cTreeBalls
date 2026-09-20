@@ -18,6 +18,10 @@ cdef extern from "cballs.h":
     ctypedef char ErrorMsg[{{ERRORMSG_SIZE}}]
     ctypedef {{INTEGER_CTYPE}} INTEGER
 
+    const char *cballs_build_id()
+    const char *cballs_build_json()
+    int cballs_run_metadata(cmdline_data *, global_data *, char **)
+
     size_t sizeof_cmdline_data()
     size_t sizeof_global_data()
 
@@ -106,6 +110,11 @@ cdef extern from "cballs.h":
         double **matPXD
         double *histZetaMFlatten
         double ***histZetaM_EE
+        unsigned char *scalar_window_status
+        double *scalar_window_w0
+        double *scalar_window_pivot_ratio
+        int scalar_window_bins
+        unsigned char scalar_window_ready
         double ***histZetaM_EE_Im
         #B cross
         double ***histZetaM_EE2
@@ -484,6 +493,7 @@ cdef extern from "cballs.h":
     int get_theta(void*, double*)
     int get_rsmooth(void*, double*)
     int get_cputime(void*, double*)
+    int cballs_opt_smooth_pivot(cmdline_data*)
     int get_edge_correction_cpu_time(void*, double*)
     int get_edge_correction_wall_time(void*, double*)
     int getcputime(void*)
@@ -519,3 +529,6 @@ cdef extern from "cballs.h":
     int get_HistZetaM_EE(void*, void*, int, char*)
     int get_HistZetaM_EE_Im(void*, void*, int, char*)
 #E histograms
+
+cdef extern from "cballs_build_fingerprint.h":
+    const char *CBALLS_BUILD_ID

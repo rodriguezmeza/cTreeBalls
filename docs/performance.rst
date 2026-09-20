@@ -35,15 +35,18 @@ Search Controls
     useful for validation but is normally slower.
 
 ``options=no-two-balls``
-    Exact body-level reference for the two-ball engines.
-    Raw KD/legacy balltree multipoles require ``no-smooth-pivot``. All BALLS4
-    runs reject an explicit ``smooth-pivot`` request.
+    Exact body-pair limit for 2PCF, with smoothing separately disabled.
+    For exact scalar 3PCF across the active methods use
+    ``no-one-ball,no-two-balls,no-smooth-pivot``;
+    native octree 3PCF still permits neighbor-cell acceptance with
+    ``no-two-balls`` alone. ``BALLS4SCANLEVON=1`` may remain enabled.
 
 ``options=dual-node-bin-slop``
     Uses dual-node-compatible Log/Linear near-bin acceptance in two-ball 2PCF
     scans. The conservative default requires both ball-distance bounds to
-    remain in the center bin. Use the same ``theta`` and slop policy when
-    comparing engines, and use ``no-two-balls`` for an exact validation run.
+    remain in the center bin. Calibrate each method to the same numerical
+    error target before comparing performance; matching ``theta`` alone does
+    not establish equivalent accuracy.
 
 ``octree-2balls`` tree preparation
     These engines stop native-octree preparation after production cell
@@ -87,7 +90,8 @@ For a production configuration:
 
 * compare at least two ``theta`` values;
 * vary ``sizeHistN`` and ``mChebyshev`` independently;
-* compare accelerated results with a direct or ``no-one-ball`` validation run
+* compare accelerated results with a direct or
+  ``no-one-ball,no-two-balls,no-smooth-pivot`` scalar validation run
   on a reduced catalog;
 * repeat timings and record thread affinity and hardware;
 * retain the used-values file and Makefile settings.

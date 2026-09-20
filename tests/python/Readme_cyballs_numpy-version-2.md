@@ -1,15 +1,18 @@
 # Building cyballs with NumPy 2
 
-Build the extension against the NumPy version in the target environment. If
-an isolated pip build selects an incompatible NumPy ABI, rebuild from the
-checkout with:
+Build against the NumPy version in the target environment. For a checkout
+build, `make -j4 all` updates the native targets and in-place Cython extension;
+it does not install a package into the environment. To install using the
+current environment's NumPy and Cython:
 
-```bash
+```sh
 python3 -m pip install . --no-build-isolation
 ```
 
-The maintained profile discovers CFITSIO as an external dependency through
-`pkg-config cfitsio`. Set `PKG_CONFIG_PATH` when the installation is outside
-the system search path. Build `cballs`, `libcballs.a`, and `cyballs` with the
-same Makefile profile; mixing archives or generated PXD files from different
-profiles is unsupported.
+Install the build requirements first when disabling isolation. Restart Python
+after rebuilding, and check `cyballs.__file__` and `cyballs.build_info()` to
+identify the extension actually loaded. Native C and Cython must use identical
+feature flags; do not mix a generated PXD or archive from another profile.
+
+The public profile uses external GSL and CFITSIO. Configure `gsl-config`,
+`pkg-config cfitsio`, or explicit include/library paths for that environment.

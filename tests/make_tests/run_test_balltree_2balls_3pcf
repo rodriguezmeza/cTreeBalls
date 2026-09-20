@@ -6,8 +6,8 @@ cd "$(dirname "$0")/.."
 CBALLS=${CBALLS:-../cballs}
 PYTHON=${PYTHON:-python3}
 MULTI_THREADS=${MULTI_THREADS:-4}
-ENGINE=${ENGINE:-balltree-2balls-omp}
-ENGINE_MACRO=${ENGINE_MACRO:-BALLTREE2BALLSOMP}
+ENGINE=${ENGINE:-balltree-2balls-omp_3pcf}
+ENGINE_MACRO=${ENGINE_MACRO:-BALLTREE2BALLSOMP3PCF}
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ctreeballs-2balls-3pcf.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
 

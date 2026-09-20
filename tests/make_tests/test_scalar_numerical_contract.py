@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent raw scalar oracle, rotations, smoothing, and MPI checks."""
+"""Independent raw scalar oracle, rotations, inactive smoothing, and MPI checks."""
 import os
 from pathlib import Path
 import subprocess
@@ -20,7 +20,8 @@ else:
 from cyballs import cballs, search_method_id
 
 METHODS = (
-    "kdtree-2balls-omp", "balltree-2balls-omp", "octree-2balls-omp",
+    "octree-ggg-omp", "kdtree-omp", "balltree-omp", "octree-balls4-omp",
+    "balltree-2balls-omp", "octree-2balls-omp", "balltree-2balls-omp_3pcf",
 )
 EDGES = np.geomspace(2*np.sin(np.pi/360), np.sqrt(3), 5)
 
@@ -116,7 +117,7 @@ def check_close(actual, expected, label):
 
 
 def test_scalar_contract():
-    methods = [m.replace("-omp", "-mpi") for m in METHODS] if MPI_MODE else METHODS
+    methods = [m.replace("-omp", "-mpi") for m in METHODS if m != "kdtree-omp"] if MPI_MODE else METHODS
     rotation, _ = np.linalg.qr(np.random.default_rng(23).normal(size=(3, 3)))
     rotation[:, 0] *= np.linalg.det(rotation)
     checked = 0
@@ -146,12 +147,40 @@ def test_undefined_bearings():
     field = np.linspace(-0.5, 1.0, len(positions))
     weights = np.linspace(0.6, 1.4, len(positions))
     expected = oracle(positions, field, weights)
-    methods = ([m.replace("-omp", "-mpi") for m in METHODS]
+    methods = ([m.replace("-omp", "-mpi") for m in METHODS if m != "kdtree-omp"]
                if MPI_MODE else METHODS)
     for method in methods:
         if search_method_id(method) >= 0:
             check_close(run(method, positions, field, weights), expected,
                         method+" undefined bearings retain ordinary pairs")
+
+
+def test_kdtree_2balls_legacy_compatibility():
+    if MPI_MODE or search_method_id("kdtree-omp") < 0 \
+            or search_method_id("kdtree-2balls-omp") < 0:
+        return
+    positions, field, weights = catalog(True)
+    reference = run("kdtree-omp", positions, field, weights, threads=3,
+                    exact=False)
+    compatibility = run("kdtree-2balls-omp", positions, field, weights,
+                        threads=3, exact=False,
+                        extra_options=("legacy-one-ball",))
+    np.testing.assert_array_equal(compatibility[0], reference[0])
+    np.testing.assert_array_equal(compatibility[1], reference[1])
+
+
+def test_balltree_2balls_legacy_compatibility():
+    if MPI_MODE or search_method_id("balltree-omp") < 0 \
+            or search_method_id("balltree-2balls-omp") < 0:
+        return
+    positions, field, weights = catalog(True)
+    reference = run("balltree-omp", positions, field, weights, threads=3,
+                    exact=False)
+    compatibility = run("balltree-2balls-omp", positions, field, weights,
+                        threads=3, exact=False,
+                        extra_options=("legacy-one-ball",))
+    np.testing.assert_array_equal(compatibility[0], reference[0])
+    np.testing.assert_array_equal(compatibility[1], reference[1])
 
 
 def test_c_executable():
@@ -195,7 +224,9 @@ def test_c_executable():
 if __name__ == "__main__":
     test_scalar_contract()
     test_undefined_bearings()
+    test_kdtree_2balls_legacy_compatibility()
+    test_balltree_2balls_legacy_compatibility()
     if not MPI_MODE:
         test_c_executable()
     if COMM is None or COMM.rank == 0:
-        print("PASS: scalar oracle, rotations, smoothing controls, and parallel consistency")
+        print("PASS: scalar oracle, rotations, inactive smoothing, and parallel consistency")

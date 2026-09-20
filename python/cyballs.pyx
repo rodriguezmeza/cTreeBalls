@@ -25,6 +25,9 @@ from scipy.interpolate import UnivariateSpline
 from scipy.interpolate import interp1d
 
 import time
+import json
+import hashlib
+from types import MappingProxyType
 
 import sys
 def viewdictitems(d):
@@ -116,6 +119,33 @@ cdef inline void safe_copy_cstr(char *dest, size_t dest_size, bytes value, str l
     memcpy(dest, <const char *> value, value_len)
     dest[value_len] = 0
 
+def _freeze_metadata(value):
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze_metadata(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze_metadata(item) for item in value)
+    return value
+
+
+def _thaw_metadata(value):
+    if isinstance(value, (dict, MappingProxyType)):
+        return {key: _thaw_metadata(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_metadata(item) for item in value]
+    return value
+
+
+def build_info():
+    """Detached resolved native build identity; reject a stale Cython pair."""
+    if (<bytes>CBALLS_BUILD_ID) != (<bytes>cballs_build_id()):
+        raise ImportError("cyballs/native build fingerprint mismatch; rebuild the matching pair")
+    return json.loads((<bytes>cballs_build_json()).decode("utf-8"))
+
+
+cdef object _parameter_text(const char *value):
+    return None if value == NULL else value.decode("utf-8", "replace")
+
+
 cdef class cballs:
     """
     cballs wrapping, creates the glue between C and python
@@ -140,6 +170,7 @@ cdef class cballs:
     cdef int computed
     cdef int allocated
     cdef object _pars
+    cdef object _run_settings
     cdef object _memory_catalogs
     cdef object ncp
 
@@ -150,7 +181,17 @@ cdef class cballs:
     # Special properties
     @property
     def pars(self):
-      return self._pars
+        """Detached, read-only parameter overrides. Change settings with set()."""
+        return MappingProxyType(self._pars.copy())
+
+    @property
+    def run_settings(self):
+        """Immutable settings for the last successful MainLoop, or None.
+
+        A changed parameter/catalog invalidates this property. A snapshot held
+        by the caller remains unchanged across subsequent runs and cleanup.
+        """
+        return self._run_settings
     @property
     def state(self):
       return True
@@ -158,6 +199,7 @@ cdef class cballs:
 #B definition for abi useful check
 
     cdef void _check_abi(self) except *:
+        build_info()
         cdef size_t c_cmd_size = sizeof_cmdline_data()
         cdef size_t c_gd_size = sizeof_global_data()
 
@@ -203,6 +245,7 @@ cdef class cballs:
         self.computed = False
         self.ncp = set()
         self._pars = {}
+        self._run_settings = None
         self._memory_catalogs = []
 
         memset(&self.cmd, 0, sizeof(cmdline_data))
@@ -228,6 +271,7 @@ cdef class cballs:
         self.allocated = False
         self.computed = False
         self._pars = {}
+        self._run_settings = None
         self._memory_catalogs = []
         self.gd.startrun_cputime = False
 
@@ -271,19 +315,29 @@ cdef class cballs:
 
     # Set up the dictionary
     def set(self,*pars,**kars):
-        oldpars = self._pars.copy()
-        if len(pars)==1:
-            self._pars.update(dict(pars[0]))
-        elif len(pars)!=0:
+        if len(pars) > 1:
             raise CosmoSevereError("bad call")
-        self._pars.update(kars)
-        if viewdictitems(self._pars) <= viewdictitems(oldpars):
-          return # Don't change the computed states, if the new dict was already contained in the previous dict
-        self.computed=False
+        incoming = dict(pars[0]) if pars else {}
+        incoming.update(kars)
+        newpars = self._pars.copy()
+        for key, value in incoming.items():
+            if not isinstance(key, str):
+                raise CosmoSevereError("parameter names must be strings")
+            # The C parser consumes text. Snapshot unusual/mutable objects now,
+            # while preserving familiar scalar types for the public mapping.
+            if type(value) not in (str, bool, int, float, type(None)):
+                value = str(value)
+            newpars[key] = value
+        if newpars == self._pars:
+            return
+        self._pars = newpars
+        self._run_settings = None
+        self.computed = False
         return True
 
     def clean(self):
         self._pars = {}
+        self._run_settings = None
         self.computed = False
 
     # Create an equivalent of the parameter file. Non specified values will be
@@ -415,7 +469,7 @@ cdef class cballs:
         if values is None:
             return None
         try:
-            result = np.ascontiguousarray(values, dtype=np.float64)
+            result = np.array(values, dtype=np.float64, order="C", copy=True)
         except (TypeError, ValueError) as exc:
             raise CosmoSevereError(
                 f"{name} must be convertible to float64"
@@ -435,8 +489,9 @@ cdef class cballs:
         Parameters
         ----------
         positions : array_like, shape (N, compiled_ndim)
-            Cartesian positions. They are copied into C-owned storage when
-            :meth:`Run` starts, so the input array is never modified.
+            Cartesian positions. Registration owns a copy; :meth:`Run` then
+            copies it into C-owned storage. To change data, call set_catalog
+            again. Mutating the caller's arrays never changes a registration.
         kappa, weights : array_like, shape (N,), optional
             Scalar field and statistical weights. Omitted arrays default to 1.
         mask : array_like, shape (N,), optional
@@ -471,7 +526,7 @@ cdef class cballs:
             )
 
         try:
-            positions_array = np.ascontiguousarray(positions, dtype=np.float64)
+            positions_array = np.array(positions, dtype=np.float64, order="C", copy=True)
         except (TypeError, ValueError) as exc:
             raise CosmoSevereError(
                 "positions must be convertible to a float64 array"
@@ -506,7 +561,7 @@ cdef class cballs:
                 )
             if not np.all((mask_array == 0) | (mask_array == 1)):
                 raise CosmoSevereError("mask values must be boolean or 0/1")
-            mask_array = np.ascontiguousarray(mask_array, dtype=np.uint8)
+            mask_array = np.array(mask_array, dtype=np.uint8, order="C", copy=True)
 
         if self.allocated:
             self.struct_cleanup()
@@ -517,6 +572,7 @@ cdef class cballs:
         else:
             self._memory_catalogs[catalog] = entry
         self.computed = False
+        self._run_settings = None
         self.ncp = set()
         return True
 
@@ -553,6 +609,7 @@ cdef class cballs:
         if self.allocated:
             self.struct_cleanup()
         self._memory_catalogs = []
+        self._run_settings = None
         self.computed = False
         self.ncp = set()
 
@@ -677,6 +734,70 @@ cdef class cballs:
             return True
         return False
 
+    def getRunMetadata(self):
+        """Copy the last successful run provenance, including after cleanup."""
+        if self._run_settings is None:
+            raise CosmoSevereError("run metadata unavailable; complete MainLoop first")
+        return _thaw_metadata(self._run_settings["provenance"])
+
+    cdef object _capture_run_settings(self):
+        cdef char *metadata_text = NULL
+        if cballs_run_metadata(&self.cmd, &self.gd, &metadata_text) == FAILURE:
+            raise CosmoSevereError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
+        try:
+            provenance = json.loads((<bytes>metadata_text).decode("utf-8"))
+        finally:
+            free(metadata_text)
+        catalogs = []
+        for entry in self._memory_catalogs:
+            fields = {}
+            for name, array in zip(("positions", "kappa", "weights", "mask", "gamma1", "gamma2", "forest_ids"), entry):
+                fields[name] = None if array is None else {
+                    "dtype": str(array.dtype), "shape": list(array.shape),
+                    "sha256": hashlib.sha256(array.tobytes(order="C")).hexdigest()}
+            if entry[3] is not None:
+                fields["mask_selected_count"] = int(np.count_nonzero(entry[3]))
+            catalogs.append(fields)
+        provenance["inputs"]["memory_catalogs"] = catalogs
+        provenance = _freeze_metadata(provenance)
+        effective = {
+            "searchMethod": _parameter_text(self.cmd.searchMethod),
+            "options": _parameter_text(self.cmd.options),
+            "sizeHistN": self.cmd.sizeHistN,
+            "mChebyshev": self.cmd.mChebyshev,
+            "sizeHistPhi": self.cmd.sizeHistPhi,
+            "useLogHist": bool(self.cmd.useLogHist),
+            "logHistBinsPD": self.cmd.logHistBinsPD,
+            "rminHist": self.cmd.rminHist,
+            "rangeN": self.cmd.rangeN,
+            "theta": self.cmd.theta,
+            "usePeriodic": bool(self.cmd.usePeriodic),
+            "nsmooth": self.cmd.nsmooth,
+            "rsmooth": _parameter_text(self.cmd.rsmooth),
+            "rsmooth_effective": float(self.getrsmooth()),
+            "smooth_pivot_enabled": bool(cballs_opt_smooth_pivot(&self.cmd)),
+            "numberThreads": self.cmd.numthreads,
+            "lengthBox": self.cmd.lengthBox,
+            "box": tuple([self.gd.Box[i] for i in range(cballs_compiled_ndim())]),
+            "catalog_sizes": tuple([int(self.gd.nbodyTable[i])
+                                     for i in range(self.gd.ninfiles)]),
+            "infile": _parameter_text(self.cmd.infile),
+            "infileformat": _parameter_text(self.cmd.infilefmt),
+            "iCatalogs": _parameter_text(self.cmd.iCatalogs),
+            "rootDir": _parameter_text(self.cmd.rootDir),
+            "outfile": _parameter_text(self.cmd.outfile),
+            "outfileformat": _parameter_text(self.cmd.outfilefmt),
+            "testmodel": _parameter_text(self.cmd.testmodel),
+            "seed": self.cmd.seed,
+        }
+        return MappingProxyType({
+            "requested": MappingProxyType(self._pars.copy()),
+            "effective": MappingProxyType(effective),
+            "version": __version__,
+            "completed_stage": "MainLoop",
+            "provenance": provenance,
+        })
+
     def Run(self, level=["MainLoop"]):
         """
         Run(level=["MainLoop"])
@@ -702,6 +823,7 @@ cdef class cballs:
         """
         cdef ErrorMsg errmsg
         cdef bint resume
+        cdef object successful_settings = self._run_settings
 
         # Append to the list level all the modules necessary to compute.
         level = self._check_task_dependency(level)
@@ -728,8 +850,10 @@ cdef class cballs:
         # Otherwise, proceed with the normal computation. A resumed run keeps
         # its parsed file_content, C-owned catalogs, and startup allocations.
         self.computed = False
+        self._run_settings = None
 
         if not resume:
+            successful_settings = None
             # Equivalent of writing a parameter file
             self._fillparfile()
 
@@ -804,6 +928,7 @@ cdef class cballs:
                 self.ncp.add("MainLoop")
                 end_wall_time_p = time.process_time()
                 self.cputime = (end_wall_time_p - start_wall_time_p)/self.nthreads
+                successful_settings = self._capture_run_settings()
 
             if "EndRun" in level and "EndRun" not in self.ncp:
                 if cballs_end_run_guarded(&(self.cmd), &(self.gd)) == FAILURE:
@@ -812,10 +937,12 @@ cdef class cballs:
                 self.allocated = False
 
         except Exception:
+            self._run_settings = None
             self.struct_cleanup()
             raise
 #E
 
+        self._run_settings = successful_settings
         self.computed = True
 
         return self.cputime
@@ -1020,7 +1147,7 @@ cdef class cballs:
     cdef void _require_live_histograms(self) except *:
         cdef short value
 
-        if self.allocated != True or "MainLoop" not in self.ncp or "EndRun" in self.ncp:
+        if not self.computed or self.allocated != True or "MainLoop" not in self.ncp or "EndRun" in self.ncp:
             raise CosmoSevereError(
                 'PXD histogram getters require live arrays; call Run(level=["MainLoop"]) before reading them, and clean after reading.'
             )
@@ -1042,7 +1169,7 @@ cdef class cballs:
                 self.gd.histShearXiMinusIm == NULL or
                 self.gd.histShearXiWeight == NULL):
             raise CosmoSevereError(
-                'Shear 2PCF results are unavailable; remove options="only-3pcf" and run an active full-sky shear method first.'
+                'Shear 2PCF results are unavailable; remove options="only-3pcf" and run octree-shear-omp first.'
             )
         if self.cmd.sizeHistN <= 0:
             raise CosmoSevereError('Shear 2PCF result dimensions are inconsistent.')
@@ -1059,7 +1186,7 @@ cdef class cballs:
                 self.gd.histShearGammaRe == NULL or
                 self.gd.histShearGammaIm == NULL):
             raise CosmoSevereError(
-                'Shear 3PCF results are unavailable; remove options="only-2pcf" and run an active full-sky shear method first.'
+                'Shear 3PCF results are unavailable; remove options="only-2pcf" and run octree-shear-omp first.'
             )
 
         if (self.cmd.sizeHistN <= 0 or self.gd.shearMultipoleMax < 0 or
@@ -1374,6 +1501,37 @@ cdef class cballs:
 
         return matrix
 
+    def getScalarWindowDiagnostics(self):
+        """Copied B-by-B status, validity, W0 and elimination-pivot ratio.
+
+        Status: 1 valid, 2 empty/nonpositive W0, 3 singular, 4 nonfinite.
+        The pivot ratio is a solver proxy, not a matrix condition number.
+        Unsupported corrected estimates are NaN; a valid zero remains zero.
+        """
+        cdef int bins, i, j
+        cdef size_t index
+        cdef np.ndarray[np.uint8_t, ndim=2] status
+        cdef np.ndarray[np.float64_t, ndim=2] monopole, ratio
+        self._require_live_histograms()
+        if (not self.gd.scalar_window_ready or self.gd.scalar_window_status == NULL
+                or self.gd.scalar_window_w0 == NULL
+                or self.gd.scalar_window_pivot_ratio == NULL):
+            raise CosmoSevereError("scalar window diagnostics unavailable; run supported scalar edge-corrections first")
+        bins = self.gd.scalar_window_bins
+        if bins != self.cmd.sizeHistN:
+            raise CosmoSevereError("scalar window dimensions are inconsistent")
+        status = np.empty((bins, bins), dtype=np.uint8)
+        monopole = np.empty((bins, bins), dtype=np.float64)
+        ratio = np.empty((bins, bins), dtype=np.float64)
+        for i in range(bins):
+            for j in range(bins):
+                index = <size_t>i*bins+j
+                status[i, j] = self.gd.scalar_window_status[index]
+                monopole[i, j] = self.gd.scalar_window_w0[index]
+                ratio[i, j] = self.gd.scalar_window_pivot_ratio[index]
+        return {"status": status, "valid": status == 1,
+                "window_monopole": monopole, "pivot_ratio": ratio}
+
     def getHistZetaM_EE(self, int m):
         self._require_live_histograms()
 
@@ -1394,9 +1552,6 @@ cdef class cballs:
 
         if get_computeTPCF(&self.cmd, &self.gd, &computeTPCF)== FAILURE:
             raise CosmoSevereErrorDummy((<char *> self.cmd.error_message).decode("utf-8", "replace"))
-        if computeTPCF==0:
-            return matrix
-
         if get_HistZetaM_EE(&self.cmd, &self.gd, m, errmsg)==FAILURE:
             raise CosmoSevereError(errmsg)
 
@@ -1424,9 +1579,6 @@ cdef class cballs:
 
         if get_computeTPCF(&self.cmd, &self.gd, &computeTPCF)== FAILURE:
             raise CosmoSevereErrorDummy((<char *> self.cmd.error_message).decode("utf-8", "replace"))
-        if computeTPCF==0:
-            return matrix
-
         if get_HistZetaM_EE_Im(&self.cmd, &self.gd, m, errmsg)==FAILURE:
             raise CosmoSevereError(errmsg)
 

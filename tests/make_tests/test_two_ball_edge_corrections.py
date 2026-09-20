@@ -13,7 +13,9 @@ import numpy as np
 
 ENGINES = (
     "balltree-2balls-omp", "balltree-2balls-mpi",
+    "balltree-2balls-omp_3pcf", "balltree-2balls-mpi_3pcf",
     "octree-2balls-omp", "octree-2balls-mpi",
+    "kdtree-omp", "kdtree-mpi",
     "kdtree-2balls-omp", "kdtree-2balls-mpi",
 )
 MMAX, BINS, RMIN, RMAX = 2, 4, 0.02, 1.5
@@ -85,7 +87,7 @@ def brute_force(data, neighbor_data=None):
 
 
 def edge_solution(signal, window):
-    result = np.zeros_like(signal)
+    result = np.full_like(signal, complex(np.nan, np.nan))
     modes = np.arange(-MMAX, MMAX + 1)
     for i in range(BINS):
         for j in range(BINS):
@@ -116,7 +118,10 @@ def load_results(root):
 
 def assert_results(actual, expected, raw_tolerance=2.e-8):
     for index, (a, b) in enumerate(zip(actual, expected)):
-        assert np.all(np.isfinite(a))
+        if index < 2:
+            assert np.all(np.isfinite(a))
+        else:
+            np.testing.assert_array_equal(np.isfinite(a), np.isfinite(b))
         np.testing.assert_allclose(a, b, rtol=raw_tolerance if index == 0 else 2e-10,
                                    atol=raw_tolerance if index == 0 else 2e-10)
 
@@ -145,7 +150,11 @@ def cli_tests(executable, engines, dimension, mpi_command):
             if weighted:
                 options.append("weights-norm")
             if exact:
-                options.append("no-two-balls")
+                options.append(
+                    "no-one-ball"
+                    if engine in {"kdtree-omp", "kdtree-mpi"}
+                    else "no-two-balls"
+                )
             files = datafile if isinstance(datafile, tuple) else (datafile,)
             command = [str(executable), f"search={engine}",
                        "in=" + ",".join(str(root / name) for name in files),
@@ -165,7 +174,12 @@ def cli_tests(executable, engines, dimension, mpi_command):
                 return proc.stdout + proc.stderr
             assert proc.returncode == 0, proc.stdout + proc.stderr
             assert "edge correction uses window modes 0..4" in proc.stdout, proc.stdout
-            return load_results(output)
+            result = load_results(output)
+            saved = np.loadtxt(output / "histZetaM_window_diagnostics.txt")
+            status = saved[:, 2].reshape(BINS, BINS)
+            np.testing.assert_array_equal(status == 1, np.isfinite(result[2][0]))
+            np.testing.assert_array_equal(saved[:, 3].reshape(BINS, BINS), result[1][0].real)
+            return result
 
         for engine in engines:
             one = run(engine)

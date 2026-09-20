@@ -237,17 +237,15 @@ local int _run_monopole_corr_neighbors(struct  cmdline_data* cmd,
     // ===============================================
     //B Saving histograms section: case 2pCORRELATION:
     // ===============================================
-    if (make_CF(cmd, gd, DD, gd->nbodyTable[cat1], corr, ercorr) == FAILURE) {
-        _free_boxes(nside, boxes);
-        return FAILURE;
-    }
+    if (make_CF(cmd, gd, DD, gd->nbodyTable[cat1], corr, ercorr) == FAILURE)
+        goto cleanup;
     
     if (cballs_opt_compute_histn(cmd)) {
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\t%s: printing neighbor-boxes-omp method...\n\n",
                                routineName);
-        PRINT_OR_FAIL(PrintHistNN(cmd, gd));
-        PRINT_OR_FAIL(PrintHistXi2pcf(cmd, gd));
+        if (PrintHistNN(cmd, gd) == FAILURE) goto cleanup;
+        if (PrintHistXi2pcf(cmd, gd) == FAILURE) goto cleanup;
     } else {
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                             "\n%s: writing output...\n", routineName);

@@ -129,7 +129,7 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
         verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                                "\n\t%s: stopping...\n\n", routineName);
         gd->stopflag = TRUE;
-        return SUCCESS;
+        return cballs_write_run_metadata(cmd, gd);
     }
 
     int eval_status = EvalHist(cmd, gd);
@@ -189,7 +189,11 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
     }
 //E
 
-    return SUCCESS;
+    int metadata_status = cballs_write_run_metadata(cmd, gd);
+#ifdef CBALLS_MPI_ENABLED
+    metadata_status = cballs_mpi_consensus(cmd, metadata_status, "MPI run metadata output");
+#endif
+    return metadata_status;
 }
 
 #define KKKCORRELATION      0

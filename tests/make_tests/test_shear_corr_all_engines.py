@@ -16,6 +16,8 @@ from shear_corr_all_engines import (  # noqa: E402
     ENGINE_ORDER,
     RunConfig,
     SHEAR_SPHERE_ENGINES,
+    SHEAR_SPHERE_MPI_ENGINES,
+    SHEAR_SPHERE_OMP_ENGINES,
     SHEAR_SPHERE_BALLTREE_TWO_BALLS_ENGINE,
     SHEAR_SPHERE_KDTREE_TWO_BALLS_ENGINE,
     SHEAR_SPHERE_TWO_BALLS_ENGINE,
@@ -36,7 +38,10 @@ def test_registry_is_limited_to_active_full_sky_addons():
     assert ENGINE_ORDER == ACTIVE_ENGINES
     assert resolve_engines(("all",), ACTIVE_ENGINES, "sphere") == list(ACTIVE_ENGINES)
     assert resolve_engines(("all-omp",), ACTIVE_ENGINES, "sphere") == list(
-        SHEAR_SPHERE_ENGINES
+        SHEAR_SPHERE_OMP_ENGINES
+    )
+    assert resolve_engines(("all-mpi",), ACTIVE_ENGINES, "sphere") == list(
+        SHEAR_SPHERE_MPI_ENGINES
     )
     assert resolve_engines((ACTIVE_ENGINES[1],), ACTIVE_ENGINES, "sphere") == [
         ACTIVE_ENGINES[1]
@@ -136,6 +141,18 @@ def test_cli_defaults_to_spherical_active_engines():
     args = parse_arguments(["--synthetic-nbody", "32", "--list-engines"])
     assert args.geometry == "sphere"
     assert args.engines == []
+    assert args.mpi_ranks == 2
+
+
+def test_mpi_runtime_contract_validation():
+    normalized = RunConfig(
+        bins=4, multipoles=2, mpi_ranks=3,
+        mpi_extra_args=("--bind-to", "none"), plots=False,
+    ).normalized()
+    assert normalized.mpi_ranks == 3
+    assert normalized.mpi_extra_args == ("--bind-to", "none")
+    with pytest.raises(ValueError, match="mpi_ranks"):
+        RunConfig(bins=4, multipoles=2, mpi_ranks=0).normalized()
 
 
 if __name__ == "__main__":

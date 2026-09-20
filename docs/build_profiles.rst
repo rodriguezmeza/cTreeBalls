@@ -111,6 +111,15 @@ time, ``cyballs`` checks the C and Cython sizes of ``cmdline_data`` and
 Safe Rebuild Workflow
 ---------------------
 
+``make -j4 all`` builds native targets and an in-place Python extension.
+Dependency files and compiler/link signatures support incremental rebuilding;
+an unchanged invocation does not reinstall Python packages. ``make reinstall-cyballs``
+forces the in-place wrapper build; installation into an environment remains
+``python3 -m pip install .``. ``options=build-fingerprint`` and
+``cyballs.build_info()`` identify the source/profile/toolchain actually built.
+The testing branch ships only enabled addons and shared dependencies, not
+private benchmark environments or disabled addon directories.
+
 After changing any build profile setting:
 
 .. code-block:: bash
