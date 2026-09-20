@@ -209,6 +209,7 @@ cBalls use/is based on the following codes or projects:
 -   [CFITSIO](https://heasarc.gsfc.nasa.gov/fitsio/fitsio.html)
 -   [HEALPix](https://healpix.sourceforge.io/)
 -   [FCFC](https://github.com/cheng-zhao/FCFC)
+-   [TreeCorr](https://github.com/rmjarvis/TreeCorr)
 
 Also author acknowledges for helpful discussion and testing to the following people:
 
@@ -219,7 +220,3 @@ Also author acknowledges for helpful discussion and testing to the following peo
 - Gustavo Niz
 - Axel Romero Tisnado
 - Sofia Samario
-
-The dual-node traversal and split criteria were informed by
-[TreeCorr](https://github.com/rmjarvis/TreeCorr); redistributed adaptations
-retain the applicable BSD license notices.
