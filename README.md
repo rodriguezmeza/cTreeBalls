@@ -187,3 +187,5 @@ Also author acknowledges for helpful discussion and testing to the following peo
 - Gustavo Niz
 - Axel Romero Tisnado
 - Sofia Samario
+
+We acknowledge financial support from SECIHITI grants CBF2023-2024-162 and CBF-2025-I-2795.
