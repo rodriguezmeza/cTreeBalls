@@ -730,6 +730,8 @@ setup(
     name='cyballs',
     version=VERSION,
     description='Python interface to the nPCF code cballs',
+    long_description=(Path(root_folder) / 'README.md').read_text(encoding='utf-8'),
+    long_description_content_type='text/markdown',
     url='http://github.com/rodriguezmeza/cTreeBalls.git',
     cmdclass={'build_ext': build_ext},
     ext_modules=[cyballs_ext],

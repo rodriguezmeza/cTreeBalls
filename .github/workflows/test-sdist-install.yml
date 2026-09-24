@@ -19,6 +19,44 @@ env:
   PXDON: "1"
 
 jobs:
+  active-public-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install public-profile prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev pkg-config libopenmpi-dev openmpi-bin libgsl-dev libcfitsio-dev libsleef-dev zlib1g-dev
+          python -m pip install -r requirements/release.txt
+      - name: Select affected regression owners
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python scripts/generate_capabilities.py --check
+          base="$PR_BASE"
+          if [ -z "$base" ]; then base="$(git rev-parse HEAD^ 2>/dev/null || true)"; fi
+          if [ -n "$base" ]; then
+            python scripts/affected_regressions.py --base "$base" --output regression-selection.json
+          else
+            python scripts/affected_regressions.py --output regression-selection.json
+          fi
+      - name: Verify the unchanged public profile and every registered method
+        run: |
+          python scripts/active_release_gate.py --output release-gate \
+            --mpi-command 'mpiexec --oversubscribe --bind-to none'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: active-public-release-evidence
+          path: |
+            release-gate/
+            regression-selection.json
+
   active-native-profile:
     runs-on: ubuntu-22.04
     steps:
@@ -90,7 +128,9 @@ jobs:
       - name: Build and inspect the source distribution
         run: |
           python -m build --sdist
-          python -m twine check dist/*.tar.gz
+          python -m twine check --strict dist/*.tar.gz
+          mkdir -p release-package
+          python scripts/check_sdist.py dist/*.tar.gz --output release-package/sdist.json
           tar -tzf dist/*.tar.gz > /tmp/ctreeballs-sdist-files.txt
           grep -q '/addons/kdtree_2balls_omp/search_kdtree_2balls_omp.c$' /tmp/ctreeballs-sdist-files.txt
           grep -q '/addons/balltree_shared/fcfc_balltree.c$' /tmp/ctreeballs-sdist-files.txt
@@ -103,4 +143,12 @@ jobs:
           python -m venv /tmp/ctreeballs-sdist
           /tmp/ctreeballs-sdist/bin/python -m pip install "$GITHUB_WORKSPACE"/dist/*.tar.gz
           cd /tmp
-          /tmp/ctreeballs-sdist/bin/python -c "from cyballs import cballs; print(cballs().getVersion())"
+          /tmp/ctreeballs-sdist/bin/python "$GITHUB_WORKSPACE/scripts/check_installed_package.py" \
+            --source-root "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/release-package/installation.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-install-evidence
+          path: |
+            release-package/
+            dist/

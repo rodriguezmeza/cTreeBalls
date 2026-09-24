@@ -19,37 +19,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / 'tests/make_tests'
-FOREST = ('lya-2pcf', 'lya-3pcf', 'lya-2pcf-3pcf', 'lya-1d-2pcf',
-          'lya-1d-3pcf', 'lya-1d-2pcf-3pcf', 'lya-1d-tree-2pcf', 'lya-1d-tree-3pcf')
-FEATURES = {
-    'KDTREE2BALLSOMPON': {'kdtree-2balls-omp': 197},
-    'KDTREE2BALLSMPION': {'kdtree-2balls-mpi': 198},
-    'BALLTREE2BALLSOMPON': {'balltree-2balls-omp': 174},
-    'BALLTREE2BALLSMPION': {'balltree-2balls-mpi': 179},
-    'OCTREE2BALLSOMPON': {'octree-2balls-omp': 176},
-    'OCTREE2BALLSMPION': {'octree-2balls-mpi': 177},
-    'OCTREESHEARSPHERE2BALLSOMPON': {'octree-shear-sphere-2balls-omp': 200},
-    'KDTREESHEARSPHERE2BALLSOMPON': {'kdtree-shear-sphere-2balls-omp': 201},
-    'BALLTREESHEARSPHERE2BALLSOMPON': {'balltree-shear-sphere-2balls-omp': 202},
-    'KDTREEBOXOMPON': {'kdtree-box-omp': 71},
-    'NEIGHBORBOXESOMPON': {'neighbor-boxes-omp': 73},
-    'OCTREE3PCF3DOMPON': {'octree-3pcf-3d-omp': 166},
-    'OCTREE3PCF3DMPION': {'octree-3pcf-3d-mpi': 192},
-    'LYAFORESTOMPON': {**dict(zip((x+'-omp' for x in FOREST), (169,170,171,180,181,182,183,193))),
-                       'lya-1d-tree-same-los-2pcf-omp': 195,
-                       'lya-los-tree-2pcf-omp': 206,
-                       'lya-los-tree-3pcf-omp': 207,
-                       'lya-los-tree-2pcf-3pcf-omp': 208},
-    'LYAFORESTMPION': dict(zip((x+'-mpi' for x in FOREST), (185,186,187,188,189,190,191,194))),
-}
-
-
-def expected_registry(settings):
-    expected = {'octree-sincos-omp': 24}
-    for flag, engines in FEATURES.items():
-        if settings.get(flag) == '1':
-            expected.update(engines)
-    return expected
+from capabilities_generated import expected_registry, gate_plan
 
 
 def parse_registry(text):
@@ -144,13 +114,38 @@ class Gate:
         assert registry == expected_registry(resolved['resolved_settings']), 'settings/registry mismatch or unhandled active engine'
         assert resolved['resolved_settings']['DEFDIMENSION'] == '3', 'this oracle matrix requires 3D'
         assert resolved['resolved_settings']['BUILD_PRECISION'] == 'double', 'this oracle matrix requires double precision'
+        self.report['capability_gate_plan'] = gate_plan(registry)
         self.registry = registry
         self.report['registry'] = registry
         code = 'import cyballs,json; r=json.loads('+repr(json.dumps(registry))+'); assert all(cyballs.search_method_id(n)==i for n,i in r.items())'
         self.command('cython-registry', [sys.executable, '-c', code])
         candidates = [p for p in ROOT.glob('build/**/build-fingerprint.json') if json.loads(p.read_text())['id']==resolved['id']]
         assert len(candidates) == 1, 'ambiguous resolved build manifest'
+        self.build_directory = candidates[0].parent
         (self.out/'build-fingerprint.json').write_bytes(candidates[0].read_bytes())
+        self.save()
+
+    def mpi_environment(self):
+        """Retain the actual library used by two Python ranks, not just a launcher name."""
+        self.command('python-environment', [sys.executable, '-m', 'pip', 'freeze'])
+        if not any(e.endswith('-mpi') for e in self.registry):
+            return
+        code = ("from mpi4py import MPI; import json,mpi4py; "
+                "c=MPI.COMM_WORLD; assert c.size==2; "
+                "rows=c.gather(dict(rank=c.rank, library=MPI.Get_library_version(), "
+                "vendor=MPI.get_vendor(), mpi4py=mpi4py.__version__), root=0); "
+                "print(json.dumps(rows)) if c.rank==0 else None")
+        output = self.command('mpi-environment', shlex.split(self.args.mpi_command)+
+                              ['-n', '2', sys.executable, '-c', code])
+        rows = next(json.loads(line) for line in output.splitlines() if line.startswith('[{'))
+        assert {r['rank'] for r in rows} == {0, 1}
+        assert rows[0]['vendor'] == rows[1]['vendor']
+        wrapper = self.report['build']['toolchain'].get('mpi_version', '')
+        version = re.search(r'Open MPI (\d+)\.(\d+)\.(\d+)', wrapper)
+        if version:
+            assert rows[0]['vendor'] == ['Open MPI', list(map(int, version.groups()))], \
+                'mpi4py library does not match the Open MPI compiler wrapper'
+        self.report['mpi_environment'] = rows
         self.save()
 
     def case(self, engine, ranks, threads):
@@ -191,22 +186,42 @@ class Gate:
         self.save()
 
     def engine_cases(self):
-        for engine in self.registry:
-            if engine.endswith('-omp'):
+        declarations=gate_plan(self.registry)
+        for declaration in declarations:
+            engine=declaration['engine']
+            if declaration['parallel']=='omp':
                 self.check(engine, lambda e=engine: self.compare(self.case(e, 1, 1), self.case(e, 1, 2)))
-        for engine in self.registry:
-            if engine.endswith('-mpi'):
+        for declaration in declarations:
+            engine=declaration['engine']
+            if declaration['parallel']=='mpi':
                 def mpi_case(e=engine):
                     omp = self.out/'cases'/f'{e[:-3]}omp-r1-t1'
                     one = self.case(e, 1, 1)
                     many = self.case(e, 2, 2)
                     self.compare(omp, one); self.compare(one, many)
                 self.check(engine, mpi_case)
+        for engine in self.registry:
+            if engine.startswith('lya-los-tree-'):
+                original = engine.replace('lya-los-tree-', 'lya-')
+                self.check(engine+'-baseline', lambda e=engine, o=original: self.compare(
+                    self.out/'cases'/f'{e}-r1-t1', self.out/'cases'/f'{o}-r1-t1'))
         covered = {c['engine'] for c in self.report['cases']}
         assert covered == set(self.registry), f'missing successful engine cases: {set(self.registry)-covered}'
 
     def scripts(self):
         py = sys.executable
+        self.check('affected-regressions', lambda: self.command('affected-regressions',
+            [py, ROOT/'scripts/affected_regressions.py', '--changed', 'source/common_histogram.c',
+             'source/smooth_pivots.c', 'source/mpi_runtime.c', '--output', self.out/'affected-regressions.json']))
+        if any(e.endswith('-mpi') for e in self.registry):
+            self.check('mpi-runtime-build', lambda: self.command('mpi-runtime-build',
+                ['make','test-mpi-runtime-build',f'PYTHON={py}'],cwd=ROOT))
+            executable=self.build_directory/'tests/test_mpi_runtime'
+            for ownership in ('owned','borrowed'):
+                self.check('mpi-runtime-'+ownership, lambda mode=ownership: self.command('mpi-runtime-'+mode,
+                    shlex.split(self.args.mpi_command)+['-n','2',executable,mode]))
+        self.check('phase-memory-accuracy-benchmark', lambda: self.command('phase-memory-accuracy-benchmark',
+            [py,ROOT/'scripts/benchmark_contracts.py','--output',self.out/'benchmarks','--repeats','2']))
         binary = str(ROOT/'cballs')
         active = self.registry
         mpi = shlex.join(shlex.split(self.args.mpi_command)+['-n','2'])
@@ -215,11 +230,17 @@ class Gate:
                        lambda: self.command(name.replace('.py',''), [py, TESTS/name, *args], env=env))
         self.check('native-unit-contracts', lambda: self.command('native-unit-contracts',
             ['make', 'test-parameter-parser', 'test-option-cache', 'test-healpix-ordering',
-             'test-runtime-stabilization-native', 'test-provenance-window-native', f'PYTHON={py}'], cwd=ROOT))
+             'test-runtime-stabilization-native', 'test-provenance-window-native', 'test-resource-contracts', 'test-runtime-context', f'PYTHON={py}'], cwd=ROOT))
         self.check('python-unit-contracts', lambda: self.command('python-unit-contracts', [py,'-m','pytest','-q',
             *[TESTS/name for name in ('test_p0_cython_instances.py','test_p2_cython.py',
               'test_provenance_window.py','test_two_ball_edge_cython.py','test_kappa_corr_all_engines.py',
-              'test_shear_corr_all_engines.py','test_lya_corr_all_engines.py','test_release_gate.py')], '-k','not mpi']))
+              'test_shear_corr_all_engines.py','test_lya_corr_all_engines.py','test_release_gate.py',
+              'test_cython_in_memory_catalog.py','test_p3_cython_startup.py',
+              'test_scalar_numerical_contract.py',
+              'test_release_packaging.py','test_resource_scientific_contracts.py','test_capability_contracts.py')], '-ra', '-k','not mpi']))
+        if 'lya-los-tree-2pcf-omp' in active:
+            self.check('los-tree-contracts', lambda: self.command('los-tree-contracts',
+                [py, '-m', 'pytest', '-q', '-ra', TESTS/'test_lya_forest_los_tree.py']))
         scalar = [e for e in active if e in ('kdtree-2balls-omp','balltree-2balls-omp','octree-2balls-omp')]
         for engine in scalar:
             name = 'run_test_'+engine.replace('-','_')
@@ -254,6 +275,8 @@ class Gate:
         script('test_io_stabilization.py','--cballs',binary,'--cython')
         script('test_runtime_stabilization.py','--cballs',binary,'--cython')
         script('test_release_io_routes.py','--cballs',binary,'--output',str(self.out/'io'))
+        self.check('accuracy-acceptance', lambda: self.command('accuracy-acceptance',
+            [py, ROOT/'scripts/accuracy_acceptance.py', '--output', self.out/'accuracy']))
         self.drivers()
 
     def drivers(self):
@@ -301,6 +324,7 @@ def main():
     gate = Gate(args)
     gate.check('build-and-registry', gate.build)
     if not gate.report['failures']:
+        gate.check('mpi-environment', gate.mpi_environment)
         gate.check('engine-coverage', gate.engine_cases)
         gate.check('script-matrix', gate.scripts)
         gate.check('final-source-identity', lambda: (

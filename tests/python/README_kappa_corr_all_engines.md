@@ -1,5 +1,12 @@
 # Convergence all-engines driver
 
+The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
+`MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
+Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
+`native_mainloop_cpu_time`. MPI uses maximum rank wall time and summed rank CPU
+for both scopes; use the same scope, output settings and accuracy for comparisons.
+Build the matching current Cython extension before running this driver.
+
 The runnable drivers and their guides live in `tests/python`; `python/` is
 reserved for the Cython binding sources. Run commands from the repository root.
 

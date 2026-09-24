@@ -198,18 +198,30 @@
 <p class="Pp">The compiled extension is imported as <b>cyballs</b>. The
     convergence, shear, and forest drivers are under <i>tests/python</i>. They
     retain one NumPy catalog across selected engines and write timing and
-    comparison summaries. Their timing tables separate setup and compute. MPI
-    wall time is the maximum across participating ranks and CPU time is their
-    sum. The forest driver reads DESI and eBOSS/PICCA delta FITS, compares
-    compatible estimator families, and supports model distortion/covariance
-    analysis. Consult its README for input contracts and separately scoped
-    external reference timings.</p>
+    comparison summaries. Their timing tables separate setup, complete Python
+    compute calls, and native MainLoop time. mainloop_wall_s and mainloop_cpu_s
+    exclude Python provenance capture; compute columns include it. MPI wall time
+    is the maximum across participating ranks and CPU time is their sum. The
+    forest driver reads DESI and eBOSS/PICCA delta FITS, compares compatible
+    estimator families, and supports model distortion/covariance analysis.
+    Consult its README for input contracts and separately scoped external
+    reference timings.</p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id="MPI"><a class="permalink" href="#MPI">MPI</a></h1>
 <p class="Pp">Use one MPI implementation for MPICC, the runtime launcher, the
     extension, and mpi4py. numberThreads is per rank. All ranks enter the same
     run and cleanup sequence; rank zero writes results.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAPABILITY_CATALOGUE"><a class="permalink" href="#CAPABILITY_CATALOGUE">CAPABILITY
+  CATALOGUE</a></h1>
+<p class="Pp">capabilities/engines.json declares the public active search
+    methods, aliases and regression ownership. Run
+    scripts/generate_capabilities.py after editing it; builds reject stale
+    generated registration files. print-search-methods reports only entries
+    enabled in the current executable. Inactive addons and addons/python_env are
+    not part of the public distribution.</p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>

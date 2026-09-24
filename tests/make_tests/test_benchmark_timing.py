@@ -31,6 +31,22 @@ def test_no_participating_ranks_is_an_error():
         aggregate_rank_timings([])
 
 
+def test_native_mainloop_timings_are_separate_and_complete():
+    rows = [_timing_metadata(1, 2, 3, 4, "test"),
+            _timing_metadata(1, 2, 5, 6, "test")]
+    for rank, row in enumerate(rows):
+        row.update(rank=rank, native_reported_cpu_time=0.5,
+                   native_mainloop_wall_time=rank + 0.25,
+                   native_mainloop_cpu_time=rank + 1.0)
+    result = aggregate_rank_timings(rows)
+    assert result["compute_wall_time"] == 5
+    assert result["native_mainloop_wall_time"] == 1.25
+    assert result["native_mainloop_cpu_time"] == 3
+    del rows[1]["native_mainloop_wall_time"]
+    with pytest.raises(ValueError, match="participating rank"):
+        aggregate_rank_timings(rows)
+
+
 def test_documented_scalar_exact_switches_parse():
     args = parse_arguments([
         "--catalog-npz", "catalog.npz", "--engine", "all",

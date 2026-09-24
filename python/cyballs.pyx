@@ -194,7 +194,9 @@ cdef class cballs:
         return self._run_settings
     @property
     def state(self):
-      return True
+        """True only while a successful MainLoop has live native results."""
+        return bool(self.computed and self.allocated and "MainLoop" in self.ncp
+                    and "EndRun" not in self.ncp)
 
 #B definition for abi useful check
 
@@ -734,6 +736,26 @@ cdef class cballs:
             return True
         return False
 
+    def getAllocationInfo(self):
+        """Common histogram plan and live pointer presence (bytes per rank)."""
+        return {"live": bool(self.allocated and self.gd.histograms_allocated),
+                "common_histogram_bytes": self.gd.common_histogram_bytes,
+                "memory_budget_bytes": self.gd.memory_budget_bytes,
+                "scalar_3pcf_planned": bool(self.gd.common_scalar_3pcf),
+                "scalar_tensor_allocated": bool(self.gd.histZetaMcos != NULL),
+                "square_export_allocated": bool(self.gd.matPXD != NULL)}
+
+    def getTimings(self):
+        """MainLoop wall and total process CPU seconds on this rank.
+
+        MPI job wall time is the maximum rank wall time; job CPU is the sum of
+        rank process CPU times. Run() retains its legacy CPU/requested-threads
+        return value, which is neither wall time nor total CPU time.
+        """
+        if self._run_settings is None:
+            raise CosmoSevereError("timings unavailable; complete MainLoop first")
+        return dict(self._run_settings["timings"])
+
     def getRunMetadata(self):
         """Copy the last successful run provenance, including after cleanup."""
         if self._run_settings is None:
@@ -802,6 +824,9 @@ cdef class cballs:
         """
         Run(level=["MainLoop"])
 
+        Returns legacy process CPU seconds divided by requested threads.
+        Use getTimings() for explicit wall and process CPU measurements.
+
         Main function, execute all the methods for all desired modules.
         This is called in Python, and this ensures that the cballs instance
         of this class contains all the relevant quantities. Then, one can deduce
@@ -853,6 +878,7 @@ cdef class cballs:
         self._run_settings = None
 
         if not resume:
+            self.cputime = 0.0
             successful_settings = None
             # Equivalent of writing a parameter file
             self._fillparfile()
@@ -922,13 +948,23 @@ cdef class cballs:
                 self.ncp.add("Initial")
 
             if "MainLoop" in level and "MainLoop" not in self.ncp:
-                start_wall_time_p = time.process_time()
+                start_wall_time_p = time.perf_counter()
+                start_cpu_time_p = time.process_time()
                 if cballs_main_loop_guarded(&(self.cmd), &(self.gd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("MainLoop")
-                end_wall_time_p = time.process_time()
-                self.cputime = (end_wall_time_p - start_wall_time_p)/self.nthreads
+                wall_seconds = time.perf_counter()-start_wall_time_p
+                cpu_seconds = time.process_time()-start_cpu_time_p
+                self.cputime = cpu_seconds/max(1,self.nthreads)
                 successful_settings = self._capture_run_settings()
+                timing = {"scope": "MainLoop on this MPI rank; no rank reduction",
+                          "wall_seconds": wall_seconds, "process_cpu_seconds": cpu_seconds,
+                          "requested_threads": self.nthreads,
+                          "legacy_cpu_per_requested_thread_seconds": self.cputime}
+                provenance = _thaw_metadata(successful_settings["provenance"])
+                provenance["timings"] = timing
+                successful_settings = MappingProxyType(dict(successful_settings,
+                    timings=MappingProxyType(timing), provenance=_freeze_metadata(provenance)))
 
             if "EndRun" in level and "EndRun" not in self.ncp:
                 if cballs_end_run_guarded(&(self.cmd), &(self.gd)) == FAILURE:
@@ -1470,6 +1506,8 @@ cdef class cballs:
 
     def getHistZetaMsincos(self, int m, int type):
         self._require_live_histograms()
+        if not self.gd.common_scalar_3pcf or not self.gd.computeTPCF:
+            raise CosmoSevereError("scalar 3PCF was not computed")
 
         cdef int sizeHistN
         cdef int index_r
@@ -1480,7 +1518,6 @@ cdef class cballs:
         if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
             raise CosmoSevereErrorDummy((<char *> self.cmd.error_message).decode("utf-8", "replace"))
         
-        sizesqr = sizeHistN*sizeHistN
 
         rows = sizeHistN
         cols = sizeHistN
@@ -1534,6 +1571,8 @@ cdef class cballs:
 
     def getHistZetaM_EE(self, int m):
         self._require_live_histograms()
+        if not self.gd.common_scalar_3pcf or not self.gd.computeTPCF:
+            raise CosmoSevereError("scalar 3PCF was not computed")
 
         cdef int sizeHistN
         cdef int index_r
@@ -1544,7 +1583,6 @@ cdef class cballs:
         if get_sizeHistN(&self.cmd,&sizeHistN)== FAILURE:
             raise CosmoSevereErrorDummy((<char *> self.cmd.error_message).decode("utf-8", "replace"))
         
-        sizesqr = sizeHistN*sizeHistN
 
         rows = sizeHistN
         cols = sizeHistN
@@ -1564,6 +1602,8 @@ cdef class cballs:
 
     def getHistZetaM_EE_Im(self, int m):
         self._require_live_histograms()
+        if not self.gd.common_scalar_3pcf or not self.gd.computeTPCF:
+            raise CosmoSevereError("scalar 3PCF was not computed")
 
         cdef int sizeHistN
         cdef short computeTPCF

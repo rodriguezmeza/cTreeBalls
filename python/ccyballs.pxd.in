@@ -378,6 +378,9 @@ cdef extern from "cballs.h":
 
         unsigned char inputHeaderFlag                # control reading header-info
 
+        unsigned char common_scalar_3pcf
+        size_t common_histogram_bytes
+        size_t memory_budget_bytes
         unsigned char computeTPCF                    # switch ON/OFF I/O for TPCF
         #B to control memory allocation/deallocation
         unsigned char flagPrint

@@ -559,7 +559,10 @@ def test_spherical_octant_frontier_parallelism():
     if ENGINE != "octree-shear-sphere-2balls-omp":
         return
 
-    positions, gamma, weights = octant_fixture()
+    # 320 pivots can finish in ~6 ms before libgomp wakes the other workers.
+    # Keep enough real work to test scheduling; retain both worker participation
+    # and bitwise serial/threaded equality assertions below.
+    positions, gamma, weights = octant_fixture(1024)
     options = f"{FAST_OPTIONS},only-3pcf"
     serial = run_native(
         positions, gamma, weights, 1, options=options,

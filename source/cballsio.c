@@ -2536,7 +2536,7 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
 
     //B Histogram arrays PXD versions
 #ifdef PXD
-    FREE_DVECTOR_NULL(gd->histZetaMFlatten, 1, cmd->sizeHistN*cmd->sizeHistN);
+    FREE_DVECTOR_NULL(gd->histZetaMFlatten, 1, 0); /* unused compatibility slot */
     FREE_DVECTOR_NULL(gd->rBins, 1, cmd->sizeHistN);
     //B offset at 0 in order to work with Cython
     FREE_DMATRIX_NULL(gd->matPXD, 0, cmd->sizeHistN-1, 0, cmd->sizeHistN-1);

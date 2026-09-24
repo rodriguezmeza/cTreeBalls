@@ -7,11 +7,15 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / 'tests/make_tests')]
+sys.path[:0] = [str(ROOT), str(ROOT / 'tests/make_tests'), str(ROOT/'scripts')]
+from capabilities_generated import ENGINES, gate_plan
 
 
 def run(engine, output, threads):
     import numpy as np
+    declaration = ENGINES[engine]
+    gate_plan({engine: declaration['id']})
+    family = declaration['gate']['oracle']
     from cyballs import cballs
     comm = None
     if engine.endswith('-mpi'):
@@ -29,18 +33,19 @@ def run(engine, output, threads):
              sizeHistPhi=8, rangeN=1.5, rminHist=.02, theta=1.,
              options='no-smooth-pivot')
     kind = None
-    if engine.startswith('lya-'):
+    if family == 'forest':
         import test_lya_forest_mpi as forest
         same = 'same-los' in engine
-        base = engine.rsplit('-', 1)[0].replace('lya-los-tree-', 'lya-')
-        kind = 6 if same else forest.METHODS.index(base)
+        # LOS-tree discovery preserves the original 3D estimators and oracles.
+        canonical = engine.replace('lya-los-tree-', 'lya-').rsplit('-', 1)[0]
+        kind = 6 if same else forest.METHODS.index(canonical)
         data = forest.three.POINTS if kind < 3 else forest.radial.WIDE_ANGLE
         p.update(forest.params(kind, '', output, threads))
         p.pop('infile'); p.pop('infileformat')
         model.set(p)
         model.set_forest_catalog(data[:, :3], data[:, 3], data[:, 4], data[:, 5].astype(np.int64))
         fixture = dict(positions=data[:, :3], delta=data[:, 3], weights=data[:, 4], forest_ids=data[:, 5])
-    elif 'shear' in engine:
+    elif family == 'shear':
         import test_shear_sphere_octree_omp as shear
         pos, gamma, weights = shear.fixture()
         p.update(rangeN=shear.RMAX, rminHist=shear.RMIN, sizeHistN=shear.BINS,
@@ -49,7 +54,7 @@ def run(engine, output, threads):
         model.set(p)
         model.set_catalog(pos, weights=weights, gamma1=gamma.real, gamma2=gamma.imag)
         fixture = dict(positions=pos, gamma=gamma, weights=weights)
-    elif '3pcf-3d' in engine:
+    elif family == 'physical':
         import test_octree_3pcf_3d_omp as physical
         data = np.array(physical.CATALOG)
         p.update(rangeN=physical.RMAX, rminHist=physical.RMIN, sizeHistN=physical.NBINS,
@@ -57,7 +62,7 @@ def run(engine, output, threads):
         model.set(p)
         model.set_catalog(data[:, :3], kappa=data[:, 3], weights=data[:, 4])
         fixture = dict(positions=data[:, :3], kappa=data[:, 3], weights=data[:, 4])
-    elif 'box' in engine:
+    elif family == 'box':
         import test_neighbor_boxes_periodic as boxes
         pos = np.random.default_rng(83519).uniform(0., boxes.LBOX, (96, 3))
         p.update(lengthBox=boxes.LBOX, usePeriodic=True, rangeN=boxes.RANGE,
@@ -82,23 +87,23 @@ def run(engine, output, threads):
         if rank != 0:
             return
         arrays = {}
-        if engine.startswith('lya-'):
+        if family == 'forest':
             if same:
                 forest.radial.assert_histogram_close(
                     forest.radial.read_2pcf(output/'histXi2pcf_lya1d_same_los.txt'),
                     forest.radial.oracle_same_los_2pcf(), 'same LOS')
             else:
                 forest.check_oracle(kind, output)
-        elif 'shear' in engine:
+        elif family == 'shear':
             arrays = dict(xi_plus=model.getShearXiPlus(), xi_minus=model.getShearXiMinus(),
                           xi_weight=model.getShearXiWeight(), upsilon=model.getShearUpsilonXMultipoles(),
                           window=model.getShearWindowMultipoles(), multipoles=model.getShearGammaXMultipoles())
             expected = shear.oracle(pos, gamma, weights)
             for key in arrays:
                 np.testing.assert_allclose(arrays[key], expected[key], rtol=5e-10, atol=5e-12, err_msg=key)
-        elif '3pcf-3d' in engine:
+        elif family == 'physical':
             physical.check_oracle(output)
-        elif 'box' in engine:
+        elif family == 'box':
             arrays['pair_counts'] = model.getHistNN().copy()
             expected = boxes.expected_pair_counts(pos)
             if engine == 'kdtree-box-omp':

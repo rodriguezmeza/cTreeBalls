@@ -39,7 +39,8 @@ PROFILE_EXEC = $(WRKDIR)/$(EXEC)
 PROFILE_LIB = $(WRKDIR)/lib$(EXEC).a
 
 OBJS = main.o cballsio.o cballs.o startrun.o testdata.o treeload.o \
-	cballsutils.o search.o abi_check.o run_metadata.o
+	cballsutils.o search.o abi_check.o run_metadata.o engine_registry.o \
+	runtime_context.o memory_catalog.o common_histogram.o smooth_pivots.o mpi_runtime.o
 
 PYTHON_FILES = python/cyballs.pyx setup.py python/ccyballs.pxd.in
 CBALLS_OBJECTS = $(sort $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
@@ -509,3 +510,27 @@ test-two-ball-pivot-progress: $(EXEC)
 
 # Do not treat .d files as profile Makefiles in the fingerprint prerequisites.
 -include $(wildcard $(addprefix $(WRKDIR)/,$(CBALLS_OBJECTS:.o=.d)))
+
+.PHONY: check-capabilities generate-capabilities
+check-capabilities:
+	@$(PYTHON) scripts/generate_capabilities.py --check
+generate-capabilities:
+	@$(PYTHON) scripts/generate_capabilities.py
+$(CBALLS_OBJECTS): | check-capabilities
+
+.PHONY: test-resource-contracts test-runtime-context test-mpi-runtime-build affected-regressions benchmark-contracts
+test-resource-contracts: cyballs-static-lib
+	mkdir -p $(WRKDIR)/tests
+	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_resource_contracts.c lib$(EXEC).a -o $(WRKDIR)/tests/test_resource_contracts $(MLIBS) $(FITSIOLIBS)
+	$(WRKDIR)/tests/test_resource_contracts
+test-runtime-context: cyballs-static-lib
+	mkdir -p $(WRKDIR)/tests
+	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_runtime_context.c lib$(EXEC).a -o $(WRKDIR)/tests/test_runtime_context $(MLIBS) $(FITSIOLIBS)
+	$(WRKDIR)/tests/test_runtime_context
+test-mpi-runtime-build: cyballs-static-lib
+	mkdir -p $(WRKDIR)/tests
+	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_mpi_runtime.c lib$(EXEC).a -o $(WRKDIR)/tests/test_mpi_runtime $(MLIBS) $(FITSIOLIBS)
+affected-regressions:
+	$(PYTHON) scripts/affected_regressions.py $(REGRESSION_ARGS) --output affected-regressions.json
+benchmark-contracts:
+	$(PYTHON) scripts/benchmark_contracts.py $(BENCHMARK_ARGS)

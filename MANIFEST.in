@@ -1,6 +1,10 @@
 include LICENSE
 include README.md
 include pyproject.toml
+recursive-include requirements *.txt
+recursive-include capabilities *.json
+include ACTIVE_RELEASE_GATE.md RESOURCE_SCIENTIFIC_CONTRACTS.md
+include ENGINE_CAPABILITIES.md MAINTAINABILITY_CONTRACTS.md
 include Makefile
 include Makefile_machine
 include Makefile_settings

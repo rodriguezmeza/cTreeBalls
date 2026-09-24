@@ -136,12 +136,14 @@ static void balltree_clear_worker_histograms(
         hist->histXi2pcfthreadsub[n] = 0.0;
     }
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
     for (int m = 1; m <= cmd->mChebyshev + 1; m++) {
         CLRM_ext(hist->histZetaMthreadcos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsin[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadsincos[m], cmd->sizeHistN);
         CLRM_ext(hist->histZetaMthreadcossin[m], cmd->sizeHistN);
     }
+    } /* scalar 3PCF requested */
 #endif
 }
 
@@ -161,6 +163,7 @@ static void balltree_publish_worker_histograms(
         gd->histXi2pcf[n] += hist->histXi2pcfthread[n];
     }
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
     for (int m = 1; m <= cmd->mChebyshev + 1; m++) {
         ADDM_ext(gd->histZetaMcos[m], gd->histZetaMcos[m],
                  hist->histZetaMthreadcos[m], cmd->sizeHistN);
@@ -171,6 +174,7 @@ static void balltree_publish_worker_histograms(
         ADDM_ext(gd->histZetaMcossin[m], gd->histZetaMcossin[m],
                  hist->histZetaMthreadcossin[m], cmd->sizeHistN);
     }
+    } /* scalar 3PCF requested */
 #endif
     gd->nbbcalc += stats->nbbcalc;
     gd->nbccalc += stats->nbccalc;
@@ -208,6 +212,7 @@ static void process_balltree_pivot(struct cmdline_data *cmd,
 #endif
     }
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
     CLRM_ext_ext(hist->histXithreadcos, cmd->mChebyshev + 1,
                  cmd->sizeHistN);
     CLRM_ext_ext(hist->histXithreadsin, cmd->mChebyshev + 1,
@@ -223,6 +228,7 @@ static void process_balltree_pivot(struct cmdline_data *cmd,
     SETV(hist->dr0, dr0rot);
 #endif
 #endif
+    } /* scalar 3PCF requested */
 #endif
 
     if (use_one_ball)
@@ -301,6 +307,7 @@ static int reduce_balltree_histograms(struct cmdline_data *cmd,
     counters[4] = *count_overlap;
 #endif
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
     const size_t orders = (size_t)cmd->mChebyshev + 1;
     size_t plane;
     size_t zeta_count;
@@ -312,6 +319,7 @@ static int reduce_balltree_histograms(struct cmdline_data *cmd,
         return FAILURE;
     }
     count += 4 * zeta_count;
+    } /* scalar 3PCF requested */
 #endif
     if (count > SIZE_MAX / sizeof(*packed)) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -335,6 +343,7 @@ static int reduce_balltree_histograms(struct cmdline_data *cmd,
         packed[cursor++] = gd->histNNSubXi2pcftotal[n];
 #endif
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
 #define PACK_ZETA(array)                                                   \
     do {                                                                  \
         for (int m = 1; m <= cmd->mChebyshev + 1; m++)                   \
@@ -347,6 +356,7 @@ static int reduce_balltree_histograms(struct cmdline_data *cmd,
     PACK_ZETA(gd->histZetaMsincos);
     PACK_ZETA(gd->histZetaMcossin);
 #undef PACK_ZETA
+    } /* scalar 3PCF requested */
 #endif
     if (cursor != count
         || fcfc_balltree_mpi_reduce_reals(cmd, packed, count) == FAILURE
@@ -369,6 +379,7 @@ static int reduce_balltree_histograms(struct cmdline_data *cmd,
             gd->histNNSubXi2pcftotal[n] = packed[cursor++];
 #endif
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
 #define UNPACK_ZETA(array)                                                 \
     do {                                                                  \
         for (int m = 1; m <= cmd->mChebyshev + 1; m++)                   \
@@ -381,6 +392,7 @@ static int reduce_balltree_histograms(struct cmdline_data *cmd,
         UNPACK_ZETA(gd->histZetaMsincos);
         UNPACK_ZETA(gd->histZetaMcossin);
 #undef UNPACK_ZETA
+    } /* scalar 3PCF requested */
 #endif
         gd->nbbcalc = counters[0];
         gd->nbccalc = counters[1];
@@ -707,6 +719,7 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
                    " and %e %e %e\n",
                    ipfalse, num, den, xi);
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
             for (mm=1; mm<=cmd->mChebyshev+1; mm++) {
                 MULMS_ext(gd->histZetaMcos[mm], gd->histZetaMcos[mm],
                           xi,cmd->sizeHistN);
@@ -718,6 +731,7 @@ static int searchcalc_balltree_driver(struct cmdline_data *cmd,
                 MULMS_ext(gd->histZetaMcossin[mm], gd->histZetaMcossin[mm],
                           xi,cmd->sizeHistN);
             }
+    } /* scalar 3PCF requested */
 #endif
 #endif
 
@@ -982,6 +996,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         xi = cballs_raw_legacy_multipoles(cmd) ? Weight(q)*Kappa(q) : Kappa(q);
 #endif
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
                         real cosphi, sinphi;
                         if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                             if (cballs_raw_legacy_multipoles(cmd))
@@ -990,6 +1005,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                             else
                                 CHEBYSHEVTUOMPSINCOS;
                         }
+    } /* scalar 3PCF requested */
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
@@ -1013,6 +1029,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                         xi = cballs_raw_legacy_multipoles(cmd) ? Weight(q)*Kappa(q) : Kappa(q);
 #endif
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
                             real cosphi, sinphi;
                             if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                                 if (cballs_raw_legacy_multipoles(cmd))
@@ -1021,6 +1038,7 @@ local void sumnode_sincos(struct  cmdline_data* cmd,
                                 else
                                     CHEBYSHEVTUOMPSINCOS;
                             }
+    } /* scalar 3PCF requested */
 #endif
                         hist->histXi2pcfthreadsub[n] += xi;
                         *nbbcalcthread += 1;
@@ -1069,6 +1087,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                     xi = cballs_raw_legacy_multipoles(cmd) ? ntab.weighted_kappa_sum : npoints*ntab.kappa;
 
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
                     real cosphi, sinphi;
                     if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                         if (cballs_raw_legacy_multipoles(cmd))
@@ -1077,6 +1096,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         else
                             CHEBYSHEVTUOMPSINCOS;
                     }
+    } /* scalar 3PCF requested */
 #endif
                     hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;
@@ -1092,6 +1112,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                     hist->histNNSubthread[n] = hist->histNNSubthread[n] + npoints;
                     xi = cballs_raw_legacy_multipoles(cmd) ? ntab.weighted_kappa_sum : npoints*ntab.kappa;
 #ifdef TPCF
+    if (!cballs_opt_only_2pcf(cmd)) {
                     real cosphi, sinphi;
                     if (cballs_angular_phase(Pos(p), dr, &cosphi, &sinphi)) {
                         if (cballs_raw_legacy_multipoles(cmd))
@@ -1100,6 +1121,7 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         else
                             CHEBYSHEVTUOMPSINCOS;
                     }
+    } /* scalar 3PCF requested */
 #endif
                     hist->histXi2pcfthreadsub[n] += xi;
                     *nbccalcthread += 1;

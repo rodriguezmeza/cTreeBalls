@@ -119,7 +119,7 @@
 #endif
 
 #ifdef USEGSL
-global gsl_rng * r_gsl;
+/* RNG belongs to cballs_runtime_state. */
 #else
 global long idum;
 #endif
@@ -140,6 +140,7 @@ typedef char ErrorMsg[_ERRORMSGSIZE_];
 #include "options_cache.h"
 #include "global_data.h"
 #include "angular_contracts.h"
+#include "resource_contracts.h"
 
 global bodyptr bodytable[MAXITEMS];
 global nodeptr *nodetablescanlev[MAXITEMS];
@@ -157,11 +158,12 @@ global cellptr *celltable[MAXITEMS];
 #endif
 
 // check this... it is repeated in global_data struct
-global real *histXi2pcf_omp;                        // Auxiliary array.
+global real *histXi2pcf_omp;
+global cellptr rootnode;                        // Auxiliary array.
                                                     //  Used in OMP segments
 //B Tree
 // BALLS
-global cellptr rootnode;                            // To make treenodes
+
 //E
 
 
@@ -169,12 +171,6 @@ global cellptr rootnode;                            // To make treenodes
 #include "scalar_moments.h"
 
 // To use in inout and cballsio
-global real *inout_xval;
-global real *inout_yval;
-global real *inout_zval;
-global real *inout_uval;
-global real *inout_vval;
-global real *inout_wval;
 
 //B socket:
 #ifdef ADDONS
@@ -200,10 +196,14 @@ global real *inout_wval;
 
 global bool tree_is_threaded[MAXITEMS];
 
+#include "mpi_runtime.h"
+#include "tree_workspace.h"
 typedef struct cballs_runtime_state {
+    cballs_mpi_engine_state mpi[CBALLS_MPI_ENGINE_COUNT];
+    cballs_tree_workspace tree_workspace;
 #ifdef USEGSL
-    gsl_rng *r_gsl;
-    mMatrix_ptr histZetaMatrix;
+    gsl_rng *rng;
+    mMatrix_ptr histogram_matrix;
 #else
     long idum;
 #endif
@@ -221,12 +221,8 @@ typedef struct cballs_runtime_state {
     bool tree_is_threaded[MAXITEMS];
     real *histXi2pcf_omp;
     cellptr rootnode;
-    real *inout_xval;
-    real *inout_yval;
-    real *inout_zval;
-    real *inout_uval;
-    real *inout_vval;
-    real *inout_wval;
+    real *io_columns[6];
+
 #ifdef CBALLS_RUNTIME_BALLS_GLOBALS
     bodyptr bodytabbf;
     bodyptr bodytabsm;
@@ -239,6 +235,7 @@ typedef struct cballs_runtime_state {
 #endif
 } cballs_runtime_state;
 
+global cballs_runtime_state *cballs_runtime_current(void);
 global cballs_runtime_state *cballs_runtime_create(void);
 global int cballs_runtime_activate(cballs_runtime_state *state);
 global const void *cballs_runtime_bodytable_at(
@@ -250,6 +247,21 @@ global void cballs_runtime_destroy(cballs_runtime_state *state);
 #ifdef CBALLS_MPI_ENABLED
 #include "cballs_mpi_dispatch.h"
 #endif
+
+
+/* Transitional source compatibility: these names are lvalues owned by the
+ * explicit context, not separately stored process globals. Context activation
+ * remains serialized; this does not promise concurrent native API calls. */
+#ifdef USEGSL
+#define r_gsl (cballs_runtime_current()->rng)
+#define histZetaMatrix (cballs_runtime_current()->histogram_matrix)
+#endif
+#define inout_xval (cballs_runtime_current()->io_columns[0])
+#define inout_yval (cballs_runtime_current()->io_columns[1])
+#define inout_zval (cballs_runtime_current()->io_columns[2])
+#define inout_uval (cballs_runtime_current()->io_columns[3])
+#define inout_vval (cballs_runtime_current()->io_columns[4])
+#define inout_wval (cballs_runtime_current()->io_columns[5])
 
 #endif // ! _globaldefs_h
 

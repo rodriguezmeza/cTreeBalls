@@ -22,112 +22,29 @@
 #define CB3D_MPI_INTEGER MPI_INT
 #endif
 
-static int mpi_active = FALSE;
-static int mpi_rank = 0;
-static int mpi_size = 1;
-static int mpi_owned = FALSE;
-static int mpi_finalized = FALSE;
+/* Per-context rank view; process MPI ownership lives in mpi_runtime.c. */
+#define CBALLS_MPI_STATE (cballs_runtime_current()->mpi[CBALLS_MPI_CB3D_MPI])
+#define mpi_active (CBALLS_MPI_STATE.active)
+#define mpi_rank (CBALLS_MPI_STATE.rank)
+#define mpi_size (CBALLS_MPI_STATE.size ? CBALLS_MPI_STATE.size : 1)
 
-static void finalize_at_exit(void)
-{
-    int finalized = FALSE;
 
-    if (!mpi_owned || mpi_finalized) return;
-    if (MPI_Finalized(&finalized) == MPI_SUCCESS && !finalized)
-        MPI_Finalize();
-    mpi_finalized = TRUE;
-    mpi_active = FALSE;
-}
 
 static int mpi_error(struct cmdline_data *cmd, const char *operation,
                      int status)
 {
-    char detail[MPI_MAX_ERROR_STRING];
-    int length = 0;
-
-    detail[0] = '\0';
-    MPI_Error_string(status, detail, &length);
-    snprintf(cmd->error_message, _ERRORMSGSIZE_, "%s failed%s%s",
-             operation, length ? ": " : "", length ? detail : "");
-    return FAILURE;
+    return cballs_mpi_shared_error(cmd, operation, status);
 }
 
 int cb3d_mpi_prepare(struct cmdline_data *cmd,
                                    struct global_data *gd)
 {
-    int initialized = FALSE;
-    int finalized = FALSE;
-    int provided = MPI_THREAD_SINGLE;
-    int status;
-
-    if (!cb3d_is_mpi_method(cmd->searchMethod))
-        return SUCCESS;
-    if ((status = MPI_Finalized(&finalized)) != MPI_SUCCESS)
-        return mpi_error(cmd, "MPI_Finalized", status);
-    if (finalized) {
-        mpi_active = FALSE;
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "3D scalar MPI cannot start after MPI_Finalize");
-        return FAILURE;
-    }
-    if (mpi_active) {
-        if (mpi_rank != CB3D_MPI_ROOT) {
-            cmd->verbose = 0;
-            cmd->verbose_log = 0;
-            gd->flagPrint = FALSE;
-        }
-        return SUCCESS;
-    }
-
-    if ((status = MPI_Initialized(&initialized)) != MPI_SUCCESS)
-        return mpi_error(cmd, "MPI_Initialized", status);
-    if (!initialized) {
-        status = MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
-        if (status != MPI_SUCCESS)
-            return mpi_error(cmd, "MPI_Init_thread", status);
-        mpi_owned = TRUE;
-        if (atexit(finalize_at_exit) != 0) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "3D scalar MPI could not register MPI cleanup");
-            finalize_at_exit();
-            return FAILURE;
-        }
-    } else if ((status = MPI_Query_thread(&provided)) != MPI_SUCCESS) {
-        return mpi_error(cmd, "MPI_Query_thread", status);
-    }
-    if (provided < MPI_THREAD_FUNNELED) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "3D scalar MPI requires MPI_THREAD_FUNNELED support");
-        return FAILURE;
-    }
-    if ((status = MPI_Comm_set_errhandler(MPI_COMM_WORLD,
-                                          MPI_ERRORS_RETURN)) != MPI_SUCCESS
-        || (status = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank)) != MPI_SUCCESS
-        || (status = MPI_Comm_size(MPI_COMM_WORLD, &mpi_size)) != MPI_SUCCESS)
-        return mpi_error(cmd, "MPI communicator setup", status);
-
-    mpi_active = TRUE;
-    if (mpi_rank != CB3D_MPI_ROOT) {
-        cmd->verbose = 0;
-        cmd->verbose_log = 0;
-        gd->flagPrint = FALSE;
-    }
-    return SUCCESS;
+    return cballs_mpi_shared_prepare(&CBALLS_MPI_STATE, cmd, gd, !(!cb3d_is_mpi_method(cmd->searchMethod)));
 }
 
 int cb3d_mpi_finalize(struct cmdline_data *cmd)
 {
-    int finalized = FALSE;
-    int status;
-
-    if (!mpi_active || !mpi_owned || mpi_finalized) return SUCCESS;
-    if ((status = MPI_Finalized(&finalized)) != MPI_SUCCESS)
-        return mpi_error(cmd, "MPI_Finalized", status);
-    if (!finalized && (status = MPI_Finalize()) != MPI_SUCCESS)
-        return mpi_error(cmd, "MPI_Finalize", status);
-    mpi_finalized = TRUE;
-    mpi_active = FALSE;
-    return SUCCESS;
+    return cballs_mpi_shared_finalize(&CBALLS_MPI_STATE, cmd);
 }
 
 int cb3d_mpi_active(void) { return mpi_active; }
@@ -148,22 +65,7 @@ int cb3d_mpi_consensus(struct cmdline_data *cmd,
                                      int local_status,
                                      const char *operation)
 {
-    int local_success = local_status == SUCCESS;
-    int all_success = FALSE;
-    int status;
-
-    if (!mpi_active || !cb3d_is_mpi_method(cmd->searchMethod))
-        return local_status;
-    status = MPI_Allreduce(&local_success, &all_success, 1, MPI_INT, MPI_MIN,
-                           MPI_COMM_WORLD);
-    if (status != MPI_SUCCESS) return mpi_error(cmd, operation, status);
-    if (!all_success) {
-        if (local_success || cmd->error_message[0] == '\0')
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s failed on at least one MPI rank", operation);
-        return FAILURE;
-    }
-    return SUCCESS;
+    return cballs_mpi_shared_consensus(&CBALLS_MPI_STATE, cmd, !(!cb3d_is_mpi_method(cmd->searchMethod)), local_status, operation);
 }
 
 int cb3d_mpi_reduce_reals(struct cmdline_data *cmd,

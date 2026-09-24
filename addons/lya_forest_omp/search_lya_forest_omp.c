@@ -522,6 +522,17 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
             goto size_error;
     }
 
+    size_t grid_cells, grid_bytes, worker_bytes, all_bytes;
+    if (!cballs_size_add(bins2,bins3,&grid_cells)
+        || !cballs_size_mul(grid_cells,2*sizeof(real),&grid_bytes)
+        || !cballs_size_mul(grid_cells,2*sizeof(real)+sizeof(size_t),&worker_bytes)
+        || !cballs_size_mul(worker_bytes,(size_t)MAX(1,cmd->numthreads),&worker_bytes)
+        || !cballs_size_add(grid_bytes,worker_bytes,&all_bytes)
+        || !cballs_size_add(all_bytes,gd->common_histogram_bytes,&all_bytes)) goto size_error;
+    if (cballs_memory_preflight(all_bytes,"Ly-alpha global and worker histogram plan",
+                               cmd->error_message,sizeof(cmd->error_message)) == FAILURE)
+        goto setup_done;
+
     if (compute_2pcf) {
         if (cballs_calloc_checked((void **)&num2, bins2, sizeof(*num2),
                                   "global Ly-alpha 2PCF numerator",

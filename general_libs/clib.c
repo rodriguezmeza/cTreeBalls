@@ -35,6 +35,7 @@
 #include <stdint.h>
 #include <setjmp.h>
 #include <stdatomic.h>
+#include "resource_contracts.h"
 
 
 //B Memory section
@@ -102,12 +103,74 @@ void cballs_allocation_failure(size_t bytes, const char *label)
     exit(1);
 }
 
+/* Budget applies to a complete common histogram plan and to each common
+ * allocation (including NR pointer tables), per MPI rank. It is not an RSS cap.
+ * Read-only getenv is safe in workers; callers must not mutate env during a run. */
+size_t cballs_memory_budget(void)
+{
+    const char *text = getenv("CBALLS_MEMORY_BUDGET_MB");
+//B increasing this threshold...
+// 65536, 131072, 262144
+//    if (!text) return (size_t)1024*1024*1024;
+    if (!text) return (size_t)65536*1024*1024;
+//E
+    if (!*text) return 0;
+    size_t mib = 0;
+    for (const char *p=text; *p; p++) {
+        if (*p<'0' || *p>'9' || mib > ((size_t)PTRDIFF_MAX/1048576-(*p-'0'))/10)
+            return 0;
+        mib=mib*10+(*p-'0');
+    }
+    if (!mib || mib>(size_t)PTRDIFF_MAX/1048576) return 0;
+    return mib*1048576;
+}
+int cballs_memory_preflight(size_t bytes, const char *label, char *errmsg, size_t size)
+{
+    size_t budget = cballs_memory_budget();
+    if (budget && bytes <= budget && bytes <= (size_t)PTRDIFF_MAX) return SUCCESS;
+    if (errmsg && size) snprintf(errmsg,size,
+        "resource preflight for %s: requested %zu bytes, budget %zu bytes; "
+//B set according to above...
+//        "CBALLS_MEMORY_BUDGET_MB must be a positive integer (default 1024 MiB)",
+        "CBALLS_MEMORY_BUDGET_MB must be a positive integer (default 65536 MiB)",
+//E
+        label ? label : "allocation",bytes,budget);
+    return FAILURE;
+}
+void cballs_resource_failure(const char *message)
+{
+    cballs_allocation_context *context=active_allocation_context;
+    if (context) {
+        if (context->errmsg && context->errmsg_size)
+            snprintf(context->errmsg,context->errmsg_size,"%s",message);
+        longjmp(context->recovery,1);
+    }
+    fprintf(stderr,"%s\n",message); fflush(stderr); exit(1);
+}
+static void cballs_preflight_or_fail(size_t bytes, const char *label)
+{
+    char message[512];
+    if (cballs_memory_preflight(bytes,label,message,sizeof(message)) == FAILURE)
+        cballs_resource_failure(message);
+}
+size_t cballs_nr_shape(int rank, long lo1, long hi1, long lo2, long hi2,
+                              long lo3, long hi3, size_t item)
+{
+    size_t a=1,b=1,c=1,bytes;
+    if (!cballs_extent(lo1,hi1,&a) || (rank>1 && !cballs_extent(lo2,hi2,&b))
+        || (rank>2 && !cballs_extent(lo3,hi3,&c))
+        || !cballs_shape_bytes(rank,a,b,c,item,&bytes))
+        cballs_resource_failure("common allocator: invalid dimensions or dimension arithmetic overflow");
+    cballs_preflight_or_fail(bytes,"common numeric array (data and pointer tables)");
+    return bytes;
+}
+
 static int cballs_allocation_bytes(size_t count, size_t item_size,
                                    size_t *bytes,
                                    const char *label,
                                    char *errmsg, size_t errmsg_size)
 {
-    if (bytes == NULL || (item_size != 0 && count > SIZE_MAX / item_size)) {
+    if (bytes == NULL || !cballs_size_mul(count, item_size, bytes)) {
         if (errmsg != NULL && errmsg_size > 0) {
             snprintf(errmsg, errmsg_size,
                      "memory allocation size overflow for %s (%zu x %zu)",
@@ -116,8 +179,7 @@ static int cballs_allocation_bytes(size_t count, size_t item_size,
         return FAILURE;
     }
 
-    *bytes = count * item_size;
-    return SUCCESS;
+    return cballs_memory_preflight(*bytes, label, errmsg, errmsg_size);
 }
 
 int cballs_allocation_guard(cballs_allocation_callback callback,
@@ -624,6 +686,7 @@ void *allocate_array(int nb)
 
     if (nb < 0)
         cballs_allocation_failure(0, "allocate_array");
+    cballs_preflight_or_fail((size_t)nb, "allocate bytes");
     mem = cballs_raw_calloc((size_t)nb, 1);
     if (mem == NULL)
         cballs_allocation_failure((size_t)nb, "allocate_array");
@@ -636,6 +699,7 @@ void *allocate(long int nb)
 
     if (nb < 0)
         cballs_allocation_failure(0, "allocate");
+    cballs_preflight_or_fail((size_t)nb, "allocate bytes");
     mem = cballs_raw_calloc((size_t)nb, 1);
     if (mem == NULL)
         cballs_allocation_failure((size_t)nb, "allocate");
@@ -656,7 +720,7 @@ int *ivector(long nl, long nh)
 {
     int *v;
 
-    size_t bytes = (size_t)(nh-nl+1+NOFFSET_END)*sizeof(int);
+    size_t bytes = cballs_nr_shape(1,nl,nh,0,0,0,0,sizeof(int));
 
     v=(int *)cballs_raw_malloc(bytes);
     if (!v) cballs_allocation_failure(bytes, "ivector");
@@ -674,7 +738,7 @@ double *dvector(long nl, long nh)
 {
     double *v;
 
-    size_t bytes = (size_t)(nh-nl+1+NOFFSET_END)*sizeof(double);
+    size_t bytes = cballs_nr_shape(1,nl,nh,0,0,0,0,sizeof(double));
 
     v=(double *)cballs_raw_malloc(bytes);
     if (!v) cballs_allocation_failure(bytes, "dvector");
@@ -684,8 +748,9 @@ double *dvector(long nl, long nh)
 
 double **dmatrix(long nrl, long nrh, long ncl, long nch)
 {
-    long i, nrow=nrh-nrl+1,
-            ncol=nch-ncl+1;
+    cballs_nr_shape(2,nrl,nrh,ncl,nch,0,0,sizeof(double));
+    size_t nrow=(size_t)(nrh-nrl)+1, ncol=(size_t)(nch-ncl)+1;
+    long i;
     double **m, **row_base;
     size_t pointer_bytes = (size_t)(nrow+NOFFSET_END)*sizeof(double*);
     size_t data_bytes = (size_t)(nrow*ncol+NOFFSET_END)*sizeof(double);
@@ -713,7 +778,9 @@ double **dmatrix(long nrl, long nrh, long ncl, long nch)
 double ***dmatrix3D(long nrl, long nrh, long ncl, long nch, long ndl, long ndh)
 /* allocate a double 3tensor with range t[nrl..nrh][ncl..nch][ndl..ndh] */
 {
-    long i,j,nrow=nrh-nrl+1,ncol=nch-ncl+1,ndep=ndh-ndl+1;
+    cballs_nr_shape(3,nrl,nrh,ncl,nch,ndl,ndh,sizeof(double));
+    size_t nrow=(size_t)(nrh-nrl)+1, ncol=(size_t)(nch-ncl)+1, ndep=(size_t)(ndh-ndl)+1;
+    long i,j;
     double ***t, ***plane_base;
     double **row_base;
     size_t plane_bytes = (size_t)(nrow+NOFFSET_END)*sizeof(double**);
@@ -775,10 +842,7 @@ void free_dvector(double *v, long nl, long nh)
 {
     if (v == NULL)
         return;
-    if (nl>0)
-        free((FREE_ARG) (v+nl-NOFFSET_END));
-    else
-        free((FREE_ARG) (v));
+    free((FREE_ARG) (v+nl-NOFFSET_END));
 }
 
 void free_dmatrix(double **m, long nrl, long nrh, long ncl, long nch)

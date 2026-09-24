@@ -938,6 +938,7 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
             model.Run(level=["MainLoop"])
             elapsed = time.perf_counter() - started
             elapsed_cpu = time.process_time() - started_cpu
+            native_timings = model.getTimings()
             result: dict[str, Any] = {
                 "engine": engine,
                 "provenance": model.getRunMetadata(),
@@ -947,6 +948,8 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
                 f"elapsed_{config.statistics}": elapsed,
                 f"cpu_{config.statistics}": elapsed_cpu,
                 "native_reported_cpu_time": float(model.getCPUTime()),
+                "native_mainloop_wall_time": float(native_timings["wall_seconds"]),
+                "native_mainloop_cpu_time": float(native_timings["process_cpu_seconds"]),
                 "parameters": {key: value for key, value in parameters.items()
                                if key != "rootDir"},
                 "shear_pivot_phase_budget": os.environ.get("CBALLS_SHEAR_PIVOT_TOL", "0.1")
@@ -1069,6 +1072,12 @@ def run_ctreeballs_mpi(catalog: ShearCatalog, config: RunConfig,
         result["native_reported_cpu_time"] = sum(
             row["native_reported_cpu_time"] for row in rank_timings
         )
+        result["native_mainloop_wall_time"] = max(
+            row["native_mainloop_wall_time"] for row in rank_timings
+        )
+        result["native_mainloop_cpu_time"] = sum(
+            row["native_mainloop_cpu_time"] for row in rank_timings
+        )
         result[f"elapsed_{config.statistics}"] = result["compute_wall_time"]
         result[f"cpu_{config.statistics}"] = result["compute_cpu_time"]
         result["ranks"] = config.mpi_ranks
@@ -1108,6 +1117,7 @@ def mpi_worker(root: Path) -> int:
         "setup_wall_time", "setup_cpu_time", "compute_wall_time",
         "compute_cpu_time", "total_wall_time", "total_cpu_time",
         "native_reported_cpu_time",
+        "native_mainloop_wall_time", "native_mainloop_cpu_time",
     )
     rank_timing = {name: float(result[name]) for name in timing_keys}
     rank_timing["rank"] = rank
@@ -1230,6 +1240,8 @@ def timing_summary(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, An
                 compute_cpu / compute_wall if compute_wall > 0.0 else None
             ),
             "native_reported_cpu_time": result.get("native_reported_cpu_time"),
+            "native_mainloop_wall_time": result.get("native_mainloop_wall_time"),
+            "native_mainloop_cpu_time": result.get("native_mainloop_cpu_time"),
             "timing_scope": result.get("timing_scope", "unspecified"),
         }
     return summary
@@ -1242,6 +1254,7 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
         ("compute_wall_s", 16), ("total_wall_s", 14),
         ("setup_cpu_s", 13), ("compute_cpu_s", 15), ("total_cpu_s", 13),
         ("native_cpu_s", 14), ("cpu/wall", 10),
+        ("mainloop_wall_s", 17), ("mainloop_cpu_s", 17),
     )
     lines = [" ".join(name.ljust(width) for name, width in columns)]
     lines.append(" ".join("-" * width for _, width in columns))
@@ -1258,11 +1271,16 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
             f'{values["total_cpu_time"]:.6f}',
             "n/a" if native_cpu is None else f"{native_cpu:.6f}",
             "n/a" if ratio is None else f"{ratio:.3f}",
+            "n/a" if values["native_mainloop_wall_time"] is None else
+            f'{values["native_mainloop_wall_time"]:.6f}',
+            "n/a" if values["native_mainloop_cpu_time"] is None else
+            f'{values["native_mainloop_cpu_time"]:.6f}',
         )
         lines.append(" ".join(str(value).ljust(width) for value, (_, width) in zip(fields, columns)))
     lines.extend((
         "",
         "CPU values are process CPU seconds; MPI rows sum them over ranks.",
+        "mainloop_* exclude Python provenance capture; compute_* time the complete Run call.",
         "The selected only-2pcf/only-3pcf option isolates the requested statistic.",
     ))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

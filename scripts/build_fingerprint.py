@@ -23,7 +23,7 @@ def digest(data):
 
 def source_files(root):
     for directory in ("source", "main", "include", "general_libs", "getparam",
-                      "addons", "python", "scripts", "tests"):
+                      "addons", "python", "scripts", "tests", "capabilities"):
         for parent, dirs, files in os.walk(root / directory):
             dirs[:] = sorted(d for d in dirs if not d.startswith((".", "backup"))
                              and d not in {"build", "python_env", "__pycache__"})
@@ -32,6 +32,7 @@ def source_files(root):
                 if path.is_symlink() or name == "cyballs.c":
                     continue
                 if (path.suffix in {".c", ".h", ".cpp", ".py", ".pyx", ".sh"}
+                        or (directory == "capabilities" and path.suffix == ".json")
                         or name.endswith(".pxd.in") or name.startswith(("Makefile", "run_test"))
                         or "fixtures" in path.parts):
                     yield path

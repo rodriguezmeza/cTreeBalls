@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import ctypes
 import gc
 import os
 import resource
@@ -10,7 +11,24 @@ import tempfile
 from cyballs import CosmoComputationError, cballs
 
 
-def current_rss_bytes():
+def current_memory_bytes():
+    # Darwin can retain hundreds of MiB of freed malloc pages in RSS. Measure
+    # live allocations there so allocator caching is not mistaken for a leak.
+    # These constructors allocate through malloc/calloc, covered by all zones.
+    if sys.platform == "darwin":
+        class MallocStatistics(ctypes.Structure):
+            _fields_ = [("blocks_in_use", ctypes.c_uint),
+                        ("size_in_use", ctypes.c_size_t),
+                        ("max_size_in_use", ctypes.c_size_t),
+                        ("size_allocated", ctypes.c_size_t)]
+        libc = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+        libc.malloc_zone_statistics.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(MallocStatistics)]
+        libc.malloc_zone_statistics.restype = None
+        statistics = MallocStatistics()
+        libc.malloc_zone_statistics(None, ctypes.byref(statistics))
+        return statistics.size_in_use
+
     try:
         with open("/proc/self/statm", encoding="ascii") as statm:
             resident_pages = int(statm.read().split()[1])
@@ -83,7 +101,7 @@ def assert_no_c_ownership(balls, iteration):
         )
 
 
-def test_repeated_failures_have_bounded_rss():
+def test_repeated_failures_have_bounded_memory():
     repeats = int(os.environ.get("CBALLS_FAILURE_REPEATS", "120"))
     warmup = int(os.environ.get("CBALLS_FAILURE_WARMUP", "24"))
     limit_mb = float(os.environ.get("CBALLS_FAILURE_RSS_LIMIT_MB", "32"))
@@ -91,8 +109,8 @@ def test_repeated_failures_have_bounded_rss():
         raise ValueError("CBALLS_FAILURE_REPEATS must exceed the warmup count")
 
     with tempfile.TemporaryDirectory(prefix="ctreeballs-p3-failures-") as root_dir:
-        baseline_rss = None
-        peak_rss = 0
+        baseline_memory = None
+        peak_memory = 0
 
         for index in range(repeats):
             balls = cballs()
@@ -110,29 +128,29 @@ def test_repeated_failures_have_bounded_rss():
 
             if index == warmup - 1 or index >= warmup and index % 8 == 0:
                 gc.collect()
-                rss = current_rss_bytes()
-                if baseline_rss is None:
-                    baseline_rss = rss
-                peak_rss = max(peak_rss, rss)
+                rss = current_memory_bytes()
+                if baseline_memory is None:
+                    baseline_memory = rss
+                peak_memory = max(peak_memory, rss)
 
         gc.collect()
-        peak_rss = max(peak_rss, current_rss_bytes())
-        growth = peak_rss - baseline_rss
+        peak_memory = max(peak_memory, current_memory_bytes())
+        growth = peak_memory - baseline_memory
         limit = int(limit_mb * 1024 * 1024)
         if growth > limit:
             raise AssertionError(
-                "repeated failed startups grew RSS by "
+                "repeated failed startups grew retained memory by "
                 f"{growth / (1024 * 1024):.1f} MiB "
                 f"after warmup (limit {limit_mb:.1f} MiB)"
             )
 
         print(
             "PASS: repeated Cython startup failures retained no C ownership; "
-            f"post-warmup RSS growth={growth / (1024 * 1024):.1f} MiB"
+            f"post-warmup memory growth={growth / (1024 * 1024):.1f} MiB"
         )
 
 
-def test_repeated_partial_tree_failures_have_bounded_rss():
+def test_repeated_large_tree_runs_have_bounded_memory():
     repeats = int(os.environ.get("CBALLS_TREE_FAILURE_REPEATS", "40"))
     warmup = int(os.environ.get("CBALLS_TREE_FAILURE_WARMUP", "8"))
     limit_mb = float(os.environ.get("CBALLS_TREE_FAILURE_RSS_LIMIT_MB", "16"))
@@ -140,8 +158,8 @@ def test_repeated_partial_tree_failures_have_bounded_rss():
         raise ValueError("CBALLS_TREE_FAILURE_REPEATS must exceed the warmup count")
 
     with tempfile.TemporaryDirectory(prefix="ctreeballs-p3-tree-failures-") as root_dir:
-        baseline_rss = None
-        peak_rss = 0
+        baseline_memory = None
+        peak_memory = 0
 
         for index in range(repeats):
             balls = cballs()
@@ -156,46 +174,39 @@ def test_repeated_partial_tree_failures_have_bounded_rss():
             )
             balls.set(parameters)
 
-            try:
-                balls.Run(level=["MainLoop"])
-            except CosmoComputationError as error:
-                if "cellRadius index out of range" not in str(error):
-                    raise AssertionError(
-                        f"partial-tree failure {index} failed for the wrong reason: {error}"
-                    ) from error
-            else:
-                raise AssertionError(
-                    f"partial-tree failure {index} unexpectedly succeeded"
-                )
-
-            assert_no_c_ownership(balls, index)
+            # setradius now clamps large radii into the overflow bin. This
+            # formerly failing fixture must complete and release its full tree.
+            balls.Run(level=["MainLoop"])
+            if balls.getNBody() <= 0:
+                raise AssertionError("large-tree run lost its input catalog")
             balls.struct_cleanup()
+            assert_no_c_ownership(balls, index)
             del balls
 
             if index == warmup - 1 or index >= warmup and index % 4 == 0:
                 gc.collect()
-                rss = current_rss_bytes()
-                if baseline_rss is None:
-                    baseline_rss = rss
-                peak_rss = max(peak_rss, rss)
+                rss = current_memory_bytes()
+                if baseline_memory is None:
+                    baseline_memory = rss
+                peak_memory = max(peak_memory, rss)
 
         gc.collect()
-        peak_rss = max(peak_rss, current_rss_bytes())
-        growth = peak_rss - baseline_rss
+        peak_memory = max(peak_memory, current_memory_bytes())
+        growth = peak_memory - baseline_memory
         limit = int(limit_mb * 1024 * 1024)
         if growth > limit:
             raise AssertionError(
-                "repeated partial-tree failures grew RSS by "
+                "repeated large-tree runs grew retained memory by "
                 f"{growth / (1024 * 1024):.1f} MiB "
                 f"after warmup (limit {limit_mb:.1f} MiB)"
             )
 
         print(
-            "PASS: repeated partial-tree failures retained no C ownership; "
-            f"post-warmup RSS growth={growth / (1024 * 1024):.1f} MiB"
+            "PASS: repeated large-tree runs released all C ownership; "
+            f"post-warmup memory growth={growth / (1024 * 1024):.1f} MiB"
         )
 
 
 if __name__ == "__main__":
-    test_repeated_failures_have_bounded_rss()
-    test_repeated_partial_tree_failures_have_bounded_rss()
+    test_repeated_failures_have_bounded_memory()
+    test_repeated_large_tree_runs_have_bounded_memory()

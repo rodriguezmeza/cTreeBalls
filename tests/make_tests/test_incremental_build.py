@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build-system regressions; small C fixtures use the real project Makefiles."""
+import json
 import os
 from pathlib import Path
 import shutil
@@ -103,14 +104,23 @@ class MakeGraphTests(unittest.TestCase):
                          "setup.py", "pyproject.toml", "MANIFEST.in"):
                 shutil.copy2(ROOT / name, root / name)
             (root / "scripts").mkdir()
-            for name in ("build_support.py", "build_fingerprint.py", "generate_make_info_header.sh"):
+            for name in ("build_support.py", "build_fingerprint.py",
+                         "generate_make_info_header.sh", "generate_capabilities.py"):
                 shutil.copy2(ROOT / "scripts" / name, root / "scripts" / name)
             (root / "source").mkdir()
             (root / "include").mkdir()
+            (root / "capabilities").mkdir()
+            (root / "capabilities" / "engines.json").write_text(json.dumps({
+                "schema_version": 1, "engines": [], "regression_groups": {},
+            }))
+            subprocess.check_call([sys.executable, "scripts/generate_capabilities.py"],
+                                  cwd=root)
             header = root / "include" / "leaf.h"
             header.write_text("#define LEAF 1\n")
             names = ("main", "cballsio", "cballs", "startrun", "testdata", "treeload",
                      "cballsutils", "search", "abi_check", "run_metadata",
+                     "engine_registry", "runtime_context", "memory_catalog",
+                     "common_histogram", "smooth_pivots", "mpi_runtime",
                      "clib", "mathfns", "inout", "mathutil", "numrec", "getparam")
             for name in names:
                 source = "int " + name + "_fixture(void) { return 0; }\n"

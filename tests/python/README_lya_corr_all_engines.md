@@ -1,5 +1,12 @@
 # Ly-alpha forest all-engines driver
 
+The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
+`MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
+Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
+`native_mainloop_cpu_time`. MPI uses maximum rank wall time and summed rank CPU
+for both scopes; use the same scope, output settings and accuracy for comparisons.
+Build the matching current Cython extension before running this driver.
+
 Run this driver from `tests/python`, not the Cython-only `python/` directory.
 Native `timing_report.txt` and `summary.json["timings"]` separate parameter/thread
 setup and MainLoop wall/CPU time. MPI wall time is the maximum rank time and CPU

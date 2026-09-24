@@ -10,7 +10,7 @@ from cyballs import CosmoSevereError, cballs
 
 def parameters(root_dir):
     return {
-        "searchMethod": "octree-ggg-omp",
+        "searchMethod": "octree-2balls-omp",
         "rangeN": 0.8,
         "rminHist": 0.05,
         "sizeHistN": 8,

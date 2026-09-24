@@ -696,111 +696,82 @@ void nrerror(char error_text[])
 	exit(1);
 }
 
+/* Share checked dimensions, complete-shape budgets and guarded failures
+ * with the primary allocators. Preserve the Numerical Recipes indexing. */
+static void *nr_checked_vector(long lo, long hi, size_t item)
+{
+    size_t bytes=cballs_nr_shape(1,lo,hi,0,0,0,0,item);
+    void *pointer=NULL; char message[512];
+    if (cballs_malloc_checked(&pointer,bytes,1,"NR vector",message,sizeof(message))==FAILURE)
+        cballs_resource_failure(message);
+    return pointer;
+}
 float *nr_vector(long nl, long nh)
 {
-	float *v;
-
-	v=(float *)malloc((size_t) ((nh-nl+1+NR_END)*sizeof(float)));
-	if (!v) nrerror("allocation failure in vector()");
-	return v-nl+NR_END;
+    float *v=nr_checked_vector(nl,nh,sizeof(*v));
+    return v-nl+NR_END;
 }
-
 int *nr_ivector(long nl, long nh)
 {
-	int *v;
-
-	v=(int *)malloc((size_t) ((nh-nl+1+NR_END)*sizeof(int)));
-	if (!v) nrerror("allocation failure in ivector()");
-	return v-nl+NR_END;
+    int *v=nr_checked_vector(nl,nh,sizeof(*v));
+    return v-nl+NR_END;
 }
-
 unsigned char *nr_cvector(long nl, long nh)
 {
-	unsigned char *v;
-
-	v=(unsigned char *)malloc((size_t) ((nh-nl+1+NR_END)*sizeof(unsigned char)));
-	if (!v) nrerror("allocation failure in cvector()");
-	return v-nl+NR_END;
+    unsigned char *v=nr_checked_vector(nl,nh,sizeof(*v));
+    return v-nl+NR_END;
 }
-
 unsigned long *nr_lvector(long nl, long nh)
 {
-	unsigned long *v;
-
-	v=(unsigned long *)malloc((size_t) ((nh-nl+1+NR_END)*sizeof(long)));
-	if (!v) nrerror("allocation failure in lvector()");
-	return v-nl+NR_END;
+    unsigned long *v=nr_checked_vector(nl,nh,sizeof(*v));
+    return v-nl+NR_END;
 }
-
 double *nr_dvector(long nl, long nh)
 {
-	double *v;
-    
-	v=(double *)malloc((size_t) ((nh-nl+1+NR_END)*sizeof(double)));
-	if (!v) nrerror("allocation failure in dvector()");
-	return v-nl+NR_END;
+    double *v=nr_checked_vector(nl,nh,sizeof(*v));
+    return v-nl+NR_END;
 }
-
-
 float **nr_matrix(long nrl, long nrh, long ncl, long nch)
 {
-	long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
-	float **m;
-
-	m=(float **) malloc((size_t)((nrow+NR_END)*sizeof(float*)));
-	if (!m) nrerror("allocation failure 1 in matrix()");
-	m += NR_END;
-	m -= nrl;
-
-	m[nrl]=(float *) malloc((size_t)((nrow*ncol+NR_END)*sizeof(float)));
-	if (!m[nrl]) nrerror("allocation failure 2 in matrix()");
-	m[nrl] += NR_END;
-	m[nrl] -= ncl;
-
-	for(i=nrl+1;i<=nrh;i++) m[i]=m[i-1]+ncol;
-
-	return m;
+    cballs_nr_shape(2,nrl,nrh,ncl,nch,0,0,sizeof(float));
+    size_t rows=(size_t)(nrh-nrl)+1, cols=(size_t)(nch-ncl)+1;
+    float **base=NULL, **m; float *data=NULL; char message[512];
+    if (cballs_malloc_checked((void **)&base,rows+1,sizeof(*base),"NR row pointers",message,sizeof(message))==FAILURE)
+        cballs_resource_failure(message);
+    if (cballs_malloc_checked((void **)&data,rows*cols+1,sizeof(*data),"NR matrix data",message,sizeof(message))==FAILURE) {
+        free(base); cballs_resource_failure(message);
+    }
+    m=base+NR_END-nrl; m[nrl]=data+NR_END-ncl;
+    for (long i=nrl+1;i<=nrh;i++) m[i]=m[i-1]+cols;
+    return m;
 }
-
 double **nr_dmatrix(long nrl, long nrh, long ncl, long nch)
 {
-	long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
-	double **m;
-
-	m=(double **) malloc((size_t)((nrow+NR_END)*sizeof(double*)));
-	if (!m) nrerror("allocation failure 1 in matrix()");
-	m += NR_END;
-	m -= nrl;
-
-	m[nrl]=(double *) malloc((size_t)((nrow*ncol+NR_END)*sizeof(double)));
-	if (!m[nrl]) nrerror("allocation failure 2 in matrix()");
-	m[nrl] += NR_END;
-	m[nrl] -= ncl;
-
-	for(i=nrl+1;i<=nrh;i++) m[i]=m[i-1]+ncol;
-
-	return m;
+    cballs_nr_shape(2,nrl,nrh,ncl,nch,0,0,sizeof(double));
+    size_t rows=(size_t)(nrh-nrl)+1, cols=(size_t)(nch-ncl)+1;
+    double **base=NULL, **m; double *data=NULL; char message[512];
+    if (cballs_malloc_checked((void **)&base,rows+1,sizeof(*base),"NR row pointers",message,sizeof(message))==FAILURE)
+        cballs_resource_failure(message);
+    if (cballs_malloc_checked((void **)&data,rows*cols+1,sizeof(*data),"NR matrix data",message,sizeof(message))==FAILURE) {
+        free(base); cballs_resource_failure(message);
+    }
+    m=base+NR_END-nrl; m[nrl]=data+NR_END-ncl;
+    for (long i=nrl+1;i<=nrh;i++) m[i]=m[i-1]+cols;
+    return m;
 }
-
-
 int **nr_imatrix(long nrl, long nrh, long ncl, long nch)
 {
-	long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
-	int **m;
-
-	m=(int **) malloc((size_t)((nrow+NR_END)*sizeof(int*)));
-	if (!m) nrerror("allocation failure 1 in matrix()");
-	m += NR_END;
-	m -= nrl;
-
-	m[nrl]=(int *) malloc((size_t)((nrow*ncol+NR_END)*sizeof(int)));
-	if (!m[nrl]) nrerror("allocation failure 2 in matrix()");
-	m[nrl] += NR_END;
-	m[nrl] -= ncl;
-
-	for(i=nrl+1;i<=nrh;i++) m[i]=m[i-1]+ncol;
-
-	return m;
+    cballs_nr_shape(2,nrl,nrh,ncl,nch,0,0,sizeof(int));
+    size_t rows=(size_t)(nrh-nrl)+1, cols=(size_t)(nch-ncl)+1;
+    int **base=NULL, **m; int *data=NULL; char message[512];
+    if (cballs_malloc_checked((void **)&base,rows+1,sizeof(*base),"NR row pointers",message,sizeof(message))==FAILURE)
+        cballs_resource_failure(message);
+    if (cballs_malloc_checked((void **)&data,rows*cols+1,sizeof(*data),"NR matrix data",message,sizeof(message))==FAILURE) {
+        free(base); cballs_resource_failure(message);
+    }
+    m=base+NR_END-nrl; m[nrl]=data+NR_END-ncl;
+    for (long i=nrl+1;i<=nrh;i++) m[i]=m[i-1]+cols;
+    return m;
 }
 
 void free_vector(float *v, long nl, long nh)

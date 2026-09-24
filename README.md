@@ -36,6 +36,7 @@ accepts every geometry, field, mask, or normalization.
 - [Sphinx guide](https://ctreeballs.readthedocs.io/en/latest/)
 - [Installation](docs/installation.rst) and [build profiles](docs/build_profiles.rst)
 - [Search-method guide](docs/search_methods.rst)
+- [Active capability catalogue](ENGINE_CAPABILITIES.md) and [validation contracts](docs/capabilities.rst)
 - [Scalar numerical contract](docs/3pcf.rst)
 - [Python API](docs/api.rst) and [in-memory catalogs](docs/user/python.rst)
 - [Benchmarking](docs/benchmarks.rst) and [regressions](tests/make_tests/README.md)
@@ -53,7 +54,7 @@ and runtime, normally `mpicc` and `mpiexec`.
 ```sh
 git clone https://github.com/rodriguezmeza/cTreeBalls.git
 cd cTreeBalls
-python3 -m pip install numpy Cython setuptools wheel
+python3 -m pip install -r requirements/build.txt
 make -j4 cballs cyballs-static-lib
 CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
 ```
@@ -66,8 +67,9 @@ library with the same profile. To install this checkout in the active environmen
 python3 -m pip install .
 ```
 
-To install a published PyPI release, use `python3 -m pip install cTreeBalls`.
-The import name is always `cyballs`. A pip installation does not install the
+To install a published PyPI release, use `python3 -m pip install cyballs`.
+The project name is cTreeBalls; both the distribution and import names are
+`cyballs`, matching `setup.py`. A pip installation does not install the
 checkout's `cballs` command, examples, or benchmark source trees.
 
 Configure `Makefile_settings`, `Makefile_machine`, and
@@ -167,7 +169,10 @@ Every rank must enter the same run and cleanup sequence; read published
 histograms on rank 0. The all-engines drivers manage catalog broadcasting.
 Native benchmark CPU time is summed across participating MPI ranks; wall time
 is the slowest rank. Save the per-rank timings and numerical settings alongside
-results. Exact native-octree 3PCF needs `no-one-ball,no-smooth-pivot`; scheduling
+results. The `mainloop_*` table columns exclude Python provenance capture;
+`compute_*` includes the complete `Run` call. Compare matching timing scopes.
+See `scripts/benchmark_contracts.py` for cold-process timing, memory and retained
+accuracy workloads. Exact native-octree 3PCF needs `no-one-ball,no-smooth-pivot`; scheduling
 with `BALLS4SCANLEVON=1` can remain enabled.
 
 ## Tests and Documentation Builds
@@ -220,3 +225,5 @@ Also author acknowledges for helpful discussion and testing to the following peo
 - Gustavo Niz
 - Axel Romero Tisnado
 - Sofia Samario
+
+We acknowledge financial support from SECIHITI grants CBF2023-2024-162 and CBF-2025-I-2795.

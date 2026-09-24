@@ -1,7 +1,8 @@
 Installation
 ============
 
-The distribution name is ``cTreeBalls``; import it as ``cyballs``.
+The project is cTreeBalls. The distribution name in ``setup.py`` is ``cyballs``;
+import it as ``cyballs``.
 These docs describe this source checkout. A published package or GitHub branch
 may not yet contain local changes. A source push does not publish a PyPI release.
 
@@ -16,7 +17,8 @@ requires an MPI C compiler and runtime, normally ``mpicc`` and ``mpiexec``.
 For an MPI-enabled source build on Debian/Ubuntu::
 
    sudo apt-get update
-   sudo apt-get install build-essential python3-dev zlib1g-dev libopenmpi-dev openmpi-bin
+   sudo apt-get install build-essential python3-dev pkg-config zlib1g-dev \
+       libopenmpi-dev openmpi-bin libgsl-dev libcfitsio-dev
 
 On macOS, configure a compiler with working OpenMP support and an MPI wrapper
 using a compatible toolchain. Do not mix unrelated MPI or OpenMP installations.
@@ -27,7 +29,7 @@ Python Installation
 
 Install a published release::
 
-   python3 -m pip install cTreeBalls
+   python3 -m pip install cyballs
 
 Install a source checkout into the active environment::
 
@@ -52,7 +54,7 @@ For the executable, static library, examples, and a local extension::
 
    git clone https://github.com/rodriguezmeza/cTreeBalls.git
    cd cTreeBalls
-   python3 -m pip install numpy Cython setuptools wheel
+   python3 -m pip install -r requirements/build.txt
    make -j4 cballs cyballs-static-lib
    CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
 
@@ -86,9 +88,11 @@ different Python minor versions.
 Native Dependencies
 -------------------
 
-``GSLINTERNAL=1`` selects the bundled GSL sources. ``USEGSL=1`` is required by
-the current wrapper. FITS support additionally requires ``CFITSIOON=1`` and an
-external CFITSIO installation.
+The intended public profile uses ``USEGSL=1``, ``GSLINTERNAL=0`` and external
+GSL, plus ``CFITSIOON=1`` and external CFITSIO. ``USEGSL=1`` is required by
+the current wrapper. The public source distribution excludes vendored GSL and
+CFITSIO trees; ``GSLINTERNAL=1`` is only for development checkouts containing
+those optional sources.
 
 For external GSL use ``GSLINTERNAL=0`` and ``gsl-config``, or explicit
 ``GSL_INCLUDE``/``GSL_LIB``. CFITSIO uses ``pkg-config cfitsio``. Set

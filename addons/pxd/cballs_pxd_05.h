@@ -327,6 +327,8 @@ int get_HistZetaMsincos(struct  cmdline_data* cmd,
     real ***histZetaMptr = NULL;
     string histName = "histZetaMcos";
 
+    class_test(!gd->common_scalar_3pcf || !gd->computeTPCF, errmsg,
+               "%s: scalar 3PCF was not computed", routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
@@ -403,6 +405,8 @@ int get_HistZetaM_EE(struct  cmdline_data* cmd,
                && (!gd->scalar_window_ready
                    || gd->scalar_window_bins != cmd->sizeHistN), errmsg,
                "%s: scalar window results are unavailable", routineName);
+    class_test(!gd->common_scalar_3pcf || !gd->computeTPCF, errmsg,
+               "%s: scalar 3PCF was not computed", routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);
@@ -451,6 +455,8 @@ int get_HistZetaM_EE_Im(struct cmdline_data* cmd,
                && (!gd->scalar_window_ready
                    || gd->scalar_window_bins != cmd->sizeHistN), errmsg,
                "%s: scalar window results are unavailable", routineName);
+    class_test(!gd->common_scalar_3pcf || !gd->computeTPCF, errmsg,
+               "%s: scalar 3PCF was not computed", routineName);
     if (gd->computeTPCF==TRUE) {
         class_test((m <= 0 || m > cmd->mChebyshev + 1),
                    errmsg,"\n%s: not allowed value of m = %d\n", routineName, m);

@@ -7,6 +7,7 @@ import sys
 import tempfile
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -21,7 +22,7 @@ from cyballs import cballs, search_method_id
 
 METHODS = (
     "octree-ggg-omp", "kdtree-omp", "balltree-omp", "octree-balls4-omp",
-    "balltree-2balls-omp", "octree-2balls-omp", "balltree-2balls-omp_3pcf",
+    "kdtree-2balls-omp", "balltree-2balls-omp", "octree-2balls-omp", "balltree-2balls-omp_3pcf",
 )
 EDGES = np.geomspace(2*np.sin(np.pi/360), np.sqrt(3), 5)
 
@@ -158,7 +159,7 @@ def test_undefined_bearings():
 def test_kdtree_2balls_legacy_compatibility():
     if MPI_MODE or search_method_id("kdtree-omp") < 0 \
             or search_method_id("kdtree-2balls-omp") < 0:
-        return
+        pytest.skip("legacy kdtree compatibility requires both OpenMP engines in a non-MPI run")
     positions, field, weights = catalog(True)
     reference = run("kdtree-omp", positions, field, weights, threads=3,
                     exact=False)
@@ -172,7 +173,7 @@ def test_kdtree_2balls_legacy_compatibility():
 def test_balltree_2balls_legacy_compatibility():
     if MPI_MODE or search_method_id("balltree-omp") < 0 \
             or search_method_id("balltree-2balls-omp") < 0:
-        return
+        pytest.skip("legacy balltree compatibility requires both OpenMP engines in a non-MPI run")
     positions, field, weights = catalog(True)
     reference = run("balltree-omp", positions, field, weights, threads=3,
                     exact=False)
@@ -185,7 +186,7 @@ def test_balltree_2balls_legacy_compatibility():
 
 def test_c_executable():
     if MPI_MODE:
-        return
+        pytest.skip("native executable checks run separately from the MPI worker")
     positions, field, _ = catalog(True)
     expected = oracle(positions, field, np.ones(len(field)))
     with tempfile.TemporaryDirectory(prefix="scalar-contract-c-") as directory:
@@ -224,8 +225,13 @@ def test_c_executable():
 if __name__ == "__main__":
     test_scalar_contract()
     test_undefined_bearings()
-    test_kdtree_2balls_legacy_compatibility()
-    test_balltree_2balls_legacy_compatibility()
+    for check in (test_kdtree_2balls_legacy_compatibility,
+                  test_balltree_2balls_legacy_compatibility):
+        try:
+            check()
+        except pytest.skip.Exception as exc:
+            if COMM is None or COMM.rank == 0:
+                print(f"SKIP: {check.__name__}: {exc}")
     if not MPI_MODE:
         test_c_executable()
     if COMM is None or COMM.rank == 0:

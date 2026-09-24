@@ -238,3 +238,6 @@ int cballs_write_run_metadata(struct cmdline_data *, struct global_data *);
 #endif
 
 #endif // ! _protodefs_h
+
+/* Generated-capability runtime help. */
+int cballs_print_search_methods(struct cmdline_data *, struct global_data *);

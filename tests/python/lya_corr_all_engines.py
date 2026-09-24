@@ -657,6 +657,7 @@ def run_engine_suite(catalog, config, comm=None):
             spec = LYA_ENGINES[engine]
             participates = spec.mpi or comm.rank == 0
             setup_wall = setup_cpu = compute_wall = compute_cpu = native_cpu = 0.0
+            native_timings = None
             def setup():
                 nonlocal setup_wall, setup_cpu
                 if participates:
@@ -672,12 +673,13 @@ def run_engine_suite(catalog, config, comm=None):
                       flush=True)
             started = time.perf_counter()
             def compute():
-                nonlocal compute_wall, compute_cpu, native_cpu
+                nonlocal compute_wall, compute_cpu, native_cpu, native_timings
                 if participates:
                     wall, cpu = time.perf_counter(), time.process_time()
                     balls.Run(level=["MainLoop"])
                     compute_wall, compute_cpu = time.perf_counter()-wall, time.process_time()-cpu
                     native_cpu = float(balls.getCPUTime())
+                    native_timings = balls.getTimings()
             try:
                 collective(comm, compute)
             finally:
@@ -688,6 +690,10 @@ def run_engine_suite(catalog, config, comm=None):
                 "cTreeBalls parameter/thread setup plus MainLoop including native output; "
                 "catalog registration, Python result loading and cleanup excluded")
             rank_timing.update(rank=comm.rank, native_reported_cpu_time=native_cpu)
+            if participates:
+                rank_timing.update(
+                    native_mainloop_wall_time=float(native_timings["wall_seconds"]),
+                    native_mainloop_cpu_time=float(native_timings["process_cpu_seconds"]))
             rows = comm.allgather(rank_timing if participates else None)
             timings = aggregate_rank_timings([row for row in rows if row is not None])
             product = collective(comm, lambda: read_products(root, engine), root_only=True)

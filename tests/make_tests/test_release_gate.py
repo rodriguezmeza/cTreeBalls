@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import subprocess
 import numpy as np
 import pytest
 
@@ -21,6 +22,14 @@ def test_resolved_registry_is_explicit_and_complete():
     with pytest.raises(AssertionError): parse_registry(text.replace('(1):','(2):'))
     with pytest.raises(AssertionError): parse_registry('')
     assert parse_registry(text.replace('octree-sincos-omp','unknown')) != expected_registry({})
+
+
+def test_current_native_registry_matches_the_resolved_gate_matrix(tmp_path):
+    result = subprocess.run([str(ROOT/'cballs'), 'options=print-search-methods',
+                             f'rootDir={tmp_path}', 'verbose=0', 'verbose_log=0'],
+                            text=True, capture_output=True, timeout=30)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert parse_registry(result.stdout) == expected_registry(build_info()['resolved_settings'])
 
 
 def test_runner_fails_on_command_failure_timeout_and_stale_output(tmp_path):

@@ -10,7 +10,7 @@ Install From PyPI
 
 .. code-block:: bash
 
-   python3 -m pip install cTreeBalls
+   python3 -m pip install cyballs
 
 Verify the Python wrapper:
 

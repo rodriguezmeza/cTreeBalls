@@ -295,6 +295,9 @@ struct global_data{
     bool gd_allocated;
     bool gd_allocated_2;
     bool histograms_allocated;
+    bool common_scalar_3pcf;
+    size_t common_histogram_bytes;
+    size_t memory_budget_bytes;
     bool tree_allocated;
     bool bodytable_allocated;
     //E

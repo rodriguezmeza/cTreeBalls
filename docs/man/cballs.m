@@ -167,7 +167,9 @@ The convergence, shear, and forest drivers are under
 .IR tests/python .
 They retain one NumPy catalog across selected engines and write timing and
 comparison summaries.
-Their timing tables separate setup and compute. MPI wall time is the maximum
+Their timing tables separate setup, complete Python compute calls, and native
+MainLoop time. mainloop_wall_s and mainloop_cpu_s exclude Python provenance
+capture; compute columns include it. MPI wall time is the maximum
 across participating ranks and CPU time is their sum. The forest driver reads
 DESI and eBOSS/PICCA delta FITS, compares compatible estimator families, and
 supports model distortion/covariance analysis. Consult its README for input
@@ -176,6 +178,12 @@ contracts and separately scoped external reference timings.
 Use one MPI implementation for MPICC, the runtime launcher, the extension, and
 mpi4py. numberThreads is per rank. All ranks enter the same run and cleanup
 sequence; rank zero writes results.
+.SH CAPABILITY CATALOGUE
+capabilities/engines.json declares the public active search methods, aliases
+and regression ownership. Run scripts/generate_capabilities.py after editing
+it; builds reject stale generated registration files. print-search-methods
+reports only entries enabled in the current executable. Inactive addons
+and addons/python_env are not part of the public distribution.
 .SH EXAMPLES
 .PP
 Inspect the executable:

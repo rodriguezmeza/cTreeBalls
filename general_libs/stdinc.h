@@ -244,6 +244,11 @@ int cballs_allocation_guard(cballs_allocation_callback callback,
                             void *argument,
                             char *errmsg, size_t errmsg_size);
 void cballs_allocation_failure(size_t bytes, const char *label);
+int cballs_memory_preflight(size_t bytes, const char *label, char *errmsg, size_t errmsg_size);
+size_t cballs_memory_budget(void);
+size_t cballs_nr_shape(int rank, long lo1, long hi1, long lo2, long hi2,
+                       long lo3, long hi3, size_t item);
+void cballs_resource_failure(const char *message);
 int cballs_malloc_checked(void **pointer, size_t count, size_t item_size,
                           const char *label,
                           char *errmsg, size_t errmsg_size);

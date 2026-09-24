@@ -36,31 +36,48 @@ local long int free_tree_file(struct global_data *, int);
 local int statBodies(struct  cmdline_data* cmd, struct  global_data* gd,
                      bodyptr btab, int nbody);
 
-#define MAXLEVEL  32
+#define MAXLEVEL  CBALLS_TREE_MAXLEVEL
+/* Build/traversal scratch belongs to the active runtime context. */
+#define cellhist (cballs_runtime_current()->tree_workspace.cellhist)
+#define subnhist (cballs_runtime_current()->tree_workspace.subnhist)
+#define NTOT (cballs_runtime_current()->tree_workspace.NTOT)
+#define ip (cballs_runtime_current()->tree_workspace.ip)
+#define cellhistNb (cballs_runtime_current()->tree_workspace.cellhistNb)
+#define cellRadius (cballs_runtime_current()->tree_workspace.cellRadius)
+#define deltaRadius (cballs_runtime_current()->tree_workspace.deltaRadius)
+#define inode (cballs_runtime_current()->tree_workspace.inode)
+#define treeinfofilePath (cballs_runtime_current()->tree_workspace.treeinfofilePath)
+#define outtreeinfo (cballs_runtime_current()->tree_workspace.outtreeinfo)
+#define inodelevB4 (cballs_runtime_current()->tree_workspace.inodelevB4)
+#define ibodyleftoutB4 (cballs_runtime_current()->tree_workspace.ibodyleftoutB4)
+#define ncell (cballs_runtime_current()->tree_workspace.ncell)
+#define isel (cballs_runtime_current()->tree_workspace.isel)
+#define inosel (cballs_runtime_current()->tree_workspace.inosel)
 
-local int cellhist[MAXLEVEL];
-local int subnhist[MAXLEVEL];
+
+
+
 //B Smooth(ing) section
-local INTEGER NTOT[1];                              // Two sets of cells to smooth
-local INTEGER ip;                                   //  bodies
-#define NbMax 33
-local INTEGER cellhistNb[NbMax];
-local int cellRadius[NbMax];
-local real deltaRadius;
+
+
+#define NbMax CBALLS_TREE_RADIUS_BINS
+
+
+
 //E
 
 local void walktree_selected(nodeptr, real);        // To see the bodies belonging
                                                     //  to a cell
 
-local INTEGER inode;
+
 #ifdef DEBUG
 local void walktree_hit(struct  cmdline_data* cmd, struct  global_data* gd,
                         nodeptr, real);
 #endif
 
 #ifdef DEBUGTREE
-local char treeinfofilePath[MAXLENGTHOFFILES];
-local FILE *outtreeinfo;
+
+
 local void walkTree_printInfo(struct  cmdline_data* cmd, struct  global_data* gd,
                               nodeptr q, real qsize, int lev);
 #endif
@@ -74,13 +91,13 @@ local int walktree_scan_lev_balls4(struct cmdline_data* cmd,
                                   struct global_data* gd,
                                   nodeptr q, int lev, int ifile,
                                   int scanLevel);
-local INTEGER inodelevB4;
-local INTEGER ibodyleftoutB4;
+
+
 #endif
 
 #ifndef MACONLY
 //B celltable
-local INTEGER ncell;
+
 //E
 #endif
 
@@ -90,7 +107,7 @@ local int pruningCells(struct  cmdline_data* cmd,
                         int ifile, cellptr p, int lev);
 #endif
 
-local INTEGER isel, inosel;
+
 //B socket:
 #ifdef ADDONS
 #include "treeload_include_00.h"

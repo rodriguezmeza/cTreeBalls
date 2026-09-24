@@ -26,7 +26,7 @@ typedef struct {
     gsl_matrix_complex *histZetaM;
 } mMatrix, *mMatrix_ptr;
 
-global mMatrix_ptr histZetaMatrix;
+/* Matrix workspace is owned by cballs_runtime_state. */
 #endif
 
 typedef struct {

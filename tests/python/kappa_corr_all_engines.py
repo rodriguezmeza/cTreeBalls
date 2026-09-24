@@ -1353,6 +1353,12 @@ def aggregate_rank_timings(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
                      "compute_cpu_time", "total_wall_time", "total_cpu_time",
                      "native_reported_cpu_time")
     }
+    for name, reduce in (("native_mainloop_wall_time", max),
+                         ("native_mainloop_cpu_time", sum)):
+        if any(name in row for row in rows):
+            if not all(name in row for row in rows):
+                raise ValueError(f"missing {name} on a participating rank")
+            result[name] = reduce(float(row[name]) for row in rows)
     result.update(ranks=len(rows), rank_timings=list(rows),
                   timing_scope=rows[0]["timing_scope"] +
                   "; wall=max(participating ranks), CPU=sum(participating ranks)")
@@ -1590,6 +1596,10 @@ def timing_summary(results: dict[str, dict]) -> dict[str, dict[str, Any]]:
         compute_cpu = float(result.get("compute_cpu_time", 0.0))
         summary[engine] = {
             "backend": "ctreeballs",
+            "ranks": int(result.get("ranks", 1)),
+            "threads_per_rank": int(result.get("threads_per_rank", 1)),
+            "native_mainloop_wall_time": result.get("native_mainloop_wall_time"),
+            "native_mainloop_cpu_time": result.get("native_mainloop_cpu_time"),
             "setup_wall_time": float(result.get("setup_wall_time", 0.0)),
             "setup_cpu_time": float(result.get("setup_cpu_time", 0.0)),
             "compute_wall_time": compute_wall,
@@ -1612,6 +1622,8 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
         ("compute_wall_s", 16), ("total_wall_s", 14),
         ("setup_cpu_s", 13), ("compute_cpu_s", 15), ("total_cpu_s", 13),
         ("native_cpu_s", 14), ("cpu/wall", 10),
+        ("ranks", 7), ("threads/rank", 13),
+        ("mainloop_wall_s", 17), ("mainloop_cpu_s", 17),
     )
     lines = [" ".join(name.ljust(width) for name, width in columns)]
     lines.append(" ".join("-" * width for _, width in columns))
@@ -1629,12 +1641,18 @@ def write_timing_report(path: Path, timings: dict[str, dict[str, Any]]) -> None:
             f'{values["total_cpu_time"]:.6f}',
             "n/a" if native_cpu is None else f"{native_cpu:.6f}",
             "n/a" if ratio is None else f"{ratio:.3f}",
+            str(values["ranks"]), str(values["threads_per_rank"]),
+            "n/a" if values["native_mainloop_wall_time"] is None else
+            f'{values["native_mainloop_wall_time"]:.6f}',
+            "n/a" if values["native_mainloop_cpu_time"] is None else
+            f'{values["native_mainloop_cpu_time"]:.6f}',
         )
         lines.append(" ".join(str(value).ljust(width) for value, (_, width) in zip(fields, columns)))
     lines.extend((
         "",
         "CPU values are process CPU seconds; they may exceed wall time for threaded work.",
         "MPI CPU is summed across participating ranks; wall time is their maximum.",
+        "mainloop_* exclude Python provenance capture; compute_* time the complete Run call.",
         "Read timing_scope in summary.json: setup, output and cleanup scopes differ by driver.",
     ))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1726,6 +1744,9 @@ def run_engine_suite(
                     )
                     rank_timing.update(rank=comm.rank,
                                        native_reported_cpu_time=float(balls.getCPUTime()))
+                    native = balls.getTimings()
+                    rank_timing.update(native_mainloop_wall_time=float(native["wall_seconds"]),
+                                       native_mainloop_cpu_time=float(native["process_cpu_seconds"]))
                     if comm.rank == 0:
                         result = copy_engine_results(balls, engine, config)
                 except Exception as exc:
@@ -1791,6 +1812,9 @@ def run_engine_suite(
                     "total_wall_time": value.get("total_wall_time"),
                     "total_cpu_time": value.get("total_cpu_time"),
                     "native_reported_cpu_time": value.get("native_reported_cpu_time"),
+                    "native_mainloop_wall_time": value.get("native_mainloop_wall_time"),
+                    "native_mainloop_cpu_time": value.get("native_mainloop_cpu_time"),
+                    "provenance": value["run_settings"]["provenance"],
                     "timing_scope": value.get("timing_scope"),
                     "rank_timings": value["rank_timings"],
                     "ranks": value["ranks"],

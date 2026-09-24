@@ -1,0 +1,9 @@
+-r build.txt
+pytest
+scipy
+astropy
+healpy
+matplotlib
+mpi4py
+build
+twine

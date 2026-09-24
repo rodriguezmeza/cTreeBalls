@@ -22,7 +22,7 @@ Install a published Python release from PyPI:
 
 .. code-block:: bash
 
-   python3 -m pip install cTreeBalls
+   python3 -m pip install cyballs
 
 Then import the compiled wrapper as ``cyballs``:
 
@@ -30,7 +30,8 @@ Then import the compiled wrapper as ``cyballs``:
 
    from cyballs import cballs
 
-For a no-checkout notebook workflow, open the standalone Colab example:
+A historical notebook (pinned to the older ``cTreeBalls==1.0.1`` package,
+not this source profile) is available as the standalone Colab example:
 `cTreeBalls minimal Colab notebook <https://colab.research.google.com/github/rodriguezmeza/cTreeBalls/blob/main/examples/cTreeBalls_minimal_colab.ipynb>`_.
 
 Use a source checkout for the ``cballs`` executable, current unpublished
@@ -40,7 +41,7 @@ changes, test catalogs, or development files:
 
    git clone https://github.com/rodriguezmeza/cTreeBalls.git
    cd cTreeBalls
-   python3 -m pip install numpy Cython setuptools wheel
+   python3 -m pip install -r requirements/build.txt
    make -j4 cballs cyballs-static-lib
    CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force
 
@@ -122,4 +123,5 @@ add-ons remains available under Tutorials and Reference.
    addons
    troubleshooting
    development
+   capabilities
    citing

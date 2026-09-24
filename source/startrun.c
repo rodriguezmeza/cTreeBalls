@@ -62,8 +62,6 @@ local int print_make_info(struct cmdline_data* cmd,
                      struct  global_data* gd);
 local int print_options(struct cmdline_data* cmd,
                         struct  global_data* gd);
-local int print_search_methods(struct cmdline_data* cmd,
-                               struct global_data* gd);
 
 #ifndef USEGSL
 local long saveidum;
@@ -782,7 +780,7 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     }
 
     if (scanopt(cmd->options, "print-search-methods")) {
-        print_search_methods(cmd, gd);
+        cballs_print_search_methods(cmd, gd);
         if (!scanopt(cmd->options, "no-stop")) {
             gd->stopflag = TRUE;
             return FAILURE;
@@ -1589,6 +1587,28 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
                         cmd->searchMethod);
     }
 
+    if (cmd->mChebyshev < 0 || cmd->mChebyshev > (INT_MAX-1)/4
+        || cmd->sizeHistN < 2 || cmd->sizeHistN > 46340)
+        cBALLS_FAIL(cmd, "histogram dimensions exceed safe signed-index limits\n");
+    size_t scalar_cells;
+    if (!cballs_opt_only_2pcf(cmd) && (!cballs_size_mul((size_t)cmd->sizeHistN, (size_t)cmd->sizeHistN, &scalar_cells)
+        || !cballs_size_mul(scalar_cells, (size_t)cmd->mChebyshev*2+1, &scalar_cells)
+        || scalar_cells > INT_MAX))
+        cBALLS_FAIL(cmd, "histogram dimensions exceed safe signed-index product limits\n");
+
+    if (cballs_opt_only_2pcf(cmd)) {
+        const char *name=cmd->searchMethod;
+        const char *supported[]={"kdtree-omp","kdtree-mpi","kdtree-2balls-omp","kdtree-2balls-mpi",
+            "balltree-omp","balltree-mpi","balltree-2balls-omp","balltree-2balls-mpi",
+            "octree-ggg-omp","octree-ggg-mpi","octree-2balls-omp","octree-2balls-mpi",
+            "octree-balls4-omp","octree-balls4-mpi"};
+        int supported_pair=strstr(name,"shear") || strstr(name,"box")
+            || !strncmp(name,"lya-",4) || strstr(name,"3pcf-3d") || strstr(name,"ggg-3d");
+        for (size_t i=0;i<sizeof(supported)/sizeof(supported[0]);i++)
+            supported_pair |= !strcmp(name,supported[i]);
+        if (!supported_pair)
+            cBALLS_FAIL(cmd, "%s does not implement only-2pcf; select octree-2balls-omp for pair-only storage\n",name);
+    }
     //B Parameters related to the searching method
     if (cmd->useLogHist==FALSE &&
         (strcmp(cmd->searchMethod,"balls-omp") == 0))
@@ -1995,140 +2015,94 @@ local int random_init(struct  cmdline_data* cmd,
     return SUCCESS;
 }
 
-global int startrun_memoryAllocation(struct  cmdline_data *cmd, 
-                                     struct  global_data* gd)
+/* Scalar Fourier storage is independent of shear, physical 3D and forest
+ * products. Keep the legacy scalar plan for the remaining scalar engines. */
+static int common_scalar_3pcf(const struct cmdline_data *cmd)
 {
-    string routineName = "startrun_memoryAllocation";
-    // Free allocated memory in reverse order as were allocated
-    //  First is allocated above gsl structure gd->r
-
-    INTEGER bytes_tot_local=0;
-    gd->histograms_allocated = TRUE;
-    //B PXD functions
-#ifdef PXD
-    gd->vecPXD = dvector(1,cmd->sizeHistN);
-    //B offset at 0 in order to work with Cython
-    gd->matPXD = dmatrix(0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
-    //E
-    bytes_tot_local += cmd->sizeHistN*sizeof(real);
-    bytes_tot_local += cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-    gd->rBins = dvector(1,cmd->sizeHistN);
-    gd->histZetaMFlatten = dvector(1,cmd->sizeHistN*cmd->sizeHistN);
-#endif
-    //E PXD functions
-    gd->histNN = dvector(1,cmd->sizeHistN);
-    gd->histCF = dvector(1,cmd->sizeHistN);
-    gd->histNNSub = dvector(1,cmd->sizeHistN);
-    //B only in search_direct_method_simple
-//    gd->histW = dvector(1,cmd->sizeHistN);
-//    gd->histWW = dvector(1,cmd->sizeHistN);
-    //E
-    // 2pcf
-    gd->histNNSubXi2pcf = dvector(1,cmd->sizeHistN);
-#ifdef SMOOTHPIVOT
-    gd->histNNSubXi2pcftotal = dvector(1,cmd->sizeHistN);
-#endif
-    //
-    gd->histNNN = dvector(1,cmd->sizeHistN);
-    gd->histXi2pcf = dvector(1,cmd->sizeHistN);
-    //B cross
-    gd->histXi2pcf12 = dvector(1,cmd->sizeHistN);
-    gd->histXi2pcf13 = dvector(1,cmd->sizeHistN);
-    //E
-
-    bytes_tot_local += 8*cmd->sizeHistN*sizeof(real);
-    bytes_tot_local += cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-
 #ifdef TPCF
-        gd->histXicos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-        gd->histXisin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-        bytes_tot_local += 2*(cmd->mChebyshev+1)*cmd->sizeHistN*sizeof(real);
-        gd->histZetaM = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,
-                                  1,cmd->sizeHistN);
-        gd->histZetaM_EE = dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,
-                                  1,cmd->sizeHistN);
-        gd->histZetaM_EE_Im = dmatrix3D(1,cmd->mChebyshev+1,
-                                       1,cmd->sizeHistN,1,cmd->sizeHistN);
-        bytes_tot_local +=
-            3.0*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-
-        gd->histZetaMcos =
-                dmatrix3D(1,cmd->mChebyshev+1,1,
-                          cmd->sizeHistN,1,cmd->sizeHistN);
-        gd->histZetaMsin =
-                dmatrix3D(1,cmd->mChebyshev+1,1,
-                          cmd->sizeHistN,1,cmd->sizeHistN);
-        gd->histZetaMsincos =
-                dmatrix3D(1,cmd->mChebyshev+1,1,
-                          cmd->sizeHistN,1,cmd->sizeHistN);
-        // Transpose of Zm(ti) X Ym(tj) = Zm(tj) X Ym(ti)
-        gd->histZetaMcossin =
-                dmatrix3D(1,cmd->mChebyshev+1,1,
-                          cmd->sizeHistN,1,cmd->sizeHistN);
-        bytes_tot_local +=
-            4*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
-        gd->histZetaGmRe =
-                    dmatrix3D(1,cmd->mChebyshev+1,1,
-                              cmd->sizeHistN,1,cmd->sizeHistN);
-        gd->histZetaGmIm =
-                    dmatrix3D(1,cmd->mChebyshev+1,1,
-                              cmd->sizeHistN,1,cmd->sizeHistN);
-        bytes_tot_local +=
-            2*(cmd->mChebyshev+1)*cmd->sizeHistN*cmd->sizeHistN*sizeof(real);
+    const char *name=cmd->searchMethod ? cmd->searchMethod : "";
+    return !cballs_opt_only_2pcf(cmd) && strncmp(name,"lya-",4)
+        && !strstr(name,"shear") && !strstr(name,"3pcf-3d")
+        && !strstr(name,"ggg-3d") && !strstr(name,"box");
+#else
+    (void)cmd; return FALSE;
 #endif
+}
 
-//B socket:
-#ifdef ADDONS
-    // this is empty and can be remove these 3 lines
-#include "startrun_include_10.h"                    // should be sync with
-                                                //  "cballsio_include_10.h"
-#endif
-//E
-
-    //B this was in startrun_include_10.h -> startrun_octree_kkk_omp_10.h above...
-    // problems with OCTREEKKKOMPON = 0
-    // 2pcf
-    gd->histNNSubN2pcf = dvector(1,cmd->sizeHistN);
+global int startrun_memoryAllocation(struct cmdline_data *cmd, struct global_data *gd)
+{
+    size_t bytes=0,part,shape, n=(size_t)cmd->sizeHistN, m=(size_t)cmd->mChebyshev+1;
+    gd->common_scalar_3pcf=common_scalar_3pcf(cmd);
+    gd->memory_budget_bytes=cballs_memory_budget();
+    /* Preflight the entire common plan BEFORE its first allocation, including
+     * padding and pointer tables. Use the allocator's double storage size. */
+#define PLAN(rank,a,b,c,copies) do { \
+    if (!cballs_shape_bytes(rank,a,b,c,sizeof(double),&shape) \
+        || !cballs_size_mul(shape,copies,&part) || !cballs_size_add(bytes,part,&bytes)) \
+        cBALLS_FAIL(cmd,"common histogram dimension arithmetic overflow\n"); \
+} while (0)
+    PLAN(1,n,1,1,10);
 #ifdef SMOOTHPIVOT
-    gd->histNNSubN2pcftotal = dvector(1,cmd->sizeHistN);
+    PLAN(1,n,1,1,2);
 #endif
-    gd->histN2pcf = dvector(1,cmd->sizeHistN);
-    bytes_tot_local += 3*cmd->sizeHistN*sizeof(real);
-    //E
-
-    gd->bytes_tot += bytes_tot_local;
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "\n%s: Allocated %g MByte for histograms storage.\n",
-                           routineName, bytes_tot_local*INMB);
-
+#ifdef PXD
+    PLAN(1,n,1,1,2);
+    if (gd->common_scalar_3pcf) PLAN(2,n,n,1,1);
+#endif
+#ifdef TPCF
+    if (gd->common_scalar_3pcf) {
+        PLAN(2,m,n,1,2);
+        PLAN(3,m,n,n,9);
+    }
+#endif
+#undef PLAN
+    if (cballs_memory_preflight(bytes,"complete common histogram plan",
+                               cmd->error_message,_ERRORMSGSIZE_) == FAILURE) return FAILURE;
+    gd->common_histogram_bytes=bytes;
+    gd->histograms_allocated=TRUE; /* cleanup owns every subsequent pointer */
+#ifdef PXD
+    gd->vecPXD=dvector(1,cmd->sizeHistN);
+    gd->rBins=dvector(1,cmd->sizeHistN);
+    if (gd->common_scalar_3pcf)
+        gd->matPXD=dmatrix(0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
+    /* histZetaMFlatten has no consumers; leave it NULL. */
+#endif
+#define VECTOR(name) gd->name=dvector(1,cmd->sizeHistN)
+    VECTOR(histNN); VECTOR(histCF); VECTOR(histNNSub); VECTOR(histNNSubXi2pcf);
+    VECTOR(histNNN); VECTOR(histXi2pcf); VECTOR(histXi2pcf12); VECTOR(histXi2pcf13);
+    VECTOR(histNNSubN2pcf); VECTOR(histN2pcf);
+#ifdef SMOOTHPIVOT
+    VECTOR(histNNSubXi2pcftotal); VECTOR(histNNSubN2pcftotal);
+#endif
+#undef VECTOR
+#ifdef TPCF
+    if (gd->common_scalar_3pcf) {
+        gd->histXicos=dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+        gd->histXisin=dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+#define TENSOR(name) gd->name=dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN)
+        TENSOR(histZetaM); TENSOR(histZetaM_EE); TENSOR(histZetaM_EE_Im);
+        TENSOR(histZetaMcos); TENSOR(histZetaMsin); TENSOR(histZetaMsincos);
+        TENSOR(histZetaMcossin); TENSOR(histZetaGmRe); TENSOR(histZetaGmIm);
+#undef TENSOR
+    }
+#endif
+    /* bytes_tot is legacy signed accounting; check its addition too. */
+    size_t accounted;
+    if (gd->bytes_tot < 0 || !cballs_size_add((size_t)gd->bytes_tot,bytes,&accounted))
+        cBALLS_FAIL(cmd,"common histogram accounting overflow\n");
+    gd->bytes_tot = (INTEGER)accounted;
+    verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+        "\ncommon histogram plan: %zu bytes; scalar 3PCF tensors: %s\n",
+        bytes,gd->common_scalar_3pcf ? "yes" : "no");
     return SUCCESS;
 }
 
-local void search_method_string_to_int(string method_str,int *method_int)
+local void search_method_string_to_int(string method_str, int *method_int)
 {
-// Every search method must have an item here::
-    *method_int=-1;
-    if (strnull(method_str))
-                *method_int = SEARCHNULL;
-    if (strcmp(method_str,"octree-sincos-omp") == 0)
-                *method_int = OCTREESINCOSOMPMETHOD;
-
-//B socket:
-#ifdef ADDONS
-#include "startrun_include_11.h"                    // See in this file
-                                                    //  the last tag number used
-#endif
-//E
+    *method_int = cballs_search_method_id(method_str);
 }
 
-global int cballs_search_method_id(const char *method)
-{
-    int method_id = -1;
 
-    if (method == NULL) return -1;
-    search_method_string_to_int((string)method, &method_id);
-    return method_id;
-}
 
 
 //B
@@ -2712,6 +2686,9 @@ local int print_make_info(struct cmdline_data* cmd,
 
     verb_print_zero(cmd->verbose,
                     "[effective compile-time features (enabled)]\n");
+    verb_print_zero(cmd->verbose,
+                    "engine registry: capabilities/engines.json; "
+                    "print-search-methods lists this executable's enabled entries\n");
 
 #ifdef SMOOTHPIVOT
     {
@@ -3097,318 +3074,7 @@ local int print_make_info(struct cmdline_data* cmd,
     return SUCCESS;
 }
 
-local int print_search_methods(struct cmdline_data* cmd,
-                               struct global_data* gd)
-{
-    typedef struct {
-        const char *name;
-        const char *geometry;
-        const char *correlations;
-        const char *usage;
-    } search_method_help;
 
-    static const search_method_help known_methods[] = {
-        {"octree-sincos-omp", "2D/3D scalar; octree; OpenMP",
-         "standard 2PCF and sine/cosine 3PCF multipoles",
-         "Core method. Select KKKCorrelation for convergence 3PCF output. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it."},
-        {"balls-omp", "scalar; octree ball aggregation; OpenMP",
-         "2PCF/3PCF multipoles",
-         "Use no-one-ball for exact body traversal; theta controls cell acceptance."},
-        {"kdtree-omp", "scalar; balanced k-d tree; OpenMP",
-         "2PCF/3PCF multipoles",
-         "One-ball aggregate-node acceptance is the default; behavior-ball is a backward-compatible explicit spelling and no-one-ball selects exact bodies. only-2pcf and only-3pcf select runtime work. read-mask excludes masked pivots and neighbors. edge-corrections,no-normalize-HistZeta computes window modes through 2*mChebyshev and applies the complex correction solve. BALLS4SCANLEVON=1 scans a fixed balanced KD pivot frontier with dynamic OpenMP scheduling. With SMOOTHPIVOTON=1, deterministic pivot smoothing is on by default; use no-smooth-pivot to disable it."},
-        {"kdtree-mpi", "scalar; balanced k-d tree; MPI+OpenMP",
-         "distributed 2PCF/3PCF multipoles, masks, and edge correction",
-         "Enable KDTREEMPION=1 and run with mpiexec; numberThreads is per rank. It shares all kdtree-omp runtime options. With BALLS4SCANLEVON=1, ranks own cyclic tasks from the balanced KD scan-level frontier, reduce raw histograms, and only rank 0 normalizes and writes output."},
-        {"kdtree-2balls-omp", "scalar; median k-d tree; dual-node dual-node OpenMP scan",
-         "2PCF and LogMultipole angular 3PCF, masks, and complex edge correction",
-         "Enable KDTREE2BALLSOMPON=1. Two-node same-bin acceptance is the default; dual-node-bin-slop enables dual-node's bin-position slop and no-two-balls forces exact bodies. legacy-one-ball dispatches to the actual kdtree-omp kernel; there no-one-ball, smoothing, masks, order selection, and edge correction have the same meaning as for search=kdtree-omp. only-2pcf and only-3pcf select runtime work. nsmooth is the leaf capacity. BALLS4SCANLEVON=1 raises the minimum balanced KD frontier to 64 tasks. read-mask excludes masked bodies. With SMOOTHPIVOTON=1, an independent active-pivot tree uses smoothed pivot fields by default; use no-smooth-pivot to disable it."},
-        {"kdtree-2balls-mpi", "scalar; median k-d tree; deterministic MPI+OpenMP dual-node scan",
-         "distributed 2PCF and LogMultipole angular 3PCF, masks, and complex edge correction",
-         "Enable KDTREE2BALLSMPION=1 and run with mpiexec; numberThreads is per rank. It accepts the kdtree-2balls-omp runtime controls. legacy-one-ball uses the distributed legacy KD kernel, and dual-node-direct-triples distributes the validation frontier; the latter still requires no-smooth-pivot. BALLS4SCANLEVON=1 sizes the balanced KD frontier for ranks times threads with a 64-task minimum. Ranks own deterministic frontier tasks, reduce raw histograms, and only rank 0 normalizes and writes output."},
-        {"balltree-omp", "scalar; FCFC-style PCA ball tree; OpenMP",
-         "2PCF/3PCF multipoles",
-         "nsmooth sets leaf capacity. Exact traversal is the default; behavior-ball enables aggregate-node acceptance, no-one-ball disables it, and aggregation requires useLogHist=true. With BALLS4SCANLEVON=1, a fixed 256-node spatial pivot frontier replaces catalog-order blocks; dynamic execution and block-ordered publication preserve thread-count-independent results. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot for raw no-normalize-HistZeta multipoles or to disable it."},
-        {"balltree-2balls-omp", "scalar; FCFC PCA ball tree; dual-node dual/triple-node OpenMP scan",
-         "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-         "TWOPCFON and TPCFON switch 2PCF and 3PCF independently; only-2pcf and only-3pcf select runtime work. Auto-correlations use a two-entry content-keyed cache whose packed points retain no body/Python pointers, so repeated 2PCFs and 3PCFs may reuse the compact tree; no-balltree-tree-cache forces cold construction. The production 3PCF inherits bounded sparse unresolved neighbor-node lists without copying multipole scratch; no-balltree-persistent-frontier restores a root restart for profiling. Deterministic upper-tree PCA statistics and sphere passes build in parallel; no-balltree-parallel-build selects the serial diagnostic path. dual-node-profile reports cache and native phases. Two-node acceptance is the default; dual-node-bin-slop enables bin-position slop, no-two-balls forces exact bodies, and dual-node-direct-triples retains the cubic validation traversal. nsmooth sets PCA-tree leaf capacity; dual-node-singleton-leaves and dual-node-bucket-leaves override the adaptive 2PCF leaf policy. legacy-one-ball dispatches to balltree-omp and rejects edge-corrections. Masks, weights, smoothing, and BALLS4SCANLEV remain supported; edge correction uses the native two-ball mode."},
-        {"balltree-2balls-mpi", "scalar; FCFC PCA ball tree; deterministic MPI+OpenMP dual/triple-node scan",
-         "distributed 2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-         "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. It distributes the production body-pivot LogMultipole traversal and otherwise matches balltree-2balls-omp, including masks, smoothing, edge correction, order selectors, and BALLS4SCANLEV. legacy-one-ball dispatches to the privately linked distributed balltree legacy kernel. dual-node-direct-triples remains an OpenMP-only validation oracle."},
-        {"octree-2balls-omp", "scalar; native octree; dual-node 2PCF and LogMultipole 3PCF",
-         "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-         "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one in native two-ball mode. nsmooth bounds compact native-octree leaf occupancy. Conservative same-bin containment is the default 2PCF policy; dual-node-bin-slop selects dual-node-compatible Log/Linear near-bin acceptance, while no-two-balls selects exact body pairs. BALLS4SCANLEVON=1 supplies balanced frontiers. Normal mode stops tree preparation after production cell aggregation and does not use smooth pivots. legacy-one-ball instead builds the full threaded native octree and dispatches to the actual octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. read-mask accepts a FITS companion mask, columns-ascii-all/binary-all mask values, or set_catalog(mask=...) in cyballs."},
-        {"octree-2balls-mpi", "scalar; native octree; deterministic MPI+OpenMP frontier",
-         "distributed 2PCF and LogMultipole angular-multipole 3PCF",
-         "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. Native two-ball mode accepts the octree-2balls-omp controls, including read-mask with valid-body-only normalization, except dual-node-direct-triples, which remains a serial validation oracle. legacy-one-ball instead builds the full threaded native octree and dispatches to the distributed octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. With BALLS4SCANLEVON=1, the selected backend builds its balanced adaptive frontier. Only rank 0 normalizes and writes output."},
-        {"balltree-2balls-omp_3pcf", "scalar; FCFC PCA ball tree; dual-node LogMultipole pair factorization",
-         "angular-multipole 3PCF with auto- and cross-catalog support",
-         "TPCFON=1 is required. Pivot-neighbor tree scans accumulate radial field multipoles and form 3PCF bins from pair products, excluding q==r with node second moments. dual-node-style radial-bin slop and angular phase-error criteria control aggregation; completed large-radius moments are inherited while unresolved bins split the pivot. nsmooth sets the default leaf capacity; dual-node-singleton-leaves forces one body per leaf. theta=1 is the production setting, theta approaching zero converges to exact. Multipoles are normalized by distinct-triplet count by default; weights-norm uses the distinct-triplet weight denominator and no-normalize-HistZeta returns raw sums. no-two-balls selects exact body moments, and dual-node-direct-triples selects the slower validation traversal. BALLS4SCANLEVON=1 explicitly enables the balanced frontier contract; production LogMultipole retains its stronger work-estimated 256-task scheduler."},
-        {"balltree-2balls-mpi_3pcf", "scalar; FCFC PCA ball tree; deterministic MPI+OpenMP LogMultipole frontier",
-         "distributed angular-multipole 3PCF with auto- and cross-catalog support",
-         "Build with BALLTREE2BALLSMPI3PCFON=1 and TPCFON=1, then run with mpiexec. numberThreads sets OpenMP threads per rank. It accepts the production balltree-2balls-omp_3pcf options except dual-node-direct-triples, which remains an OpenMP validation oracle. With BALLS4SCANLEVON=1, the work-estimated frontier is distributed deterministically across ranks."},
-        {"balltree-mpi", "scalar; FCFC-style ball tree; MPI+OpenMP",
-         "distributed 2PCF/3PCF multipoles",
-         "Run with mpiexec; numberThreads sets OpenMP threads per MPI rank. BALLS4SCANLEVON=1 enforces at least 256 spatial frontier tasks for dynamic rank/thread scheduling. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it."},
-        {"octree-kkk-omp", "scalar convergence; octree; OpenMP",
-         "KK, KKK, NN, and configured count estimators",
-         "Select the correlation with KKCorrelation, KKKCorrelation, NNCorrelation, or NNEstimator."},
-        {"octree-ggg-omp", "projected scalar; octree; OpenMP",
-         "2PCF and angular-multipole 3PCF",
-         "Common options include KKKCorrelation, compute-HistN, read-mask, and edge-corrections. Add only-2pcf to skip all angular multipoles and 3PCF storage. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it. The deterministic adaptive frontier balances active pivots after smoothing and masking. Raw no-output 3PCF skips unused count/window multipoles; normalized, edge-corrected, ggg-full-window, and requested count-output runs retain them. ggg-profile reports frontier, work, wait, and ordered-reduction timings."},
-        {"octree-ggg-mpi", "projected scalar; octree; MPI+OpenMP",
-         "distributed octree-ggg-omp estimator",
-         "Run with mpiexec; numberThreads sets OpenMP threads per MPI rank. Ranks claim deterministic ranges of the shared adaptive frontier; GGG_MPI_PIVOT_CLAIM_SIZE controls the approximate active-pivot claim size. Raw no-output 3PCF skips count/window multipoles exactly as in OpenMP; edge-corrections and ggg-full-window retain modes through 2*mChebyshev. ggg-profile reports rank work, ordered wait, merge, and wall timings. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it."},
-        {"octree-shear-omp", "flat-sky spin-2 shear; accepted-node octree; OpenMP",
-         "xi+/xi- and four Gamma-x shear 3PCF components",
-         "Use Cartesian tangent-plane catalogs with pos-and-shear; periodic geometry is not supported. only-2pcf uses a dedicated pair kernel without 3PCF storage, and only-3pcf skips pair work. The default dual-node-style node path accepts only cells contained in one radial bin and within the theta angular phase tolerance; no-one-ball selects exact bodies. Accepted cells retain exact spin-2 second moments for distinct-neighbor subtraction. With SMOOTHPIVOTON=1, deterministic weighted-shear pivot smoothing is on by default; rsmooth is literal and must satisfy 2*rsmooth <= rminHist so a group cannot contain measured pairs. Automatically derived radii are capped at that limit. Use no-smooth-pivot to disable it. BALLS4SCANLEVON=1 visits exact body pivots in spatial scan-level order and reduces fixed SHEAR_OMP_PIVOT_BLOCK_SIZE blocks deterministically."},
-        {"octree-shear-sphere-omp", "full-sky spin-2 shear; unit-sphere octree; OpenMP",
-         "xi+/xi- and four Gamma-x shear 3PCF components",
-         "Use 3D observer-centered vectors and gamma1+i*gamma2 in each point's local east/north basis. Positions are normalized to the unit sphere; radial limits are chord distances r=2 sin(angle/2), with rangeN no greater than 2. Neighbor shears are parallel transported along great circles into every pivot tangent frame. only-2pcf uses a deterministic dual-octree kernel when smoothing is disabled; spherical smooth-pivot runs use representative body pivots because the symmetric dual tree has no pivot ownership. only-3pcf skips pair work. Spherical cells store basis-aware transported first and second shear moments, so both orders may accept cells when their radial-bin, angular-phase, and transport-error bounds pass. theta controls this approximation; no-one-ball selects the exact body oracle. read-mask and shear mode-coupling correction are supported. BALLS4SCANLEVON=1 retains deterministic spatial pivot ordering for the 3PCF/body path. With SMOOTHPIVOTON=1, transport-aware pivot smoothing is on by default; explicit rsmooth is in arcmin, is not scaled by THETA, and must satisfy the internal chord-distance condition 2*rsmooth <= rminHist. Automatically derived radii are capped there. Use no-smooth-pivot to retain raw pivots and the only-2pcf dual-tree path."},
-        {"octree-shear-sphere-2balls-omp",
-         "full-sky spin-2 shear; dual-node/Jarvis dual-node octree; OpenMP",
-         "xi+/xi- and four Gamma-x shear 3PCF components",
-         "Build with OCTREESHEARSPHERE2BALLSOMPON=1. The native 2PCF uses combined node radii, bin-width opening tests, dual-node's 0.585 split heuristic, simultaneous splitting of comparable nodes, and a chunked symmetric dual-tree frontier. no-two-balls or no-one-ball forces exact body pairs. only-2pcf runs only the dual-node scan; in a combined run the pair scan is separate and the spherical LogMultipole pivot scan computes only the 3PCF. only-3pcf skips pair work. With BALLS4SCANLEVON=1, a work-estimated native pivot-cell frontier conservatively prefilters neighbor roots, dynamically schedules exact body pivots, and merges task-local histograms in spatial order under a bounded memory budget. The experimental shear-pivot-reuse option instead inherits unresolved neighbors and partial rings and permits aggregate pivots; CBALLS_SHEAR_PIVOT_TOL controls its spherical phase budget and requires numerical calibration. It requires no-smooth-pivot and is off by default. Body unit vectors are reused while native aggregate-cell centers remain explicitly normalized. legacy-one-ball dispatches this search name to the actual octree-shear-sphere-omp kernel. Use no-smooth-pivot to make the unsmoothed pair paths available. Set CBALLS_SHEAR_PROFILE=1 for kernel timings."},
-        {"octree-shear-sphere-2balls-mpi",
-         "full-sky spin-2 shear; native octree; adaptive MPI+OpenMP frontier",
-         "distributed xi+/xi- and four Gamma-x shear 3PCF components",
-         "Build with OCTREESHEARSPHERE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. With BALLS4SCANLEVON=1, work-estimated native pivot tasks conservatively prefilter neighbor roots, largest tasks are assigned to the least-loaded rank, and each rank allocates only owned task histograms. The chunked symmetric dual-tree 2PCF is distributed independently in only-2pcf and combined runs. Enabled raw histograms are packed into one real reduction, counters use one integer reduction, and only rank 0 normalizes, solves mode coupling, reconstructs angular Gamma, and writes output. Set CBALLS_SHEAR_PROFILE=1 for scheduler, rank, and thread timings."},
-        {"kdtree-shear-sphere-2balls-omp",
-         "full-sky spin-2 shear; dual-node/Jarvis median KD tree; OpenMP",
-         "xi+/xi- and four Gamma-x shear 3PCF components",
-         "Build with KDTREESHEARSPHERE2BALLSOMPON=1. KD nodes store first and second spin-2 moments in their local tangent frames. only-2pcf uses a symmetric dual-node scan; only-3pcf uses exact body pivots and accepted KD neighbor nodes. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier dynamically schedules 3PCF work, conservatively prefilters neighbor roots, and merges task-local histograms in spatial order under a bounded memory budget. Catalog positions are normalized once and reused by the SIMD-friendly transport/ring kernel. no-two-balls or no-one-ball forces exact bodies, dual-node-bin-slop enables the looser radial criterion, and nsmooth sets leaf capacity. Masks, mode-coupling edge correction, and the safe SMOOTHPIVOTON/no-smooth-pivot contract match the spherical octree shear engines. Set CBALLS_SHEAR_PROFILE=1 for kernel timings."},
-        {"kdtree-shear-sphere-2balls-mpi",
-         "full-sky spin-2 shear; median KD tree; adaptive MPI+OpenMP frontier",
-         "distributed xi+/xi- and four Gamma-x shear 3PCF components",
-         "Build with KDTREESHEARSPHERE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier is sized for ranks times threads, conservative neighbor roots are prefiltered, and largest tasks are assigned to the least-loaded rank before dynamic OpenMP execution. Each rank stores only its owned task histograms. The independent symmetric dual-tree 2PCF frontier is distributed over ranks for both only-2pcf and combined runs using conservative overlap/cardinality estimates and largest-work-first assignment. Enabled raw histograms are packed into one real-valued reduction, counters use one integer reduction, and only rank 0 normalizes, solves mode coupling, reconstructs angular Gamma, and writes output. Set CBALLS_SHEAR_PROFILE=1 for rank- and thread-specific kernel timings."},
-        {"balltree-shear-sphere-2balls-omp",
-         "full-sky spin-2 shear; dual-node/Jarvis FCFC PCA ball tree; OpenMP",
-         "xi+/xi- and four Gamma-x shear 3PCF components",
-         "Build with BALLTREESHEARSPHERE2BALLSOMPON=1. PCA-split nodes carry conservative spherical balls and direct first/second spin-2 moments. Construction skips leaf PCA, fuses center/PCA statistics, and parallelizes upper member passes with fixed chunks and exact preorder node ranges; no-balltree-parallel-build selects serial construction with identical chunking. Unsmoothed repeated roles share one tree within a call, without a cross-call cache. The symmetric dual-node 2PCF projects both shears onto their connecting great circle and combines auto-pair orientations. The default 3PCF uses exact body pivots. With BALLS4SCANLEVON=1, opt-in shear-pivot-reuse inherits sparse unresolved lists and ancestor-frame rings, permitting aggregate pivots under CBALLS_SHEAR_PIVOT_TOL; calibrate this spherical phase budget against exact results. It requires no-smooth-pivot, has a 64 MiB per-worker scratch cap, and does not change the 2PCF. The work-estimated frontier publishes histograms in spatial order under a 256 MiB cap. Either no-one-ball or no-two-balls disables cell aggregation for both statistics. dual-node-bin-slop enables the looser radial criterion; nsmooth sets leaf capacity. Masks, mode-coupling correction, and smoothing contracts match the other spherical shear engines. CBALLS_SHEAR_PROFILE=1 reports build, kernel, and reuse counters."},
-        {"balltree-shear-sphere-2balls-mpi",
-         "full-sky spin-2 shear; FCFC PCA ball tree; adaptive MPI+OpenMP frontier",
-         "distributed xi+/xi- and four Gamma-x shear 3PCF components",
-         "Build with BALLTREESHEARSPHERE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier is sized for ranks times threads, conservative neighbor multipole roots are prefiltered, and largest-first tasks are assigned to the least-loaded rank before dynamic OpenMP execution. Each rank stores and merges only its owned frontier histograms. The independent symmetric dual-tree 2PCF frontier is distributed over ranks for both only-2pcf and combined runs using conservative overlap/cardinality estimates and deterministic largest-work-first assignment. Enabled raw histograms are packed into one real-valued reduction, counters use one integer reduction, and only rank 0 normalizes, solves mode coupling, reconstructs angular Gamma, and writes output. Set CBALLS_SHEAR_PROFILE=1 for rank- and thread-specific kernel timings."},
-        {"octree-sincos-omp-addons", "scalar; addon octree; OpenMP",
-         "sine/cosine 3PCF multipoles",
-         "Addon variant of the core octree-sincos method."},
-        {"tree-omp-sincos", "scalar; legacy tree; OpenMP",
-         "sine/cosine 3PCF multipoles",
-         "Legacy comparison method using the common histogram parameters."},
-        {"octree-ggg-cross-omp", "projected scalar cross-catalog; octree; OpenMP",
-         "cross-catalog angular-multipole 3PCF",
-         "Provide the required distinct catalogs through infile and iCatalogs."},
-        {"direct-sincos", "scalar; direct enumeration",
-         "reference sine/cosine correlations",
-         "Brute-force validation method; intended for small catalogs."},
-        {"kdtree-cute-box", "periodic Cartesian box; k-d tree",
-         "CUTE-compatible box correlations",
-         "Use usePeriodic=true and the cute-box/cute-box-fmt options as needed."},
-        {"direct-simple-sincos", "scalar; direct simple loops",
-         "reference sine/cosine correlations",
-         "Development/reference method for small catalogs."},
-        {"octree-ggg-omp-triangles", "projected scalar; octree; OpenMP",
-         "explicit triangle-oriented 3PCF output",
-         "Triangle-output variant of octree-ggg-omp."},
-        {"octree-balls4-omp", "scalar convergence; normal octree; OpenMP",
-         "weighted convergence 2PCF and balls4 KKK 3PCF multipoles",
-         "Requires 3D, usePeriodic=false, and useLogHist=true. Enable OCTREEBALLS4OMPON=1. Build with TWOPCFON=1 for 2PCF and TPCFON=1 for 3PCF; only-2pcf skips all 3PCF and B4 scan work and uses the shared compact native-octree pair kernel, while only-3pcf skips pair accumulation, reduction, and output. BALLS4SCANLEVON=1 raises compact-pair concurrency, coalesces normalized scan tasks, and caps raw/edge work at about 1024 deterministic pivot blocks. dual-node-bin-slop selects its production approximation; no-two-balls or no-one-ball selects exact body pairs. BALLS4 preserves its Weight*Kappa signal and weights-norm selects a pair-weight denominator. compute-HistN,and-CF writes pair-count/CF files. Works with SMOOTHPIVOTON=0 or 1; options=smooth-pivot is not supported. read-mask accepts an embedded columns-ascii-all/binary-all mask or an in-memory mask. edge-corrections,no-normalize-HistZeta uses distinct-neighbor body-pivot multipoles, window modes through 2*mChebyshev, and a complex solve; weights-norm enables weighted windows. Either no-one-ball or no-two-balls makes edge moments exact."},
-        {"octree-balls4-mpi", "scalar convergence; normal octree; MPI+OpenMP",
-         "distributed BALLS4 2PCF and 3PCF with masks and complex edge corrections",
-         "Enable OCTREEBALLS4MPION=1 and run with mpiexec; numberThreads is threads per rank. The runtime options match octree-balls4-omp, including only-2pcf, only-3pcf, read-mask, and edge-corrections. With only-2pcf each rank uses the shared compact native-octree pair frontier, skips B4/3PCF storage, and reduces pair vectors in deterministic task order. With only-3pcf it omits pair accumulation and MPI pair reduction. The 3PCF path keeps disjoint B4 work; raw sums are reduced before normalization and only rank 0 writes output. Edge pivot blocks are gathered and accumulated in fixed task order. SMOOTHPIVOT is unsupported."},
-        {"octree-kkk-balls4-omp-triangles", "scalar convergence; octree; OpenMP",
-         "balls4 triangle-oriented KKK 3PCF",
-         "Triangle-output variant of octree-balls4-omp."},
-        {"kdtree-box-omp", "periodic Cartesian box; k-d tree; OpenMP",
-         "box 2PCF",
-         "Use usePeriodic=true; cute-box-fmt writes CUTE-compatible output. BALLS4SCANLEVON=1 scans a balanced, spatially ordered KD pivot frontier."},
-        {"octree-box-omp", "periodic Cartesian box; octree; OpenMP",
-         "box 2PCF/3PCF",
-         "Use usePeriodic=true and configure rangeN/rminHist/sizeHistN."},
-        {"neighbor-boxes-omp", "periodic Cartesian box; linked boxes; OpenMP",
-         "periodic pair counts and unweighted density correlation function",
-         "Use usePeriodic=true. Coordinates are wrapped locally modulo lengthBox; centered and translated periodic catalogs are accepted. This method does not accumulate a convergence-weighted 2PCF. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it."},
-        {"octree-ggg", "projected scalar; serial octree",
-         "legacy angular-multipole 3PCF",
-         "Serial comparison variant of octree-ggg-omp."},
-        {"direct-simple-sincos-loopId", "scalar; direct loops with IDs",
-         "reference sine/cosine correlations",
-         "Development/reference method that retains loop identifiers."},
-        {"balls-omp-0357", "scalar; legacy balls profile; OpenMP",
-         "legacy 2PCF/3PCF multipoles",
-         "Optional compatibility profile; prefer balls-omp for new runs."},
-        {"octree-3pcf-3d-omp", "3D scalar; exact octree leaves; OpenMP",
-         "spherical-harmonic 2PCF/3PCF multipoles",
-         "Use x,y,z,delta,weight input. compute-2pcf-3d and compute-3pcf-3d select outputs. BALLS4SCANLEVON=1 preserves exact body pivots and forms fixed reduction blocks from a spatial scan-level order. For Lyman-alpha input, exclude-all-same-los requires three distinct forest IDs per triplet; octree-ggg-3d-omp is an alias."},
-        {"octree-3pcf-3d-mpi", "3D scalar; exact octree leaves; MPI+OpenMP pivot blocks",
-         "spherical-harmonic 2PCF/3PCF; data/random survey estimator and edge correction",
-         "Enable OCTREE3PCF3DMPION=1 and run with mpiexec. compute-2pcf-3d and compute-3pcf-3d select outputs. BALLS4SCANLEVON=1 distributes fixed blocks of the spatial exact-body pivot order across ranks. For Lyman-alpha input, exclude-all-same-los requires three distinct forest IDs per triplet. survey-estimator-3d uses data,random catalogs with iCatalogs=1,2. Catalogs are replicated; numberThreads is per rank. octree-ggg-3d-mpi is an alias."},
-        {"lya-2pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
-         "weighted anisotropic 2PCF",
-         "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below."},
-        {"lya-3pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
-         "weighted five-dimensional 3PCF",
-         "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below."},
-        {"lya-2pcf-3pcf-omp", "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
-         "weighted 2PCF and 3PCF in one traversal",
-         "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below."},
-        {"lya-los-tree-2pcf-omp", "3D forest discovery + per-LOS radial trees; OpenMP",
-         "exact weighted anisotropic 2PCF",
-         "One pixel discovers each neighboring forest; excludes the pivot forest. Same domain, bins and output as lya-2pcf-omp; transverse separation is retained."},
-        {"lya-los-tree-3pcf-omp", "3D forest discovery + per-LOS radial trees; OpenMP",
-         "exact weighted five-dimensional 3PCF",
-         "Same domain, bins and output as lya-3pcf-omp; all three forest IDs must differ. No angular or cell approximation."},
-        {"lya-los-tree-2pcf-3pcf-omp", "3D forest discovery + per-LOS radial trees; OpenMP",
-         "exact weighted 2PCF and 3PCF in one discovery pass",
-         "Uses the larger discovery sphere, then each estimator's exact cuts. Not a radial-only estimator. Enabled by LYAFORESTOMPON=1."},
-        {"lya-1d-2pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
-         "weighted radial-only 2PCF",
-         "Ignores transverse separation; lya2RpMax and lya2RpBins define |delta radial distance| bins."},
-        {"lya-1d-3pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
-         "weighted radial-only 3PCF",
-         "Ignores transverse separation; lya3RMax and lya3RBins define signed pivot-lag bins."},
-        {"lya-1d-2pcf-3pcf-omp", "radial Lyman-alpha pixels; sorted 1D range scan; OpenMP",
-         "weighted radial-only 2PCF and 3PCF",
-         "Requires forest IDs; all correlated pixels must belong to distinct quasars."},
-        {"lya-1d-tree-2pcf-omp", "radial Lyman-alpha pixels; exact 1D interval tree; OpenMP",
-         "weighted radial-only 2PCF",
-         "Uses exact same-bin node aggregation and subtracts within-quasar pairs; lya2RpMax and lya2RpBins set the domain."},
-        {"lya-1d-tree-same-los-2pcf-omp", "per-LOS radial Lyman-alpha pixels; exact 1D interval trees; OpenMP",
-         "equal-LOS mean of weighted within-forest radial 2PCFs",
-         "Builds one radial interval tree per forest, accepts pairs only when both pixels share forest_id, normalizes each forest histogram separately, then averages occupied forests with equal weight per bin. Uses lya2RpMax and lya2RpBins."},
-        {"lya-1d-tree-3pcf-omp", "radial Lyman-alpha pixels; exact 1D interval tree; OpenMP",
-         "weighted radial-only 3PCF",
-         "Uses signed-lag node moments and exact same-forest neighbor-pair subtraction; lya3RMax and lya3RBins set the two-axis domain. LYA1D_TREE3_LEAF_SIZE is reported by make-info."},
-        {"lya-2pcf-mpi", "Lyman-alpha pixels; 3D octree; MPI+OpenMP",
-         "weighted anisotropic 2PCF",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-2pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-3pcf-mpi", "Lyman-alpha pixels; 3D octree; MPI+OpenMP",
-         "weighted five-dimensional 3PCF",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-2pcf-3pcf-mpi", "Lyman-alpha pixels; 3D octree; MPI+OpenMP",
-         "weighted 2PCF and 3PCF",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-2pcf-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-1d-2pcf-mpi", "Lyman-alpha pixels; radial range scan; MPI+OpenMP",
-         "weighted radial-only 2PCF",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-2pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-1d-3pcf-mpi", "Lyman-alpha pixels; radial range scan; MPI+OpenMP",
-         "weighted radial-only 3PCF",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-1d-2pcf-3pcf-mpi", "Lyman-alpha pixels; radial range scan; MPI+OpenMP",
-         "weighted radial-only 2PCF and 3PCF",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-2pcf-3pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-1d-tree-2pcf-mpi", "Lyman-alpha pixels; radial interval tree; MPI+OpenMP",
-         "weighted radial-only 2PCF with same-forest subtraction",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Requires one forest catalog (file or in-memory, see below), DEFDIMENSION=3, and usePeriodic=false. Options and output columns match lya-1d-tree-2pcf-omp. Raw sums are reduced before normalization; only rank 0 writes."},
-        {"lya-1d-tree-3pcf-mpi", "Lyman-alpha pixels; radial interval tree; MPI+OpenMP",
-         "weighted radial-only 3PCF with exact three-forest exclusion",
-         "Enable LYAFORESTMPION=1; run with mpiexec and numberThreads per rank. Options and output columns match lya-1d-tree-3pcf-omp. Pivot blocks and raw long-double sums are distributed; only rank 0 normalizes and writes. LYA1D_TREE3_LEAF_SIZE is reported by make-info."}
-    };
-    const size_t method_count =
-        sizeof(known_methods) / sizeof(known_methods[0]);
-    size_t available_count = 0;
-    size_t i;
-    int method_id;
-
-    (void)gd;
-
-    for (i = 0; i < method_count; ++i) {
-        search_method_string_to_int((string)known_methods[i].name, &method_id);
-        if (method_id >= 0) ++available_count;
-    }
-
-    verb_print_zero(cmd->verbose,
-                    "\nSearching methods registered in this executable (%zu):\n",
-                    available_count);
-    verb_print_zero(cmd->verbose,
-                    "Select one with search=<name> or searchMethod=<name>.\n");
-    verb_print_zero(cmd->verbose,
-                    "Common controls: rangeN, rminHist, sizeHistN, useLogHist, "
-                    "theta, numberThreads, and options.\n");
-    verb_print_zero(cmd->verbose,
-                    "Only methods enabled by this executable's build profile are shown.\n");
-
-    for (i = 0; i < method_count; ++i) {
-        search_method_string_to_int((string)known_methods[i].name, &method_id);
-        if (method_id < 0) continue;
-        verb_print_zero(cmd->verbose, "\n- %s (id=%d)\n",
-                        known_methods[i].name, method_id);
-        verb_print_zero(cmd->verbose, "  geometry: %s\n",
-                        known_methods[i].geometry);
-        verb_print_zero(cmd->verbose, "  computes: %s\n",
-                        known_methods[i].correlations);
-        verb_print_zero(cmd->verbose, "  use: %s\n",
-                        known_methods[i].usage);
-        if (strcmp(known_methods[i].name, "octree-2balls-omp") == 0
-            || strcmp(known_methods[i].name, "octree-2balls-mpi") == 0) {
-#ifdef SMOOTHPIVOT
-            verb_print_zero(cmd->verbose,
-                "  smooth-pivot: default-on only with options=legacy-one-ball; add no-smooth-pivot to disable it\n");
-#else
-            verb_print_zero(cmd->verbose,
-                "  smooth-pivot: legacy-one-ball supports it, but SMOOTHPIVOTON=1 is not compiled\n");
-#endif
-        } else if (cballs_method_supports_smooth_pivot(known_methods[i].name)) {
-#ifdef SMOOTHPIVOT
-            verb_print_zero(cmd->verbose,
-                "  smooth-pivot: default-on; add options=no-smooth-pivot to disable\n");
-#else
-            verb_print_zero(cmd->verbose,
-                "  smooth-pivot: supported but not compiled; set SMOOTHPIVOTON=1 and rebuild\n");
-#endif
-        } else {
-            verb_print_zero(cmd->verbose,
-                "  smooth-pivot: unsupported; SMOOTHPIVOTON does not change this engine\n");
-        }
-        if (strcmp(known_methods[i].name,
-                   "lya-1d-tree-same-los-2pcf-omp") == 0)
-            verb_print_zero(cmd->verbose,
-                "  input: one x y z delta weight forest_id catalog (lya-ascii), or "
-                "cyballs.set_forest_catalog(positions, delta, weights, forest_ids). "
-                "Only pairs within the same forest are accepted. Each occupied "
-                "forest/bin is normalized first, then forests are averaged equally. "
-                "DEFDIMENSION=3 and usePeriodic=false are required.\n");
-        else if (strncmp(known_methods[i].name, "lya-", 4) == 0)
-            verb_print_zero(cmd->verbose,
-                "  input: one x y z delta weight forest_id catalog (lya-ascii), or "
-                "cyballs.set_forest_catalog(positions, delta, weights, forest_ids). "
-                "DEFDIMENSION=3, observer-centered comoving coordinates and "
-                "usePeriodic=false are required even for radial searches. "
-                "Pairs exclude the same quasar; triplets require three distinct "
-                "quasars. Histograms are weight-normalized; empty bins are zero. "
-                "Use tests/python/lya_corr_all_engines.py for DESI FITS/NPZ/ASCII, "
-                "one-time loading and MPI broadcasting. No smooth-pivot.\n");
-        if (strncmp(known_methods[i].name, "octree-3pcf-3d-", 15) == 0)
-            verb_print_zero(cmd->verbose,
-                "  modes: only-2pcf-3d, only-3pcf-3d, or "
-                "compute-2pcf-3d,compute-3pcf-3d. survey-estimator-3d "
-                "uses data/random catalogs and window correction. "
-                "exclude-same-los excludes pivot LOS matches only. "
-                "exclude-all-same-los (alias lya-distinct-forests) requires "
-                "three distinct LOS/forest IDs in every triplet.\n");
-        if (strstr(known_methods[i].name, "2balls") != NULL
-            && strstr(known_methods[i].name, "shear") == NULL)
-            verb_print_zero(cmd->verbose,
-                "  edge correction: add edge-corrections,no-normalize-HistZeta "
-                "for complex scalar 3PCF window deconvolution. Window modes "
-                "extend through 2*mChebyshev. weights-norm weights both signal "
-                "and window; unsupported corrected bins are NaN; window diagnostics distinguish empty, singular, and valid bins. 2PCF is unchanged.\n");
-    }
-
-    verb_print_zero(cmd->verbose,
-                    "\nScalar angular engines preserve the observer frame in 3D and use "
-                    "tangent-plane angles with Euclidean chord bins. Coincident/radial/antipodal "
-                    "legs are excluded from angular multipoles, not from ordinary pair counts.\n"
-                    "tests/python/kappa_corr_all_engines.py reuses one in-memory catalog across active native "
-                    "engines and writes ordinary and "
-                    "flattened radial-bin 3PCF plots. tests/python/shear_corr_all_engines.py provides "
-                    "flat/full-sky spin-2 comparisons, and the CPU benchmark exposes those full-sky "
-                    "engines through scenarios=sphere-shear. tests/python/lya_corr_all_engines.py provides "
-                    "the corresponding forest workflow and rejects spin-2 engines explicitly.\n"
-                    "Use options=make-info to inspect the build profile and "
-                    "options=print-options for the full option list.\n\n");
-    return SUCCESS;
-}
 
 local int print_options(struct cmdline_data* cmd,
                         struct global_data* gd)

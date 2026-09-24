@@ -22,34 +22,18 @@
 #define KDTREE_2BALLS_MPI_INTEGER MPI_INT
 #endif
 
-static int mpi_active = FALSE;
-static int mpi_rank = 0;
-static int mpi_size = 1;
-static int mpi_owned = FALSE;
-static int mpi_finalized = FALSE;
+/* Per-context rank view; process MPI ownership lives in mpi_runtime.c. */
+#define CBALLS_MPI_STATE (cballs_runtime_current()->mpi[CBALLS_MPI_FCFC_KDTREE_2BALLS_MPI])
+#define mpi_active (CBALLS_MPI_STATE.active)
+#define mpi_rank (CBALLS_MPI_STATE.rank)
+#define mpi_size (CBALLS_MPI_STATE.size ? CBALLS_MPI_STATE.size : 1)
 
-static void kdtree_2balls_finalize_at_exit(void)
-{
-    int finalized = FALSE;
 
-    if (!mpi_owned || mpi_finalized) return;
-    if (MPI_Finalized(&finalized) == MPI_SUCCESS && !finalized)
-        MPI_Finalize();
-    mpi_finalized = TRUE;
-    mpi_active = FALSE;
-}
 
 static int kdtree_2balls_mpi_error(
         struct cmdline_data *cmd, const char *operation, int status)
 {
-    char detail[MPI_MAX_ERROR_STRING];
-    int length = 0;
-
-    detail[0] = '\0';
-    MPI_Error_string(status, detail, &length);
-    snprintf(cmd->error_message, _ERRORMSGSIZE_, "%s failed%s%s",
-             operation, length ? ": " : "", length ? detail : "");
-    return FAILURE;
+    return cballs_mpi_shared_error(cmd, operation, status);
 }
 
 static bool kdtree_2balls_mpi_method(const struct cmdline_data *cmd)
@@ -61,78 +45,12 @@ static bool kdtree_2balls_mpi_method(const struct cmdline_data *cmd)
 int fcfc_kdtree_2balls_mpi_prepare(
         struct cmdline_data *cmd, struct global_data *gd)
 {
-    int initialized = FALSE;
-    int finalized = FALSE;
-    int provided = MPI_THREAD_SINGLE;
-    int status;
-
-    if (!kdtree_2balls_mpi_method(cmd)) return SUCCESS;
-    if (mpi_active) {
-        if (mpi_rank != KDTREE_2BALLS_MPI_ROOT) {
-            cmd->verbose = 0;
-            cmd->verbose_log = 0;
-            gd->flagPrint = FALSE;
-        }
-        return SUCCESS;
-    }
-    if ((status = MPI_Finalized(&finalized)) != MPI_SUCCESS)
-        return kdtree_2balls_mpi_error(cmd, "MPI_Finalized", status);
-    if (finalized) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "kdtree-2balls-mpi cannot start after MPI_Finalize");
-        return FAILURE;
-    }
-    if ((status = MPI_Initialized(&initialized)) != MPI_SUCCESS)
-        return kdtree_2balls_mpi_error(cmd, "MPI_Initialized", status);
-    if (!initialized) {
-        status = MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
-        if (status != MPI_SUCCESS)
-            return kdtree_2balls_mpi_error(cmd, "MPI_Init_thread", status);
-        mpi_owned = TRUE;
-        if (atexit(kdtree_2balls_finalize_at_exit) != 0) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "kdtree-2balls-mpi could not register MPI cleanup");
-            kdtree_2balls_finalize_at_exit();
-            return FAILURE;
-        }
-    } else if ((status = MPI_Query_thread(&provided)) != MPI_SUCCESS) {
-        return kdtree_2balls_mpi_error(cmd, "MPI_Query_thread", status);
-    }
-    if (provided < MPI_THREAD_FUNNELED) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "kdtree-2balls-mpi requires MPI_THREAD_FUNNELED support");
-        return FAILURE;
-    }
-    if ((status = MPI_Comm_set_errhandler(
-             MPI_COMM_WORLD, MPI_ERRORS_RETURN)) != MPI_SUCCESS
-        || (status = MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank)) != MPI_SUCCESS
-        || (status = MPI_Comm_size(MPI_COMM_WORLD, &mpi_size)) != MPI_SUCCESS)
-        return kdtree_2balls_mpi_error(cmd, "MPI communicator setup", status);
-
-    mpi_active = TRUE;
-    if (mpi_rank != KDTREE_2BALLS_MPI_ROOT) {
-        cmd->verbose = 0;
-        cmd->verbose_log = 0;
-        gd->flagPrint = FALSE;
-    } else {
-        verb_print(cmd->verbose, "kdtree-2balls-mpi: %d ranks\n", mpi_size);
-    }
-    return SUCCESS;
+    return cballs_mpi_shared_prepare(&CBALLS_MPI_STATE, cmd, gd, !(!kdtree_2balls_mpi_method(cmd)));
 }
 
 int fcfc_kdtree_2balls_mpi_finalize(struct cmdline_data *cmd)
 {
-    int finalized = FALSE;
-    int status;
-
-    if (!mpi_active || !mpi_owned || mpi_finalized) return SUCCESS;
-    if ((status = MPI_Finalized(&finalized)) != MPI_SUCCESS)
-        return kdtree_2balls_mpi_error(cmd, "MPI_Finalized", status);
-    if (!finalized && (status = MPI_Finalize()) != MPI_SUCCESS)
-        return kdtree_2balls_mpi_error(cmd, "MPI_Finalize", status);
-    mpi_finalized = TRUE;
-    mpi_active = FALSE;
-    return SUCCESS;
+    return cballs_mpi_shared_finalize(&CBALLS_MPI_STATE, cmd);
 }
 
 int fcfc_kdtree_2balls_mpi_is_root(void)
@@ -154,22 +72,7 @@ int fcfc_kdtree_2balls_mpi_output_enabled(struct cmdline_data *cmd)
 int fcfc_kdtree_2balls_mpi_consensus(
         struct cmdline_data *cmd, int local_status, const char *operation)
 {
-    int local_success = local_status == SUCCESS;
-    int all_success = FALSE;
-    int status;
-
-    if (!mpi_active || !kdtree_2balls_mpi_method(cmd)) return local_status;
-    status = MPI_Allreduce(&local_success, &all_success, 1, MPI_INT,
-                           MPI_MIN, MPI_COMM_WORLD);
-    if (status != MPI_SUCCESS)
-        return kdtree_2balls_mpi_error(cmd, operation, status);
-    if (!all_success) {
-        if (local_success || cmd->error_message[0] == '\0')
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s failed on at least one MPI rank", operation);
-        return FAILURE;
-    }
-    return SUCCESS;
+    return cballs_mpi_shared_consensus(&CBALLS_MPI_STATE, cmd, !(!kdtree_2balls_mpi_method(cmd)), local_status, operation);
 }
 
 int fcfc_kdtree_2balls_mpi_task_owned(INTEGER task)

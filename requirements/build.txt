@@ -1,0 +1,5 @@
+# Keep aligned with pyproject.toml's isolated build requirements.
+setuptools>=68
+wheel
+Cython>=0.29.36,<4
+numpy>=2.0
