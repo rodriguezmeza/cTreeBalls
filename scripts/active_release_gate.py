@@ -19,7 +19,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / 'tests/make_tests'
-from capabilities_generated import expected_registry, gate_plan
+from capabilities_generated import expected_registry, gate_plan, CAPABILITIES
 
 
 def parse_registry(text):
@@ -28,6 +28,22 @@ def parse_registry(text):
     if not count or len(rows) != int(count[1]) or len(dict(rows)) != len(rows):
         raise AssertionError('missing, duplicate or truncated registry')
     return {name: int(number) for name, number in rows}
+
+
+def regression_coverage(registry, commands):
+    required = {test for case in gate_plan(registry) for test in
+                case['tests'] + CAPABILITIES['regression_groups'][case['oracle']]}
+    executed = set()
+    for command in commands:
+        if command['status'] != 'PASS':
+            continue
+        for arg in command['argv']:
+            path = Path(arg)
+            if path.is_absolute():
+                try: arg = str(path.relative_to(ROOT))
+                except ValueError: continue
+            if arg in required: executed.add(arg)
+    return dict(required=sorted(required), executed=sorted(executed), missing=sorted(required-executed))
 
 
 def json_line(text):
@@ -117,6 +133,11 @@ class Gate:
         self.report['capability_gate_plan'] = gate_plan(registry)
         self.registry = registry
         self.report['registry'] = registry
+        profile = ['# Resolved active profile', '', f'Build ID: `{resolved["id"]}`', '',
+                   f'{len(registry)} canonical methods; '+str(sum(n.endswith('-omp') for n in registry))+' OpenMP; '+str(sum(n.endswith('-mpi') for n in registry))+' MPI.', '',
+                   '| Method | ID |', '| --- | ---: |']
+        profile += [f'| {n} | {v} |' for n, v in registry.items()]
+        (self.out/'active-profile.md').write_text('\n'.join(profile)+'\n')
         code = 'import cyballs,json; r=json.loads('+repr(json.dumps(registry))+'); assert all(cyballs.search_method_id(n)==i for n,i in r.items())'
         self.command('cython-registry', [sys.executable, '-c', code])
         candidates = [p for p in ROOT.glob('build/**/build-fingerprint.json') if json.loads(p.read_text())['id']==resolved['id']]
@@ -220,6 +241,8 @@ class Gate:
             for ownership in ('owned','borrowed'):
                 self.check('mpi-runtime-'+ownership, lambda mode=ownership: self.command('mpi-runtime-'+mode,
                     shlex.split(self.args.mpi_command)+['-n','2',executable,mode]))
+        self.check('workload-acceptance', lambda: self.command('workload-acceptance',
+            [py,ROOT/'scripts/workload_acceptance.py','--output',self.out/'workload-acceptance']))
         self.check('phase-memory-accuracy-benchmark', lambda: self.command('phase-memory-accuracy-benchmark',
             [py,ROOT/'scripts/benchmark_contracts.py','--output',self.out/'benchmarks','--repeats','2']))
         binary = str(ROOT/'cballs')
@@ -237,10 +260,10 @@ class Gate:
               'test_shear_corr_all_engines.py','test_lya_corr_all_engines.py','test_release_gate.py',
               'test_cython_in_memory_catalog.py','test_p3_cython_startup.py',
               'test_scalar_numerical_contract.py',
-              'test_release_packaging.py','test_resource_scientific_contracts.py','test_capability_contracts.py')], '-ra', '-k','not mpi']))
+              'test_public_profile.py','test_dual_node_compat.py','test_release_packaging.py','test_release_verification_contracts.py','test_owned_results_resources.py','test_scientific_qualification.py','test_resource_scientific_contracts.py','test_capability_contracts.py')], '-ra', '-k','not mpi']))
         if 'lya-los-tree-2pcf-omp' in active:
             self.check('los-tree-contracts', lambda: self.command('los-tree-contracts',
-                [py, '-m', 'pytest', '-q', '-ra', TESTS/'test_lya_forest_los_tree.py']))
+                [py, '-m', 'pytest', '-q', '-ra', TESTS/'test_lya_forest_los_tree.py', TESTS/'test_lya_triplet_acceleration.py', TESTS/'test_lya_cell_approximation.py', TESTS/'test_lya_pivot_frontier.py', TESTS/'test_lya_pair_cells.py']))
         scalar = [e for e in active if e in ('kdtree-2balls-omp','balltree-2balls-omp','octree-2balls-omp')]
         for engine in scalar:
             name = 'run_test_'+engine.replace('-','_')
@@ -295,7 +318,7 @@ class Gate:
                 '--synthetic-nbody','45','--engines',','.join(shear),'--outdir',self.out/'drivers/shear',
                 '--min-sep','2','--max-sep','100','--nbins','4','--multipoles','2',
                 '--linear-bins','--no-smooth-pivot',*common]))
-        forest = [e for e in self.registry if e.startswith('lya-') and e.endswith('-omp')]
+        forest = [e for e in self.registry if e.startswith('lya-') and e.endswith('-omp') and 'anisotropic-multipole' not in e]
         if forest:
             self.check('lya-driver', lambda: self.command('lya-driver', [py,directory/'lya_corr_all_engines.py',
                 '--synthetic','--synthetic-forests','4','--synthetic-pixels','4','--engine',*forest,
@@ -308,6 +331,11 @@ class Gate:
                 self.report['tested_archive_sha256'] = sha(ROOT/name)
             elif sha(ROOT/name) != expected:
                 self.report['failures'].append(dict(check='final-artifact-identity', error=f'{name} changed during validation'))
+        if hasattr(self, 'registry'):
+            coverage = regression_coverage(self.registry, self.report['commands'])
+            self.report['declared_regression_coverage'] = coverage
+            if coverage['missing']:
+                self.report['failures'].append(dict(check='declared-regressions', error=str(coverage['missing'])))
         self.report['status'] = 'FAIL' if self.report['failures'] else 'PASS'
         self.report['finished_utc'] = datetime.now(timezone.utc).isoformat()
         self.save()

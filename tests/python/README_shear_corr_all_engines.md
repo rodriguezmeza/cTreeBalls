@@ -111,3 +111,23 @@ For scaling, repeat a fixed catalog and statistic at each thread count with
 separate output directories. Compare dual node methods at matched numerical
 error, not merely equal opening parameters. Private benchmark environments
 are not bundled in this public checkout.
+
+## Optional external dual-node API
+
+The all-engines driver times native cTreeBalls engines. Separate external
+comparisons can use [dual_node_compat.py](dual_node_compat.py), which lazily
+loads the installed external library and translates `bin_theta` and
+`angle_theta` without changing their values. It is optional; no external
+package is required for the native driver. For example:
+
+```python
+from dual_node_compat import catalog, correlation
+
+# Use identical catalogs, units, weights, bins and estimator conventions.
+ref = correlation("GG", min_sep=0.01, max_sep=1.0, nbins=10,
+                  bin_theta=0.0, angle_theta=0.0)
+# ref.process(catalog(...), num_threads=4)
+```
+
+`bin_theta`/`angle_theta` are geometric tolerances, not relative-error bounds.
+The native `theta` parameter retains its existing meaning.

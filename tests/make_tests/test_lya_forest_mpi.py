@@ -179,7 +179,21 @@ def c_tests(binary, mpi, mpi_only):
             bad_out.mkdir()
             (bad_out/products(kind)[0]).mkdir()
             run(kind, extra={"rootDir": str(bad_out)}, fail=True)
-        print("PASS: radial scan/tree, same-quasar exclusion, rank-local input and root output failures", flush=True)
+        # Only rank 1 exceeds the histogram-plus-neighbor scratch budget.
+        # It must reach worker error consensus before ranks attempt reductions
+        # (their deliberately different histogram dimensions would not match).
+        old_budget = os.environ.get("CBALLS_MEMORY_BUDGET_MB")
+        os.environ["CBALLS_MEMORY_BUDGET_MB"] = "1"
+        try:
+            message = run(1, threads=4, fail=True,
+                          overrides={"1": {"lya3MuBins": "23"}})
+            assert "Ly-alpha histograms and neighbor scratch" in message, message
+        finally:
+            if old_budget is None:
+                os.environ.pop("CBALLS_MEMORY_BUDGET_MB", None)
+            else:
+                os.environ["CBALLS_MEMORY_BUDGET_MB"] = old_budget
+        print("PASS: radial scan/tree, same-quasar exclusion, rank-local input/scratch and root output failures", flush=True)
 
 
 def cython_worker(root):
@@ -199,6 +213,12 @@ def cython_worker(root):
             b.Run(level=["MainLoop"])
             if rank == 0:
                 check_oracle(kind, out)
+                arrays=b.getForestResults()['arrays']
+                assert arrays and all(np.isfinite(v).all() for v in arrays.values())
+            else:
+                try: b.getForestResults()
+                except Exception as exc: assert 'no published native products' in str(exc)
+                else: raise AssertionError('non-publishing rank exposed reduced products')
         finally:
             b.struct_cleanup()
         comm.Barrier()

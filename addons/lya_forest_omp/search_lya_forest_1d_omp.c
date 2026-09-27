@@ -629,6 +629,14 @@ size_error:
 publication:
     status = lya_parallel_consensus(cmd, status, "Ly-alpha radial output");
 cleanup:
+    if(status==SUCCESS && lya_parallel_publish(cmd)) {
+        size_t pair_shape[1]={(size_t)cmd->lya2RpBins};
+        size_t triple_shape[2]={2*(size_t)cmd->lya3RBins,2*(size_t)cmd->lya3RBins};
+        cballs_result_adopt("pair_numerator",(void **)&num2,0,1,pair_shape);
+        cballs_result_adopt("pair_denominator",(void **)&den2,0,1,pair_shape);
+        cballs_result_adopt("triple_numerator",(void **)&num3,0,2,triple_shape);
+        cballs_result_adopt("triple_denominator",(void **)&den3,0,2,triple_shape);
+    }
     gd->cpusearch = CPUTIME - cpustart;
     free(radial_order);
     free(first);

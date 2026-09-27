@@ -10,7 +10,10 @@ missing result, or changed build identity makes the gate fail.
 The maintained matrix covers the current 3D, double-precision profile: core
 sine/cosine octree; scalar KD/ball/octree two-ball methods; three full-sky shear
 methods; KD-box and neighbor boxes; physical 3D correlations; and all forest
-methods. There are 22 OpenMP and 12 MPI search names. Other dimensions, precision
+methods, including the experimental anisotropic forest multipole route. The gate
+generates `active-profile.md` from resolved settings and records every required
+regression module in `declared_regression_coverage`. Missing executions fail the
+gate. Other dimensions, precision
 profiles, or newly registered engines need an explicit matrix extension.
 
 ## Invocation

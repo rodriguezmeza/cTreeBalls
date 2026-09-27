@@ -33,12 +33,13 @@ def run(engine, output, threads):
              sizeHistPhi=8, rangeN=1.5, rminHist=.02, theta=1.,
              options='no-smooth-pivot')
     kind = None
+    anisotropic = engine == 'lya-anisotropic-multipole-3pcf-omp'
     if family == 'forest':
         import test_lya_forest_mpi as forest
         same = 'same-los' in engine
         # LOS-tree discovery preserves the original 3D estimators and oracles.
         canonical = engine.replace('lya-los-tree-', 'lya-').rsplit('-', 1)[0]
-        kind = 6 if same else forest.METHODS.index(canonical)
+        kind = 1 if anisotropic else (6 if same else forest.METHODS.index(canonical))
         data = forest.three.POINTS if kind < 3 else forest.radial.WIDE_ANGLE
         p.update(forest.params(kind, '', output, threads))
         p.pop('infile'); p.pop('infileformat')
@@ -88,7 +89,10 @@ def run(engine, output, threads):
             return
         arrays = {}
         if family == 'forest':
-            if same:
+            if anisotropic:
+                from test_lya_triplet_acceleration import check_moment_output
+                check_moment_output(output,data,8)
+            elif same:
                 forest.radial.assert_histogram_close(
                     forest.radial.read_2pcf(output/'histXi2pcf_lya1d_same_los.txt'),
                     forest.radial.oracle_same_los_2pcf(), 'same LOS')

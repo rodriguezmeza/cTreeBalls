@@ -146,7 +146,7 @@ for file in "$TMP_ROOT/exact-one"/*.txt; do
                          "$TMP_ROOT/exact-many/run.log"
 done
 
-aggregate=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot,dual-node-bin-slop
+aggregate=KKKCorrelation,compute-HistN,out-m-HistZeta,no-smooth-pivot,dual-node-bin-theta
 run_case aggregate-one kdtree-2balls-omp 1 "$aggregate" true
 run_case aggregate-many kdtree-2balls-omp "$MULTI_THREADS" \
     "$aggregate,dual-node-profile" true

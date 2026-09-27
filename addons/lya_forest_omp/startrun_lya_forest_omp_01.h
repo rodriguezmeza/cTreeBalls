@@ -10,4 +10,26 @@
     cmd->lya3ThetaBins = GetiParam("lya3ThetaBins");
     cmd->lya3MuBins = GetiParam("lya3MuBins");
 
+    cmd->lya3Kernel = GetiParam("lya3Kernel");
+
+    cmd->lya3LMax = GetiParam("lya3LMax");
+
+    cmd->lya3PivotBlock = GetiParam("lya3PivotBlock");
+
+    cmd->lya3MuSlop = GetdParam("lya3MuSlop");
+
+    cmd->lya3RadialSlop = GetdParam("lya3RadialSlop");
+
+    cmd->lya3PolarSlop = GetdParam("lya3PolarSlop");
+
+    cmd->lya3PivotCellMax = GetiParam("lya3PivotCellMax");
+
+    cmd->lya2Kernel = GetiParam("lya2Kernel");
+    cmd->lya2RpSlop = GetdParam("lya2RpSlop");
+    cmd->lya2RtSlop = GetdParam("lya2RtSlop");
+
+    cmd->lyaScanLevel = GetiParam("lyaScanLevel");
+    cmd->lyaPivotRadius = GetdParam("lyaPivotRadius");
+    cmd->lyaPivotMax = GetiParam("lyaPivotMax");
+
 #endif

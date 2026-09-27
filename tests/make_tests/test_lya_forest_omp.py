@@ -52,9 +52,9 @@ def mu_bin(value: float) -> int:
     return min(int((np.clip(value, -1.0, 1.0) + 1.0) * 0.5 * MU_BINS), MU_BINS - 1)
 
 
-def oracle_2pcf() -> dict[tuple[int, int], tuple[float, float]]:
+def oracle_2pcf(points=POINTS) -> dict[tuple[int, int], tuple[float, float]]:
     result: dict[tuple[int, int], list[float]] = {}
-    for left, right in itertools.combinations(POINTS, 2):
+    for left, right in itertools.combinations(points, 2):
         if int(left[5]) == int(right[5]):
             continue
         p = left[:3]
@@ -73,16 +73,16 @@ def oracle_2pcf() -> dict[tuple[int, int], tuple[float, float]]:
         cell = result.setdefault((bp, bt), [0.0, 0.0])
         cell[0] += numerator
         cell[1] += denominator
-    return {key: tuple(value) for key, value in result.items()}
+    return {key: tuple(value) for key, value in result.items() if value[1] > 0}
 
 
-def oracle_3pcf() -> dict[tuple[int, int, int, int, int], tuple[float, float]]:
+def oracle_3pcf(points=POINTS) -> dict[tuple[int, int, int, int, int], tuple[float, float]]:
     result: dict[tuple[int, int, int, int, int], list[float]] = {}
-    for pivot_index, pivot in enumerate(POINTS):
+    for pivot_index, pivot in enumerate(points):
         los = pivot[:3] / np.linalg.norm(pivot[:3])
         neighbors = [
             candidate
-            for index, candidate in enumerate(POINTS)
+            for index, candidate in enumerate(points)
             if index != pivot_index
             and int(candidate[5]) != int(pivot[5])
             and np.linalg.norm(candidate[:3] - pivot[:3]) < R3_MAX
@@ -106,7 +106,7 @@ def oracle_3pcf() -> dict[tuple[int, int, int, int, int], tuple[float, float]]:
                 cell = result.setdefault(key, [0.0, 0.0])
                 cell[0] += numerator
                 cell[1] += denominator
-    return {key: tuple(value) for key, value in result.items()}
+    return {key: tuple(value) for key, value in result.items() if value[1] > 0}
 
 
 def read_2pcf(path: Path) -> dict[tuple[int, int], tuple[float, float]]:
@@ -172,6 +172,33 @@ def run(binary: Path, catalog: Path, output: Path, threads: int) -> None:
         )
 
 
+def check_multiblock(binary: Path, root: Path) -> None:
+    # Cross five fixed publication blocks, including a partial last block.
+    # Independent brute force exercises signed deltas, zero weights and
+    # interleaved forest IDs without sharing the native geometry cache.
+    rng = np.random.default_rng(925)
+    count = 259
+    # Binary-exact coordinates let this oracle also exercise float storage
+    # without comparing against a different, unrounded input geometry.
+    points = np.column_stack((100 + 3*np.arange(count),
+                              rng.integers(-64, 65, (count, 2)) / 32.,
+                              rng.normal(size=count), rng.uniform(.2, 2, count),
+                              np.arange(count) % 11))
+    points[::7, 4] = 0
+    rng.shuffle(points)
+    catalog = root / "multiblock.txt"
+    np.savetxt(catalog, points, fmt=("%.17g",)*5 + ("%.0f",))
+    one, many = root / "blocks-one", root / "blocks-many"
+    run(binary, catalog, one, 1)
+    run(binary, catalog, many, 4)
+    assert_histogram_close(read_2pcf(one / "histXi2pcf_lya.txt"),
+                           oracle_2pcf(points), "multiblock 2PCF")
+    assert_histogram_close(read_3pcf(one / "histZetaM_lya5d.txt"),
+                           oracle_3pcf(points), "multiblock 3PCF")
+    for name in ("histXi2pcf_lya.txt", "histZetaM_lya5d.txt"):
+        assert (one / name).read_bytes() == (many / name).read_bytes(), name
+
+
 def main() -> None:
     repository = Path(__file__).resolve().parents[2]
     binary = Path(os.environ.get("CBALLS", repository / "cballs")).resolve()
@@ -204,7 +231,9 @@ def main() -> None:
             if (one / name).read_bytes() != (many / name).read_bytes():
                 raise AssertionError(f"OpenMP output is not deterministic: {name}")
 
-    print("PASS: Ly-alpha 2PCF/3PCF oracle and OpenMP determinism")
+        check_multiblock(binary, root)
+
+    print("PASS: Ly-alpha 2PCF/3PCF independent oracles and multiblock OpenMP determinism")
 
 
 if __name__ == "__main__":

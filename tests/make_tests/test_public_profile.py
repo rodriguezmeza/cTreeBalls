@@ -34,7 +34,12 @@ def test_public_terminology_and_notebooks():
                 continue
             if path.suffix not in {'.h', '.c', '.py', '.md', '.rst', '.txt', '.ipynb', '.m', '.1', '.html'}:
                 continue
+            if path == ROOT/'tests/python/dual_node_compat.py':
+                continue  # The explicit boundary preserves the external API.
             assert forbidden.encode() not in path.read_bytes().lower(), path
+            assert ('bin'+'_slop').encode() not in path.read_bytes(), path
+            assert ('angle'+'_slop').encode() not in path.read_bytes(), path
+            assert ('bin'+'-slop').encode() not in path.read_bytes(), path
             if path.suffix == '.ipynb':
                 notebook = json.loads(path.read_text())
                 assert notebook['nbformat'] == 4

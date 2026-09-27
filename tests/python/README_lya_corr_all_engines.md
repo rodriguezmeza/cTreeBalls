@@ -19,7 +19,8 @@ into the native timing table.
 
 `lya_corr_all_engines.py` reads a forest catalog once and runs the active
 cTreeBalls forest and physical-3D multipole methods. `LYAFORESTOMPON=1`
-provides twelve OpenMP names; `LYAFORESTMPION=1` provides eight MPI counterparts.
+provides twelve standard OpenMP names plus the experimental anisotropic multipole
+method (calibrated separately); `LYAFORESTMPION=1` provides eight MPI counterparts.
 `OCTREE3PCF3DOMPON=1` and `OCTREE3PCF3DMPION=1` add two physical-3D methods.
 
 List the methods compiled into the current extension:
@@ -283,3 +284,82 @@ LYA2PCF_SOURCE=/path/to/lya2pcf python3 -m pytest \
   tests/make_tests/test_lya_corr_all_engines.py \
   tests/make_tests/test_lya_analysis.py
 ```
+
+## Updated input and benchmark workflow (2026-09-25)
+
+`--fits` now accepts directories as well as files/globs. It selects immediate
+`.fits`, `.fits.gz`, `.fit`, `.fit.gz` and `.fits.fz` children in sorted order,
+ignores NPZ caches and other sidecars, and rejects overlapping inputs. Selection
+and preprocessing are exposed through `load_catalog(args)`, shared with the
+private `benchmark_lya_corr.py` timing frontend.
+
+For the existing small DESI example, run from the cTreeBalls checkout and set
+`BENCHMARK_DIR` to your private benchmark directory:
+
+```bash
+BENCHMARK_DIR=/path/to/run2/python_env/cputime_comparison
+python tests/python/lya_corr_all_engines.py \
+  --fits "$BENCHMARK_DIR/catalogs/desi-lya-example/delta-1019.fits.gz" \
+  --max-forests 4 --pixel-stride 32 \
+  --engine lya-2pcf-omp lya-3pcf-omp lya-2pcf-3pcf-omp \
+           lya-los-tree-2pcf-omp lya-los-tree-3pcf-omp lya-los-tree-2pcf-3pcf-omp \
+  --statistics both --threads 4 \
+  --rp-max 160 --rt-max 160 --r3-max 160 \
+  --rp-bins 8 --rt-bins 8 --r3-bins 4 --theta-bins 4 --mu-bins 4 \
+  --save-catalog selected-desi.npz --fail-on-mismatch \
+  --output Output_DESI_all_engines
+```
+
+Passing the directory `"$BENCHMARK_DIR/catalogs/desi-lya-example"` selects both
+supplied delta files before applying the global forest limit. Do not point at
+the parent `catalogs` directory containing unrelated HEALPix maps. The original
+DELTA_BLIND/DELTA values, integer LOS_IDs and supplied positive finite weights
+are preserved unless explicit preprocessing is requested.
+
+Cartesian forest tables are also recognized automatically, or can be selected
+with `--fits-layout cartesian`. The existing
+`catalogs/lya_15_xyz_raw_with_losid.fits` has the supported columns
+`x, y, z, delta, weight, los_id`. These are already comoving coordinates; they
+must be in Mpc/h and are not recomputed from the catalog's sky columns. The
+example omits coordinate units, so the Mpc/h assumption is recorded in metadata.
+Integer IDs retain all 64 bits. The first `--max-forests` forest IDs in input
+order are selected, invalid pixels are removed, and `--pixel-stride` acts within
+each forest. Cosmology overrides, redshift cuts and wavelength-dependent
+projection/weighting are rejected for this Cartesian layout. Default
+wavelength preprocessing remains available for DESI and eBOSS layouts.
+
+The optimized original `lya-2pcf-omp`, `lya-3pcf-omp` and
+`lya-2pcf-3pcf-omp` retain the exact estimator with default controls. Per-pivot geometry caching and
+block scheduling change execution cost, not the binning or forest exclusions.
+No new theta/accuracy tuning option is needed. Continue validating both
+numerators and denominators against the independent reference tests and the
+compatible LOS-tree products. Small floating-point reduction-order differences
+are handled by the stated tolerances.
+
+For repeated timing, use the separate private `benchmark_lya_corr.py` and its
+`README_benchmark_lya_corr.md`. Its DESI reader is this same public loader. The
+kappa/count/shear frontend remains `benchmark_kappa_corr.py`. Both native
+histograms and provenance are retained per repeat, and CPU and wall time are
+reported separately. Native process CPU seconds are never divided by the
+thread count; MPI uses maximum rank wall and summed rank CPU. A combined
+2PCF+3PCF timing is the complete combined workload.
+
+## Exact 3PCF acceleration and anisotropic moments
+
+The existing 3D engines now default to exact per-forest segment aggregation
+with fixed-block OpenMP scheduling and a tiled direct fallback. Their estimator
+and file formats are unchanged; rounding can change when sums are regrouped.
+`lya3Kernel=1` selects the retained reference loop in native/Cython parameters.
+The opt-in `lya-anisotropic-multipole-3pcf-omp` engine has separate signed-moment
+and approximate reconstruction outputs. Use
+[the triplet calibration benchmark](README_benchmark_lya_triplet_kernels.md)
+for this engine, accuracy acceptance, timing and peak-memory measurements.
+
+## Explicit cell-geometry calibration
+
+See [the cell calibration guide](README_benchmark_lya_cell_approximation.md) for mu-only slop, persistent forest nodes, pivot-cell aggregation, and retained accuracy/timing/memory evidence. All slops default to zero.
+
+For the separate `lyaScanLevel` spatial tasks and opt-in `lyaPivotRadius`
+forest-local smoothing, use [the pivot calibration guide](README_benchmark_lya_pivot_frontier.md).
+The latter changes pivot geometry and needs its own exact-reference calibration;
+the public all-engine comparison continues to use default exact settings.

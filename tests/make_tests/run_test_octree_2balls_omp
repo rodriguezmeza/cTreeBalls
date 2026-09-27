@@ -291,7 +291,7 @@ fi
 if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env"; then
     exact_2pcf=compute-HistN,only-2pcf,no-two-balls,no-smooth-pivot
     aggregate_2pcf=compute-HistN,only-2pcf
-    slop_2pcf=compute-HistN,only-2pcf,dual-node-bin-slop
+    slop_2pcf=compute-HistN,only-2pcf,dual-node-bin-theta
 
     run_case pair-exact-one octree-2balls-omp 1 512 1 "$exact_2pcf"
     run_case pair-exact-many octree-2balls-omp "$MULTI_THREADS" 512 1 \

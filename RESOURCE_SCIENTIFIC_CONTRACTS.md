@@ -17,7 +17,7 @@ saving does not include estimator-owned shear/forest products or tree storage.
 
 ## Checked dimensions and budget
 
-`CBALLS_MEMORY_BUDGET_MB` is a positive integer in MiB, default 1024. Set it
+`CBALLS_MEMORY_BUDGET_MB` is a positive integer in MiB, default 65536 (64 GiB). Set it
 before a run, identically on all MPI ranks; do not mutate process environment
 while workers execute. Zero, malformed and overflowing values fail closed.
 For example, `CBALLS_MEMORY_BUDGET_MB=256 python analysis.py`.
@@ -122,3 +122,16 @@ CFITSIO and the 3D-only estimators disabled. Its geometry checks are separate
 from the active public 3D/double release gate.
 
 Legacy ball-tree pair-only runs also omit worker angular vectors, matrices and tensors, angular accumulation, reductions, and 3PCF output. The native allocation test enforces this under a 1 MiB limit. Forest provenance emits only computed axes and preflights JSON expansion before allocating it.
+
+## Extended plans and qualification
+
+The native default is defined once in `include/resource_contracts.h`. The
+anisotropic forest aggregate plan now also includes catalog bodies and retained
+object caches. `cyballs.resource_plan()` exposes dominant known and estimated
+per-rank components before loading input; tree estimates are not upper bounds.
+See `RELEASE_WORK_SEQUENCE.md` for exclusions and the owned native result APIs.
+
+The active gate additionally runs `workload_acceptance.py`, which retains
+held-out weak/signed geometry and raw/corrected products. Approximate candidates
+are explicitly QUALIFIED or REJECTED; campaign PASS is not blanket approximation
+approval. The original fixture-specific envelope above is unchanged.

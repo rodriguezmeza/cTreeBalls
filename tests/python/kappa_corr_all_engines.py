@@ -89,7 +89,7 @@ class EngineSpec:
     force_log_bins: bool = False
     supports_mask: bool = False
     supports_edge: bool = False
-    supports_dual_node_bin_slop: bool = False
+    supports_dual_node_bin_theta: bool = False
     supports_smooth_pivot: bool = False
     note: str = ""
 
@@ -100,26 +100,26 @@ class EngineSpec:
 KAPPA_ENGINES: Dict[str, EngineSpec] = {
     "kdtree-2balls-omp": EngineSpec(
         supports_mask=True, supports_edge=True,
-        supports_dual_node_bin_slop=True, supports_smooth_pivot=True,
+        supports_dual_node_bin_theta=True, supports_smooth_pivot=True,
     ),
     "kdtree-2balls-mpi": EngineSpec(
         mpi=True, supports_mask=True, supports_edge=True,
-        supports_dual_node_bin_slop=True, supports_smooth_pivot=True,
+        supports_dual_node_bin_theta=True, supports_smooth_pivot=True,
     ),
     "balltree-2balls-omp": EngineSpec(
         supports_mask=True, supports_edge=True,
-        supports_dual_node_bin_slop=True, supports_smooth_pivot=True,
+        supports_dual_node_bin_theta=True, supports_smooth_pivot=True,
     ),
     "balltree-2balls-mpi": EngineSpec(
         mpi=True, supports_mask=True, supports_edge=True,
-        supports_dual_node_bin_slop=True, supports_smooth_pivot=True,
+        supports_dual_node_bin_theta=True, supports_smooth_pivot=True,
     ),
     "octree-2balls-omp": EngineSpec(
-        supports_mask=True, supports_edge=True, supports_dual_node_bin_slop=True
+        supports_mask=True, supports_edge=True, supports_dual_node_bin_theta=True
     ),
     "octree-2balls-mpi": EngineSpec(
         mpi=True, supports_mask=True, supports_edge=True,
-        supports_dual_node_bin_slop=True,
+        supports_dual_node_bin_theta=True,
     ),
 }
 
@@ -268,7 +268,7 @@ class RunConfig:
     verbose_log: int = 1
     continue_on_error: bool = False
     edge_corrections: bool = False
-    dual_node_bin_slop: bool = False
+    dual_node_bin_theta: bool = False
     smooth_pivot_compiled: Optional[bool] = None
     plots: bool = True
     flatten_plots: bool = True
@@ -1095,8 +1095,8 @@ def engine_parameters(config: RunConfig, engine: str, masked: bool) -> dict:
         options = _split_options(
             [*options, "edge-corrections", "no-normalize-HistZeta"]
         )
-    if config.dual_node_bin_slop and spec.supports_dual_node_bin_slop:
-        options = _split_options([*options, "dual-node-bin-slop"])
+    if config.dual_node_bin_theta and spec.supports_dual_node_bin_theta:
+        options = _split_options([*options, "dual-node-bin-theta"])
     return {
         "searchMethod": engine,
         "rangeN": rmax,
@@ -1914,7 +1914,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--multipoles", type=int, default=7)
     parser.add_argument("--tree-theta", type=float, default=1.0)
     parser.add_argument(
-        "--dual-node-bin-slop", action="store_true",
+        "--dual-node-bin-theta", action="store_true",
         help="enable theta-sized approximate dual-node acceptance",
     )
     parser.add_argument("--nsmooth", type=int, default=16)
@@ -2032,7 +2032,7 @@ def main() -> int:
             verbose_log=args.verbose_log,
             continue_on_error=args.continue_on_error,
             edge_corrections=args.edge_corrections,
-            dual_node_bin_slop=args.dual_node_bin_slop,
+            dual_node_bin_theta=args.dual_node_bin_theta,
             smooth_pivot_compiled=smooth_pivot_compiled,
             plots=not args.no_plots,
             flatten_plots=not args.no_flatten_plots,

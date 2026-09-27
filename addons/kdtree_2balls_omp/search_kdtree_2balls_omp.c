@@ -1,4 +1,4 @@
-/* dual-node-style dual-node and LogMultipole scans over a median KD tree. */
+/* dual-node and LogMultipole scans over a median KD tree. */
 
 #include "globaldefs.h"
 #include "kdtree_2balls_tree.h"
@@ -98,11 +98,11 @@ global int KDTREE_2BALLS_SEARCH_FUNCTION(
 #ifdef DUAL_NODE_DISTRIBUTED_ENGINE
     if (cballs_opt_legacy_one_ball(cmd)) {
         if (cballs_opt_no_two_balls(cmd)
-            || scanopt(cmd->options, "dual-node-bin-slop")
+            || scanopt(cmd->options, "dual-node-bin-theta")
             || scanopt(cmd->options, "dual-node-direct-triples")) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "%s: legacy-one-ball cannot be combined with "
-                     "no-two-balls, dual-node-bin-slop, or "
+                     "no-two-balls, dual-node-bin-theta, or "
                      "dual-node-direct-triples",
                      cmd->searchMethod);
             return FAILURE;
@@ -117,11 +117,11 @@ global int KDTREE_2BALLS_SEARCH_FUNCTION(
 #else
     if (cballs_opt_legacy_one_ball(cmd)) {
         if (cballs_opt_no_two_balls(cmd)
-            || scanopt(cmd->options, "dual-node-bin-slop")
+            || scanopt(cmd->options, "dual-node-bin-theta")
             || scanopt(cmd->options, "dual-node-direct-triples")) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "%s: legacy-one-ball cannot be combined with "
-                     "no-two-balls, dual-node-bin-slop, or "
+                     "no-two-balls, dual-node-bin-theta, or "
                      "dual-node-direct-triples",
                      cmd->searchMethod);
             return FAILURE;

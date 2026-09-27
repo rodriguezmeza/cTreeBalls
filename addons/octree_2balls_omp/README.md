@@ -27,7 +27,7 @@ octree and compact-view builds. Use
 `options=no-native-tree-cache` for a cold-build benchmark or when retaining the
 compact views is undesirable.
 
-For 2PCF, `dual-node-bin-slop` enables controlled approximate radial-bin
+For 2PCF, `dual-node-bin-theta` enables controlled approximate radial-bin
 acceptance with a `radius1 + radius2 <= theta * bin_width` criterion and a
 near-boundary fallback. Without that option, the full interval
 `distance - radius1 - radius2` through `distance + radius1 + radius2` must stay
@@ -38,7 +38,7 @@ Otherwise the larger node is split with the dual-node
 case reuses its logarithmic bin coordinate rather than evaluating a second log. The
 production 3PCF body-pivot path always applies theta-sized radial acceptance
 and bounds angular phase error by `theta*pi/(2*mChebyshev+1)`; its radial
-acceptance does not switch to exact bins when `dual-node-bin-slop` is absent.
+acceptance does not switch to exact bins when `dual-node-bin-theta` is absent.
 With edge correction enabled, the angular bound uses the highest required
 window order instead. Use `options=no-two-balls,no-smooth-pivot` for the
 same-engine exact body-pair and body-moment reference.
@@ -49,7 +49,7 @@ The modern two-ball path has these parameter roles:
 
 | Control | Role |
 | --- | --- |
-| `theta` | Controls allowed radial/angular node extent in production 3PCF and approximate 2PCF with `dual-node-bin-slop`. It is not a percentage bound on the final correlation. |
+| `theta` | Controls allowed radial/angular node extent in production 3PCF and approximate 2PCF with `dual-node-bin-theta`. It is not a percentage bound on the final correlation. |
 | `nsmooth` | Controls compact-tree leaf capacity, not pivot smoothing. It affects speed and can change the approximate node partition, so it must be included in a calibration profile. |
 | `rsmooth` / `smooth-pivot` | Pivot smoothing is unsupported by the modern octree two-ball path. Changing a smoothing radius is not an accuracy/speed tuning strategy for this path. |
 | Compile-time `THETA` | Controls the legacy B4 scan-table criterion. Modern octree two-ball traversal does not consume that table; uppercase `THETA` is not its acceptance tolerance. |
@@ -151,7 +151,7 @@ masking, normalization, complex edge correction, `ggg-full-window`, and
 smoothing is enabled by default in compatibility mode and
 `options=no-smooth-pivot` disables it.
 
-Do not combine `legacy-one-ball` with `no-two-balls`, `dual-node-bin-slop`, or
+Do not combine `legacy-one-ball` with `no-two-balls`, `dual-node-bin-theta`, or
 `dual-node-direct-triples`; those select features of the native two-ball
 kernel. `only-2pcf` is supported. `only-3pcf` is rejected because the GGG
 kernel does not yet provide a true skip-2PCF execution path. Without

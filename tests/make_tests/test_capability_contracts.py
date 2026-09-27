@@ -63,3 +63,10 @@ def test_relative_shared_kernel_includes_select_all_scalar_tree_families():
             for parallel in ('omp','mpi')} <= set(plan['engines'])
     assert 'addons/kdtree_2balls_omp/search_kdtree_2balls_omp.c' in plan['include_closure']
     assert not any('/../' in path for path in plan['include_closure'])
+
+@pytest.mark.parametrize('name',['dual_node_radial_bins.h','dual_node_pair_acceptance.h','dual_node_task_schedule.h','dual_node_multipole.h','dual_node_search_policy.h'])
+def test_extracted_scalar_contract_selects_all_six_engines(name):
+    plan=select(['addons/balltree_2balls_omp/'+name])
+    expected={f'{tree}-2balls-{parallel}' for tree in ('octree','kdtree','balltree') for parallel in ('omp','mpi')}
+    assert expected <= set(plan['engines'])
+    assert 'tests/make_tests/test_two_ball_edge_corrections.py' in plan['tests']

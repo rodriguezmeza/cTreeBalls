@@ -2,7 +2,7 @@
  * Shared deterministic 2PCF traversal over a compact binary view of the
  * production cTreeBalls octree.
  *
- * The dual-node split and bin-slop criteria are adapted from dual-node:
+ * The dual-node split and bin-theta criteria are adapted from dual-node:
  * Copyright (c) 2003-2024 Mike Jarvis, under its BSD-style license.
  */
 
@@ -60,7 +60,7 @@ typedef struct {
     struct cmdline_data *cmd;
     struct global_data *gd;
     bool use_two_balls;
-    bool use_bin_slop;
+    bool use_bin_theta;
     bool weighted_signal;
     bool weighted_normalization;
     real pair_scale;
@@ -69,8 +69,8 @@ typedef struct {
     real theta2;
     real bin_size;
     real inverse_bin_size;
-    real bin_slop;
-    real bin_slop2;
+    real bin_theta;
+    real bin_theta2;
     real half_bin_plus_slop2;
     real log_acceptance_limit2;
     bool profile;
@@ -306,13 +306,13 @@ static int native_pair_initialize_acceptance(native_pair_context *context)
     context->theta2 = rsqr(cmd->theta);
     context->bin_size = cmd->useLogHist
         ? rlog(10.0) * gd->deltaR : gd->deltaR;
-    context->bin_slop = cmd->theta * context->bin_size;
-    context->bin_slop2 = rsqr(context->bin_slop);
+    context->bin_theta = cmd->theta * context->bin_size;
+    context->bin_theta2 = rsqr(context->bin_theta);
     context->half_bin_plus_slop2 =
-        0.25 * rsqr(context->bin_size + context->bin_slop);
+        0.25 * rsqr(context->bin_size + context->bin_theta);
     context->log_acceptance_limit2 = MIN(
         context->theta2,
-        MAX(context->bin_slop2, context->half_bin_plus_slop2));
+        MAX(context->bin_theta2, context->half_bin_plus_slop2));
     if (!(context->bin_size > 0.0)) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: radial bin width must be positive",
@@ -472,14 +472,14 @@ static int native_pair_two_ball_bin(
         || !(cmd->theta > 0.0))
         return -1;
 
-    if (context->use_bin_slop) {
+    if (context->use_bin_theta) {
         real fraction;
 
         if (cmd->useLogHist) {
             if (!(cmd->rminHist > 0.0)) return -1;
             if (size2 > context->log_acceptance_limit2 * distance2)
                 return -1;
-            if (size2 > context->bin_slop2 * distance2) {
+            if (size2 > context->bin_theta2 * distance2) {
                 const real relative_size2 = size2 / distance2;
 
                 if (size2 > context->half_bin_plus_slop2 * distance2)
@@ -490,25 +490,25 @@ static int native_pair_two_ball_bin(
                 fraction = coordinate - rfloor(coordinate);
                 if (fraction > 0.5) fraction = 1.0 - fraction;
                 if (size2 > rsqr(fraction * context->bin_size
-                                 + context->bin_slop) * distance2)
+                                 + context->bin_theta) * distance2)
                     return -1;
                 fraction = coordinate - rfloor(coordinate);
                 if (size2
                     > rsqr(fraction * context->bin_size
-                           + context->bin_slop - relative_size2)
+                           + context->bin_theta - relative_size2)
                       * distance2)
                     return -1;
             }
         } else {
             if (size2 > context->theta2 * distance2) return -1;
-            if (size2 > context->bin_slop2) {
+            if (size2 > context->bin_theta2) {
                 if (size2 > context->half_bin_plus_slop2) return -1;
                 coordinate = (rsqrt(distance2) - cmd->rminHist)
                            / context->bin_size;
                 fraction = coordinate - rfloor(coordinate);
                 if (fraction > 0.5) fraction = 1.0 - fraction;
                 if (size > fraction * context->bin_size
-                         + context->bin_slop) return -1;
+                         + context->bin_theta) return -1;
             }
         }
         if (!(distance2 > context->minimum2
@@ -610,9 +610,9 @@ static void native_pair_process_pair(
         real effective_width2;
 
         if (context->cmd->useLogHist)
-            effective_width2 = context->bin_slop2 * distance2;
+            effective_width2 = context->bin_theta2 * distance2;
         else
-            effective_width2 = context->bin_slop2;
+            effective_width2 = context->bin_theta2;
 
         if (size2 > size1) {
             split2 = TRUE;
@@ -1019,9 +1019,9 @@ int cballs_native_octree_pair_search(
         || (policy->no_one_ball_is_exact && cballs_opt_no_one_ball(cmd)))
         verb_print(cmd->verbose,
                    "exact body-pair accumulation enabled\n");
-    else if (scanopt(cmd->options, "dual-node-bin-slop"))
+    else if (scanopt(cmd->options, "dual-node-bin-theta"))
         verb_print(cmd->verbose,
-                   "dual-node-compatible controlled 2PCF bin slop enabled\n");
+                   "dual-node-compatible controlled 2PCF bin theta enabled\n");
     else
         verb_print(cmd->verbose,
                    "conservative same-bin dual-node acceptance enabled\n");
@@ -1107,7 +1107,7 @@ int cballs_native_octree_pair_search(
 
     context.use_two_balls = !cballs_opt_no_two_balls(cmd)
         && !(policy->no_one_ball_is_exact && cballs_opt_no_one_ball(cmd));
-    context.use_bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
+    context.use_bin_theta = scanopt(cmd->options, "dual-node-bin-theta");
     context.weighted_normalization = cballs_opt_weights_norm(cmd);
     context.weighted_signal = policy->weighted_signal
         || context.weighted_normalization;

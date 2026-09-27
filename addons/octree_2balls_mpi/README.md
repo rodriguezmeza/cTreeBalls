@@ -51,7 +51,7 @@ edge correction, `ggg-full-window`, and `ggg-profile` retain their GGG
 meanings. With `SMOOTHPIVOTON=1`, smoothing is enabled by default and
 `no-smooth-pivot` disables it. `only-2pcf` is supported; `only-3pcf` is
 rejected because GGG does not provide a true skip-2PCF execution path. Do not
-combine compatibility mode with `no-two-balls`, `dual-node-bin-slop`, or
+combine compatibility mode with `no-two-balls`, `dual-node-bin-theta`, or
 `dual-node-direct-triples`.
 
 The compatibility objects are private dependencies of this addon, so a narrow

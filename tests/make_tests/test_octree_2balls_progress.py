@@ -125,7 +125,7 @@ def suite(binary, reference_binary=None, engine="octree-2balls-omp"):
             # including bins completed collectively before children are visited.
             for capacity in (1, 16, 1024):
                 options = ["KKKCorrelation", "only-3pcf", "no-smooth-pivot",
-                           "no-normalize-HistZeta", "dual-node-bin-slop"]
+                           "no-normalize-HistZeta", "dual-node-bin-theta"]
                 stdout, log, histograms = run(options, overrides=dict(nsmooth=capacity), step=1)
                 assert check(stdout, len(data[0]), 1) == check(log, len(data[0]), 1)
                 _, _, quiet = run(options, overrides=dict(nsmooth=capacity), verbose=0, verbose_log=0)

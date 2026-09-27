@@ -22,8 +22,11 @@ int lya_los_workspace_init(const lya_los_index *index,
                             lya_los_workspace *workspace,
                             ErrorMsg error_message);
 void lya_los_workspace_free(lya_los_workspace *workspace);
+/* minimum_id=0 visits all IDs. Pair-only unsmoothed pivots may pass Id(pivot)
+ * to discard reverse ownership before radial pixel geometry. Discovery must
+ * remain independent of ownership: its witness may have any row ID. */
 int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
-                  bodyptr pivot, REAL cutoff, lya_los_visit visit,
+                  bodyptr pivot, REAL cutoff, INTEGER minimum_id, lya_los_visit visit,
                   void *context, ErrorMsg error_message);
 
 #endif

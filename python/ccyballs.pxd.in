@@ -7,7 +7,7 @@
 from libc.stdio cimport FILE
 from libc.time cimport clock_t
 from libc.stddef cimport size_t
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint64_t
 #E
 
 
@@ -32,6 +32,24 @@ cdef extern from "cballs.h":
     int cballs_runtime_activate(cballs_runtime_state *)
     const void *cballs_runtime_bodytable_at(const cballs_runtime_state *, int)
     void cballs_runtime_destroy(cballs_runtime_state *)
+    void cballs_runtime_clear_caches(cballs_runtime_state *)
+    size_t cballs_runtime_cache_bytes(const cballs_runtime_state *)
+    void cballs_runtime_clear_results(cballs_runtime_state *)
+    size_t cballs_runtime_result_bytes(const cballs_runtime_state *)
+    void cballs_runtime_retain_results(cballs_runtime_state *, int)
+    size_t cballs_resource_type_size(int)
+    size_t cballs_resource_default_mib()
+    size_t cballs_memory_budget()
+    cdef struct cballs_result_array:
+        char name[48]
+        int kind
+        int rank
+        size_t shape[5]
+        size_t count
+        size_t bytes
+    const cballs_result_array *cballs_result_at(const cballs_runtime_state *, int)
+    double cballs_result_value(const cballs_result_array *, size_t)
+    uint64_t cballs_result_count_value(const cballs_result_array *, size_t)
 
     cdef struct cmdline_data:
         char * paramfile

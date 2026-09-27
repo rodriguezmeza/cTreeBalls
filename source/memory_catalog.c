@@ -244,3 +244,4 @@ global int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
     return FAILURE;
 #endif
 }
+

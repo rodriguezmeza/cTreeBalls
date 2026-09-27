@@ -18,6 +18,7 @@
 
 #include "globaldefs.h"
 #include "tree_contracts.h"
+#include "resource_contracts.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -473,3 +474,88 @@ global int search_compute_HistN(struct cmdline_data *cmd,
 {
     return search_normalize_count_histograms(cmd, gd, nbody, gd->histNN, gd->histCF);
 }
+
+
+
+/* Scalar Fourier storage is independent of shear, physical 3D and forest
+ * products. Keep the legacy scalar plan for the remaining scalar engines. */
+static int common_scalar_3pcf(const struct cmdline_data *cmd)
+{
+#ifdef TPCF
+    const char *name=cmd->searchMethod ? cmd->searchMethod : "";
+    return !cballs_opt_only_2pcf(cmd) && strncmp(name,"lya-",4)
+        && !strstr(name,"shear") && !strstr(name,"3pcf-3d")
+        && !strstr(name,"ggg-3d") && !strstr(name,"box");
+#else
+    (void)cmd; return FALSE;
+#endif
+}
+
+global int startrun_memoryAllocation(struct cmdline_data *cmd, struct global_data *gd)
+{
+    size_t bytes=0,part,shape, n=(size_t)cmd->sizeHistN, m=(size_t)cmd->mChebyshev+1;
+    gd->common_scalar_3pcf=common_scalar_3pcf(cmd);
+    gd->memory_budget_bytes=cballs_memory_budget();
+    /* Preflight the entire common plan BEFORE its first allocation, including
+     * padding and pointer tables. Use the allocator's double storage size. */
+#define PLAN(rank,a,b,c,copies) do { \
+    if (!cballs_shape_bytes(rank,a,b,c,sizeof(double),&shape) \
+        || !cballs_size_mul(shape,copies,&part) || !cballs_size_add(bytes,part,&bytes)) \
+        cBALLS_FAIL(cmd,"common histogram dimension arithmetic overflow\n"); \
+} while (0)
+    PLAN(1,n,1,1,10);
+#ifdef SMOOTHPIVOT
+    PLAN(1,n,1,1,2);
+#endif
+#ifdef PXD
+    PLAN(1,n,1,1,2);
+    if (gd->common_scalar_3pcf) PLAN(2,n,n,1,1);
+#endif
+#ifdef TPCF
+    if (gd->common_scalar_3pcf) {
+        PLAN(2,m,n,1,2);
+        PLAN(3,m,n,n,9);
+    }
+#endif
+#undef PLAN
+    if (cballs_memory_preflight(bytes,"complete common histogram plan",
+                               cmd->error_message,_ERRORMSGSIZE_) == FAILURE) return FAILURE;
+    gd->common_histogram_bytes=bytes;
+    gd->histograms_allocated=TRUE; /* cleanup owns every subsequent pointer */
+#ifdef PXD
+    gd->vecPXD=dvector(1,cmd->sizeHistN);
+    gd->rBins=dvector(1,cmd->sizeHistN);
+    if (gd->common_scalar_3pcf)
+        gd->matPXD=dmatrix(0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
+    /* histZetaMFlatten has no consumers; leave it NULL. */
+#endif
+#define VECTOR(name) gd->name=dvector(1,cmd->sizeHistN)
+    VECTOR(histNN); VECTOR(histCF); VECTOR(histNNSub); VECTOR(histNNSubXi2pcf);
+    VECTOR(histNNN); VECTOR(histXi2pcf); VECTOR(histXi2pcf12); VECTOR(histXi2pcf13);
+    VECTOR(histNNSubN2pcf); VECTOR(histN2pcf);
+#ifdef SMOOTHPIVOT
+    VECTOR(histNNSubXi2pcftotal); VECTOR(histNNSubN2pcftotal);
+#endif
+#undef VECTOR
+#ifdef TPCF
+    if (gd->common_scalar_3pcf) {
+        gd->histXicos=dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+        gd->histXisin=dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
+#define TENSOR(name) gd->name=dmatrix3D(1,cmd->mChebyshev+1,1,cmd->sizeHistN,1,cmd->sizeHistN)
+        TENSOR(histZetaM); TENSOR(histZetaM_EE); TENSOR(histZetaM_EE_Im);
+        TENSOR(histZetaMcos); TENSOR(histZetaMsin); TENSOR(histZetaMsincos);
+        TENSOR(histZetaMcossin); TENSOR(histZetaGmRe); TENSOR(histZetaGmIm);
+#undef TENSOR
+    }
+#endif
+    /* bytes_tot is legacy signed accounting; check its addition too. */
+    size_t accounted;
+    if (gd->bytes_tot < 0 || !cballs_size_add((size_t)gd->bytes_tot,bytes,&accounted))
+        cBALLS_FAIL(cmd,"common histogram accounting overflow\n");
+    gd->bytes_tot = (INTEGER)accounted;
+    verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+        "\ncommon histogram plan: %zu bytes; scalar 3PCF tensors: %s\n",
+        bytes,gd->common_scalar_3pcf ? "yes" : "no");
+    return SUCCESS;
+}
+

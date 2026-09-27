@@ -122,7 +122,7 @@ methods. BALLS4SCANLEVON may remain enabled: it controls scheduling.
 Select the privately linked compatibility kernel behind an active two-ball
 method. Its smoothing behavior differs from native octree dual node traversal.
 .TP
-.B dual-node-bin-slop
+.B dual-node-bin-theta
 Enable bin-position-aware Log/Linear node acceptance.
 .TP
 .B no-smooth-pivot

@@ -41,7 +41,7 @@ typedef struct {
     INTEGER cell_pairs;
     shear_profile_counters *profile;
     bool allow_nodes;
-    bool bin_slop;
+    bool bin_theta;
     real angular_tolerance;
     real max_cell_ratio;
     real bin_width;
@@ -180,7 +180,7 @@ static int kd_shear_pair_bin(struct cmdline_data *cmd,
         return -1;
     if (distance <= size || size/distance > hist->max_cell_ratio)
         return -1;
-    if (hist->bin_slop) {
+    if (hist->bin_theta) {
         real width = cmd->useLogHist ? hist->bin_width*distance : hist->bin_width;
         if (!(width > 0.0) || size > width) return -1;
     }
@@ -188,7 +188,7 @@ static int kd_shear_pair_bin(struct cmdline_data *cmd,
     if (bin < 0) return -1;
     lower = distance - size;
     upper = distance + size;
-    if (!hist->bin_slop && !shear_interval_within_radial_bin(
+    if (!hist->bin_theta && !shear_interval_within_radial_bin(
                    cmd, gd, lower, upper, bin)) {
         return -1;
     }
@@ -495,7 +495,7 @@ static int kd_shear_dual_tree_2pcf(
     int status = FAILURE;
     const bool allow_nodes = cmd->theta > 0.0
         && !cballs_opt_no_two_balls(cmd) && !cballs_opt_no_one_ball(cmd);
-    const bool bin_slop = scanopt(cmd->options, "dual-node-bin-slop");
+    const bool bin_theta = scanopt(cmd->options, "dual-node-bin-theta");
     const real angular_tolerance = MIN(0.5*PI, cmd->theta*PI/9.0);
     const real max_cell_ratio = rsin(MAX(0.0, angular_tolerance));
     const real bin_width = cmd->useLogHist
@@ -663,7 +663,7 @@ static int kd_shear_dual_tree_2pcf(
                 .xi_plus_re = base, .xi_plus_im = base + stride,
                 .xi_minus_re = base + 2*stride, .xi_minus_im = base + 3*stride,
                 .weight = base + 4*stride, .profile = profile,
-                .allow_nodes = allow_nodes, .bin_slop = bin_slop,
+                .allow_nodes = allow_nodes, .bin_theta = bin_theta,
                 .angular_tolerance = angular_tolerance,
                 .max_cell_ratio = max_cell_ratio, .bin_width = bin_width
             };

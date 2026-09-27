@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <limits.h>
+#define CBALLS_DEFAULT_MEMORY_BUDGET_MIB 65536
+#define CBALLS_STRINGIFY_INNER(x) #x
+#define CBALLS_STRINGIFY(x) CBALLS_STRINGIFY_INNER(x)
 /* All shapes are checked before multiplication or signed conversion. */
 static inline int cballs_size_add(size_t a, size_t b, size_t *out)
 {

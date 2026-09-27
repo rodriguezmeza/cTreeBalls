@@ -18,6 +18,8 @@
 
 #include "globaldefs.h"
 #include "tree_contracts.h"
+#include "resource_contracts.h"
+#include "../addons/balltree_shared/fcfc_balltree.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -284,5 +286,86 @@ global void cballs_runtime_destroy(cballs_runtime_state *state)
         cballs_runtime_load(&cballs_default_runtime);
         cballs_active_runtime = NULL;
     }
+    cballs_runtime_clear_results(state);
+    cballs_runtime_clear_caches(state);
     free(state);
+}
+
+
+/* Results and backend attachments are object-owned. Legacy activation remains
+ * serialized; this does not make concurrent direct native entry safe. */
+void *cballs_runtime_attach(int slot, size_t size, void (*destroy)(void *), size_t (*bytes)(const void *))
+{
+    if(slot<0 || slot>=2 || !size || !destroy || !bytes)
+        cballs_resource_failure("invalid runtime attachment");
+    cballs_runtime_attachment *a=&cballs_runtime_current()->attachments[slot];
+    if (!a->data) {
+        a->data=calloc(1,size);
+        if (!a->data) cballs_allocation_failure(size,"runtime attachment");
+        a->destroy=destroy; a->bytes=bytes;
+    }
+    return a->data;
+}
+size_t cballs_runtime_cache_bytes(const cballs_runtime_state *state)
+{
+    size_t total=0;
+    for (int i=0;i<2;i++) if (state->attachments[i].data)
+        total+=state->attachments[i].bytes(state->attachments[i].data);
+    return total;
+}
+void cballs_runtime_clear_caches(cballs_runtime_state *state)
+{
+    for (int i=0;i<2;i++) {
+        if (state->attachments[i].data) state->attachments[i].destroy(state->attachments[i].data);
+        memset(&state->attachments[i],0,sizeof(state->attachments[i]));
+    }
+}
+void cballs_runtime_clear_results(cballs_runtime_state *state)
+{
+    for (int i=0;i<8;i++) { free(state->results[i].data); memset(&state->results[i],0,sizeof(state->results[i])); }
+}
+size_t cballs_runtime_result_bytes(const cballs_runtime_state *state)
+{
+    size_t total=0; for(int i=0;i<8;i++) total+=state->results[i].bytes; return total;
+}
+void cballs_runtime_retain_results(cballs_runtime_state *state,int enabled) {state->retain_results=enabled;}
+void cballs_result_adopt(const char *name,void **data,int kind,int rank,const size_t *shape)
+{
+    cballs_runtime_state *state=cballs_runtime_current();
+    if (!state->retain_results || !*data) return;
+    cballs_result_array *a=NULL;
+    for(int i=0;i<8;i++) if(!state->results[i].data) {a=&state->results[i];break;}
+    if(!a || rank<1 || rank>5 || kind<0 || kind>2)
+        cballs_resource_failure("invalid native result ownership request");
+    size_t count=1,bytes;
+    for(int i=0;i<rank;i++) if(!cballs_size_mul(count,shape[i],&count))
+        cballs_resource_failure("native result dimensions overflow");
+    if(!cballs_size_mul(count,kind==1?sizeof(long double):kind==2?sizeof(uint64_t):sizeof(REAL),&bytes))
+        cballs_resource_failure("native result size overflow");
+    snprintf(a->name,sizeof(a->name),"%s",name);a->kind=kind;a->rank=rank;a->count=count;a->bytes=bytes;
+    memcpy(a->shape,shape,rank*sizeof(size_t));a->data=*data;*data=NULL;
+}
+const cballs_result_array *cballs_result_at(const cballs_runtime_state *state,int index)
+{return index>=0 && index<8 && state->results[index].data ? &state->results[index] : NULL;}
+double cballs_result_value(const cballs_result_array *a,size_t i)
+{return a->kind==1?(double)((long double*)a->data)[i]:a->kind==2?(double)((uint64_t*)a->data)[i]:(double)((REAL*)a->data)[i];}
+uint64_t cballs_result_count_value(const cballs_result_array *a,size_t i) {return ((uint64_t*)a->data)[i];}
+size_t cballs_resource_type_size(int kind)
+{
+    switch(kind) {case 0:return sizeof(body);case 1:return sizeof(cell);case 2:return sizeof(fcfc_ballnode);
+    case 3:return sizeof(fcfc_ballpoint);case 4:return sizeof(REAL);case 5:return sizeof(size_t);case 6:return sizeof(long double);default:return 0;}
+}
+size_t cballs_resource_default_mib(void) {return CBALLS_DEFAULT_MEMORY_BUDGET_MIB;}
+int cballs_resource_base(struct cmdline_data *cmd,struct global_data *gd,size_t *out)
+{
+    size_t total=gd->common_histogram_bytes,bytes;
+    for(int i=0;i<gd->ninfiles;i++) {
+        if(gd->nbodyTable[i]<0 || !cballs_size_mul((size_t)gd->nbodyTable[i],sizeof(body),&bytes)
+            || !cballs_size_add(total,bytes,&total)) goto invalid;
+    }
+    if(!cballs_size_add(total,cballs_runtime_cache_bytes(cballs_runtime_current()),&total)) goto invalid;
+    *out=total;
+    return cballs_memory_preflight(total,"catalogs, common histograms and retained caches per rank",cmd->error_message,sizeof(cmd->error_message));
+invalid:
+    snprintf(cmd->error_message,sizeof(cmd->error_message),"aggregate resource dimension overflow");return FAILURE;
 }

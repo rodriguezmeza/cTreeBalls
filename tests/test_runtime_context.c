@@ -3,6 +3,10 @@
 #include "globaldefs.h"
 #include <assert.h>
 
+static int destroyed;
+static void destroy_attachment(void *p) {destroyed++;free(p);}
+static size_t attachment_bytes(const void *p) {(void)p;return 32;}
+
 int main(void)
 {
     cballs_runtime_state *original = cballs_runtime_current();
@@ -11,6 +15,8 @@ int main(void)
     body cat_a = {0}, cat_b = {0};
     assert(a && b && a != b);
     assert(cballs_runtime_activate(a) == SUCCESS);
+    assert(cballs_runtime_attach(0,32,destroy_attachment,attachment_bytes));
+    assert(cballs_runtime_cache_bytes(a)==32);
     inout_xval = &io_a;
     bodytable[0] = &cat_a;
     a->mpi[0].rank = 3;
@@ -43,7 +49,7 @@ int main(void)
 #ifdef USEGSL
     gsl_rng_free(r_gsl); r_gsl = NULL;
 #endif
-    cballs_runtime_destroy(a); /* Destroying an inactive context preserves b. */
+    cballs_runtime_destroy(a); assert(destroyed==1); /* Destroying an inactive context preserves b. */
     assert(cballs_runtime_current() == b && inout_xval == &io_b);
     cballs_runtime_destroy(b);
     assert(cballs_runtime_current() == original);

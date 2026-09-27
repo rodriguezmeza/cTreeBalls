@@ -112,6 +112,23 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         : cballs_opt_no_normalize_histzeta(cmd) ? "raw scalar distinct-neighbor tangent-Fourier moments"
         : "weight-normalized scalar Fourier moments");
     append(&b, ",\"options\":"); string_value(&b, cmd->options);
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
+    if (forest && !radial_forest) {
+        append(&b,",\"lya_pivot_frontier\":{\"scan_level\":%d,\"smoothing_radius\":%.17g,\"maximum_group_pixels\":%d,\"geometry_approximate\":%s,\"neighbors\":\"original pixels\",\"grouping\":\"same forest, increasing chi, first pixel representative\",\"pair_ownership\":\"%s\",\"cutoffs\":\"%s\"}",
+            cmd->lyaScanLevel,(double)cmd->lyaPivotRadius,cmd->lyaPivotMax,cmd->lyaPivotRadius>0?"true":"false",
+            "original row-ID ownership in the pixel-pivot branch",
+            cmd->lyaPivotRadius>0?"smoothed branch uses representative geometry":"exact pixel or certified cell geometry");
+        append(&b,",\"lya_2pcf\":{\"kernel\":%d,\"rp_slop\":%.17g,\"rt_slop\":%.17g,\"approximate\":%s}",
+            cmd->lya2Kernel,(double)cmd->lya2RpSlop,(double)cmd->lya2RtSlop,
+            (cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0 || (cmd->lyaPivotRadius>0 && cmd->lya2Kernel==0))?"true":"false");
+        append(&b,",\"lya_3pcf\":{\"kernel\":%d,\"lmax\":%d,\"pivot_block_requested\":%d,\"mu_reconstruction_approximate\":%s}",
+               cmd->lya3Kernel,cmd->lya3LMax,cmd->lya3PivotBlock,lya_forest_is_multipole_method(method)?"true":"false");
+        append(&b,",\"lya_geometry\":{\"mu_slop\":%.17g,\"radial_slop\":%.17g,\"polar_slop\":%.17g,\"pivot_cell_max\":%d,\"three_point_approximate\":%s,\"pair_geometry_exact\":%s}",
+            (double)cmd->lya3MuSlop,(double)cmd->lya3RadialSlop,(double)cmd->lya3PolarSlop,cmd->lya3PivotCellMax,
+            (cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0 || cmd->lyaPivotRadius>0)?"true":"false",
+            (cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0 || (cmd->lyaPivotRadius>0 && cmd->lya2Kernel==0))?"false":"true");
+    }
+#endif
     append(&b, ",\"bin_edges\":{");
     if (!forest) {
         int logarithmic = cmd->useLogHist;
@@ -164,7 +181,11 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         }
     }
 #endif
-    append(&b, "},\"multipole_max\":%d,\"coordinate_convention\":", cmd->mChebyshev);
+    int reported_lmax=cmd->mChebyshev;
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
+    if (lya_forest_is_multipole_method(method)) reported_lmax=cmd->lya3LMax;
+#endif
+    append(&b, "},\"multipole_max\":%d,\"coordinate_convention\":", reported_lmax);
     string_value(&b, forest ? "observer-centered Cartesian comoving positions; radial norm/LOS separation; no periodic wrapping"
         : shear ? (spherical_shear ? "unit-sphere Cartesian directions; chord-distance bins; parallel-transported spin-2 tangent components" : "Cartesian tangent-plane positions; planar distances and spin-2 components; no spherical transport")
         : physical ? "Cartesian physical separations; interior 3D opening angle; Legendre multipoles"
@@ -173,8 +194,10 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         : "original observer frame; Cartesian chords and tangent bearings; undefined radial/antipodal bearings excluded from angular moments");
     append(&b, ",\"geometry\":{\"dimensions\":%d,\"spherical_shear\":%s,\"scalar_observer_frame\":%s},",
         NDIM,spherical_shear?"true":"false",!shear && cballs_observer_frame(cmd)?"true":"false");
-    append(&b, "\"resources\":{\"common_histogram_bytes\":%zu,\"common_scalar_3pcf\":%s,\"memory_budget_bytes\":%zu,\"budget_scope\":\"per-rank common histogram plan and individual common allocations; not total RSS\"}",
+    append(&b, "\"resources\":{\"common_histogram_bytes\":%zu,\"common_scalar_3pcf\":%s,\"memory_budget_bytes\":%zu,\"budget_scope\":\"per-rank active-run plans (catalog/common/cache/forest scratch) and individual common allocations; not total RSS\"}",
         gd->common_histogram_bytes,gd->common_scalar_3pcf?"true":"false",gd->memory_budget_bytes);
+    append(&b, ",\"resource_policy\":{\"default_budget_mib\":%zu,\"body_bytes\":%zu,\"cache_bytes\":%zu,\"retained_result_bytes\":%zu,\"cache_scope\":\"runtime object; explicit cleanup releases caches\",\"rss_ceiling\":false}",
+        cballs_resource_default_mib(),cballs_resource_type_size(0),cballs_runtime_cache_bytes(cballs_runtime_current()),cballs_runtime_result_bytes(cballs_runtime_current()));
     append(&b, ",\"box\":[");
     for (int k=0; k<NDIM; k++) { if (k) append(&b, ","); number(&b, gd->Box[k]); }
     append(&b, "],\"weights\":{");

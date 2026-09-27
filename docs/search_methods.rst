@@ -38,7 +38,7 @@ switch.
 For the addon methods, ``TWOPCFON`` and ``TPCFON`` compile the two correlation orders.
 ``only-2pcf`` and ``only-3pcf`` select work at runtime. The default dual-node
 acceptance requires the complete pair-distance interval to remain inside one
-radial bin. ``dual-node-bin-slop`` enables the less conservative Log/Linear
+radial bin. ``dual-node-bin-theta`` enables the less conservative Log/Linear
 bin-position policy, and ``no-two-balls`` requests exact body pairs for 2PCF.
 For exact unsmoothed scalar 3PCF across engines use
 ``no-one-ball,no-two-balls,no-smooth-pivot``: native octree
@@ -96,7 +96,8 @@ spatial order after the parallel region for deterministic results.  The
 Lyman-alpha Forest Methods
 --------------------------
 
-``LYAFORESTOMPON=1`` enables twelve OpenMP names. ``LYAFORESTMPION=1`` enables
+``LYAFORESTOMPON=1`` enables thirteen OpenMP names, including the experimental
+``lya-anisotropic-multipole-3pcf-omp`` method. ``LYAFORESTMPION=1`` enables
 eight MPI names; the same-LOS and three LOS-tree methods are OpenMP only.
 
 The families are:

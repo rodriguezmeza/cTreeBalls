@@ -17,7 +17,7 @@ OpenMP and MPI method:
 
 They compute 2PCF and LogMultipole 3PCF, selected with ``only-2pcf`` or
 ``only-3pcf``. Dual-node acceptance is conservative by default;
-``dual-node-bin-slop`` enables bin-aware approximation and ``no-two-balls``
+``dual-node-bin-theta`` enables bin-aware approximation and ``no-two-balls``
 selects exact body pairs. Exact unsmoothed 3PCF uses
 ``no-one-ball,no-smooth-pivot``; native octree 3PCF is not exact with
 ``no-two-balls`` alone. ``BALLS4SCANLEVON=1`` supplies balanced task frontiers.

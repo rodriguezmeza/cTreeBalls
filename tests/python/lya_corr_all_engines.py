@@ -91,6 +91,10 @@ INCOMPATIBLE_ENGINE_REASONS = {
         "balltree-shear-sphere-2balls-omp",
     )
 }
+INCOMPATIBLE_ENGINE_REASONS["lya-anisotropic-multipole-3pcf-omp"] = (
+    "uses exact anisotropic moments and approximate mu reconstruction; "
+    "use tests/python/benchmark_lya_triplet_kernels.py for accuracy calibration"
+)
 PRODUCTS = {
     "3d_2pcf": ("histXi2pcf_lya.txt", 2, 7),
     "3d_3pcf": ("histZetaM_lya5d.txt", 5, 13),
@@ -280,6 +284,11 @@ def resolve_engines(tokens, available, statistics="2pcf"):
 
 
 def expand_inputs(patterns):
+    """Resolve files/globs and immediate FITS children of directories deterministically.
+
+    Cached NPZ files and unrelated sidecars in a delta directory are ignored.
+    Overlapping inputs are rejected to prevent silently counting a forest twice.
+    """
     paths = []
     for pattern in patterns:
         matches = sorted(glob.glob(os.path.expanduser(str(pattern))))
@@ -287,9 +296,18 @@ def expand_inputs(patterns):
             raise FileNotFoundError(f"no files match {pattern}")
         for item in matches:
             path = Path(item).resolve()
-            if path in paths:
-                raise ValueError(f"duplicate input file: {path}")
-            paths.append(path)
+            candidates = ([p for p in sorted(path.iterdir()) if p.is_file()
+                           and p.name.lower().endswith((".fits", ".fits.gz", ".fit", ".fit.gz", ".fits.fz"))]
+                          if path.is_dir() else [path])
+            if not candidates:
+                raise FileNotFoundError(f"no FITS files in {path}")
+            for candidate in candidates:
+                candidate = candidate.resolve()
+                if not candidate.is_file():
+                    raise FileNotFoundError(f"not an input file: {candidate}")
+                if candidate in paths:
+                    raise ValueError(f"duplicate input file: {candidate}")
+                paths.append(candidate)
     return paths
 
 
@@ -759,7 +777,7 @@ def run_engine_suite(catalog, config, comm=None):
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group()
-    source.add_argument("--fits", nargs="+", help="DESI image-layout or eBOSS/PICCA forest-HDU delta FITS files/globs")
+    source.add_argument("--fits", nargs="+", help="DESI, eBOSS/PICCA, or Cartesian forest FITS files/globs/directories")
     source.add_argument("--catalog", type=Path, help="NPZ with positions, delta, weights, forest_ids")
     source.add_argument("--ascii", type=Path, help="six columns: x y z delta weight forest_id")
     source.add_argument("--synthetic", action="store_true", help="small generated catalog (default)")
@@ -787,7 +805,7 @@ def parse_arguments(argv=None):
     parser.add_argument("--max-forests", type=int, help="FITS demonstration subset")
     parser.add_argument("--pixel-stride", type=int, default=1, help="FITS subsampling, not rebinning")
     parser.add_argument("--delta-field", choices=["auto", "DELTA", "DELTA_BLIND"], default="auto")
-    parser.add_argument("--fits-layout", choices=["auto", "desi", "eboss"], default="auto")
+    parser.add_argument("--fits-layout", choices=["auto", "desi", "eboss", "cartesian"], default="auto")
     parser.add_argument("--eboss-angle-unit", choices=["rad", "deg"], default="rad")
     parser.add_argument("--project-delta", action="store_true", help="remove weighted mean and log-wavelength slope on retained FITS pixels")
     parser.add_argument("--redshift-weight-exponent", type=float, default=0., help="optional WEIGHT multiplier ((1+z)/(1+z_ref))**exponent")
@@ -821,6 +839,36 @@ def parse_arguments(argv=None):
     parser.add_argument("--mpiexec", help="launcher built against the same MPI as cyballs/mpi4py")
     parser.add_argument("--mpi-extra-arg", action="append", default=[])
     return parser.parse_args(argv)
+
+
+def load_catalog(args):
+    """Read and validate one catalog; shared by the forest benchmark frontend."""
+    if not args.fits and (args.max_forests is not None or args.pixel_stride != 1
+                          or args.z_min != 0 or args.z_max != 10
+                          or args.omega_m != .315 or args.h != .674
+                          or args.delta_field != "auto" or args.fits_layout != "auto"
+                          or args.eboss_angle_unit != "rad" or args.project_delta
+                          or args.redshift_weight_exponent != 0 or args.weight_z_ref != 2.25):
+        raise ValueError("FITS selection/cosmology options require --fits; "
+                         "ASCII and NPZ coordinates are already comoving")
+    if args.fits:
+        from lya_fits import read_fits
+        catalog = read_fits(args.fits, omega_m=args.omega_m, h=args.h,
+                            z_min=args.z_min, z_max=args.z_max, max_forests=args.max_forests,
+                            pixel_stride=args.pixel_stride, delta_field=args.delta_field,
+                            fits_layout=args.fits_layout, eboss_angle_unit=args.eboss_angle_unit,
+                            project_delta=args.project_delta,
+                            redshift_weight_exponent=args.redshift_weight_exponent, weight_z_ref=args.weight_z_ref)
+    elif args.catalog:
+        catalog = read_npz(args.catalog)
+    elif args.ascii:
+        catalog = read_ascii(args.ascii)
+    else:
+        catalog = synthetic_catalog(args.synthetic_forests, args.synthetic_pixels, args.seed)
+    if args.save_catalog:
+        args.save_catalog.parent.mkdir(parents=True, exist_ok=True)
+        save_catalog(args.save_catalog, catalog)
+    return catalog
 
 
 def main(argv=None):
@@ -880,34 +928,7 @@ def main(argv=None):
                        wedge_mu_edges=tuple(float(x) for x in args.wedge_mu_edges.split(",")),
                        wedge_subsamples=args.wedge_subsamples, wedge_r_max=args.wedge_r_max)
     collective(comm, config.validate)
-    def load():
-        if not args.fits and (args.max_forests is not None or args.pixel_stride != 1
-                              or args.z_min != 0 or args.z_max != 10
-                              or args.omega_m != .315 or args.h != .674
-                              or args.delta_field != "auto" or args.fits_layout != "auto"
-                              or args.eboss_angle_unit != "rad" or args.project_delta
-                              or args.redshift_weight_exponent != 0 or args.weight_z_ref != 2.25):
-            raise ValueError("FITS selection/cosmology options require --fits; "
-                             "ASCII and NPZ coordinates are already comoving")
-        if args.fits:
-            from lya_fits import read_fits
-            catalog = read_fits(args.fits, omega_m=args.omega_m, h=args.h,
-                                z_min=args.z_min, z_max=args.z_max, max_forests=args.max_forests,
-                                pixel_stride=args.pixel_stride, delta_field=args.delta_field,
-                                fits_layout=args.fits_layout, eboss_angle_unit=args.eboss_angle_unit,
-                                project_delta=args.project_delta,
-                                redshift_weight_exponent=args.redshift_weight_exponent, weight_z_ref=args.weight_z_ref)
-        elif args.catalog:
-            catalog = read_npz(args.catalog)
-        elif args.ascii:
-            catalog = read_ascii(args.ascii)
-        else:
-            catalog = synthetic_catalog(args.synthetic_forests, args.synthetic_pixels, args.seed)
-        if args.save_catalog:
-            args.save_catalog.parent.mkdir(parents=True, exist_ok=True)
-            save_catalog(args.save_catalog, catalog)
-        return catalog
-    catalog = collective(comm, load, root_only=True)
+    catalog = collective(comm, lambda: load_catalog(args), root_only=True)
     catalog = broadcast_catalog(comm, catalog)
     if comm.rank == 0:
         print("Catalog loaded once; retained NumPy input will be reused by every engine.")

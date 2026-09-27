@@ -1,8 +1,12 @@
 /* Exact weighted Lyman-alpha forest 2PCF and anisotropic 3PCF.
  *
  * This implements equations (2.4) and (2.8) of the Lya2pcf paper.  Octree
- * cells are used only to reject regions outside the largest requested scale;
- * all accepted contributions are evaluated from individual forest pixels.
+ * cells reject regions outside the largest requested scale in the reference
+ * walker. Optional persistent 2PCF cell pairs certify rp/rt bins and reuse
+ * observer-angle bounds, with exact radial-window and pixel fallbacks.
+ * 3PCF contributions use certified same-bin forest segment sums with exact
+ * pixel fallback. The opt-in anisotropic multipole method computes exact
+ * Legendre moments and explicitly approximate mu-bin reconstruction.
  */
 
 #include "globaldefs.h"
@@ -15,7 +19,29 @@
 
 #define LYA_PI 3.141592653589793238462643383279502884
 
+/* Pivot-dependent quantities are invariant across the neighbor-pair loop.
+ * Keep its inputs contiguous rather than repeatedly dereferencing full bodies.
+ * Retain displacement/radius (not unit vectors) to preserve the original mu
+ * arithmetic at bin boundaries. */
 typedef struct {
+    compute_vector displacement;
+    REAL radius, weight, weighted_delta;
+    INTEGER forest_id;
+    size_t first_index, second_index, ordinal, leg_bin;
+} lya_neighbor;
+
+#include "lya_triplet_types.h"
+
+typedef struct {
+    REAL *moments;
+    size_t *moment_bins;
+    unsigned char *moment_seen;
+    int aggregation_safe, moment_mode;
+    REAL polar_edges[65];
+    int polar_lookup;
+    lya_segment *segments;
+    size_t *segment_roots, segment_count, segment_capacity;
+    unsigned long long aggregated_pairs, direct_pairs, segment_accepts, approximate_pairs;
     REAL *num2;
     REAL *den2;
     REAL *num3;
@@ -24,13 +50,29 @@ typedef struct {
     size_t touched2_count;
     size_t *touched3;
     size_t touched3_count;
-    bodyptr *neighbors;
+    lya_neighbor *neighbors;
     size_t neighbor_count;
     size_t neighbor_capacity;
+    size_t histogram_plan_bytes;
+    size_t scratch_workers;
+    /* Zero multiplicity means the unmodified pixel-pivot path. */
+    INTEGER pivot_multiplicity;
+    REAL pivot_weight, pivot_field;
+    bodyptr *pivot_members;
+    INTEGER pivot_idlo, pivot_idhi;
     INTEGER accepted_visits;
     INTEGER pair_count;
     INTEGER ordered_triplet_count;
 } lya_worker_hist;
+
+local REAL lya_pivot_weight(const lya_worker_hist *w,bodyptr p)
+{return w->pivot_multiplicity?w->pivot_weight:Weight(p);}
+
+local REAL lya_pivot_field(const lya_worker_hist *w,bodyptr p)
+{return w->pivot_multiplicity?w->pivot_field:Weight(p)*Kappa(p);}
+
+local INTEGER lya_pivot_multiplicity(const lya_worker_hist *w)
+{return w->pivot_multiplicity?w->pivot_multiplicity:1;}
 
 local int lya_size_mul(size_t left, size_t right, size_t *result)
 {
@@ -81,9 +123,20 @@ local size_t lya_index3(int b1, int b2, int t1, int t2, int mu,
 
 local int lya_worker_init(struct cmdline_data *cmd, lya_worker_hist *worker,
                           size_t bins2, size_t bins3, int compute_2pcf,
-                          int compute_3pcf, ErrorMsg error_message)
+                          int compute_3pcf, size_t histogram_plan_bytes,
+                          ErrorMsg error_message)
 {
     memset(worker, 0, sizeof(*worker));
+    worker->moment_mode = lya_forest_is_multipole_method(cmd->searchMethod);
+    worker->histogram_plan_bytes = histogram_plan_bytes;
+    worker->scratch_workers = (size_t)MAX(1, cmd->numthreads);
+#ifndef __FAST_MATH__
+    worker->polar_lookup=sizeof(REAL)==sizeof(double) && sizeof(real)==sizeof(double)
+        && cmd->lya3ThetaBins<=64;
+#endif
+    if(compute_3pcf && worker->polar_lookup)
+        for(int j=1;j<cmd->lya3ThetaBins;j++)
+            worker->polar_edges[j]=cos((REAL)LYA_PI*j/cmd->lya3ThetaBins);
 
     if (compute_2pcf) {
         if (cballs_calloc_checked((void **)&worker->num2, bins2,
@@ -129,25 +182,70 @@ local void lya_worker_free(lya_worker_hist *worker)
     free(worker->den3);
     free(worker->touched2);
     free(worker->touched3);
+    free(worker->moments);free(worker->moment_bins);free(worker->moment_seen);
+    free(worker->segments);
+    free(worker->segment_roots);
     free(worker->neighbors);
     memset(worker, 0, sizeof(*worker));
 }
 
-local int lya_append_neighbor(lya_worker_hist *worker, bodyptr neighbor,
-                              ErrorMsg error_message)
+#include "lya_neighbor_geometry.h"
+
+local int lya_append_neighbor(struct cmdline_data *cmd, bodyptr pivot,
+                              lya_worker_hist *worker, bodyptr neighbor,
+                              REAL distance, ErrorMsg error_message)
 {
+    lya_neighbor entry;
+    REAL cos_theta;
+    int radial_bin, theta_bin;
+    SUBV(entry.displacement,Pos(neighbor),Pos(pivot));
+    entry.radius = distance;
+    radial_bin = lya_bin_positive(entry.radius, cmd->lya3RMax, cmd->lya3RBins);
+    if (radial_bin < 0 || entry.radius <= 0.0) return SUCCESS;
+    DOTVP(cos_theta, entry.displacement, LyaLOS(pivot));
+    cos_theta=lya_clamp(cos_theta/entry.radius,-1.,1.);
+    theta_bin = worker->polar_lookup
+        ? lya_polar_bin(cos_theta,cmd->lya3ThetaBins,worker->polar_edges)
+        : lya_bin_theta(racos(cos_theta),cmd->lya3ThetaBins);
+    entry.leg_bin=(size_t)radial_bin*cmd->lya3ThetaBins+theta_bin;
+    entry.ordinal=worker->neighbor_count;
+    entry.forest_id = LyaForestId(neighbor);
+    entry.weight = Weight(neighbor);
+    entry.weighted_delta = Weight(neighbor) * Kappa(neighbor);
+    /* Hard-bin offsets are only used by exact kernels. The multipole grid
+     * was checked with L+1 instead of MuBins, so do not form unused MuBins
+     * products here. leg_bin supplies the common sorting/grouping key. */
+    if (worker->moment_mode) entry.first_index=entry.second_index=0;
+    else {
+    /* bins3 was checked before worker allocation, so these partial indices
+     * and their eventual sum fit size_t. */
+    entry.first_index = (((size_t)radial_bin * (size_t)cmd->lya3RBins
+                         * (size_t)cmd->lya3ThetaBins + (size_t)theta_bin)
+                        * (size_t)cmd->lya3ThetaBins) * (size_t)cmd->lya3MuBins;
+    entry.second_index = ((size_t)radial_bin * (size_t)cmd->lya3ThetaBins
+                          * (size_t)cmd->lya3ThetaBins + (size_t)theta_bin)
+                         * (size_t)cmd->lya3MuBins;
+    }
     if (worker->neighbor_count == worker->neighbor_capacity) {
         size_t new_capacity = worker->neighbor_capacity == 0
                             ? 128 : worker->neighbor_capacity * 2;
-        bodyptr *resized;
+        size_t bytes, all_scratch, all_bytes, old_segments;
+        lya_neighbor *resized;
         if (new_capacity < worker->neighbor_capacity
-            || new_capacity > SIZE_MAX / sizeof(*resized)) {
+            || !cballs_size_mul(new_capacity, sizeof(*resized), &bytes)
+            || !cballs_size_mul(worker->segment_capacity,2*sizeof(lya_segment)+sizeof(size_t),&old_segments)
+            || !cballs_size_mul(bytes,2,&all_scratch)
+            || !cballs_size_add(all_scratch,old_segments,&all_scratch)
+            || !cballs_size_mul(all_scratch, worker->scratch_workers, &all_scratch)
+            || !cballs_size_add(worker->histogram_plan_bytes, all_scratch, &all_bytes)) {
             snprintf(error_message, _ERRORMSGSIZE_,
                      "Ly-alpha neighbor-list size overflow");
             return FAILURE;
         }
-        resized = realloc(worker->neighbors,
-                          new_capacity * sizeof(*resized));
+        if (cballs_memory_preflight(all_bytes, "Ly-alpha histograms and neighbor scratch",
+                                    error_message, _ERRORMSGSIZE_) == FAILURE)
+            return FAILURE;
+        resized = realloc(worker->neighbors, bytes);
         if (resized == NULL) {
             snprintf(error_message, _ERRORMSGSIZE_,
                      "not enough memory growing Ly-alpha neighbor list");
@@ -156,7 +254,7 @@ local int lya_append_neighbor(lya_worker_hist *worker, bodyptr neighbor,
         worker->neighbors = resized;
         worker->neighbor_capacity = new_capacity;
     }
-    worker->neighbors[worker->neighbor_count++] = neighbor;
+    worker->neighbors[worker->neighbor_count++] = entry;
     return SUCCESS;
 }
 
@@ -174,7 +272,26 @@ local void lya_accumulate_2pcf(struct cmdline_data *cmd, bodyptr p, bodyptr q,
     int bt;
     size_t index;
 
-    if (Id(q) <= Id(p) || LyaForestId(q) == LyaForestId(p)) return;
+    if (LyaForestId(q) == LyaForestId(p)) return;
+    REAL pivot_weight=lya_pivot_weight(worker,p),pivot_field=lya_pivot_field(worker,p);
+    INTEGER multiplicity=lya_pivot_multiplicity(worker);
+    if(worker->pivot_multiplicity) {
+        if(Id(q)<=worker->pivot_idlo) return;
+        if(Id(q)<=worker->pivot_idhi) {
+            /* Preserve original row-ID ownership even when a smoothed group
+             * straddles q in a shuffled catalog. Do not compare only the
+             * representative's ID or multiply by an ineligible member. */
+            long double weight=0,field=0; multiplicity=0;
+            for(INTEGER j=0;j<worker->pivot_multiplicity;j++) {
+                bodyptr member=worker->pivot_members[j];
+                if(Id(member)<Id(q)) {
+                    weight+=Weight(member);field+=(REAL)(Weight(member)*Kappa(member));multiplicity++;
+                }
+            }
+            if(!multiplicity) return;
+            pivot_weight=(REAL)weight;pivot_field=(REAL)field;
+        }
+    } else if(Id(q)<=Id(p)) return;
 
     DOTVP(cos_sight, LyaLOS(p), LyaLOS(q));
     cos_sight = lya_clamp(cos_sight, -1.0, 1.0);
@@ -187,9 +304,9 @@ local void lya_accumulate_2pcf(struct cmdline_data *cmd, bodyptr p, bodyptr q,
     if (bp < 0 || bt < 0) return;
 
     index = (size_t)bp * (size_t)cmd->lya2RtBins + (size_t)bt;
-    denominator = Weight(p) * Weight(q);
-    numerator = (Weight(p) * Kappa(p)) * (Weight(q) * Kappa(q));
-    worker->pair_count++;
+    denominator = pivot_weight * Weight(q);
+    numerator = pivot_field * (Weight(q) * Kappa(q));
+    worker->pair_count+=multiplicity;
     if (denominator <= 0.0) return;
     if (worker->den2[index] == 0.0)
         worker->touched2[worker->touched2_count++] = index;
@@ -207,6 +324,11 @@ local int lya_walktree(struct cmdline_data *cmd, bodyptr p, nodeptr q,
     nodeptr child;
 
     if ((nodeptr)p == q) return SUCCESS;
+    /* Pair ownership and forest exclusion do not depend on geometry. Do not
+     * spend a distance calculation on the reverse orientation. Smoothed
+     * groups retain their original per-member ownership check. */
+    if(Type(q)!=CELL && !compute_3pcf && !worker->pivot_multiplicity
+        && (Id(q)<=Id(p) || LyaForestId((bodyptr)q)==LyaForestId(p))) return SUCCESS;
     DOTPSUBV(distance2, displacement, Pos(p), Pos(q));
     distance = rsqrt(distance2);
 
@@ -232,7 +354,7 @@ local int lya_walktree(struct cmdline_data *cmd, bodyptr p, nodeptr q,
         lya_accumulate_2pcf(cmd, p, (bodyptr)q, worker);
     if (compute_3pcf && distance < cmd->lya3RMax
         && LyaForestId(p) != LyaForestId((bodyptr)q))
-        return lya_append_neighbor(worker, (bodyptr)q, error_message);
+        return lya_append_neighbor(cmd, p, worker, (bodyptr)q, distance, error_message);
     return SUCCESS;
 }
 
@@ -241,62 +363,34 @@ local void lya_accumulate_3pcf(struct cmdline_data *cmd, bodyptr p,
 {
     size_t iq;
     size_t ir;
+    const REAL pivot_weight = lya_pivot_weight(worker,p);
+    const REAL pivot_weighted_delta = lya_pivot_field(worker,p);
     for (iq = 0; iq < worker->neighbor_count; iq++) {
-        bodyptr q = worker->neighbors[iq];
-        compute_vector dq;
-        REAL rq2;
-        REAL rq;
-        REAL cos_theta_q;
-        int bq;
-        int tq;
-        DOTPSUBV(rq2, dq, Pos(q), Pos(p));
-        rq = rsqrt(rq2);
-        bq = lya_bin_positive(rq, cmd->lya3RMax, cmd->lya3RBins);
-        if (bq < 0 || rq <= 0.0) continue;
-        DOTVP(cos_theta_q, dq, LyaLOS(p));
-        tq = lya_bin_theta(racos(lya_clamp(cos_theta_q / rq, -1.0, 1.0)),
-                           cmd->lya3ThetaBins);
+        const lya_neighbor *q = &worker->neighbors[iq];
+        const REAL pq_weight = pivot_weight * q->weight;
+        const REAL pq_weighted_delta = pivot_weighted_delta * q->weighted_delta;
 
         for (ir = iq + 1; ir < worker->neighbor_count; ir++) {
-            bodyptr r = worker->neighbors[ir];
-            compute_vector dr;
-            REAL rr2;
-            REAL rr;
-            REAL cos_theta_r;
+            const lya_neighbor *r = &worker->neighbors[ir];
             REAL dot_qr;
             REAL mu;
             REAL numerator;
             REAL denominator;
-            int br;
-            int tr;
             int bm;
             size_t forward;
             size_t reverse;
 
-            if (LyaForestId(q) == LyaForestId(r)) continue;
-            DOTPSUBV(rr2, dr, Pos(r), Pos(p));
-            rr = rsqrt(rr2);
-            br = lya_bin_positive(rr, cmd->lya3RMax, cmd->lya3RBins);
-            if (br < 0 || rr <= 0.0) continue;
-            DOTVP(cos_theta_r, dr, LyaLOS(p));
-            tr = lya_bin_theta(racos(lya_clamp(cos_theta_r / rr, -1.0, 1.0)),
-                               cmd->lya3ThetaBins);
-            DOTVP(dot_qr, dq, dr);
-            mu = lya_clamp(dot_qr / (rq * rr), -1.0, 1.0);
+            if (q->forest_id == r->forest_id) continue;
+            DOTVP(dot_qr, q->displacement, r->displacement);
+            mu = lya_clamp(dot_qr / (q->radius * r->radius), -1.0, 1.0);
             bm = lya_bin_mu(mu, cmd->lya3MuBins);
 
-            denominator = Weight(p) * Weight(q) * Weight(r);
-            numerator = (Weight(p) * Kappa(p))
-                      * (Weight(q) * Kappa(q))
-                      * (Weight(r) * Kappa(r));
+            denominator = pq_weight * r->weight;
+            numerator = pq_weighted_delta * r->weighted_delta;
             worker->ordered_triplet_count += 2;
             if (denominator <= 0.0) continue;
-            forward = lya_index3(bq, br, tq, tr, bm,
-                                 cmd->lya3RBins, cmd->lya3ThetaBins,
-                                 cmd->lya3MuBins);
-            reverse = lya_index3(br, bq, tr, tq, bm,
-                                 cmd->lya3RBins, cmd->lya3ThetaBins,
-                                 cmd->lya3MuBins);
+            forward = q->first_index + r->second_index + (size_t)bm;
+            reverse = r->first_index + q->second_index + (size_t)bm;
             if (worker->den3[forward] == 0.0)
                 worker->touched3[worker->touched3_count++] = forward;
             worker->num3[forward] += numerator;
@@ -308,6 +402,9 @@ local void lya_accumulate_3pcf(struct cmdline_data *cmd, bodyptr p,
         }
     }
 }
+
+#include "lya_triplet_exact.h"
+#include "lya_triplet_multipole.h"
 
 typedef struct {
     struct cmdline_data *cmd;
@@ -324,7 +421,7 @@ local int lya_los_accumulate(bodyptr q, REAL distance, void *context,
     if (acc->compute_2pcf)
         lya_accumulate_2pcf(acc->cmd, acc->pivot, q, acc->worker);
     if (acc->compute_3pcf && distance < acc->cmd->lya3RMax)
-        return lya_append_neighbor(acc->worker, q, error_message);
+        return lya_append_neighbor(acc->cmd, acc->pivot, acc->worker, q, distance, error_message);
     return SUCCESS;
 }
 
@@ -383,6 +480,11 @@ local int lya_write_2pcf(struct cmdline_data *cmd, struct global_data *gd,
     fprintf(stream, "# distinct-forest unordered pairs: %" INTEGER_FMT "\n",
             pair_count);
     fprintf(stream, "# columns: bp bt rp_center rt_center xi numerator denominator\n");
+    fprintf(stream,"# pivot_frontier level=%d radius=%.17g max_pixels=%d; pivot_geometry_approximate=%d; neighbors=original_pixels\n",
+        cmd->lyaScanLevel,(double)cmd->lyaPivotRadius,cmd->lyaPivotMax,cmd->lyaPivotRadius>0 && cmd->lya2Kernel==0);
+    fprintf(stream, "# pair_geometry kernel=%d rp_slop=%.17g rt_slop=%.17g approximate=%d\n",
+        cmd->lya2Kernel,(double)cmd->lya2RpSlop,(double)cmd->lya2RtSlop,
+        cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0);
     for (bp = 0; bp < cmd->lya2RpBins; bp++) {
         for (bt = 0; bt < cmd->lya2RtBins; bt++) {
             size_t index = (size_t)bp * (size_t)cmd->lya2RtBins + (size_t)bt;
@@ -435,6 +537,11 @@ local int lya_write_3pcf(struct cmdline_data *cmd, struct global_data *gd,
     fprintf(stream, "# zero-denominator policy: zeta=0; empty bins are %s\n",
             output_empty ? "included" : "omitted");
     fprintf(stream, "# columns: b1 b2 t1 t2 bmu r1 r2 theta1 theta2 mu zeta numerator denominator\n");
+    fprintf(stream,"# pivot_frontier level=%d radius=%.17g max_pixels=%d; pivot_geometry_approximate=%d; neighbors=original_pixels\n",
+        cmd->lyaScanLevel,(double)cmd->lyaPivotRadius,cmd->lyaPivotMax,cmd->lyaPivotRadius>0);
+    fprintf(stream, "# geometry_slop mu=%.17g radial=%.17g polar=%.17g; kernel=%d; approximate=%d\n",
+        (double)cmd->lya3MuSlop,(double)cmd->lya3RadialSlop,(double)cmd->lya3PolarSlop,cmd->lya3Kernel,
+        cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0);
     for (b1 = 0; b1 < cmd->lya3RBins; b1++)
         for (b2 = 0; b2 < cmd->lya3RBins; b2++)
             for (t1 = 0; t1 < cmd->lya3ThetaBins; t1++)
@@ -471,6 +578,12 @@ local int lya_write_3pcf(struct cmdline_data *cmd, struct global_data *gd,
     return SUCCESS;
 }
 
+// Persistent-node kernels share the estimator and publication helpers above.
+#include "lya_forest_cells.h"
+#include "lya_pair_cells.h"
+#include "lya_triplet_cells.h"
+#include "lya_pivot_frontier.h"
+
 global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
                                      struct global_data *gd,
                                      bodyptr *btable, INTEGER *nbody,
@@ -493,10 +606,17 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
     int allocation_failed = FALSE;
     ErrorMsg worker_error = "";
     int status = FAILURE;
-    const int use_los_tree = lya_forest_is_los_tree_method(cmd->searchMethod);
+    const int multipole = lya_forest_is_multipole_method(cmd->searchMethod);
+    const int persistent = compute_3pcf && !multipole && cmd->lya3Kernel>=3;
+    const int pair_cells = compute_2pcf && cmd->lya2Kernel==1;
+    const int legacy2 = compute_2pcf && !pair_cells;
+    const int use_los_tree = !persistent && (compute_3pcf || legacy2) && lya_forest_is_los_tree_method(cmd->searchMethod);
     lya_los_index *los_index = NULL;
+    lya_pivot_frontier frontier={0};
+    const int use_frontier=cmd->lyaScanLevel || cmd->lyaPivotRadius>0;
     lya_los_workspace los_totals = {0};
     double los_build_cpu = 0.0;
+    unsigned long long aggregated_pairs=0, direct_pairs=0, segment_accepts=0, approximate_pairs=0;
 
 #if NDIM != 3
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -518,17 +638,18 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
         if (lya_size_mul(bins3, (size_t)cmd->lya3RBins, &bins3) == FAILURE
             || lya_size_mul(bins3, (size_t)cmd->lya3ThetaBins, &bins3) == FAILURE
             || lya_size_mul(bins3, (size_t)cmd->lya3ThetaBins, &bins3) == FAILURE
-            || lya_size_mul(bins3, (size_t)cmd->lya3MuBins, &bins3) == FAILURE)
+            || lya_size_mul(bins3, (size_t)(multipole ? cmd->lya3LMax+1 : cmd->lya3MuBins), &bins3) == FAILURE)
             goto size_error;
     }
 
-    size_t grid_cells, grid_bytes, worker_bytes, all_bytes;
+    size_t grid_cells, grid_bytes, worker_bytes, all_bytes, base_bytes;
+    if (cballs_resource_base(cmd,gd,&base_bytes)==FAILURE) goto setup_done;
     if (!cballs_size_add(bins2,bins3,&grid_cells)
         || !cballs_size_mul(grid_cells,2*sizeof(real),&grid_bytes)
         || !cballs_size_mul(grid_cells,2*sizeof(real)+sizeof(size_t),&worker_bytes)
         || !cballs_size_mul(worker_bytes,(size_t)MAX(1,cmd->numthreads),&worker_bytes)
         || !cballs_size_add(grid_bytes,worker_bytes,&all_bytes)
-        || !cballs_size_add(all_bytes,gd->common_histogram_bytes,&all_bytes)) goto size_error;
+        || !cballs_size_add(all_bytes,base_bytes,&all_bytes)) goto size_error;
     if (cballs_memory_preflight(all_bytes,"Ly-alpha global and worker histogram plan",
                                cmd->error_message,sizeof(cmd->error_message)) == FAILURE)
         goto setup_done;
@@ -558,7 +679,7 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
     }
     cutoff = MAX(cutoff2, compute_3pcf ? cmd->lya3RMax : 0.0);
 
-    if (use_los_tree) {
+    if (use_los_tree && !pair_cells) {
         double start = CPUTIME;
         if (lya_los_build(&los_index, btable[cat], nbody[cat],
                           (nodeptr)roottable[cat], cmd->error_message) == FAILURE)
@@ -574,15 +695,68 @@ setup_done:
     ThreadCount(cmd, gd, nbody[cat], cat);
     const INTEGER first_task = (INTEGER)lya_parallel_first(cmd);
     const INTEGER task_stride = (INTEGER)lya_parallel_stride(cmd);
-    /* Fixed logical blocks retain thread-count determinism without publishing
-     * every inexpensive pivot. Keep existing 3D/MPI summation order unchanged. */
-    const INTEGER pivot_block = use_los_tree ? 64 : 1;
+    /* Fixed grouping, independent of thread count. Small runs need enough
+     * blocks to distribute dense pivots; large runs amortize ordered commits.
+     * The explicit override supports workload calibration without rebuilding.
+     * Original MPI rank ownership continues to use individual pivots. */
     const INTEGER pivot_count = ipmax[cat] - (ipmin - 1);
-    const INTEGER blocks = pivot_count / pivot_block
+    const INTEGER chosen_block = cmd->lya3PivotBlock ? cmd->lya3PivotBlock
+                                : (pivot_count <= 16384 ? 8 : 64);
+    const INTEGER pivot_block = use_los_tree || !lya_forest_is_mpi_method(cmd->searchMethod)
+                              ? (compute_3pcf ? chosen_block : 64) : 1;
+    INTEGER blocks = pivot_count / pivot_block
                          + (pivot_count % pivot_block != 0);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-        "\n%s: exact Ly-alpha estimator; 2PCF=%d 3PCF=%d cutoff=%g\n",
-        cmd->searchMethod, compute_2pcf, compute_3pcf, cutoff);
+        "\n%s: %s; 2PCF=%d 3PCF=%d cutoff=%g pivot_block=%ld\n",
+        cmd->searchMethod, multipole ? "anisotropic moments; approximate mu reconstruction" : (cmd->lyaPivotRadius>0 ? "approximate forest-local pivot geometry; original neighbors" : ((cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0 || cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0) ? "approximate geometry; exact forest exclusions/cutoffs" : "exact Ly-alpha estimator")), compute_2pcf, compute_3pcf, cutoff, (long)pivot_block);
+
+    if (pair_cells && !persistent) {
+        lya_cells pair_tree;
+        double start=CPUTIME;
+        allocation_failed=lya_cells_build(&pair_tree,cmd,btable[cat],nbody[cat],
+            ipmin-1,ipmax[cat],all_bytes,cmd->error_message)==FAILURE;
+        if(!allocation_failed) {
+            verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+                "Ly-alpha 2PCF forest build: nodes=%zu build_CPU=%g shared_with_3pcf=0\n",
+                pair_tree.nodes_count,CPUTIME-start);
+            allocation_failed=lya_pairs_run(&pair_tree,cmd,gd,btable[cat],ipmin-1,ipmax[cat],
+                bins2,pair_tree.plan,num2,den2,&pair_count,&accepted_visits)==FAILURE;
+            lya_cells_free(&pair_tree);
+        }
+        if(allocation_failed || !compute_3pcf) goto workers_done;
+        /* The 3PCF discovery now uses only its own sphere. */
+        cutoff=cmd->lya3RMax;
+        /* The pair hierarchy is already freed. Avoid overlapping it with the
+         * independent legacy LOS index in combined kernels 0/1/2. */
+        if(use_los_tree) {
+            double start=CPUTIME;
+            allocation_failed=lya_los_build(&los_index,btable[cat],nbody[cat],
+                (nodeptr)roottable[cat],cmd->error_message)==FAILURE;
+            los_build_cpu=CPUTIME-start;
+            if(allocation_failed) goto workers_done;
+        }
+    }
+
+    if (persistent) {
+        allocation_failed=lya_cells_run(cmd,gd,btable[cat],nbody[cat],ipmin-1,ipmax[cat],
+            (nodeptr)roottable[cat],compute_2pcf,bins2,bins3,all_bytes,num2,den2,num3,den3,
+            &accepted_visits,&pair_count,&ordered_triplet_count,
+            &aggregated_pairs,&direct_pairs,&segment_accepts,&approximate_pairs)==FAILURE;
+        goto workers_done;
+    }
+
+    if(use_frontier) {
+        double start=CPUTIME;
+        if(lya_pivot_frontier_build(&frontier,cmd,btable[cat],nbody[cat],ipmin-1,ipmax[cat],
+            (nodeptr)roottable[cat],(size_t)pivot_block,compute_3pcf,all_bytes,cmd->error_message)==FAILURE) {
+            allocation_failed=TRUE;goto workers_done;
+        }
+        all_bytes=frontier.plan;blocks=(INTEGER)frontier.blocks;
+        verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+            "Ly-alpha pivot frontier: level=%d active=%zu representatives=%zu tasks=%zu radius=%g max_actual_radius=%g build_CPU=%g\n",
+            cmd->lyaScanLevel,frontier.active,frontier.count,frontier.blocks,
+            (double)cmd->lyaPivotRadius,(double)frontier.max_radius,CPUTIME-start);
+    }
 
 #pragma omp parallel shared(allocation_failed,worker_error,num2,den2,num3,den3,accepted_visits,pair_count,ordered_triplet_count)
     {
@@ -590,8 +764,8 @@ setup_done:
         lya_los_workspace los_workspace = {0};
         ErrorMsg local_error = "";
         int worker_ready = lya_worker_init(cmd, &worker, bins2, bins3,
-                                           compute_2pcf, compute_3pcf,
-                                           local_error) == SUCCESS;
+                                           legacy2, compute_3pcf,
+                                           all_bytes, local_error) == SUCCESS;
         if (worker_ready && use_los_tree
             && lya_los_workspace_init(los_index, &los_workspace,
                                       local_error) == FAILURE) {
@@ -610,26 +784,33 @@ setup_done:
         }
 
 #pragma omp barrier
-#pragma omp for schedule(static,1) ordered
+#pragma omp for schedule(dynamic,1) ordered
         for (block = first_task; block < blocks; block += task_stride) {
-            INTEGER first = ipmin - 1 + block * pivot_block;
-            INTEGER end = first + MIN(pivot_block, ipmax[cat] - first);
+            INTEGER first = use_frontier?(INTEGER)frontier.offsets[block]:ipmin-1+block*pivot_block;
+            INTEGER end = use_frontier?(INTEGER)frontier.offsets[block+1]:first+MIN(pivot_block,ipmax[cat]-first);
             INTEGER pivot;
             worker.accepted_visits = 0;
             worker.pair_count = 0;
             worker.ordered_triplet_count = 0;
             for (pivot = first; pivot < end; pivot++) {
-                bodyptr p = btable[cat] + pivot;
+                const lya_pivot_group *group=frontier.groups?&frontier.groups[frontier.order[pivot]]:NULL;
+                bodyptr p=group?group->pivot:btable[cat]+(use_frontier?(INTEGER)frontier.order[pivot]:pivot);
+                worker.pivot_multiplicity=(group && cmd->lyaPivotRadius>0)?group->count:0;
+                if(worker.pivot_multiplicity) {
+                    worker.pivot_weight=group->weight;worker.pivot_field=group->field;
+                    worker.pivot_members=group->members;worker.pivot_idlo=group->idlo;worker.pivot_idhi=group->idhi;
+                }
                 worker.neighbor_count = 0;
                 if (!worker_failed && Update(p) != FALSE
                     && Mask(p) == MASK_NODE_VALID) {
                     lya_los_accumulator acc = {cmd, p, &worker,
-                                               compute_2pcf, compute_3pcf};
+                                               legacy2, compute_3pcf};
                     int walk_status = use_los_tree
                         ? lya_los_query(los_index, &los_workspace, p, cutoff,
+                                         !compute_3pcf && !worker.pivot_multiplicity?Id(p):0,
                                          lya_los_accumulate, &acc, local_error)
                         : lya_walktree(cmd, p, (nodeptr)roottable[cat], cutoff,
-                                        compute_2pcf, compute_3pcf, &worker, local_error);
+                                        legacy2, compute_3pcf, &worker, local_error);
                     if (walk_status == FAILURE) {
                         worker_failed = TRUE;
 #pragma omp critical(lya_failure)
@@ -640,7 +821,25 @@ setup_done:
                             allocation_failed = TRUE;
                         }
                     } else if (compute_3pcf) {
-                        lya_accumulate_3pcf(cmd, p, &worker);
+                        int triplet_status=SUCCESS;
+                        INTEGER before_triplets=worker.ordered_triplet_count;
+                        if (multipole) triplet_status=lya_accumulate_multipoles(cmd,p,&worker,local_error);
+                        else if (cmd->lya3Kernel==1) lya_accumulate_3pcf(cmd,p,&worker);
+                        else triplet_status=lya_accumulate_segments(cmd,p,&worker,local_error);
+                        /* Scale represented counts once per pivot, outside the
+                         * hot neighbor-pair loop. The frontier preflight bounds
+                         * the full multiplicity-weighted count before execution. */
+                        if(worker.pivot_multiplicity>1)
+                            worker.ordered_triplet_count +=
+                                (worker.ordered_triplet_count-before_triplets)*(worker.pivot_multiplicity-1);
+                        if (triplet_status==FAILURE) {
+                            worker_failed=TRUE;
+#pragma omp critical(lya_failure)
+                            {
+                                if (!allocation_failed) snprintf(worker_error,sizeof(worker_error),"%s",local_error);
+                                allocation_failed=TRUE;
+                            }
+                        }
                     }
                 }
             }
@@ -649,13 +848,15 @@ setup_done:
             {
                 if (worker_ready && !worker_failed) {
                     lya_commit_worker(&worker, num2, den2, num3, den3,
-                                      compute_2pcf, compute_3pcf);
+                                      legacy2, compute_3pcf);
                     accepted_visits += worker.accepted_visits;
                     pair_count += worker.pair_count;
                     ordered_triplet_count += worker.ordered_triplet_count;
                 }
             }
         }
+#pragma omp critical(lya_segment_counters)
+        { aggregated_pairs+=worker.aggregated_pairs; direct_pairs+=worker.direct_pairs; segment_accepts+=worker.segment_accepts; approximate_pairs+=worker.approximate_pairs; }
         if (worker_ready) lya_worker_free(&worker);
         if (use_los_tree) {
 #pragma omp critical(lya_los_counters)
@@ -670,6 +871,7 @@ setup_done:
         }
     }
 
+workers_done:
     if (allocation_failed) {
         if (cmd->error_message[0] == '\0')
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
@@ -704,11 +906,14 @@ setup_done:
             && lya_write_2pcf(cmd, gd, num2, den2, pair_count) == FAILURE)
             goto publication;
         if (compute_3pcf
-            && lya_write_3pcf(cmd, gd, num3, den3,
-                              ordered_triplet_count) == FAILURE)
+            && (multipole ? lya_write_multipoles(cmd,gd,num3,den3,ordered_triplet_count)
+                : lya_write_3pcf(cmd, gd, num3, den3,ordered_triplet_count)) == FAILURE)
             goto publication;
     }
 
+    if (compute_3pcf && !multipole && cmd->lya3Kernel!=1) verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+        "Ly-alpha 3PCF kernel=%d aggregated_pairs=%llu direct_pairs=%llu segment_accepts=%llu approximate_pairs=%llu (rank-local)\n",
+        cmd->lya3Kernel,aggregated_pairs,direct_pairs,segment_accepts,approximate_pairs);
     gd->cpusearch = CPUTIME - cpustart;
     if (use_los_tree)
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -734,6 +939,15 @@ size_error:
 publication:
     status = lya_parallel_consensus(cmd, status, "Ly-alpha 3D output");
 cleanup:
+    if(status==SUCCESS && lya_parallel_publish(cmd)) {
+        size_t pair_shape[2]={(size_t)cmd->lya2RpBins,(size_t)cmd->lya2RtBins};
+        size_t triple_shape[5]={(size_t)cmd->lya3RBins,(size_t)cmd->lya3RBins,(size_t)cmd->lya3ThetaBins,(size_t)cmd->lya3ThetaBins,(size_t)(multipole?cmd->lya3LMax+1:cmd->lya3MuBins)};
+        cballs_result_adopt("pair_numerator",(void **)&num2,0,2,pair_shape);
+        cballs_result_adopt("pair_denominator",(void **)&den2,0,2,pair_shape);
+        cballs_result_adopt(multipole?"moments_numerator":"triple_numerator",(void **)&num3,0,5,triple_shape);
+        cballs_result_adopt(multipole?"moments_denominator":"triple_denominator",(void **)&den3,0,5,triple_shape);
+    }
+    lya_pivot_frontier_free(&frontier);
     lya_los_free(los_index);
     gd->cpusearch = CPUTIME - cpustart;
     free(num2);

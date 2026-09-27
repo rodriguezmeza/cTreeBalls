@@ -55,10 +55,35 @@ typedef struct {
     fcfc_balltreeptr tree;
 } fcfc_balltree_cache_entry;
 
-static fcfc_balltree_cache_entry
-    fcfc_balltree_cache[FCFC_BALLTREE_CACHE_SLOTS];
-static uint64_t fcfc_balltree_cache_stamp;
-static bool fcfc_balltree_cache_registered;
+typedef struct {
+    fcfc_balltree_cache_entry entries[FCFC_BALLTREE_CACHE_SLOTS];
+    uint64_t stamp;
+} fcfc_balltree_cache_state;
+static void fcfc_balltree_cache_destroy(void *pointer)
+{
+    fcfc_balltree_cache_state *state = pointer;
+    for (int i=0; i<FCFC_BALLTREE_CACHE_SLOTS; i++) fcfc_balltree_free(state->entries[i].tree);
+    free(state);
+}
+static size_t fcfc_balltree_cache_bytes(const void *pointer)
+{
+    const fcfc_balltree_cache_state *state=pointer;
+    size_t bytes=sizeof(*state);
+    for (int i=0; i<FCFC_BALLTREE_CACHE_SLOTS; i++) {
+        fcfc_balltreeptr t=state->entries[i].tree;
+        if (t) bytes += sizeof(*t)+(size_t)t->capacity*sizeof(*t->nodes)
+            +(t->packed_points ? (size_t)t->npoint*sizeof(*t->packed_points) : 0)
+            +(t->bptr ? (size_t)t->npoint*sizeof(*t->bptr) : 0);
+    }
+    return bytes;
+}
+static fcfc_balltree_cache_state *fcfc_balltree_cache_owner(void)
+{
+    return cballs_runtime_attach(1,sizeof(fcfc_balltree_cache_state),
+        fcfc_balltree_cache_destroy,fcfc_balltree_cache_bytes);
+}
+#define fcfc_balltree_cache (fcfc_balltree_cache_owner()->entries)
+#define fcfc_balltree_cache_stamp (fcfc_balltree_cache_owner()->stamp)
 
 static real fcfc_balltree_field(bodyptr point)
 {
@@ -166,14 +191,6 @@ static uint64_t fcfc_balltree_catalog_fingerprint(
     return hash;
 }
 
-static void fcfc_balltree_cache_clear(void)
-{
-    for (int i = 0; i < FCFC_BALLTREE_CACHE_SLOTS; i++) {
-        fcfc_balltree_free(fcfc_balltree_cache[i].tree);
-        fcfc_balltree_cache[i].tree = NULL;
-        fcfc_balltree_cache[i].users = 0;
-    }
-}
 
 static int fcfc_balltree_pack_points(const struct global_data *gd)
 {
@@ -999,8 +1016,9 @@ int fcfc_balltree_build_scalar_role_cached(
     fingerprint = fcfc_balltree_catalog_fingerprint(
         cmd, body_table, body_count, leaf_capacity, pivot_role);
 
+    (void)fcfc_balltree_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
-#pragma omp critical(fcfc_balltree_cache)
+#pragma omp critical(fcfc_balltree_cache_lock)
 #endif
     {
         for (int i = 0; i < FCFC_BALLTREE_CACHE_SLOTS; i++) {
@@ -1033,8 +1051,9 @@ int fcfc_balltree_build_scalar_role_cached(
             pivot_role, &built) == FAILURE)
         return FAILURE;
 
+    (void)fcfc_balltree_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
-#pragma omp critical(fcfc_balltree_cache)
+#pragma omp critical(fcfc_balltree_cache_lock)
 #endif
     {
         uint64_t oldest_stamp = UINT64_MAX;
@@ -1083,10 +1102,7 @@ int fcfc_balltree_build_scalar_role_cached(
             entry->tree = built;
             found = built;
             built = NULL;
-            if (!fcfc_balltree_cache_registered) {
-                atexit(fcfc_balltree_cache_clear);
-                fcfc_balltree_cache_registered = TRUE;
-            }
+
         }
     }
 
@@ -1754,8 +1770,14 @@ void fcfc_balltree_release(fcfc_balltreeptr tree)
     bool cached = FALSE;
 
     if (tree == NULL) return;
+    /* Releasing an uncached tree must not allocate a cache owner. */
+    if (cballs_runtime_current()->attachments[1].data == NULL) {
+        fcfc_balltree_free(tree);
+        return;
+    }
+    (void)fcfc_balltree_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
-#pragma omp critical(fcfc_balltree_cache)
+#pragma omp critical(fcfc_balltree_cache_lock)
 #endif
     {
         for (int i = 0; i < FCFC_BALLTREE_CACHE_SLOTS; i++) {

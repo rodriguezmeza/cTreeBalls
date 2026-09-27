@@ -41,7 +41,7 @@ Search Controls
     native octree 3PCF still permits neighbor-cell acceptance with
     ``no-two-balls`` alone. ``BALLS4SCANLEVON=1`` may remain enabled.
 
-``options=dual-node-bin-slop``
+``options=dual-node-bin-theta``
     Uses dual-node-compatible Log/Linear near-bin acceptance in two-ball 2PCF
     scans. The conservative default requires both ball-distance bounds to
     remain in the center bin. Calibrate each method to the same numerical

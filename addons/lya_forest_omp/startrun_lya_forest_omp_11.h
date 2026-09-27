@@ -35,3 +35,6 @@ if (strcmp(method_str, "lya-1d-tree-3pcf-omp") == 0) *method_int = 193;
 #if (defined(ADDONS)) && (defined(LYAFORESTOMP))
 if (strcmp(method_str, "lya-1d-tree-same-los-2pcf-omp") == 0) *method_int = 195;
 #endif
+#if (defined(ADDONS)) && (defined(LYAFORESTOMP))
+if (strcmp(method_str, "lya-anisotropic-multipole-3pcf-omp") == 0) *method_int = 209;
+#endif

@@ -283,6 +283,7 @@ cdef class cballs:
         if self.runtime_state == NULL:
             raise CosmoSevereError("not enough memory allocating C runtime state")
 
+        cballs_runtime_retain_results(self.runtime_state, 1)
         self.fc.filename = <char*> malloc(sizeof(char) * 30)
         if self.fc.filename == NULL:
             raise CosmoSevereError("not enough memory allocating fc.filename")
@@ -445,7 +446,16 @@ cdef class cballs:
             raise
 
     # Called at the end of a run, to free memory
-    def struct_cleanup(self):
+    def struct_cleanup(self, clear_cache=True):
+        """Release native arrays; explicit cleanup also clears this object's trees.
+
+        Internal reconfiguration can retain packed, content-keyed trees. The
+        caller may request that behavior with clear_cache=False as well.
+        """
+        self._activate_runtime()
+        cballs_runtime_clear_results(self.runtime_state)
+        if clear_cache:
+            cballs_runtime_clear_caches(self.runtime_state)
         if(self.allocated != True):
             return
 
@@ -736,11 +746,59 @@ cdef class cballs:
             return True
         return False
 
+    def clearCaches(self):
+        """Release this object's retained compact trees; live results survive."""
+        self._activate_runtime()
+        cballs_runtime_clear_caches(self.runtime_state)
+
+    def getCacheInfo(self):
+        return {"bytes": cballs_runtime_cache_bytes(self.runtime_state),
+                "scope": "runtime object", "concurrent_native_calls": False}
+
+    def _dedicated_results(self, family):
+        cdef const cballs_result_array *a
+        cdef size_t i
+        cdef int slot
+        cdef np.ndarray[np.float64_t, ndim=1] value
+        cdef np.ndarray[np.uint64_t, ndim=1] counts
+        if not self.state:
+            raise CosmoSevereError("results unavailable; complete MainLoop first")
+        method = self._run_settings["effective"]["searchMethod"]
+        if (family == "forest" and not method.startswith("lya-")) or (family == "physical" and "3pcf-3d" not in method and "ggg-3d" not in method):
+            raise CosmoSevereError("result getter does not match the completed estimator")
+        arrays = {}
+        for slot in range(8):
+            a=cballs_result_at(self.runtime_state,slot)
+            if a == NULL: continue
+            shape=tuple(a.shape[i] for i in range(a.rank))
+            if a.kind == 2:
+                counts=np.empty(a.count,dtype=np.uint64)
+                for i in range(a.count):counts[i]=cballs_result_count_value(a,i)
+                arrays[(<bytes>a.name).decode()] = counts.reshape(shape)
+            else:
+                value=np.empty(a.count,dtype=np.float64)
+                for i in range(a.count):value[i]=cballs_result_value(a,i)
+                arrays[(<bytes>a.name).decode()] = value.reshape(shape)
+        if not arrays:
+            raise CosmoSevereError("no published native products on this rank")
+        return {"engine": method, "arrays": arrays, "metadata": self.getRunMetadata(),
+                "ownership": "independent NumPy copies; survive cleanup", "normalization": "raw sums; consult estimator metadata before dividing"}
+
+    def getForestResults(self):
+        """Copied raw forest products and axes, including with no-out-Hist."""
+        return self._dedicated_results("forest")
+
+    def getPhysicalResults(self):
+        """Copied raw physical multipoles; survey returns D-R and random sums."""
+        return self._dedicated_results("physical")
+
     def getAllocationInfo(self):
         """Common histogram plan and live pointer presence (bytes per rank)."""
         return {"live": bool(self.allocated and self.gd.histograms_allocated),
                 "common_histogram_bytes": self.gd.common_histogram_bytes,
                 "memory_budget_bytes": self.gd.memory_budget_bytes,
+                "retained_cache_bytes": cballs_runtime_cache_bytes(self.runtime_state),
+                "retained_result_bytes": cballs_runtime_result_bytes(self.runtime_state),
                 "scalar_3pcf_planned": bool(self.gd.common_scalar_3pcf),
                 "scalar_tensor_allocated": bool(self.gd.histZetaMcos != NULL),
                 "square_export_allocated": bool(self.gd.matPXD != NULL)}
@@ -870,7 +928,7 @@ cdef class cballs:
 
         # Check if already allocated to prevent memory leaks
         if self.allocated and not resume:
-            self.struct_cleanup()
+            self.struct_cleanup(clear_cache=False)
 
         # Otherwise, proceed with the normal computation. A resumed run keeps
         # its parsed file_content, C-owned catalogs, and startup allocations.
@@ -1639,3 +1697,5 @@ cdef class cballs:
 #
 
 #E cballs definitions
+
+include "resource_api.pxi"

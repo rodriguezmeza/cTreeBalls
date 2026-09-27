@@ -1118,6 +1118,11 @@ postprocess:
 publication:
     status = lya_parallel_consensus(cmd, status, "Ly-alpha interval-tree output");
 cleanup:
+    if(status==SUCCESS && lya_parallel_publish(cmd)) {
+        size_t shape[1]={(size_t)cmd->lya2RpBins};
+        cballs_result_adopt("pair_numerator",(void **)&all_num,1,1,shape);
+        cballs_result_adopt("pair_denominator",(void **)&all_den,1,1,shape);
+    }
     gd->cpusearch = CPUTIME - cpustart;
     free(radial_order);
     free(forest_order);
@@ -1388,6 +1393,11 @@ publication:
     status = lya_parallel_consensus(cmd, status,
                                     "same-LOS interval-tree output");
 cleanup:
+    if(status==SUCCESS && lya_parallel_publish(cmd)) {
+        size_t shape[1]={(size_t)cmd->lya2RpBins};
+        cballs_result_adopt("correlation_sum",(void **)&correlation_sum,1,1,shape);
+        cballs_result_adopt("contributing_forests",(void **)&contributing_los,2,1,shape);
+    }
     gd->cpusearch = CPUTIME - cpustart;
     free(forest_order);
     free(nodes);

@@ -1027,6 +1027,11 @@ publication:
     status = lya_parallel_consensus(cmd, status,
                                     "Ly-alpha radial-tree 3PCF output");
 cleanup:
+    if(status==SUCCESS && lya_parallel_publish(cmd)) {
+        size_t shape[2]={2*(size_t)cmd->lya3RBins,2*(size_t)cmd->lya3RBins};
+        cballs_result_adopt("triple_numerator",(void **)&num,1,2,shape);
+        cballs_result_adopt("triple_denominator",(void **)&den,1,2,shape);
+    }
     gd->cpusearch = CPUTIME - cpustart;
     free(order);
     free(first);

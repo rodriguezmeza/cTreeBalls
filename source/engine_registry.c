@@ -92,7 +92,7 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
                 "Pairs exclude the same quasar; triplets require three distinct "
                 "quasars. Histograms are weight-normalized; empty bins are zero. "
                 "Use tests/python/lya_corr_all_engines.py for DESI/eBOSS FITS, NPZ or ASCII, "
-                "one-time loading and MPI broadcasting. No smooth-pivot.\n");
+                "one-time loading and MPI broadcasting. Legacy options=smooth-pivot is unsupported.\n");
         if (strncmp(cballs_engine_registry[i].name, "octree-3pcf-3d-", 15) == 0)
             verb_print_zero(cmd->verbose,
                 "  modes: only-2pcf-3d, only-3pcf-3d, or "

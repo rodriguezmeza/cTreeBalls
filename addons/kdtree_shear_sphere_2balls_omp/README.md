@@ -45,7 +45,7 @@ search range. They are not treated as zero-distance body pairs: cross catalogs
 can have identical cell centers while containing valid nonzero-distance pairs.
 
 `only-2pcf` and `only-3pcf` skip the unused statistic. `no-two-balls` or
-`no-one-ball` forces body-level results; `dual-node-bin-slop` enables the looser
+`no-one-ball` forces body-level results; `dual-node-bin-theta` enables the looser
 dual-node radial criterion. Masks and the shared shear mode-coupling edge solve
 are supported. With `SMOOTHPIVOTON=1`, deterministic transport-aware smoothing
 is on by default and `no-smooth-pivot` disables it. The safety requirement

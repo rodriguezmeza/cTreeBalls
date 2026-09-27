@@ -109,11 +109,7 @@ void cballs_allocation_failure(size_t bytes, const char *label)
 size_t cballs_memory_budget(void)
 {
     const char *text = getenv("CBALLS_MEMORY_BUDGET_MB");
-//B increasing this threshold...
-// 65536, 131072, 262144
-//    if (!text) return (size_t)1024*1024*1024;
-    if (!text) return (size_t)65536*1024*1024;
-//E
+    if (!text) return (size_t)CBALLS_DEFAULT_MEMORY_BUDGET_MIB*1048576;
     if (!*text) return 0;
     size_t mib = 0;
     for (const char *p=text; *p; p++) {
@@ -130,10 +126,8 @@ int cballs_memory_preflight(size_t bytes, const char *label, char *errmsg, size_
     if (budget && bytes <= budget && bytes <= (size_t)PTRDIFF_MAX) return SUCCESS;
     if (errmsg && size) snprintf(errmsg,size,
         "resource preflight for %s: requested %zu bytes, budget %zu bytes; "
-//B set according to above...
-//        "CBALLS_MEMORY_BUDGET_MB must be a positive integer (default 1024 MiB)",
-        "CBALLS_MEMORY_BUDGET_MB must be a positive integer (default 65536 MiB)",
-//E
+        "CBALLS_MEMORY_BUDGET_MB must be a positive integer (default "
+        CBALLS_STRINGIFY(CBALLS_DEFAULT_MEMORY_BUDGET_MIB) " MiB)",
         label ? label : "allocation",bytes,budget);
     return FAILURE;
 }

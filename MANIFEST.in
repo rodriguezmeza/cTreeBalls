@@ -13,8 +13,8 @@ recursive-include main *.c
 recursive-include include *.h
 recursive-include general_libs *.c *.h
 recursive-include getparam *.c *.h
-recursive-include scripts *.py *.sh
-recursive-include python *.pyx
+recursive-include scripts *.py *.sh *.md
+recursive-include python *.pyx *.pxi
 include python/ccyballs.pxd.in
 recursive-include tests/python *.py *.md *.txt
 include examples/download_desi_lya_example.sh
@@ -41,7 +41,6 @@ recursive-include addons/balltree_shared *.c *.h Makefile*
 recursive-include addons/shear_sphere_shared *.c *.h
 recursive-include addons/scalar_compat_shared *.c *.h
 recursive-include addons/balltree_2balls_omp *.c *.h *.md Makefile*
-include addons/balltree_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/balltree_2balls_mpi *.c *.h *.md Makefile*
 recursive-include addons/octree_2balls_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_2balls_mpi *.c *.h *.md Makefile*
@@ -51,11 +50,8 @@ recursive-include addons/neighbor_boxes_omp *.c *.h Makefile*
 recursive-include addons/lya_forest_omp *.c *.h *.py *.md Makefile*
 recursive-include addons/lya_forest_mpi *.c *.h *.md *.ini *.txt Makefile*
 recursive-include addons/octree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
-include addons/octree_shear_sphere_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/kdtree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
-include addons/kdtree_shear_sphere_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/balltree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
-include addons/balltree_shear_sphere_2balls_omp/DUAL_NODE_LICENSE
 recursive-include addons/shear_sphere_binary_2balls *.h
 recursive-include addons/octree_3pcf_3d_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_3pcf_3d_mpi *.c *.h *.md *.ini *.txt Makefile*
@@ -72,3 +68,5 @@ global-exclude *.Po *.Plo
 global-exclude *.o *.a *.so *.dylib
 global-exclude __pycache__/*
 global-exclude *.pyc
+
+include RELEASE_WORK_SEQUENCE.md

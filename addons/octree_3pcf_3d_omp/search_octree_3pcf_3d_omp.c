@@ -494,6 +494,14 @@ setup_done:
 
 cleanup:
     gd->cpusearch = CPUTIME - cpustart;
+    if(status==SUCCESS && cb3d_parallel_publish(cmd)) {
+        size_t pair_shape[1]={(size_t)cmd->sizeHistN};
+        size_t triple_shape[3]={(size_t)cmd->mChebyshev+1,(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
+        cballs_result_adopt("pair_numerator",(void **)&result.xi_num,0,1,pair_shape);
+        cballs_result_adopt("pair_denominator",(void **)&result.xi_den,0,1,pair_shape);
+        cballs_result_adopt("triple_numerator",(void **)&result.num,0,3,triple_shape);
+        cballs_result_adopt("triple_denominator",(void **)&result.den,0,3,triple_shape);
+    }
     cb3d_free_result(&result);
     return status;
 }
@@ -545,6 +553,18 @@ setup_done:
 
 cleanup:
     gd->cpusearch = CPUTIME - cpustart;
+    if(status==SUCCESS && cb3d_parallel_publish(cmd)) {
+        size_t pair_shape[1]={(size_t)cmd->sizeHistN};
+        size_t triple_shape[3]={(size_t)cmd->mChebyshev+1,(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
+        cballs_result_adopt("data_pair_numerator",(void **)&numerator.xi_num,0,1,pair_shape);
+        cballs_result_adopt("data_pair_denominator",(void **)&numerator.xi_den,0,1,pair_shape);
+        cballs_result_adopt("data_triple_numerator",(void **)&numerator.num,0,3,triple_shape);
+        cballs_result_adopt("data_triple_denominator",(void **)&numerator.den,0,3,triple_shape);
+        cballs_result_adopt("random_pair_numerator",(void **)&randoms.xi_num,0,1,pair_shape);
+        cballs_result_adopt("random_pair_denominator",(void **)&randoms.xi_den,0,1,pair_shape);
+        cballs_result_adopt("random_triple_numerator",(void **)&randoms.num,0,3,triple_shape);
+        cballs_result_adopt("random_triple_denominator",(void **)&randoms.den,0,3,triple_shape);
+    }
     cb3d_free_result(&numerator);
     cb3d_free_result(&randoms);
     return status;

@@ -4,7 +4,7 @@ This independent addon computes full-sky spin-2 `xi+`, `xi-`, and Gamma-x
 multipole estimators. Neighbor shears are
 parallel transported along great circles into the pivot tangent frame.
 
-Its 2PCF uses a dual-node/Jarvis-style dual-node traversal over the native
+Its 2PCF uses a dual-node-style dual-node traversal over the native
 cTreeBalls octree. For nodes of radii `s1` and `s2` at chord distance `d`, the
 production path accepts their aggregate shear when their combined angular
 extent is within the radial-bin and spin-phase tolerance. Otherwise it splits

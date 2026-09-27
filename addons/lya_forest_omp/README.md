@@ -1,8 +1,29 @@
 # Lyman-alpha forest OpenMP addon
 
 This addon computes weighted Lyman-alpha forest correlations from individual
-forest pixels. It uses the cTreeBalls octree for exact range rejection; accepted
-leaves are always evaluated as individual pixels.
+forest pixels. Exact pixel geometry is the default. Optional certified cell
+aggregation and explicitly approximate forest-local pivot smoothing are
+available for the 3D OpenMP paths; see the controls below.
+
+## Spatial pivot tasks and optional smoothing
+
+`lyaScanLevel=1..20` constructs deterministic spatial tasks from the native
+octree; `lyaScanLevel=0` retains catalog order. `lyaPivotRadius>0` additionally
+groups nearby pivots from the same forest, preserving sums of weights and
+weighted deltas while evaluating geometry at the first group pixel. Neighbors
+remain original pixels. `lyaPivotMax=8` caps group membership by default.
+Both acceleration controls default to zero/off. Radius-zero scan tasks retain
+the exact estimator. Positive radius approximates both bin and cutoff geometry;
+it must be calibrated against exact output, and is never a promised error bound.
+
+These controls adapt the legacy `BALLS4SCANLEV`/`SMOOTHPIVOT` ideas without
+changing the input catalog or mixing forests. They do not depend on the legacy
+compile flags or `smooth-pivot`/`rsmooth` options. They support the six original
+and LOS-tree OpenMP 3D methods with pixel-pivot kernels; persistent 3PCF kernels
+3/4, MPI, radial and multipole paths reject active controls. See the
+[complete contract and calibration script](../../tests/python/README_benchmark_lya_pivot_frontier.md)
+for supported combinations, equations, Cython use and accuracy/timing/memory
+measurements.
 
 ## Build and methods
 
@@ -74,13 +95,14 @@ and the existing `mu = cos(opening angle)` bins are unchanged.
 Interval calculations use a conservatively inflated sphere. A measured bound
 on each forest's departure from its reference sightline covers non-collinear
 pixels, recentering, and mixed-precision position storage; final distance/bin
-tests use the original stored geometry. No `theta`-controlled approximation
-or smooth-pivot aggregation is introduced. Arithmetic order differs from the
+tests use the original stored geometry by default. Positive `lyaPivotRadius`
+instead uses representative pivot geometry as described above. Arithmetic order differs from the
 old traversal, so agreement is to floating-point rounding, not necessarily
-byte-for-byte between different algorithms. Fixed 64-pivot publication blocks
+byte-for-byte between different algorithms. Fixed publication blocks
 preserve determinism across OpenMP thread counts for the same method/build,
 while avoiding a synchronized merge and scratch clearing after every pivot.
-The old 3D methods keep their original per-pivot publication order.
+The original three 3D OpenMP methods use the same fixed publication policy;
+their MPI counterparts retain the existing per-pivot rank ownership and order.
 
 This accelerates neighbor discovery, not the quadratic neighbor-pair loop
 of the five-dimensional 3PCF. Dense 3PCF neighborhoods can therefore remain
@@ -276,3 +298,92 @@ Per-thread 3PCF storage is approximately
 addon computes raw estimators; survey distortion matrices, covariance
 estimation, continuum fitting, and metal corrections remain preprocessing or
 post-processing responsibilities.
+
+## Exact-kernel optimizations and reproducible timing
+
+The 3D 3PCF kernel caches each accepted neighbor's pivot-relative displacement,
+radius, polar-angle bin, partial histogram indices, weight, weighted delta, and
+forest ID once per pivot. The inner neighbor-pair loop then only needs the
+opening-angle cosine, mutual forest exclusion, weight products, and histogram
+updates. Displacement/radius arithmetic is retained for the opening-angle
+cosine; replacing it with pre-normalized vectors could change boundary bins.
+This cache is shared by the original 3D, LOS-tree, and 3D MPI methods.
+
+The exact estimator is unchanged. Same-forest exclusions, half-open radial bins,
+ordered 3PCF permutations, weights, and output columns are preserved. No
+`theta` approximation or multipole truncation is used. Block accumulation can
+change last-bit rounding relative to older binaries, while output remains
+byte-identical across thread counts for one build/method. The neighbor-pair
+loop remains quadratic in the number of neighbors: this is a constant-factor
+optimization, not an asymptotic replacement for the five-dimensional estimator.
+
+Additional 3PCF scratch is `capacity * sizeof(lya_neighbor)` per worker; the
+compiled layout determines the record width. Capacity starts at 128 and doubles as needed, is reused
+across pivots, and is freed after each run. Pair-only runs allocate no neighbor
+cache or 3PCF histogram. Checked arithmetic and the existing
+`CBALLS_MEMORY_BUDGET_MB` guard now cover global/worker histograms plus a
+conservative all-workers-at-this-capacity scratch estimate before growth.
+This estimate is not a whole-process RSS limit: catalogs, trees, and other
+runtime allocations also contribute to actual memory use.
+
+The September 2026 exact optimization pass adds:
+
+- Pair-only pixel walkers reject the reverse row-ID orientation before the
+  pixel-distance calculation. LOS discovery still uses any valid witness;
+  ownership is applied only to the later radial pixel visits. Combined runs
+  retain both neighbor orientations for the 3PCF. Smoothed pivot groups retain
+  their per-member ownership logic. Diagnostic visit counts can decrease;
+  scientific pair/triplet counts and products keep their meaning.
+- Neighbor construction reuses the distance already computed by discovery.
+  For up to 64 polar bins in the strict double profile, a cosine-edge lookup
+  replaces most `acos` calls. Values within 256 double epsilons of an edge
+  use the original `acos`/division/multiplication calculation. Larger grids
+  and other precision/fast-math profiles retain the original polar lookup.
+- Segment kernel 0 uses a typed introsort with bounded recursion and a
+  heapsort fallback. Its total order is the original forest-ID, leg-bin,
+  radius, ordinal order; neither geometry nor summation order is changed by
+  the sort replacement.
+- Automatic pixel-pivot 3PCF publication blocks are 8 pivots for at most
+  16,384 pivots and 64 above that. `lya3PivotBlock=1..4096` remains an explicit
+  override. The partition remains independent of OpenMP thread count.
+  The original MPI methods retain individual-pivot ownership. Persistent
+  kernels 3/4 retain their existing task policy.
+
+These changes do not enable any approximation. `theta`, compile-time `THETA`,
+`rsmooth` and `nsmooth` keep their existing tree/legacy meanings; they are not
+translated into Ly-alpha error tolerances. Use the explicit `lya2*Slop`,
+`lya3*Slop`, `lyaScanLevel`, `lyaPivotRadius` and `lyaPivotMax` controls for
+forest calibration. A bin-leakage fraction is not a relative correlation-error
+bound, especially where signed numerators nearly cancel.
+
+See [the before/after benchmark](../../scripts/README_benchmark_lya_optimization.md)
+for all six methods, retained exact comparisons, process CPU, wall time and RSS.
+
+For baseline/candidate measurements, retain an executable from before the
+change and build both with identical compiler/profile settings:
+
+```bash
+python3 scripts/benchmark_lya_exact.py \
+  --baseline /path/to/before/cballs --candidate /path/to/after/cballs \
+  --output benchmark_lya_exact --threads 1 4 --repeats 5
+```
+
+The output directory must be new. Python 3.10+ and NumPy are required on macOS
+or Linux. The default seeded catalogs use the existing multi-engine benchmark
+recipe: 128 forests x 256 pixels for pair-only timing and 32 x 64 for 3PCF and
+combined timing. Override with `--pair-catalog`, `--triple-catalog`, or provide
+one six-column file with `--catalog`. Use `--pair-input` and `--triple-input`
+for separate existing catalogs. The script retains catalogs, commands,
+binary hashes, histograms, logs, and `benchmark.json`. It checks occupied bins,
+numerators, denominators, correlations, exact pair/triplet counts, and thread
+determinism before accepting timings. Numerical limits are `rtol=3e-12` and
+`atol=3e-12`; independent brute-force oracles are provided by
+`make test-lya-forest-omp` at the tighter existing `2e-13` limits.
+
+Accuracy runs also warm the filesystem cache. Timed runs start fresh processes,
+disable histogram output, alternate executable order, and set
+`OMP_DYNAMIC=FALSE` and `OMP_WAIT_POLICY=PASSIVE` for both builds. Search CPU
+seconds sum process CPU time over all threads; end-to-end wall seconds include
+startup, catalog reading, and tree construction. Peak RSS is measured for each
+child process with `wait4`, in bytes. Use an otherwise idle host and report the
+recorded ranges and thread count alongside speedup, especially for short runs.

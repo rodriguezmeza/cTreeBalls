@@ -31,7 +31,7 @@ def source_files(root):
                 path = Path(parent) / name
                 if path.is_symlink() or name == "cyballs.c":
                     continue
-                if (path.suffix in {".c", ".h", ".cpp", ".py", ".pyx", ".sh"}
+                if (path.suffix in {".c", ".h", ".cpp", ".py", ".pyx", ".pxi", ".sh"}
                         or (directory == "capabilities" and path.suffix == ".json")
                         or name.endswith(".pxd.in") or name.startswith(("Makefile", "run_test"))
                         or "fixtures" in path.parts):

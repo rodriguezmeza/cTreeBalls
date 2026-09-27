@@ -170,3 +170,22 @@ def test_random_windows_against_octree(tmp_path, seed):
     run(catalog, old, "lya-2pcf-3pcf-omp", **domain)
     run(catalog, new, "lya-los-tree-2pcf-3pcf-omp", threads=3, **domain)
     compare_products(new, old)
+
+
+@pytest.mark.parametrize("method", ["lya-3pcf-omp", "lya-los-tree-3pcf-omp"])
+def test_cached_neighbors_respect_histogram_plus_scratch_budget(tmp_path, monkeypatch, method):
+    catalog = catalog_file(tmp_path, reference.POINTS)
+    # Four workers plus global histograms fit below 1 MiB at this grid size;
+    # the conservative four-worker neighbor scratch plan crosses the limit.
+    monkeypatch.setenv("CBALLS_MEMORY_BUDGET_MB", "1")
+    with pytest.raises(AssertionError, match="Ly-alpha histograms and neighbor scratch"):
+        run(catalog, tmp_path / "budget-one", method, threads=4,
+            extra=("lya3MuBins=23",))
+    monkeypatch.setenv("CBALLS_MEMORY_BUDGET_MB", "2")
+    run(catalog, tmp_path / "budget-two", method, threads=4,
+        extra=("lya3MuBins=23",))
+
+
+def test_original_methods_multiblock_independent_oracle(tmp_path):
+    # This module is selected automatically for changes to the shared kernel.
+    reference.check_multiblock(BINARY, tmp_path)

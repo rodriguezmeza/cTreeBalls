@@ -196,6 +196,12 @@ Open `docs/_build/html/index.html` after the Sphinx build. Additional plotting
 notebooks are maintained in
 [CBalls_plots](https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks).
 
+## Active-profile contracts
+
+See [Release work sequence](RELEASE_WORK_SEQUENCE.md) for exact-profile release checks,
+resource forecasts, held-out accuracy qualification, owned forest/physical result
+APIs, and matching-science scaling benchmarks.
+
 ## License
 
 **cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE). If you use this program in research work that results in publications, please cite the following paper:

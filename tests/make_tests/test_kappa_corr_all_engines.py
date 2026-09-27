@@ -79,15 +79,15 @@ def test_statistics_selector_maps_to_native_options():
 def test_active_engine_capabilities_and_parameters():
     for name, spec in KAPPA_ENGINES.items():
         assert spec.supports_mask and spec.supports_edge
-        assert spec.supports_dual_node_bin_slop
+        assert spec.supports_dual_node_bin_theta
         assert spec.mpi == name.endswith("-mpi")
         config = RunConfig(
             engines=(name,), output_dir=Path("unused"),
-            dual_node_bin_slop=True,
+            dual_node_bin_theta=True,
         )
         options = engine_parameters(config, name, True)["options"].split(",")
         assert options.count("read-mask") == 1
-        assert options.count("dual-node-bin-slop") == 1
+        assert options.count("dual-node-bin-theta") == 1
 
 
 def test_smooth_pivot_policy():

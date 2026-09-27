@@ -488,7 +488,7 @@ def test_binary_coincident_centers_and_catalog_reuse():
     for use_log in (False, True):
         expected = oracle(*first, use_log=use_log)
         for options in (OPTIONS, FAST_OPTIONS+",no-two-balls",
-                        FAST_OPTIONS+",dual-node-bin-slop"):
+                        FAST_OPTIONS+",dual-node-bin-theta"):
             for threads in (1, 4):
                 cross = run_native_catalogs(
                     [first, first], threads, options=options+",only-2pcf",

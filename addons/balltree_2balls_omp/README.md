@@ -18,7 +18,7 @@ retains the older `process3`/`process21`/`process111` traversal as a small-catal
 validation oracle.
 
 Node pairs retain exact radial-bin containment. Oriented node triples use
-dual-node-style `bin_slop` and the LogMultipole default angular tolerance,
+dual-node-style `bin_theta` and the LogMultipole default angular tolerance,
 scaled by `theta`; this is the approximation that permits useful cell
 aggregation. The exact reference remains available with `no-two-balls`.
 `options=no-two-balls` disables aggregation and forces exact body neighbors,
@@ -39,7 +39,7 @@ disable it; `make test-sleef-vector-log` checks both SIMD and scalar-tail
 results against libm and rejects a build that selected only one-wide lanes.
 
 The OpenMP auto-2PCF and LogMultipole auto-3PCF paths keep a two-entry,
-process-local cache of compact
+runtime-object-owned cache of compact
 trees.  Cache keys include catalog contents and all tree-shaping field,
 weight, mask, smoothing, and leaf settings, so modifying a catalog causes a
 rebuild. Cached trees own packed positions, scalar values, weights, and moments;
@@ -105,7 +105,7 @@ implementation. Its controls remain unchanged: `behavior-ball` enables
 one-ball node aggregation, while `no-one-ball` forces exact traversal. Use it
 with `search=balltree-2balls-omp` for OpenMP or
 `search=balltree-2balls-mpi` for MPI. Do not combine compatibility mode with
-`no-two-balls`, `dual-node-bin-slop`, or `dual-node-direct-triples`. The old
+`no-two-balls`, `dual-node-bin-theta`, or `dual-node-direct-triples`. The old
 standalone search names are disabled in the default build profile. The legacy
 ball-tree kernel has no angular-window solver: combining `legacy-one-ball`
 with `edge-corrections` is rejected. Remove `legacy-one-ball` to solve the window.

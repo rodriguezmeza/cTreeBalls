@@ -534,3 +534,7 @@ affected-regressions:
 	$(PYTHON) scripts/affected_regressions.py $(REGRESSION_ARGS) --output affected-regressions.json
 benchmark-contracts:
 	$(PYTHON) scripts/benchmark_contracts.py $(BENCHMARK_ARGS)
+
+.PHONY: test-lya-pivot-frontier
+test-lya-pivot-frontier: $(EXEC) cyballs
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(CURDIR)/tests/python:$(PYTHONPATH) $(PYTHON) -m pytest -q tests/make_tests/test_lya_pivot_frontier.py

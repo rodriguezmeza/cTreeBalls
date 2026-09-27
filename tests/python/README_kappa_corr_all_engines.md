@@ -26,7 +26,7 @@ current profile exposes:
 - `octree-2balls-omp` and `octree-2balls-mpi`
 
 These are native cTreeBalls engines. Their production traversal uses dual-node
-acceptance; `--dual-node-bin-slop` enables the looser bin-aware policy, and
+acceptance; `--dual-node-bin-theta` enables the looser bin-aware policy, and
 `--more-options no-one-ball,no-two-balls --no-smooth-pivot` requests an exact body-level
 validation walk. For native octree 3PCF, `no-two-balls` alone is not an exact
 reference. `--more-options legacy-one-ball` selects the privately linked compatibility
@@ -137,3 +137,23 @@ matrices; use `--no-plots` or `--no-flatten-plots` to disable them.
 
 The catalog is read once and retained between runs, but every engine still
 builds its own C-owned tree and histograms.
+
+## Optional external dual-node API
+
+The all-engines driver times native cTreeBalls engines. Separate external
+comparisons can use [dual_node_compat.py](dual_node_compat.py), which lazily
+loads the installed external library and translates `bin_theta` and
+`angle_theta` without changing their values. It is optional; no external
+package is required for the native driver. For example:
+
+```python
+from dual_node_compat import catalog, correlation
+
+# Use identical catalogs, units, weights, bins and estimator conventions.
+ref = correlation("KK", min_sep=0.01, max_sep=1.0, nbins=10,
+                  bin_theta=0.0, angle_theta=0.0)
+# ref.process(catalog(...), num_threads=4)
+```
+
+`bin_theta`/`angle_theta` are geometric tolerances, not relative-error bounds.
+The native `theta` parameter retains its existing meaning.

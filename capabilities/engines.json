@@ -15,7 +15,9 @@
       "gate": {
         "oracle": "core",
         "tests": [
-          "tests/make_tests/test_runtime_stabilization.py"
+          "tests/make_tests/test_runtime_stabilization.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -30,15 +32,17 @@
       "cpp": "(defined(ADDONS)) && (defined(KDTREE2BALLSOMP))",
       "registration_header": "addons/kdtree_2balls_omp/startrun_kdtree_2balls_omp_11.h",
       "aliases": [],
-      "geometry": "scalar; median k-d tree; dual-node dual-node OpenMP scan",
+      "geometry": "scalar; median k-d tree; dual-node OpenMP scan",
       "correlations": "2PCF and LogMultipole angular 3PCF, masks, and complex edge correction",
-      "usage": "Enable KDTREE2BALLSOMPON=1. Two-node same-bin acceptance is the default; dual-node-bin-slop enables dual-node's bin-position slop and no-two-balls forces exact bodies. legacy-one-ball dispatches to the actual kdtree-omp kernel; there no-one-ball, smoothing, masks, order selection, and edge correction have the same meaning as for search=kdtree-omp. only-2pcf and only-3pcf select runtime work. nsmooth is the leaf capacity. BALLS4SCANLEVON=1 raises the minimum balanced KD frontier to 64 tasks. read-mask excludes masked bodies. With SMOOTHPIVOTON=1, an independent active-pivot tree uses smoothed pivot fields by default; use no-smooth-pivot to disable it.",
+      "usage": "Enable KDTREE2BALLSOMPON=1. Two-node same-bin acceptance is the default; dual-node-bin-theta enables dual-node's bin-position tolerance and no-two-balls forces exact bodies. legacy-one-ball dispatches to the actual kdtree-omp kernel; there no-one-ball, smoothing, masks, order selection, and edge correction have the same meaning as for search=kdtree-omp. only-2pcf and only-3pcf select runtime work. nsmooth is the leaf capacity. BALLS4SCANLEVON=1 raises the minimum balanced KD frontier to 64 tasks. read-mask excludes masked bodies. With SMOOTHPIVOTON=1, an independent active-pivot tree uses smoothed pivot fields by default; use no-smooth-pivot to disable it.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/make_tests/test_two_ball_edge_corrections.py",
-          "tests/make_tests/test_scalar_numerical_contract.py"
+          "tests/make_tests/test_scalar_numerical_contract.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -64,7 +68,9 @@
         "oracle": "scalar",
         "tests": [
           "tests/make_tests/test_two_ball_edge_corrections.py",
-          "tests/make_tests/test_scalar_numerical_contract.py"
+          "tests/make_tests/test_scalar_numerical_contract.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -84,13 +90,15 @@
       "aliases": [],
       "geometry": "scalar; FCFC PCA ball tree; dual-node dual/triple-node OpenMP scan",
       "correlations": "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-      "usage": "TWOPCFON and TPCFON switch 2PCF and 3PCF independently; only-2pcf and only-3pcf select runtime work. Auto-correlations use a two-entry content-keyed cache whose packed points retain no body/Python pointers, so repeated 2PCFs and 3PCFs may reuse the compact tree; no-balltree-tree-cache forces cold construction. The production 3PCF inherits bounded sparse unresolved neighbor-node lists without copying multipole scratch; no-balltree-persistent-frontier restores a root restart for profiling. Deterministic upper-tree PCA statistics and sphere passes build in parallel; no-balltree-parallel-build selects the serial diagnostic path. dual-node-profile reports cache and native phases. Two-node acceptance is the default; dual-node-bin-slop enables bin-position slop, no-two-balls forces exact bodies, and dual-node-direct-triples retains the cubic validation traversal. nsmooth sets PCA-tree leaf capacity; dual-node-singleton-leaves and dual-node-bucket-leaves override the adaptive 2PCF leaf policy. legacy-one-ball dispatches to balltree-omp and rejects edge-corrections. Masks, weights, smoothing, and BALLS4SCANLEV remain supported; edge correction uses the native two-ball mode.",
+      "usage": "TWOPCFON and TPCFON switch 2PCF and 3PCF independently; only-2pcf and only-3pcf select runtime work. Auto-correlations use a two-entry content-keyed cache whose packed points retain no body/Python pointers, so repeated 2PCFs and 3PCFs may reuse the compact tree; no-balltree-tree-cache forces cold construction. The production 3PCF inherits bounded sparse unresolved neighbor-node lists without copying multipole scratch; no-balltree-persistent-frontier restores a root restart for profiling. Deterministic upper-tree PCA statistics and sphere passes build in parallel; no-balltree-parallel-build selects the serial diagnostic path. dual-node-profile reports cache and native phases. Two-node acceptance is the default; dual-node-bin-theta enables bin-position tolerance, no-two-balls forces exact bodies, and dual-node-direct-triples retains the cubic validation traversal. nsmooth sets PCA-tree leaf capacity; dual-node-singleton-leaves and dual-node-bucket-leaves override the adaptive 2PCF leaf policy. legacy-one-ball dispatches to balltree-omp and rejects edge-corrections. Masks, weights, smoothing, and BALLS4SCANLEV remain supported; edge correction uses the native two-ball mode. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/make_tests/test_two_ball_edge_corrections.py",
-          "tests/make_tests/test_scalar_numerical_contract.py"
+          "tests/make_tests/test_scalar_numerical_contract.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -110,13 +118,15 @@
       "aliases": [],
       "geometry": "scalar; FCFC PCA ball tree; deterministic MPI+OpenMP dual/triple-node scan",
       "correlations": "distributed 2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-      "usage": "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. It distributes the production body-pivot LogMultipole traversal and otherwise matches balltree-2balls-omp, including masks, smoothing, edge correction, order selectors, and BALLS4SCANLEV. legacy-one-ball dispatches to the privately linked distributed balltree legacy kernel. dual-node-direct-triples remains an OpenMP-only validation oracle.",
+      "usage": "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. It distributes the production body-pivot LogMultipole traversal and otherwise matches balltree-2balls-omp, including masks, smoothing, edge correction, order selectors, and BALLS4SCANLEV. legacy-one-ball dispatches to the privately linked distributed balltree legacy kernel. dual-node-direct-triples remains an OpenMP-only validation oracle. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/make_tests/test_two_ball_edge_corrections.py",
-          "tests/make_tests/test_scalar_numerical_contract.py"
+          "tests/make_tests/test_scalar_numerical_contract.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -136,13 +146,15 @@
       "aliases": [],
       "geometry": "scalar; native octree; dual-node 2PCF and LogMultipole 3PCF",
       "correlations": "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-      "usage": "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one in native two-ball mode. nsmooth bounds compact native-octree leaf occupancy. Conservative same-bin containment is the default 2PCF policy; dual-node-bin-slop selects dual-node-compatible Log/Linear near-bin acceptance, while no-two-balls selects exact body pairs. BALLS4SCANLEVON=1 supplies balanced frontiers. Normal mode stops tree preparation after production cell aggregation and does not use smooth pivots. legacy-one-ball instead builds the full threaded native octree and dispatches to the actual octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. read-mask accepts a FITS companion mask, columns-ascii-all/binary-all mask values, or set_catalog(mask=...) in cyballs.",
+      "usage": "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one in native two-ball mode. nsmooth bounds compact native-octree leaf occupancy. Conservative same-bin containment is the default 2PCF policy; dual-node-bin-theta selects dual-node-compatible Log/Linear near-bin acceptance, while no-two-balls selects exact body pairs. BALLS4SCANLEVON=1 supplies balanced frontiers. Normal mode stops tree preparation after production cell aggregation and does not use smooth pivots. legacy-one-ball instead builds the full threaded native octree and dispatches to the actual octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. read-mask accepts a FITS companion mask, columns-ascii-all/binary-all mask values, or set_catalog(mask=...) in cyballs. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/make_tests/test_two_ball_edge_corrections.py",
-          "tests/make_tests/test_scalar_numerical_contract.py"
+          "tests/make_tests/test_scalar_numerical_contract.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -162,13 +174,15 @@
       "aliases": [],
       "geometry": "scalar; native octree; deterministic MPI+OpenMP frontier",
       "correlations": "distributed 2PCF and LogMultipole angular-multipole 3PCF",
-      "usage": "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. Native two-ball mode accepts the octree-2balls-omp controls, including read-mask with valid-body-only normalization, except dual-node-direct-triples, which remains a serial validation oracle. legacy-one-ball instead builds the full threaded native octree and dispatches to the distributed octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. With BALLS4SCANLEVON=1, the selected backend builds its balanced adaptive frontier. Only rank 0 normalizes and writes output.",
+      "usage": "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. Native two-ball mode accepts the octree-2balls-omp controls, including read-mask with valid-body-only normalization, except dual-node-direct-triples, which remains a serial validation oracle. legacy-one-ball instead builds the full threaded native octree and dispatches to the distributed octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. With BALLS4SCANLEVON=1, the selected backend builds its balanced adaptive frontier. Only rank 0 normalizes and writes output. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/make_tests/test_two_ball_edge_corrections.py",
-          "tests/make_tests/test_scalar_numerical_contract.py"
+          "tests/make_tests/test_scalar_numerical_contract.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -186,14 +200,16 @@
       "cpp": "(defined(ADDONS)) && (defined(OCTREESHEARSPHERE2BALLSOMP))",
       "registration_header": "addons/octree_shear_sphere_2balls_omp/startrun_octree_shear_sphere_2balls_omp_11.h",
       "aliases": [],
-      "geometry": "full-sky spin-2 shear; dual-node/Jarvis dual-node octree; OpenMP",
+      "geometry": "full-sky spin-2 shear; dual-node dual-node octree; OpenMP",
       "correlations": "xi+/xi- and four Gamma-x shear 3PCF components",
       "usage": "Build with OCTREESHEARSPHERE2BALLSOMPON=1. The native 2PCF uses combined node radii, bin-width opening tests, dual-node's 0.585 split heuristic, simultaneous splitting of comparable nodes, and a chunked symmetric dual-tree frontier. no-two-balls or no-one-ball forces exact body pairs. only-2pcf runs only the dual-node scan; in a combined run the pair scan is separate and the spherical LogMultipole pivot scan computes only the 3PCF. only-3pcf skips pair work. With BALLS4SCANLEVON=1, a work-estimated native pivot-cell frontier conservatively prefilters neighbor roots, dynamically schedules exact body pivots, and merges task-local histograms in spatial order under a bounded memory budget. The experimental shear-pivot-reuse option instead inherits unresolved neighbors and partial rings and permits aggregate pivots; CBALLS_SHEAR_PIVOT_TOL controls its spherical phase budget and requires numerical calibration. It requires no-smooth-pivot and is off by default. Body unit vectors are reused while native aggregate-cell centers remain explicitly normalized. legacy-one-ball dispatches this search name to the actual octree-shear-sphere-omp kernel. Use no-smooth-pivot to make the unsmoothed pair paths available. Set CBALLS_SHEAR_PROFILE=1 for kernel timings.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
         "tests": [
-          "tests/make_tests/test_shear_sphere_octree_omp.py"
+          "tests/make_tests/test_shear_sphere_octree_omp.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -211,14 +227,16 @@
       "cpp": "(defined(ADDONS)) && (defined(KDTREESHEARSPHERE2BALLSOMP))",
       "registration_header": "addons/kdtree_shear_sphere_2balls_omp/startrun_kdtree_shear_sphere_2balls_omp_11.h",
       "aliases": [],
-      "geometry": "full-sky spin-2 shear; dual-node/Jarvis median KD tree; OpenMP",
+      "geometry": "full-sky spin-2 shear; dual-node median KD tree; OpenMP",
       "correlations": "xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Build with KDTREESHEARSPHERE2BALLSOMPON=1. KD nodes store first and second spin-2 moments in their local tangent frames. only-2pcf uses a symmetric dual-node scan; only-3pcf uses exact body pivots and accepted KD neighbor nodes. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier dynamically schedules 3PCF work, conservatively prefilters neighbor roots, and merges task-local histograms in spatial order under a bounded memory budget. Catalog positions are normalized once and reused by the SIMD-friendly transport/ring kernel. no-two-balls or no-one-ball forces exact bodies, dual-node-bin-slop enables the looser radial criterion, and nsmooth sets leaf capacity. Masks, mode-coupling edge correction, and the safe SMOOTHPIVOTON/no-smooth-pivot contract match the spherical octree shear engines. Set CBALLS_SHEAR_PROFILE=1 for kernel timings.",
+      "usage": "Build with KDTREESHEARSPHERE2BALLSOMPON=1. KD nodes store first and second spin-2 moments in their local tangent frames. only-2pcf uses a symmetric dual-node scan; only-3pcf uses exact body pivots and accepted KD neighbor nodes. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier dynamically schedules 3PCF work, conservatively prefilters neighbor roots, and merges task-local histograms in spatial order under a bounded memory budget. Catalog positions are normalized once and reused by the SIMD-friendly transport/ring kernel. no-two-balls or no-one-ball forces exact bodies, dual-node-bin-theta enables the looser radial criterion, and nsmooth sets leaf capacity. Masks, mode-coupling edge correction, and the safe SMOOTHPIVOTON/no-smooth-pivot contract match the spherical octree shear engines. Set CBALLS_SHEAR_PROFILE=1 for kernel timings.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
         "tests": [
-          "tests/make_tests/test_shear_sphere_octree_omp.py"
+          "tests/make_tests/test_shear_sphere_octree_omp.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -236,14 +254,16 @@
       "cpp": "(defined(ADDONS)) && (defined(BALLTREESHEARSPHERE2BALLSOMP))",
       "registration_header": "addons/balltree_shear_sphere_2balls_omp/startrun_balltree_shear_sphere_2balls_omp_11.h",
       "aliases": [],
-      "geometry": "full-sky spin-2 shear; dual-node/Jarvis FCFC PCA ball tree; OpenMP",
+      "geometry": "full-sky spin-2 shear; dual-node FCFC PCA ball tree; OpenMP",
       "correlations": "xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Build with BALLTREESHEARSPHERE2BALLSOMPON=1. PCA-split nodes carry conservative spherical balls and direct first/second spin-2 moments. Construction skips leaf PCA, fuses center/PCA statistics, and parallelizes upper member passes with fixed chunks and exact preorder node ranges; no-balltree-parallel-build selects serial construction with identical chunking. Unsmoothed repeated roles share one tree within a call, without a cross-call cache. The symmetric dual-node 2PCF projects both shears onto their connecting great circle and combines auto-pair orientations. The default 3PCF uses exact body pivots. With BALLS4SCANLEVON=1, opt-in shear-pivot-reuse inherits sparse unresolved lists and ancestor-frame rings, permitting aggregate pivots under CBALLS_SHEAR_PIVOT_TOL; calibrate this spherical phase budget against exact results. It requires no-smooth-pivot, has a 64 MiB per-worker scratch cap, and does not change the 2PCF. The work-estimated frontier publishes histograms in spatial order under a 256 MiB cap. Either no-one-ball or no-two-balls disables cell aggregation for both statistics. dual-node-bin-slop enables the looser radial criterion; nsmooth sets leaf capacity. Masks, mode-coupling correction, and smoothing contracts match the other spherical shear engines. CBALLS_SHEAR_PROFILE=1 reports build, kernel, and reuse counters.",
+      "usage": "Build with BALLTREESHEARSPHERE2BALLSOMPON=1. PCA-split nodes carry conservative spherical balls and direct first/second spin-2 moments. Construction skips leaf PCA, fuses center/PCA statistics, and parallelizes upper member passes with fixed chunks and exact preorder node ranges; no-balltree-parallel-build selects serial construction with identical chunking. Unsmoothed repeated roles share one tree within a call, without a cross-call cache. The symmetric dual-node 2PCF projects both shears onto their connecting great circle and combines auto-pair orientations. The default 3PCF uses exact body pivots. With BALLS4SCANLEVON=1, opt-in shear-pivot-reuse inherits sparse unresolved lists and ancestor-frame rings, permitting aggregate pivots under CBALLS_SHEAR_PIVOT_TOL; calibrate this spherical phase budget against exact results. It requires no-smooth-pivot, has a 64 MiB per-worker scratch cap, and does not change the 2PCF. The work-estimated frontier publishes histograms in spatial order under a 256 MiB cap. Either no-one-ball or no-two-balls disables cell aggregation for both statistics. dual-node-bin-theta enables the looser radial criterion; nsmooth sets leaf capacity. Masks, mode-coupling correction, and smoothing contracts match the other spherical shear engines. CBALLS_SHEAR_PROFILE=1 reports build, kernel, and reuse counters.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
         "tests": [
-          "tests/make_tests/test_shear_sphere_octree_omp.py"
+          "tests/make_tests/test_shear_sphere_octree_omp.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -268,7 +288,9 @@
       "gate": {
         "oracle": "box",
         "tests": [
-          "tests/make_tests/test_neighbor_boxes_periodic.py"
+          "tests/make_tests/test_neighbor_boxes_periodic.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -290,7 +312,9 @@
       "gate": {
         "oracle": "box",
         "tests": [
-          "tests/make_tests/test_neighbor_boxes_periodic.py"
+          "tests/make_tests/test_neighbor_boxes_periodic.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -314,7 +338,9 @@
       "gate": {
         "oracle": "physical",
         "tests": [
-          "tests/make_tests/test_octree_3pcf_3d_mpi.py"
+          "tests/make_tests/test_octree_3pcf_3d_mpi.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -338,7 +364,9 @@
       "gate": {
         "oracle": "physical",
         "tests": [
-          "tests/make_tests/test_octree_3pcf_3d_mpi.py"
+          "tests/make_tests/test_octree_3pcf_3d_mpi.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -353,15 +381,19 @@
       "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
       "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
       "aliases": [],
-      "geometry": "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
+      "geometry": "3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP",
       "correlations": "weighted anisotropic 2PCF",
-      "usage": "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below.",
+      "usage": "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below. lya2Kernel=0 retains reference pixel traversal; 1 aggregates persistent forest cell pairs. lya2RpSlop/lya2RtSlop independently allow parallel/transverse bin leakage; zero is exact. Combined persistent 3PCF kernels share the hierarchy. Calibrate with tests/python/benchmark_lya_pair_cells.py. lyaScanLevel=1..20 opts into an exact spatial pivot frontier. lyaPivotRadius>0 explicitly approximates pivot geometry using same-forest groups capped by lyaPivotMax; neighbors and original pixel-ID ownership are retained. These controls require legacy pixel-pivot kernels; see tests/python/README_benchmark_lya_pivot_frontier.md for accuracy calibration.",
       "family": "forest",
       "gate": {
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_pair_cells.py",
+          "tests/make_tests/test_lya_pivot_frontier.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -378,15 +410,20 @@
       "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
       "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
       "aliases": [],
-      "geometry": "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
+      "geometry": "3D observer-centered forest pixels; exact default, opt-in bounded cell-bin approximation; OpenMP",
       "correlations": "weighted five-dimensional 3PCF",
-      "usage": "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below.",
+      "usage": "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below. Zero slop remains exact. lya3Kernel=0 supports mu-only slop; 3 reuses persistent forest nodes; 4 aggregates pivot cells. Independent lya3MuSlop/lya3RadialSlop/lya3PolarSlop are fractions of bin widths, not correlation-error bounds. Calibrate with tests/python/benchmark_lya_cell_approximation.py. lyaScanLevel=1..20 opts into an exact spatial pivot frontier. lyaPivotRadius>0 explicitly approximates pivot geometry using same-forest groups capped by lyaPivotMax; neighbors and original pixel-ID ownership are retained. These controls require legacy pixel-pivot kernels; see tests/python/README_benchmark_lya_pivot_frontier.md for accuracy calibration.",
       "family": "forest",
       "gate": {
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_lya_cell_approximation.py",
+          "tests/make_tests/test_lya_pivot_frontier.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -403,15 +440,21 @@
       "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
       "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
       "aliases": [],
-      "geometry": "3D Lyman-alpha forest pixels; exact octree leaves; OpenMP",
-      "correlations": "weighted 2PCF and 3PCF in one traversal",
-      "usage": "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below.",
+      "geometry": "3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP",
+      "correlations": "weighted 2PCF and 3PCF; shared discovery or independently optimized passes",
+      "usage": "Requires one forest catalog, non-periodic geometry, and forest IDs; see input below. Zero slop remains exact. lya3Kernel=0 supports mu-only slop; 3 reuses persistent forest nodes; 4 aggregates pivot cells. Independent lya3MuSlop/lya3RadialSlop/lya3PolarSlop are fractions of bin widths, not correlation-error bounds. Calibrate with tests/python/benchmark_lya_cell_approximation.py. lya2Kernel=0 retains reference pixel traversal; 1 aggregates persistent forest cell pairs. lya2RpSlop/lya2RtSlop independently allow parallel/transverse bin leakage; zero is exact. Combined persistent 3PCF kernels share the hierarchy. Calibrate with tests/python/benchmark_lya_pair_cells.py. lyaScanLevel=1..20 opts into an exact spatial pivot frontier. lyaPivotRadius>0 explicitly approximates pivot geometry using same-forest groups capped by lyaPivotMax; neighbors and original pixel-ID ownership are retained. These controls require legacy pixel-pivot kernels; see tests/python/README_benchmark_lya_pivot_frontier.md for accuracy calibration.",
       "family": "forest",
       "gate": {
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_lya_cell_approximation.py",
+          "tests/make_tests/test_lya_pair_cells.py",
+          "tests/make_tests/test_lya_pivot_frontier.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -428,15 +471,20 @@
       "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
       "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
       "aliases": [],
-      "geometry": "3D forest discovery + per-LOS radial trees; OpenMP",
+      "geometry": "3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP",
       "correlations": "exact weighted anisotropic 2PCF",
-      "usage": "One pixel discovers each neighboring forest; excludes the pivot forest. Same domain, bins and output as lya-2pcf-omp; transverse separation is retained.",
+      "usage": "One pixel discovers each neighboring forest; excludes the pivot forest. Same domain, bins and output as lya-2pcf-omp; transverse separation is retained. lya2Kernel=0 retains reference pixel traversal; 1 aggregates persistent forest cell pairs. lya2RpSlop/lya2RtSlop independently allow parallel/transverse bin leakage; zero is exact. Combined persistent 3PCF kernels share the hierarchy. Calibrate with tests/python/benchmark_lya_pair_cells.py. lyaScanLevel=1..20 opts into an exact spatial pivot frontier. lyaPivotRadius>0 explicitly approximates pivot geometry using same-forest groups capped by lyaPivotMax; neighbors and original pixel-ID ownership are retained. These controls require legacy pixel-pivot kernels; see tests/python/README_benchmark_lya_pivot_frontier.md for accuracy calibration.",
       "family": "forest",
       "gate": {
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_lya_pair_cells.py",
+          "tests/make_tests/test_lya_pivot_frontier.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -453,15 +501,20 @@
       "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
       "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
       "aliases": [],
-      "geometry": "3D forest discovery + per-LOS radial trees; OpenMP",
+      "geometry": "3D observer-centered forest pixels; exact default, opt-in bounded cell-bin approximation; OpenMP",
       "correlations": "exact weighted five-dimensional 3PCF",
-      "usage": "Same domain, bins and output as lya-3pcf-omp; all three forest IDs must differ. No angular or cell approximation.",
+      "usage": "Same domain, bins and output as lya-3pcf-omp; all three forest IDs must differ. No angular or cell approximation. Zero slop remains exact. lya3Kernel=0 supports mu-only slop; 3 reuses persistent forest nodes; 4 aggregates pivot cells. Independent lya3MuSlop/lya3RadialSlop/lya3PolarSlop are fractions of bin widths, not correlation-error bounds. Calibrate with tests/python/benchmark_lya_cell_approximation.py. lyaScanLevel=1..20 opts into an exact spatial pivot frontier. lyaPivotRadius>0 explicitly approximates pivot geometry using same-forest groups capped by lyaPivotMax; neighbors and original pixel-ID ownership are retained. These controls require legacy pixel-pivot kernels; see tests/python/README_benchmark_lya_pivot_frontier.md for accuracy calibration.",
       "family": "forest",
       "gate": {
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_lya_cell_approximation.py",
+          "tests/make_tests/test_lya_pivot_frontier.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -478,15 +531,21 @@
       "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
       "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
       "aliases": [],
-      "geometry": "3D forest discovery + per-LOS radial trees; OpenMP",
-      "correlations": "exact weighted 2PCF and 3PCF in one discovery pass",
-      "usage": "Uses the larger discovery sphere, then each estimator's exact cuts. Not a radial-only estimator. Enabled by LYAFORESTOMPON=1.",
+      "geometry": "3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP",
+      "correlations": "weighted 2PCF and 3PCF; shared discovery or independently optimized passes",
+      "usage": "Uses the larger discovery sphere, then each estimator's exact cuts. Not a radial-only estimator. Enabled by LYAFORESTOMPON=1. Zero slop remains exact. lya3Kernel=0 supports mu-only slop; 3 reuses persistent forest nodes; 4 aggregates pivot cells. Independent lya3MuSlop/lya3RadialSlop/lya3PolarSlop are fractions of bin widths, not correlation-error bounds. Calibrate with tests/python/benchmark_lya_cell_approximation.py. lya2Kernel=0 retains reference pixel traversal; 1 aggregates persistent forest cell pairs. lya2RpSlop/lya2RtSlop independently allow parallel/transverse bin leakage; zero is exact. Combined persistent 3PCF kernels share the hierarchy. Calibrate with tests/python/benchmark_lya_pair_cells.py. lyaScanLevel=1..20 opts into an exact spatial pivot frontier. lyaPivotRadius>0 explicitly approximates pivot geometry using same-forest groups capped by lyaPivotMax; neighbors and original pixel-ID ownership are retained. These controls require legacy pixel-pivot kernels; see tests/python/README_benchmark_lya_pivot_frontier.md for accuracy calibration.",
       "family": "forest",
       "gate": {
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_lya_cell_approximation.py",
+          "tests/make_tests/test_lya_pair_cells.py",
+          "tests/make_tests/test_lya_pivot_frontier.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -511,7 +570,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -536,7 +597,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -561,7 +624,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -586,7 +651,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -611,7 +678,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -636,7 +705,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "omp"
       },
@@ -661,7 +732,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -686,7 +759,10 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -711,7 +787,10 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -736,7 +815,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -761,7 +842,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -786,7 +869,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -811,7 +896,9 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
@@ -836,12 +923,40 @@
         "oracle": "forest",
         "tests": [
           "tests/make_tests/test_lya_forest_mpi.py",
-          "tests/make_tests/test_lya_forest_los_tree.py"
+          "tests/make_tests/test_lya_forest_los_tree.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
         ],
         "parallel": "mpi"
       },
       "sources": [
         "addons/lya_forest_mpi/*",
+        "addons/lya_forest_omp/*",
+        "addons/lya_forest_mpi/*"
+      ]
+    },
+    {
+      "name": "lya-anisotropic-multipole-3pcf-omp",
+      "id": 209,
+      "id_symbol": "LYAFORESTMULTIPOLE3PCFMETHOD",
+      "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
+      "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
+      "aliases": [],
+      "geometry": "3D observer-centered forest pixels; exact radial and LOS polar bins; LOS-tree discovery; OpenMP",
+      "correlations": "anisotropic Legendre raw moments; approximate five-dimensional mu-bin reconstruction",
+      "usage": "Experimental: lya3LMax=0..32 (default 8). Distinct forests enforced exactly; truncation only affects reconstructed mu bins. Writes _lya_multipoles and _lya5d_multipole products; signed denominators are retained and nonpositive reconstructed denominators give NaN. Calibrate against lya-3pcf-omp for each workload.",
+      "family": "forest",
+      "gate": {
+        "oracle": "forest",
+        "tests": [
+          "tests/make_tests/test_lya_triplet_acceleration.py",
+          "tests/make_tests/test_owned_results_resources.py",
+          "tests/make_tests/test_scientific_qualification.py"
+        ],
+        "parallel": "omp"
+      },
+      "sources": [
+        "addons/lya_forest_omp/*",
         "addons/lya_forest_omp/*",
         "addons/lya_forest_mpi/*"
       ]
@@ -870,7 +985,10 @@
     ],
     "forest": [
       "tests/make_tests/test_lya_forest_mpi.py",
-      "tests/make_tests/test_lya_forest_los_tree.py"
+      "tests/make_tests/test_lya_forest_los_tree.py",
+      "tests/make_tests/test_lya_cell_approximation.py",
+      "tests/make_tests/test_lya_pair_cells.py",
+      "tests/make_tests/test_lya_pivot_frontier.py"
     ],
     "shear": [
       "tests/make_tests/test_shear_sphere_octree_omp.py"

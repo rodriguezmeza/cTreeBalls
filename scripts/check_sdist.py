@@ -8,6 +8,18 @@ from pathlib import Path, PurePosixPath
 import tarfile
 
 REQUIRED = {
+    'RELEASE_WORK_SEQUENCE.md', 'python/resource_api.pxi', 'scripts/resource_plan.py',
+    'scripts/workload_acceptance.py','scripts/benchmark_scaling.py',
+    'tests/make_tests/test_scientific_qualification.py',
+    'addons/balltree_2balls_omp/dual_node_radial_bins.h',
+    'addons/balltree_2balls_omp/dual_node_pair_acceptance.h',
+    'addons/balltree_2balls_omp/dual_node_task_schedule.h',
+    'addons/balltree_2balls_omp/dual_node_multipole.h',
+    'addons/balltree_2balls_omp/dual_node_search_policy.h',
+    'tests/make_tests/test_release_verification_contracts.py',
+    'tests/make_tests/test_owned_results_resources.py',
+    'tests/make_tests/test_lya_pair_cells.py',
+
     'capabilities/engines.json','include/engine_registry_generated.h','include/mpi_runtime.h','include/tree_workspace.h',
     'source/engine_registry.c','source/runtime_context.c','source/memory_catalog.c',
     'source/common_histogram.c','source/smooth_pivots.c','source/mpi_runtime.c',
@@ -27,9 +39,13 @@ REQUIRED = {
     'addons/Makefile_gsl', 'addons/cfitsio/Makefile_cfitsio',
     'addons/lya_forest_omp/search_lya_forest_los_tree_omp.c',
     'addons/lya_forest_omp/lya_forest_los_tree.h',
+    'addons/lya_forest_omp/lya_pivot_frontier.h',
     'addons/lya_forest_omp/Makefile_lya_forest_omp',
     'addons/octree_3pcf_3d_omp/search_octree_3pcf_3d_omp.c',
     'tests/make_tests/test_lya_forest_los_tree.py',
+    'tests/make_tests/test_lya_pivot_frontier.py',
+    'tests/python/benchmark_lya_pivot_frontier.py',
+    'tests/python/README_benchmark_lya_pivot_frontier.md',
     'tests/make_tests/test_cython_in_memory_catalog.py',
     'tests/make_tests/test_release_packaging.py',
 }

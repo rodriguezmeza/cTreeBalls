@@ -11,7 +11,7 @@ removes repeated neighbors.
 
 `nsmooth` is the maximum 3PCF leaf occupancy and `theta` controls radial and
 angular error acceptance. `options=no-two-balls` is the exact validation path, while
-`dual-node-bin-slop` selects dual-node-compatible near-bin acceptance.
+`dual-node-bin-theta` selects dual-node-compatible near-bin acceptance.
 `only-2pcf` and `only-3pcf` avoid all work and output for the other order.
 For an isolated 2PCF run, the KD implementation selects 4-, 8-, or 16-point
 leaves from the full-sky catalog density, relative radial-bin width, and the
@@ -88,7 +88,7 @@ privately linked one-ball KD implementation before the two-ball tree is built. I
 mode, one-ball node acceptance is the default and `no-one-ball` selects exact
 body traversal. Smooth pivots, masks, `only-2pcf`, `only-3pcf`, normalization,
 and edge correction therefore retain their one-ball compatibility meanings.
-Two-ball-only controls (`no-two-balls`, `dual-node-bin-slop`, and
+Two-ball-only controls (`no-two-balls`, `dual-node-bin-theta`, and
 `dual-node-direct-triples`) are rejected. The same compatibility option is
 available through `search=kdtree-2balls-mpi`, where the legacy frontier and
 histogram reductions use that method's active MPI communicator.

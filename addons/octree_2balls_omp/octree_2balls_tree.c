@@ -29,10 +29,35 @@ typedef struct {
     fcfc_balltreeptr tree;
 } octree_2balls_cache_entry;
 
-static octree_2balls_cache_entry
-    octree_2balls_cache[OCTREE_2BALLS_CACHE_SLOTS];
-static uint64_t octree_2balls_cache_stamp;
-static bool octree_2balls_cache_registered;
+typedef struct {
+    octree_2balls_cache_entry entries[OCTREE_2BALLS_CACHE_SLOTS];
+    uint64_t stamp;
+} octree_2balls_cache_state;
+static void octree_2balls_cache_destroy(void *pointer)
+{
+    octree_2balls_cache_state *state = pointer;
+    for (int i=0; i<OCTREE_2BALLS_CACHE_SLOTS; i++) octree_2balls_tree_free(state->entries[i].tree);
+    free(state);
+}
+static size_t octree_2balls_cache_bytes(const void *pointer)
+{
+    const octree_2balls_cache_state *state=pointer;
+    size_t bytes=sizeof(*state);
+    for (int i=0; i<OCTREE_2BALLS_CACHE_SLOTS; i++) {
+        fcfc_balltreeptr t=state->entries[i].tree;
+        if (t) bytes += sizeof(*t)+(size_t)t->capacity*sizeof(*t->nodes)
+            +(t->packed_points ? (size_t)t->npoint*sizeof(*t->packed_points) : 0)
+            +(t->bptr ? (size_t)t->npoint*sizeof(*t->bptr) : 0);
+    }
+    return bytes;
+}
+static octree_2balls_cache_state *octree_2balls_cache_owner(void)
+{
+    return cballs_runtime_attach(0,sizeof(octree_2balls_cache_state),
+        octree_2balls_cache_destroy,octree_2balls_cache_bytes);
+}
+#define octree_2balls_cache (octree_2balls_cache_owner()->entries)
+#define octree_2balls_cache_stamp (octree_2balls_cache_owner()->stamp)
 
 static real octree_2balls_field(bodyptr p)
 {
@@ -124,14 +149,6 @@ static uint64_t octree_2balls_catalog_fingerprint(
     return hash;
 }
 
-static void octree_2balls_cache_clear(void)
-{
-    for (int i = 0; i < OCTREE_2BALLS_CACHE_SLOTS; i++) {
-        octree_2balls_tree_free(octree_2balls_cache[i].tree);
-        octree_2balls_cache[i].tree = NULL;
-        octree_2balls_cache[i].users = 0;
-    }
-}
 
 static real octree_2balls_distance_squared(const cballs_storage_real *a,
                                            const cballs_storage_real *b)
@@ -674,6 +691,7 @@ int octree_2balls_tree_build_cached(struct cmdline_data *cmd,
     fingerprint = octree_2balls_catalog_fingerprint(
         cmd, btab, nbody, leaf_capacity);
 
+    (void)octree_2balls_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
 #pragma omp critical(octree_2balls_tree_cache)
 #endif
@@ -704,6 +722,7 @@ int octree_2balls_tree_build_cached(struct cmdline_data *cmd,
             cmd, gd, btab, nbody, leaf_capacity, &built) == FAILURE)
         return FAILURE;
 
+    (void)octree_2balls_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
 #pragma omp critical(octree_2balls_tree_cache)
 #endif
@@ -750,10 +769,7 @@ int octree_2balls_tree_build_cached(struct cmdline_data *cmd,
             entry->tree = built;
             found = built;
             built = NULL;
-            if (!octree_2balls_cache_registered) {
-                atexit(octree_2balls_cache_clear);
-                octree_2balls_cache_registered = TRUE;
-            }
+
         }
     }
 
@@ -777,9 +793,12 @@ bool octree_2balls_tree_cache_contains(struct cmdline_data *cmd,
 
     if (cmd == NULL || btab == NULL || nbody < 1 || leaf_capacity < 1)
         return FALSE;
+    if (cballs_runtime_current()->attachments[0].data == NULL)
+        return FALSE;
     read_mask = cballs_opt_read_mask(cmd);
     fingerprint = octree_2balls_catalog_fingerprint(
         cmd, btab, nbody, leaf_capacity);
+    (void)octree_2balls_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
 #pragma omp critical(octree_2balls_tree_cache)
 #endif
@@ -876,6 +895,12 @@ void octree_2balls_tree_release(fcfc_balltreeptr tree)
     bool cached = FALSE;
 
     if (tree == NULL) return;
+    /* Releasing an uncached tree must not allocate a cache owner. */
+    if (cballs_runtime_current()->attachments[0].data == NULL) {
+        octree_2balls_tree_free(tree);
+        return;
+    }
+    (void)octree_2balls_cache_owner(); /* allocation must precede the OpenMP lock */
 #ifdef OPENMPCODE
 #pragma omp critical(octree_2balls_tree_cache)
 #endif

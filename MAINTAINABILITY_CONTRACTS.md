@@ -1,6 +1,7 @@
 # Capability, runtime and measurement contracts
 
-The public profile retains 34 engines and independent numerical references.
+The active engine set is resolved from the saved Makefiles and recorded in the
+release gate’s `active-profile.md`, with independent numerical references.
 
 ## Declaring engines
 
@@ -45,12 +46,12 @@ The extracted histogram, smoothing and catalogue routine bodies preserve their
 arithmetic and iteration order. RNG, GSL histogram workspace and six I/O column
 pointers now belong directly to the active context. Native-octree construction
 counters, radius histograms and diagnostic scratch also live there. Each of
-the linked MPI backends has a context-local active/rank/size view. Native context tests
+13 MPI backends has a context-local active/rank/size view. Native context tests
 and Python interleaving/recovery tests protect these ownership boundaries.
 
 Catalogue/tree pointer globals still use the serialized save/restore adapter
 because OpenMP clauses name them. The current-context selector, GSL error
-handler, parameter parser and some optional caches retain process-level
+handler and parameter parser retain process-level
 constraints. Concurrent native entry is **not** supported; Python retains the
 GIL. These are verified migration steps, not a reentrancy claim. Rebuild C
 consumers with the matching headers and library.
@@ -58,7 +59,7 @@ consumers with the matching headers and library.
 ## MPI contract
 
 Only `mpi_runtime.c` initializes/finalizes MPI and implements error consensus.
-The linked backend wrappers delegate to it. One process owner is tracked; MPI supplied
+All 13 backend wrappers delegate to it. One process owner is tracked; MPI supplied
 by mpi4py or another host is never finalized by cTreeBalls. FUNNELED support and
 MPI main-thread entry are required. Calls after finalization fail. All ranks
 receive the first failed rank's diagnostic when a stage fails.
@@ -99,3 +100,8 @@ floor contract. Accuracy failure fails the benchmark and active gate. These
 small workloads establish reproducible baselines, not large-survey scalability.
 Timing variation is reported; this refactor claims no speedup. Compare matching
 machines, workloads, threads and settings when judging future optimizations.
+
+The native-octree and PCA compact-tree caches are now runtime-object attachments.
+Explicit cleanup/destruction frees them; internal parameter recomputation can
+reuse them within the same object. See RELEASE_WORK_SEQUENCE.md for lifecycle
+and concurrency guarantees and the extracted radial/acceptance/scheduling owners.

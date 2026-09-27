@@ -18,4 +18,39 @@
     PARSER_READ(parser_read_int(pfc, "lya3MuBins", &param, &flag, errmsg));
     if (flag == TRUE) cmd->lya3MuBins = param;
 
+    PARSER_READ(parser_read_int(pfc, "lya3Kernel", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lya3Kernel = param;
+
+    PARSER_READ(parser_read_int(pfc, "lya3LMax", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lya3LMax = param;
+
+    PARSER_READ(parser_read_int(pfc, "lya3PivotBlock", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lya3PivotBlock = param;
+
+    PARSER_READ(parser_read_double(pfc, "lya3MuSlop", &param1, &flag1, errmsg));
+    if (flag1 == TRUE) cmd->lya3MuSlop = param1;
+
+    PARSER_READ(parser_read_double(pfc, "lya3RadialSlop", &param1, &flag1, errmsg));
+    if (flag1 == TRUE) cmd->lya3RadialSlop = param1;
+
+    PARSER_READ(parser_read_double(pfc, "lya3PolarSlop", &param1, &flag1, errmsg));
+    if (flag1 == TRUE) cmd->lya3PolarSlop = param1;
+
+    PARSER_READ(parser_read_int(pfc, "lya3PivotCellMax", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lya3PivotCellMax = param;
+
+    PARSER_READ(parser_read_int(pfc, "lya2Kernel", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lya2Kernel = param;
+    PARSER_READ(parser_read_double(pfc, "lya2RpSlop", &param1, &flag1, errmsg));
+    if (flag1 == TRUE) cmd->lya2RpSlop = param1;
+    PARSER_READ(parser_read_double(pfc, "lya2RtSlop", &param1, &flag1, errmsg));
+    if (flag1 == TRUE) cmd->lya2RtSlop = param1;
+
+    PARSER_READ(parser_read_int(pfc, "lyaScanLevel", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lyaScanLevel = param;
+    PARSER_READ(parser_read_double(pfc, "lyaPivotRadius", &param1, &flag1, errmsg));
+    if (flag1 == TRUE) cmd->lyaPivotRadius = param1;
+    PARSER_READ(parser_read_int(pfc, "lyaPivotMax", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lyaPivotMax = param;
+
 #endif

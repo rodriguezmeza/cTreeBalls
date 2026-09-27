@@ -127,7 +127,7 @@ def test_engine_contracts():
     with pytest.raises(ValueError, match="unavailable"):
         driver.resolve_engines(["lya-2pcf-omp"], [])
     for name in driver.INCOMPATIBLE_ENGINE_REASONS:
-        with pytest.raises(ValueError, match="shear_corr_all_engines.py"):
+        with pytest.raises(ValueError, match=("benchmark_lya_triplet_kernels.py" if "anisotropic-multipole" in name else "shear_corr_all_engines.py")):
             driver.resolve_engines([name], [name])
 
 
@@ -343,3 +343,44 @@ def test_mpi_multi_engine_driver(tmp_path):
     assert summary["comparisons"]
     assert all(m["max_abs_correlation"] < 2e-12
                for m in summary["comparisons"].values())
+
+
+def test_fits_directory_ignores_cache_and_retains_selection(desi_file, tmp_path):
+    path, ids = desi_file
+    (tmp_path / 'pixels.npz').write_bytes(b'cache sidecar')
+    (tmp_path / 'README.txt').write_text('forest directory')
+    args = driver.parse_arguments(['--fits', str(tmp_path), '--max-forests', '2',
+                                   '--pixel-stride', '2'])
+    selected = driver.load_catalog(args)
+    expected = driver.read_desi([path], max_forests=2, pixel_stride=2)
+    np.testing.assert_array_equal(selected.positions, expected.positions)
+    np.testing.assert_array_equal(selected.forest_ids, expected.forest_ids)
+    assert driver.expand_inputs([tmp_path]) == [path.resolve()]
+    with pytest.raises(ValueError, match='duplicate input'):
+        driver.expand_inputs([tmp_path, path])
+
+
+def test_empty_fits_directory_and_reused_loader_controls(tmp_path):
+    (tmp_path / 'pixels.npz').write_bytes(b'not a FITS input')
+    with pytest.raises(FileNotFoundError, match='no FITS files'):
+        driver.expand_inputs([tmp_path])
+    with pytest.raises(ValueError, match='require --fits'):
+        driver.load_catalog(driver.parse_arguments(['--pixel-stride', '2']))
+
+
+def test_cartesian_fits_preserves_coordinates_int64_and_weights(tmp_path):
+    fits = pytest.importorskip('astropy.io.fits')
+    ids = np.repeat(np.array([2**55+1, 2**55+3, 2**55+5], dtype=np.int64), 3)
+    columns = [fits.Column(name=k, format='D', array=v) for k,v in dict(
+        x=np.arange(9.)+4000, y=np.zeros(9), z=np.zeros(9), delta=np.arange(9.)/10,
+        weight=[1,0,2,3,4,5,6,7,8]).items()]
+    columns.append(fits.Column(name='los_id', format='K', array=ids))
+    path=tmp_path/'xyz.fits'
+    fits.HDUList([fits.PrimaryHDU(), fits.BinTableHDU.from_columns(columns)]).writeto(path)
+    cat=driver.load_catalog(driver.parse_arguments(['--fits',str(path),'--max-forests','2']))
+    np.testing.assert_array_equal(cat.forest_ids,ids[[0,2,3,4,5]])
+    np.testing.assert_array_equal(cat.positions[:,0],4000+np.array([0,2,3,4,5]))
+    np.testing.assert_array_equal(cat.weights,[1,2,3,4,5])
+    assert cat.metadata['input_format']=='Cartesian forest FITS'
+    with pytest.raises(ValueError,match='already comoving'):
+        driver.load_catalog(driver.parse_arguments(['--fits',str(path),'--omega-m','.3']))

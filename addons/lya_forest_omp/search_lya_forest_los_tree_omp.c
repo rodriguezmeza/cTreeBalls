@@ -243,7 +243,7 @@ static void lya_los_interval(const lya_los_forest *forest, bodyptr pivot,
 }
 
 int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
-                  bodyptr pivot, REAL cutoff, lya_los_visit visit,
+                  bodyptr pivot, REAL cutoff, INTEGER minimum_id, lya_los_visit visit,
                   void *context, ErrorMsg error_message)
 {
     size_t node = 0, found = 0, f;
@@ -300,7 +300,8 @@ int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
                     bodyptr q = index->points[i];
                     REAL d2, distance;
                     compute_vector displacement;
-                    if (LyaDistance(q) < lower || LyaDistance(q) > upper
+                    if (Id(q)<=minimum_id
+                        || LyaDistance(q) < lower || LyaDistance(q) > upper
                         || Update(q) == FALSE || Mask(q) != MASK_NODE_VALID) continue;
                     workspace->pixel_tests++;
                     DOTPSUBV(d2, displacement, Pos(pivot), Pos(q));

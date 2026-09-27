@@ -198,7 +198,21 @@ global bool tree_is_threaded[MAXITEMS];
 
 #include "mpi_runtime.h"
 #include "tree_workspace.h"
+typedef struct {
+    void *data;
+    void (*destroy)(void *);
+    size_t (*bytes)(const void *);
+} cballs_runtime_attachment;
+typedef struct cballs_result_array {
+    char name[48];
+    void *data;
+    int kind, rank;
+    size_t shape[5], count, bytes;
+} cballs_result_array;
 typedef struct cballs_runtime_state {
+    cballs_runtime_attachment attachments[2]; /* native octree, PCA ball tree */
+    cballs_result_array results[8];
+    int retain_results;
     cballs_mpi_engine_state mpi[CBALLS_MPI_ENGINE_COUNT];
     cballs_tree_workspace tree_workspace;
 #ifdef USEGSL
@@ -241,6 +255,20 @@ global int cballs_runtime_activate(cballs_runtime_state *state);
 global const void *cballs_runtime_bodytable_at(
     const cballs_runtime_state *state, int ifile);
 global void cballs_runtime_destroy(cballs_runtime_state *state);
+global void *cballs_runtime_attach(int slot, size_t size, void (*destroy)(void *), size_t (*bytes)(const void *));
+global size_t cballs_runtime_cache_bytes(const cballs_runtime_state *);
+global void cballs_runtime_clear_caches(cballs_runtime_state *);
+global void cballs_runtime_clear_results(cballs_runtime_state *);
+global size_t cballs_runtime_result_bytes(const cballs_runtime_state *);
+global void cballs_runtime_retain_results(cballs_runtime_state *, int);
+/* kinds: 0=REAL, 1=long double, 2=uint64_t. Adopt never copies an array. */
+global void cballs_result_adopt(const char *, void **, int, int, const size_t *);
+global const cballs_result_array *cballs_result_at(const cballs_runtime_state *, int);
+global double cballs_result_value(const cballs_result_array *, size_t);
+global uint64_t cballs_result_count_value(const cballs_result_array *, size_t);
+global size_t cballs_resource_type_size(int);
+global size_t cballs_resource_default_mib(void);
+global int cballs_resource_base(struct cmdline_data *, struct global_data *, size_t *);
 
 #include "protodefs.h"
 #include "scalar_window.h"

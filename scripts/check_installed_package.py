@@ -6,9 +6,22 @@ import importlib.metadata
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 
-def check(source_root, output):
+def check_profile(installed_build, intended_build, lookup):
+    from capabilities_generated import expected_registry, ENGINES
+    expected = expected_registry(intended_build['resolved_settings'])
+    actual = expected_registry(installed_build['resolved_settings'])
+    assert actual == expected, f'installation profile mismatch: missing={set(expected)-set(actual)}, extra={set(actual)-set(expected)}'
+    assert expected, 'intended profile is empty'
+    # Check absent canonical names too, so a stale extension cannot hide extras.
+    for name in ENGINES:
+        assert lookup(name) == expected.get(name, -1), f'installed registry mismatch: {name}'
+    return expected
+
+
+def check(source_root, output, expected_build=None):
     import numpy as np
     import cyballs
     from active_release_gate import expected_registry
@@ -19,9 +32,13 @@ def check(source_root, output):
     assert sys.prefix != sys.base_prefix, 'use a fresh virtual environment'
     assert module.is_relative_to(Path(sys.prefix).resolve()), 'module is outside the install environment'
     build = cyballs.build_info()
-    expected = expected_registry(build['resolved_settings'])
-    assert len(expected) == 34, 'installation did not build the intended public profile'
-    assert all(cyballs.search_method_id(name) == number for name, number in expected.items())
+    if expected_build is None:
+        text = subprocess.check_output(['make', '--no-print-directory', 'print-build-fingerprint',
+                                        f'PYTHON={sys.executable}'], cwd=source_root, text=True)
+        intended = next(json.loads(line) for line in text.splitlines() if line.startswith('{'))
+    else:
+        intended = json.loads(Path(expected_build).read_text())
+    expected = check_profile(build, intended, cyballs.search_method_id)
     distribution = importlib.metadata.distribution('cyballs')
     assert distribution.metadata['Name'] == 'cyballs'
     products = output.resolve().with_suffix('.products')
@@ -50,7 +67,16 @@ def check(source_root, output):
                     data = np.atleast_2d(np.loadtxt(directory/filename))
                     np.testing.assert_allclose(data[:, columns].sum(axis=0), totals,
                                                rtol=2e-13, atol=2e-13)
-            cases.append(dict(engine=engine, status='PASS', metadata=model.getRunMetadata()))
+            native = model.getForestResults()['arrays']
+            for key, total in [('pair_numerator',172.), ('pair_denominator',14.),
+                               ('triple_numerator',1440.), ('triple_denominator',48.)]:
+                if key in native:
+                    np.testing.assert_allclose(native[key].sum(), total, rtol=2e-13)
+            plan = cyballs.resource_plan(engine, len(positions), 2)
+            assert plan['known_total_bytes'] > 0
+            assert model.getAllocationInfo()['retained_result_bytes'] > 0
+            cases.append(dict(engine=engine, status='PASS', arrays=sorted(native),
+                              resource_plan=plan, metadata=model.getRunMetadata()))
         finally:
             model.struct_cleanup()
     result = dict(status='PASS', distribution=distribution.metadata['Name'],
@@ -67,8 +93,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-root', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--expected-build', type=Path, help='retained gate build-fingerprint.json; otherwise resolve saved Makefiles')
     args = parser.parse_args()
-    check(args.source_root, args.output.resolve())
+    check(args.source_root, args.output.resolve(), args.expected_build)
 
 
 if __name__ == '__main__':

@@ -111,7 +111,7 @@ fi
 for option in print-search-methods make-info smooth-pivot no-smooth-pivot \
     legacy-one-ball read-mask edge-corrections only-2pcf only-3pcf \
     compute-2pcf-3d compute-3pcf-3d survey-estimator-3d \
-    exclude-same-los exclude-all-same-los dual-node-bin-slop \
+    exclude-same-los exclude-all-same-los dual-node-bin-theta \
     dual-node-direct-triples dual-node-bucket-leaves \
     dual-node-singleton-leaves dual-node-profile no-balltree-tree-cache \
     no-balltree-persistent-frontier no-balltree-parallel-build weights-norm; do

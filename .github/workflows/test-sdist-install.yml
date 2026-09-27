@@ -79,7 +79,7 @@ jobs:
           make test-parameter-parser test-parameter-file-parser test-cell-production
       - name: Check active Python benchmark drivers
         run: |
-          PYTHONPATH="$PWD:$PWD/python" python -m pytest -q \
+          PYTHONPATH="$PWD:$PWD/tests/python" python -m pytest -q \
             tests/make_tests/test_kappa_corr_all_engines.py \
             tests/make_tests/test_shear_corr_all_engines.py \
             tests/make_tests/test_lya_corr_all_engines.py \

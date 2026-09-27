@@ -14,7 +14,7 @@ the combined-radius opening criterion and 0.585 split heuristic.
 
 `only-2pcf` and `only-3pcf` skip unused work. Either `no-two-balls` or
 `no-one-ball` disables cell aggregation in this binary-tree implementation,
-for both 2PCF and 3PCF. `dual-node-bin-slop` enables the looser dual-node
+for both 2PCF and 3PCF. `dual-node-bin-theta` enables the looser dual-node
 radial criterion, and `nsmooth` sets leaf capacity. Masks, shear
 mode-coupling edge correction, deterministic `BALLS4SCANLEVON`, and the
 `SMOOTHPIVOTON`/`no-smooth-pivot` contract match the spherical octree and KD

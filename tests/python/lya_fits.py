@@ -34,9 +34,20 @@ def read_fits(paths, *, fits_layout="auto", eboss_angle_unit="rad", **kwargs):
     paths = expand_inputs(paths)
     if fits_layout == "auto":
         with fits.open(paths[0], memmap=False) as hdus:
-            fits_layout = "desi" if {"LAMBDA", "METADATA", "WEIGHT"} <= {h.name for h in hdus} else "eboss"
+            if {"LAMBDA", "METADATA", "WEIGHT"} <= {h.name for h in hdus}:
+                fits_layout = "desi"
+            elif any(isinstance(h, fits.BinTableHDU) and
+                     {"x", "y", "z", "los_id", "weight"} <= {k.lower() for k in h.columns.names}
+                     for h in hdus[1:]):
+                fits_layout = "cartesian"
+            else:
+                fits_layout = "eboss"
     if fits_layout == "desi":
         return read_desi(paths, **kwargs)
+    if fits_layout == "cartesian":
+        return read_cartesian(paths, **kwargs)
+    if fits_layout != "eboss":
+        raise ValueError(f"unsupported FITS layout: {fits_layout}")
     return read_eboss(paths, angle_unit=eboss_angle_unit, **kwargs)
 
 
@@ -122,3 +133,151 @@ def read_eboss(paths, *, omega_m=.315, h=.674, z_min=0., z_max=10.,
         redshift_weight_exponent=redshift_weight_exponent, weight_z_ref=weight_z_ref,
         weights="input WEIGHT times ((1+z)/(1+z_ref))**exponent",
     )).normalized()
+
+
+def read_cartesian(
+    paths,
+    *,
+    max_forests=None,
+    pixel_stride=1,
+    delta_field="auto",
+    omega_m=0.315,
+    h=0.674,
+    z_min=0.0,
+    z_max=10.0,
+    project_delta=False,
+    redshift_weight_exponent=0.0,
+    weight_z_ref=2.25,
+):
+    """Read already-comoving x/y/z/delta/weight/los_id tables, without reprojection.
+
+    As with ASCII/NPZ input, coordinates must already be in Mpc/h. Some private
+    exported catalogs omit TUNIT; this assumption is recorded in provenance.
+    """
+    from astropy.io import fits
+    from lya_corr_all_engines import ForestCatalog, expand_inputs
+
+    if (
+        omega_m != 0.315
+        or h != 0.674
+        or z_min != 0
+        or z_max != 10
+        or project_delta
+        or redshift_weight_exponent != 0
+        or weight_z_ref != 2.25
+    ):
+        raise ValueError(
+            "Cartesian FITS coordinates are already comoving; cosmology, redshift cuts, "
+            "projection and wavelength weighting require DESI/eBOSS wavelength data"
+        )
+    if pixel_stride < 1 or (max_forests is not None and max_forests < 1):
+        raise ValueError("pixel_stride and max_forests must be positive")
+    pieces, provenance, seen = [], [], set()
+    for path in expand_inputs(paths):
+        if max_forests is not None and len(pieces) >= max_forests:
+            break
+        with fits.open(path, memmap=True) as hdus:
+            recognized, loaded, fields = False, 0, set()
+            for hdu in hdus[1:]:
+                if not isinstance(hdu, fits.BinTableHDU):
+                    continue
+                columns = {k.lower(): k for k in hdu.columns.names}
+                if not {"x", "y", "z", "weight", "los_id"} <= columns.keys():
+                    continue
+                recognized = True
+                field = (
+                    ("delta_blind" if "delta_blind" in columns else "delta")
+                    if delta_field == "auto"
+                    else delta_field.lower()
+                )
+                if field not in columns:
+                    raise ValueError(f"{path}: missing {field}")
+                fields.add(field)
+                for axis in ("x", "y", "z"):
+                    unit = hdu.columns[columns[axis]].unit
+                    if unit and unit.lower().replace(" ", "") not in {
+                        "mpc/h",
+                        "mpch-1",
+                        "mpch^-1",
+                    }:
+                        raise ValueError(
+                            f"{path}: Cartesian coordinates require Mpc/h; found {unit}"
+                        )
+                ids = np.asarray(hdu.data[columns["los_id"]])
+                if ids.ndim != 1 or ids.dtype.kind not in "iu":
+                    raise ValueError(f"{path}: LOS_ID must be a scalar integer column")
+                if ids.dtype.kind == "u" and np.any(ids > np.iinfo(np.int64).max):
+                    raise ValueError("forest ID exceeds signed int64")
+                # Preserve catalog forest order, then stride within each valid forest.
+                unique, first = np.unique(ids, return_index=True)
+                forest_order = unique[np.argsort(first)]
+                remaining = None if max_forests is None else max_forests - len(pieces)
+                # Only selected forests need Cartesian materialization.
+                chosen = forest_order if remaining is None else forest_order[:remaining]
+                rows = np.flatnonzero(np.isin(ids, chosen))
+                positions = np.column_stack(
+                    [hdu.data[columns[k]][rows] for k in ("x", "y", "z")]
+                )
+                delta, weight = [
+                    np.asarray(hdu.data[columns[k]][rows], dtype=float)
+                    for k in (field, "weight")
+                ]
+                selected_ids = ids[rows]
+                valid = (
+                    np.isfinite(positions).all(axis=1)
+                    & (np.linalg.norm(positions, axis=1) > 0)
+                    & np.isfinite(delta)
+                    & np.isfinite(weight)
+                    & (weight > 0)
+                )
+                order = np.argsort(selected_ids, kind="stable")
+                ordered_ids = selected_ids[order]
+                for identifier in chosen:
+                    identifier = int(identifier)
+                    if identifier in seen:
+                        raise ValueError(f"{path}: duplicate forest ID {identifier}")
+                    seen.add(identifier)
+                    left, right = np.searchsorted(
+                        ordered_ids, identifier, side="left"
+                    ), np.searchsorted(ordered_ids, identifier, side="right")
+                    group = order[left:right]
+                    take = group[valid[group]][::pixel_stride]
+                    if not len(take):
+                        continue
+                    pieces.append(
+                        (
+                            positions[take],
+                            delta[take],
+                            weight[take],
+                            np.full(len(take), identifier, dtype=np.int64),
+                        )
+                    )
+                    loaded += 1
+                if max_forests is not None and len(pieces) >= max_forests:
+                    break
+            if not recognized:
+                raise ValueError(
+                    f"{path}: expected Cartesian FITS columns x, y, z, delta, weight, los_id"
+                )
+            provenance.append(
+                dict(
+                    path=str(path),
+                    delta_field=",".join(sorted(fields)),
+                    blinding="as supplied; no unblinding",
+                    accepted_forests=loaded,
+                )
+            )
+    if not pieces:
+        raise ValueError("no valid forest pixels survived the selection")
+    arrays = [np.concatenate([p[i] for p in pieces]) for i in range(4)]
+    return ForestCatalog(
+        *arrays,
+        metadata=dict(
+            input_format="Cartesian forest FITS",
+            files=provenance,
+            distance_unit="Mpc/h required; existing coordinates preserved (unlabelled exports assumed Mpc/h)",
+            max_forests=max_forests,
+            pixel_stride=pixel_stride,
+            weights="input WEIGHT unchanged; zero/negative/nonfinite pixels excluded",
+        ),
+    ).normalized()

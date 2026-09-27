@@ -10,4 +10,26 @@
     IPName(cmd->lya3ThetaBins, "lya3ThetaBins");
     IPName(cmd->lya3MuBins, "lya3MuBins");
 
+    IPName(cmd->lya3Kernel, "lya3Kernel");
+
+    IPName(cmd->lya3LMax, "lya3LMax");
+
+    IPName(cmd->lya3PivotBlock, "lya3PivotBlock");
+
+    RPName(cmd->lya3MuSlop, "lya3MuSlop");
+
+    RPName(cmd->lya3RadialSlop, "lya3RadialSlop");
+
+    RPName(cmd->lya3PolarSlop, "lya3PolarSlop");
+
+    IPName(cmd->lya3PivotCellMax, "lya3PivotCellMax");
+
+    IPName(cmd->lya2Kernel, "lya2Kernel");
+    RPName(cmd->lya2RpSlop, "lya2RpSlop");
+    RPName(cmd->lya2RtSlop, "lya2RtSlop");
+
+    IPName(cmd->lyaScanLevel, "lyaScanLevel");
+    RPName(cmd->lyaPivotRadius, "lyaPivotRadius");
+    IPName(cmd->lyaPivotMax, "lyaPivotMax");
+
 #endif
