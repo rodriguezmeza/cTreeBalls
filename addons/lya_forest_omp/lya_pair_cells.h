@@ -8,6 +8,7 @@ typedef struct { REAL cmin,cmax,smin,smax; } lya_pair_angle;
 typedef struct {
     unsigned long long nodes, pruned, aggregates, aggregated_pairs, approximate_pairs;
     unsigned long long leaf_pairs, angle_evaluations, angle_reuses, certified_leaf_pairs, window_skips, scan_products;
+    unsigned long long range_aggregates,range_pairs;
 } lya_pair_work;
 
 static uintmax_t lya_pair_count_max(void)
@@ -143,12 +144,107 @@ static size_t lya_pair_lower(const lya_cells *t,size_t lo,size_t hi,REAL chi,int
     return lo;
 }
 
+/* Query immutable dyadic moments without subtracting large prefix sums. The
+ * bounding box covers every actual pixel, including bent sightlines. */
+static void lya_pair_range_moments(const lya_cells *t,size_t node,size_t begin,
+                                    size_t end,lya_cell *sum)
+{
+    const lya_cell *q=&t->nodes[node];
+    if(q->end<=begin || q->begin>=end) return;
+    if(q->begin>=begin && q->end<=end) {
+        sum->weight+=q->weight;sum->field+=q->field;
+        for(int k=0;k<3;k++) {sum->lo[k]=MIN(sum->lo[k],q->lo[k]);sum->hi[k]=MAX(sum->hi[k],q->hi[k]);}
+        return;
+    }
+    lya_pair_range_moments(t,q->left,begin,end,sum);
+    lya_pair_range_moments(t,q->right,begin,end,sum);
+}
+
+static int lya_pair_range_bin(const lya_cells *t,const struct cmdline_data *cmd,
+                               REAL chi,size_t begin,size_t end,const lya_pair_angle *angle)
+{
+    REAL low=LyaDistance(t->points[begin]),high=LyaDistance(t->points[end-1]);
+    REAL dlo=MAX(0.,MAX(low-chi,chi-high)),dhi=MAX(fabs(low-chi),fabs(high-chi));
+    REAL pad=8192*DBL_EPSILON*(chi+high)+32*sqrt(DBL_MIN);
+    REAL pl=MAX(0.,dlo*angle->cmin-pad),ph=dhi*angle->cmax+pad;
+    REAL tl=MAX(0.,(chi+low)*angle->smin-pad),th=(chi+high)*angle->smax+pad;
+    if(!isfinite(ph)||!isfinite(th)||ph>=cmd->lya2RpMax||th>=cmd->lya2RtMax) return -1;
+    int bp=lya_bin_positive(pl,cmd->lya2RpMax,cmd->lya2RpBins);
+    int bt=lya_bin_positive(tl,cmd->lya2RtMax,cmd->lya2RtBins);
+    if(bp<0 || bt<0 || bp!=lya_bin_positive(ph,cmd->lya2RpMax,cmd->lya2RpBins)
+        || bt!=lya_bin_positive(th,cmd->lya2RtMax,cmd->lya2RtBins)) return -1;
+    /* Histogram dimensions were preflighted; return the axes via a size_t at
+     * the caller instead of multiplying int bin counts here. */
+    return bp;
+}
+
+static int lya_pair_ranges(const lya_cells *t,struct cmdline_data *cmd,
+                            const lya_cell *p,const lya_cell *q,size_t qi,
+                            size_t pi,size_t begin,size_t end,const lya_pair_angle *angle,
+                            bodyptr base,INTEGER first,INTEGER last,REAL cutoff,lya_worker_hist *w,lya_pair_work *work,ErrorMsg err)
+{
+    bodyptr a=t->points[pi];REAL chi=LyaDistance(a);
+    lya_cell pixel={0};pixel.begin=pi;pixel.end=pi+1;
+    for(int k=0;k<3;k++) pixel.lo[k]=pixel.hi[k]=Pos(a)[k];
+    for(size_t j=begin;j<end;) {
+        int bp=-1;size_t stop=j;
+        if(end-j>=8) bp=lya_pair_range_bin(t,cmd,chi,j,j+8,angle);
+        if(bp>=0) {
+            /* Exponential search limits overhead for short bin runs. The
+             * enclosure only widens when the range grows, so certification
+             * cannot resume after its first failure. */
+            size_t good=j+8,bad=end+1,step=8;
+            while(good<end) {
+                size_t trial=good+MIN(step,end-good);
+                if(lya_pair_range_bin(t,cmd,chi,j,trial,angle)<0) {bad=trial;break;}
+                good=trial;step=MIN(step,SIZE_MAX/2)*2;
+            }
+            if(bad<=end) while(bad-good>1) {
+                size_t mid=good+(bad-good)/2;
+                if(lya_pair_range_bin(t,cmd,chi,j,mid,angle)>=0) good=mid;else bad=mid;
+            }
+            stop=good;
+            lya_cell sum={0};for(int k=0;k<3;k++) {sum.lo[k]=INFINITY;sum.hi[k]=-INFINITY;}
+            lya_pair_range_moments(t,qi,j,stop,&sum);
+            REAL upper;lya_pair_box_outside(&pixel,&sum,cutoff,&upper);
+            long double ld=(long double)Weight(a)*sum.weight;
+            long double ln=(long double)(Weight(a)*Kappa(a))*sum.field;
+            if(upper<cutoff && isfinite((REAL)ld) && isfinite((REAL)ln) && ((REAL)ld>=DBL_MIN||ld==0)) {
+                REAL pad=8192*DBL_EPSILON*(chi+LyaDistance(t->points[stop-1]))+32*sqrt(DBL_MIN);
+                REAL tl=MAX(0.,(chi+LyaDistance(t->points[j]))*angle->smin-pad);
+                int bt=lya_bin_positive(tl,cmd->lya2RtMax,cmd->lya2RtBins);
+                if(lya_pair_add_count(w,1,stop-j,err)==FAILURE) return FAILURE;
+                lya_pair_deposit(w,(size_t)bp*cmd->lya2RtBins+bt,(REAL)ln,(REAL)ld);
+                work->range_aggregates++;work->range_pairs+=stop-j;
+                j=stop;continue;
+            }
+        }
+        /* Ambiguous bins, geometry or exponent ranges retain exact pixels. */
+        lya_cell tile={0};tile.begin=j;tile.end=MIN(j+8,end);
+        if(lya_pair_tile(t,cmd,&pixel,&tile,base,first,last,cutoff,angle,0,w,work,err)==FAILURE) return FAILURE;
+        j=tile.end;
+    }
+    (void)p;(void)q;
+    return SUCCESS;
+}
+
 static int lya_pair_scan(const lya_cells *t,struct cmdline_data *cmd,
-                           const lya_cell *p,const lya_cell *q,lya_pair_angle *angle,
+                           const lya_cell *p,const lya_cell *q,size_t qi,lya_pair_angle *angle,
                            bodyptr base,INTEGER first,INTEGER last,REAL cutoff,
                            lya_worker_hist *w,lya_pair_work *work,ErrorMsg err)
 {
     work->scan_products++;
+    /* Sparse regular sampling cannot amortize a moment query. Check once per
+     * forest product for any eight-pixel run that could fit the bins. The
+     * parallel absolute value can fold at the pivot, hence the factor 1/2.
+     * This is a scheduling heuristic only; skipping it retains exact tiles. */
+    int ranges=0;
+    if(p->safe && q->safe && p->pivots==p->end-p->begin && q->pivots==q->end-q->begin)
+        for(size_t j=q->begin;j+7<q->end;j++) {
+            REAL span=LyaDistance(t->points[j+7])-LyaDistance(t->points[j]);
+            if(.5*span*angle->cmin<cmd->lya2RpMax/cmd->lya2RpBins
+                && span*angle->smin<cmd->lya2RtMax/cmd->lya2RtBins) {ranges=1;break;}
+        }
     for(size_t i=p->begin;i<p->end;i++) {
         REAL chi=LyaDistance(t->points[i]);
         REAL margin=8192*DBL_EPSILON*(chi+q->chihi)+32*sqrt(DBL_MIN);
@@ -158,6 +254,10 @@ static int lya_pair_scan(const lya_cells *t,struct cmdline_data *cmd,
         size_t begin=lya_pair_lower(t,q->begin,q->end,low,0);
         size_t end=lya_pair_lower(t,begin,q->end,high,1);
         work->window_skips+=(q->end-q->begin)-(end-begin);
+        if(ranges) {
+            if(lya_pair_ranges(t,cmd,p,q,qi,i,begin,end,angle,base,first,last,cutoff,w,work,err)==FAILURE) return FAILURE;
+            continue;
+        }
         lya_cell pixel={0};pixel.begin=i;pixel.end=i+1;
         for(size_t j=begin;j<end;j+=8) {
             lya_cell tile={0};tile.begin=j;tile.end=MIN(j+8,end);
@@ -227,7 +327,7 @@ static int lya_pair_visit(const lya_cells *t,struct cmdline_data *cmd,size_t ip,
                   +a.smax*cmd->lya2RtBins/cmd->lya2RtMax;
     if(bounded && np>=16 && nq>=16 && a.cmax-a.cmin+a.smax-a.smin<1e-5
         && MIN((p->chihi-p->chilo)/np,(q->chihi-q->chilo)/nq)*bin_scale>.25)
-        return lya_pair_scan(t,cmd,p,q,&a,base,first,last,cutoff,w,work,err);
+        return lya_pair_scan(t,cmd,p,q,iq,&a,base,first,last,cutoff,w,work,err);
     if(np<=8 && nq<=8) return lya_pair_tile(t,cmd,p,q,base,first,last,cutoff,
         bounded?&a:NULL,upper<cutoff,w,work,err);
     /* Split by uncertainty in the two estimator coordinates, including the
@@ -259,6 +359,7 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
     int failed=0;ErrorMsg error="";lya_pair_work total={0};
     double start=CPUTIME;
     REAL cutoff=hypot(cmd->lya2RpMax,cmd->lya2RtMax);
+    const size_t first_row=lya_parallel_first(cmd),row_stride=lya_parallel_stride(cmd);
 #pragma omp parallel
     {
         lya_worker_hist w;lya_pair_work work={0};ErrorMsg local_error="";
@@ -267,7 +368,7 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
         /* Rows have uneven numbers of forest partners. Dynamic claims balance
          * them; ordered row commits make histogram summation reproducible. */
 #pragma omp for schedule(dynamic,1) ordered
-        for(size_t row=0;row<t->roots_count;row++) {
+        for(size_t row=first_row;row<t->roots_count;row+=row_stride) {
             w.pair_count=0;
             for(size_t j=row+1;!worker_failed && j<t->roots_count;j++)
                 if(lya_pair_visit(t,cmd,t->roots[row],t->roots[j],NULL,base,first,last,
@@ -288,10 +389,12 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
             total.nodes+=work.nodes;total.pruned+=work.pruned;total.aggregates+=work.aggregates;
             total.aggregated_pairs+=work.aggregated_pairs;total.approximate_pairs+=work.approximate_pairs;
             total.leaf_pairs+=work.leaf_pairs;total.angle_evaluations+=work.angle_evaluations;total.angle_reuses+=work.angle_reuses;total.certified_leaf_pairs+=work.certified_leaf_pairs;
+            total.range_aggregates+=work.range_aggregates;total.range_pairs+=work.range_pairs;
             total.window_skips+=work.window_skips;total.scan_products+=work.scan_products;
         }
         if(ready) lya_worker_free(&w);
     }
+    gd->lyaHierarchyCounts[4]+=total.range_aggregates;gd->lyaHierarchyCounts[5]+=total.range_pairs;
     /* Work count: direct candidate pairs, excluding aggregated products. */
     if(total.leaf_pairs<=lya_pair_count_max()-(uintmax_t)*visits) *visits+=(INTEGER)total.leaf_pairs;
     else {failed=1;snprintf(error,sizeof(error),"Ly-alpha pair work count overflow");}

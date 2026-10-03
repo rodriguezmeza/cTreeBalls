@@ -1,4 +1,4 @@
-/* Distributed FCFC ball-tree dual-node 2PCF and triple-node 3PCF. */
+/* Distributed FCFC ball-tree dual-node 2PCF and body-pivot LogMultipole 3PCF. */
 
 #include "globaldefs.h"
 #include "fcfc_balltree_2balls_mpi.h"

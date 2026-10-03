@@ -66,6 +66,10 @@ LYA_ENGINES.update({
     "lya-los-tree-2pcf-omp": EngineSpec(False, (2,), False, tree=True),
     "lya-los-tree-3pcf-omp": EngineSpec(False, (3,), False, tree=True),
     "lya-los-tree-2pcf-3pcf-omp": EngineSpec(False, (2, 3), False, tree=True),
+    "lya-los-tree-2pcf-mpi": EngineSpec(False, (2,), True, tree=True),
+    "lya-los-tree-3pcf-mpi": EngineSpec(False, (3,), True, tree=True),
+    "lya-los-tree-2pcf-3pcf-mpi": EngineSpec(False, (2, 3), True, tree=True),
+
     "octree-3pcf-3d-omp": EngineSpec(False, (3,), False, family="multipole"),
     "octree-3pcf-3d-mpi": EngineSpec(False, (3,), True, family="multipole"),
     "lya-1d-tree-same-los-2pcf-omp": EngineSpec(
@@ -144,6 +148,9 @@ class ForestCatalog:
 class RunConfig:
     engines: tuple[str, ...]
     output_dir: Path
+    qualification_reference: Path | None = None
+    qualification_rtol: float = .02
+    qualification_atol: float = 1e-10
     threads: int = 1
     rp_max: float = 200.0
     rt_max: float = 200.0
@@ -153,6 +160,9 @@ class RunConfig:
     r3_bins: int = 4
     theta_bins: int = 4
     mu_bins: int = 4
+    lya2_kernel: int = 0
+    lya3_kernel: int = 0
+    lya3_pivot_cell_max: int = 8
     multipole_lmax: int = 3
     multipole_rmin: float = 0.0
     max_hist_mib: float = 1024.0
@@ -182,6 +192,10 @@ class RunConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or not 1 <= value <= 100000:
                 raise ValueError(f"{name} must be an integer in [1, 100000]")
+        if self.lya2_kernel not in (0,1) or self.lya3_kernel not in range(6):
+            raise ValueError("require lya2_kernel=0..1 and lya3_kernel=0..5")
+        if not isinstance(self.lya3_pivot_cell_max,int) or not 1<=self.lya3_pivot_cell_max<=64:
+            raise ValueError("lya3_pivot_cell_max must be in [1,64]")
         if not isinstance(self.multipole_lmax, int) or not 0 <= self.multipole_lmax <= 10:
             raise ValueError("multipole_lmax must be an integer in [0, 10]")
         for name in ("rp_max", "rt_max", "r3_max", "max_hist_mib"):
@@ -484,7 +498,10 @@ def engine_parameters(config, engine, root):
                 lya2RpMax=config.rp_max, lya2RtMax=config.rt_max,
                 lya2RpBins=config.rp_bins, lya2RtBins=config.rt_bins,
                 lya3RMax=config.r3_max, lya3RBins=config.r3_bins,
-                lya3ThetaBins=config.theta_bins, lya3MuBins=config.mu_bins)
+                lya3ThetaBins=config.theta_bins, lya3MuBins=config.mu_bins,
+                lya2Kernel=config.lya2_kernel if not spec.radial and 2 in spec.orders else 0,
+                lya3Kernel=config.lya3_kernel if not spec.radial and 3 in spec.orders else 0,
+                lya3PivotCellMax=config.lya3_pivot_cell_max)
 
 
 def read_products(root, engine):
@@ -698,6 +715,11 @@ def run_engine_suite(catalog, config, comm=None):
                     compute_wall, compute_cpu = time.perf_counter()-wall, time.process_time()-cpu
                     native_cpu = float(balls.getCPUTime())
                     native_timings = balls.getTimings()
+                    if comm.rank == 0:
+                        from cyballs import publish_result_packet
+                        publish_result_packet(balls,root/'qualification',
+                            Path(config.qualification_reference)/engine/'qualification' if config.qualification_reference else None,
+                            rtol=config.qualification_rtol,atol=config.qualification_atol)
             try:
                 collective(comm, compute)
             finally:
@@ -776,6 +798,9 @@ def run_engine_suite(catalog, config, comm=None):
 
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--qualification-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
+    parser.add_argument('--qualification-rtol',type=float,default=.02)
+    parser.add_argument('--qualification-atol',type=float,default=1e-10)
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--fits", nargs="+", help="DESI, eBOSS/PICCA, or Cartesian forest FITS files/globs/directories")
     source.add_argument("--catalog", type=Path, help="NPZ with positions, delta, weights, forest_ids")
@@ -796,6 +821,9 @@ def parse_arguments(argv=None):
     for name, default in (("rp-bins", 50), ("rt-bins", 50), ("r3-bins", 4),
                           ("theta-bins", 4), ("mu-bins", 4)):
         parser.add_argument("--"+name, type=int, default=default)
+    parser.add_argument("--lya2-kernel",type=int,choices=(0,1),default=0,help="3D pair kernel: 0 pixel, 1 certified forest cells/range moments")
+    parser.add_argument("--lya3-kernel",type=int,choices=range(6),default=0,help="3D triple kernel: 5 adaptive hierarchical radial moments; 0 retains segments")
+    parser.add_argument("--lya3-pivot-cell-max",type=int,default=8,help="maximum pivot-cell population for kernels 4/5 (1..64)")
     parser.add_argument("--multipole-lmax", type=int, default=3)
     parser.add_argument("--multipole-rmin", type=float, default=0.0, help="Mpc/h")
     parser.add_argument("--omega-m", type=float, default=.315)
@@ -911,10 +939,15 @@ def main(argv=None):
     engines = collective(comm, lambda: resolve_engines(args.engine, available, args.statistics))
     if comm.size == 1 and any(LYA_ENGINES[e].mpi for e in engines):
         comm = get_mpi_comm(True)
-    config = RunConfig(engines, args.output, threads=args.threads, rp_max=args.rp_max,
+    config = RunConfig(engines, args.output, threads=args.threads,
+            qualification_reference=args.qualification_reference,
+            qualification_rtol=args.qualification_rtol,
+            qualification_atol=args.qualification_atol, rp_max=args.rp_max,
                        rt_max=args.rt_max, rp_bins=args.rp_bins, rt_bins=args.rt_bins,
                        r3_max=args.r3_max, r3_bins=args.r3_bins, theta_bins=args.theta_bins,
                        mu_bins=args.mu_bins, multipole_lmax=args.multipole_lmax,
+                       lya2_kernel=args.lya2_kernel,lya3_kernel=args.lya3_kernel,
+                       lya3_pivot_cell_max=args.lya3_pivot_cell_max,
                        multipole_rmin=args.multipole_rmin,
                        max_hist_mib=args.max_hist_mib,
                        plots=not args.no_plots,

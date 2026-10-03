@@ -1,68 +1,70 @@
-# Active public add-on settings
-# Mario A. Rodriguez-Meza, Ciudad de Mexico
+# Enabled addon profile for testing/current-state-2026-08-30.
+# Only shipped addons are selectable. Core octree-sincos-omp is always present.
+# Shared builders and compatibility kernels live in support/; they do not
+# register standalone addon methods. See docs/ACTIVE_PROFILE.md.
+# Values must have no trailing whitespace or inline comments.
 
-$(info )
-$(info =====================================================)
-
-# Scalar angular correlations: OpenMP and MPI+OpenMP partners.
+GGG_OMP_FRONTIER_TARGET_TASKS ?= 256
+GGG_OMP_FRONTIER_MIN_ACTIVE ?= 64
+GGG_OMP_PIVOT_CHUNK_SIZE ?= 4096
 KDTREE2BALLSOMPON = 1
 KDTREE2BALLSMPION = 1
 BALLTREE2BALLSOMPON = 1
 BALLTREE2BALLSMPION = 1
 OCTREE2BALLSOMPON = 1
 OCTREE2BALLSMPION = 1
-
-# Ly-alpha forest methods and deterministic reduction controls.
+GGG_MPI_PIVOT_CLAIM_SIZE ?= 65536
 LYAFORESTOMPON = 1
 LYAFORESTMPION = 1
 LYA1D_OMP_PIVOT_BLOCK_SIZE ?= 256
 LYA1D_TREE3_LEAF_SIZE ?= 8
-
-# Full-sky spin-2 OpenMP methods.
-OCTREESHEARSPHERE2BALLSOMPON ?= 1
-KDTREESHEARSPHERE2BALLSOMPON ?= 1
-BALLTREESHEARSPHERE2BALLSOMPON ?= 1
 SHEAR_OMP_PIVOT_BLOCK_SIZE ?= 32
-
-# Periodic-box methods.
+OCTREESHEARSPHERE2BALLSOMPON ?= 1
+OCTREESHEARSPHERE2BALLSMPION ?= 1
+KDTREESHEARSPHERE2BALLSOMPON ?= 1
+KDTREESHEARSPHERE2BALLSMPION ?= 1
+BALLTREESHEARSPHERE2BALLSOMPON ?= 1
+BALLTREESHEARSPHERE2BALLSMPION ?= 1
 KDTREEBOXOMPON = 1
 NEIGHBORBOXESOMPON = 1
-
-# I/O and Python binding support.
 GADGETIOON = 1
 CLASSLIBON = 1
 IOLIBON = 1
-CFITSIOON = 1
-# Link external CFITSIO; the bundled library addon is not distributed.
-CFITSIOLIBON = 0
-ifeq ($(CLASSLIBON),1)
-PXDON = 1
-else
-$(error PXDON requires CLASSLIBON=1)
-endif
-
-# Production numerical behavior.
+CFITSIOLIBON = 1
 SMOOTHPIVOTON = 1
+ADDPIVOTNEIGHBOURSON ?= 0
+NOWKAvgON = 0
 NMultipolesON = 1
 NONORMHISTON = 1
+POLARAXISON = 0
+NOLIMBERON = 0
+OVERCOUNTINGON = 0
+NOSTANDARNORMHISTON = 0
 CMDLINE_DEFS_UNITSPHERE_ON = 1
 TWOPCFON = 1
 TPCFON = 1
+TPCFSHEARON = 0
 PRUNEON = 1
 BALLS4SCANLEVON = 1
 THETA = 1.25
-# Privately linked scalar compatibility kernels; these are not public addons.
-GGG_OMP_FRONTIER_TARGET_TASKS ?= 256
-GGG_OMP_FRONTIER_MIN_ACTIVE ?= 64
-GGG_OMP_PIVOT_CHUNK_SIZE ?= 4096
-GGG_MPI_PIVOT_CLAIM_SIZE ?= 65536
-DEFINEFLAGS =
+NORMALHISTSCALEON = 0
 _DEBUGON_ = 0
 LOGBINON = 0
-
-# Physical 3D scalar multipoles.
+ORIGINALCBON = 0
 OCTREE3PCF3DOMPON = 1
 OCTREE3PCF3DMPION = 1
 CB3D_OMP_PIVOT_BLOCK_SIZE ?= 64
+ALLOW_BALLS_WITH_SMOOTHING ?= 0
 
-$(info =====================================================)
+# The Cython and FITS bridges require their enabled parser/I/O support.
+ifeq ($(CLASSLIBON),1)
+PXDON = 1
+else
+PXDON = 0
+endif
+ifeq ($(IOLIBON),1)
+CFITSIOON = 1
+else
+CFITSIOON = 0
+endif
+DEFINEFLAGS =

@@ -7,6 +7,7 @@
  * 3PCF contributions use certified same-bin forest segment sums with exact
  * pixel fallback. The opt-in anisotropic multipole method computes exact
  * Legendre moments and explicitly approximate mu-bin reconstruction.
+ * Optional exact mu bins share discovery and use certified segment products.
  */
 
 #include "globaldefs.h"
@@ -33,12 +34,18 @@ typedef struct {
 #include "lya_triplet_types.h"
 
 typedef struct {
+    uint64_t multipole_counts[5];
+    size_t moment_leg_bins;
     REAL *moments;
     size_t *moment_bins;
     unsigned char *moment_seen;
-    int aggregation_safe, moment_mode;
+    int aggregation_safe, moment_mode, neighbors_sorted;
     REAL polar_edges[65];
     int polar_lookup;
+    lya_los_moment *los_moments;
+    lya_los_moment_entry *los_entries;
+    size_t los_moment_count,los_moment_capacity,los_moment_bytes;
+    uint64_t los_moment_counts[4];
     lya_segment *segments;
     size_t *segment_roots, segment_count, segment_capacity;
     unsigned long long aggregated_pairs, direct_pairs, segment_accepts, approximate_pairs;
@@ -50,6 +57,8 @@ typedef struct {
     size_t touched2_count;
     size_t *touched3;
     size_t touched3_count;
+    REAL *exact_num3, *exact_den3;
+    size_t *exact_touched3, exact_touched3_count;
     lya_neighbor *neighbors;
     size_t neighbor_count;
     size_t neighbor_capacity;
@@ -162,9 +171,27 @@ local int lya_worker_init(struct cmdline_data *cmd, lya_worker_hist *worker,
                                      error_message, _ERRORMSGSIZE_) == FAILURE)
             goto fail;
     }
+    if (compute_3pcf && worker->moment_mode && cmd->lya3MuMode) {
+        size_t exact_bins;
+        if (lya_size_mul(bins3/(size_t)(cmd->lya3LMax+1),
+                         (size_t)cmd->lya3MuBins,&exact_bins)==FAILURE) {
+            snprintf(error_message,_ERRORMSGSIZE_,"Ly-alpha exact mu dimensions overflow");
+            goto fail;
+        }
+        if (cballs_calloc_checked((void **)&worker->exact_num3,exact_bins,sizeof(REAL),
+                "Ly-alpha exact mu numerator",error_message,_ERRORMSGSIZE_)==FAILURE
+            || cballs_calloc_checked((void **)&worker->exact_den3,exact_bins,sizeof(REAL),
+                "Ly-alpha exact mu denominator",error_message,_ERRORMSGSIZE_)==FAILURE
+            || cballs_calloc_checked((void **)&worker->exact_touched3,exact_bins,sizeof(size_t),
+                "Ly-alpha exact mu touched bins",error_message,_ERRORMSGSIZE_)==FAILURE)
+            goto fail;
+    }
     return SUCCESS;
 
 fail:
+    free(worker->exact_num3); worker->exact_num3=NULL;
+    free(worker->exact_den3); worker->exact_den3=NULL;
+    free(worker->exact_touched3); worker->exact_touched3=NULL;
     free(worker->num2); worker->num2 = NULL;
     free(worker->den2); worker->den2 = NULL;
     free(worker->num3); worker->num3 = NULL;
@@ -176,6 +203,9 @@ fail:
 
 local void lya_worker_free(lya_worker_hist *worker)
 {
+    free(worker->exact_num3);
+    free(worker->exact_den3);
+    free(worker->exact_touched3);
     free(worker->num2);
     free(worker->den2);
     free(worker->num3);
@@ -183,6 +213,7 @@ local void lya_worker_free(lya_worker_hist *worker)
     free(worker->touched2);
     free(worker->touched3);
     free(worker->moments);free(worker->moment_bins);free(worker->moment_seen);
+    free(worker->los_moments);
     free(worker->segments);
     free(worker->segment_roots);
     free(worker->neighbors);
@@ -236,6 +267,7 @@ local int lya_append_neighbor(struct cmdline_data *cmd, bodyptr pivot,
             || !cballs_size_mul(worker->segment_capacity,2*sizeof(lya_segment)+sizeof(size_t),&old_segments)
             || !cballs_size_mul(bytes,2,&all_scratch)
             || !cballs_size_add(all_scratch,old_segments,&all_scratch)
+            || !cballs_size_add(all_scratch,worker->los_moment_bytes,&all_scratch)
             || !cballs_size_mul(all_scratch, worker->scratch_workers, &all_scratch)
             || !cballs_size_add(worker->histogram_plan_bytes, all_scratch, &all_bytes)) {
             snprintf(error_message, _ERRORMSGSIZE_,
@@ -406,6 +438,42 @@ local void lya_accumulate_3pcf(struct cmdline_data *cmd, bodyptr p,
 #include "lya_triplet_exact.h"
 #include "lya_triplet_multipole.h"
 
+/* The two grids own separate accumulators but share the discovered neighbors
+ * and worker scratch. Restore the moment view even when the exact pass fails. */
+local void lya_swap_mu_histogram(lya_worker_hist *w)
+{
+    REAL *n=w->num3,*d=w->den3;
+    size_t *t=w->touched3,count=w->touched3_count;
+    w->num3=w->exact_num3;w->den3=w->exact_den3;
+    w->touched3=w->exact_touched3;w->touched3_count=w->exact_touched3_count;
+    w->exact_num3=n;w->exact_den3=d;
+    w->exact_touched3=t;w->exact_touched3_count=count;
+    w->moment_mode=!w->moment_mode;
+}
+
+local int lya_accumulate_exact_mu(struct cmdline_data *cmd,bodyptr p,
+                                  lya_worker_hist *w,ErrorMsg err)
+{
+    /* The additional MuBins grid has passed the global memory/overflow plan.
+     * Multipole-only runs never form these otherwise-unused index products. */
+    for(size_t i=0;i<w->neighbor_count;i++) {
+        lya_neighbor *q=&w->neighbors[i];
+        size_t radial=q->leg_bin/(size_t)cmd->lya3ThetaBins;
+        size_t polar=q->leg_bin%(size_t)cmd->lya3ThetaBins;
+        q->first_index=(radial*cmd->lya3RBins*cmd->lya3ThetaBins+polar)
+                        *cmd->lya3ThetaBins*cmd->lya3MuBins;
+        q->second_index=(radial*cmd->lya3ThetaBins*cmd->lya3ThetaBins+polar)
+                        *cmd->lya3MuBins;
+    }
+    INTEGER count=w->ordered_triplet_count;
+    w->ordered_triplet_count=0; /* do not count the same triangles twice */
+    lya_swap_mu_histogram(w);
+    int status=lya_accumulate_segments(cmd,p,w,err);
+    lya_swap_mu_histogram(w);
+    w->ordered_triplet_count=count;
+    return status;
+}
+
 typedef struct {
     struct cmdline_data *cmd;
     bodyptr pivot;
@@ -450,6 +518,10 @@ local void lya_commit_worker(lya_worker_hist *worker,
             worker->den3[index] = 0.0;
         }
         worker->touched3_count = 0;
+        if(worker->moment_mode && worker->moment_seen) {
+            size_t b=worker->moment_leg_bins;
+            memset(worker->moment_seen+2*b,0,b*b);
+        }
     }
 }
 
@@ -534,13 +606,15 @@ local int lya_write_3pcf(struct cmdline_data *cmd, struct global_data *gd,
     fprintf(stream, "# Weighted anisotropic Lyman-alpha forest 3PCF (paper equation 2.8)\n");
     fprintf(stream, "# distinct-forest ordered triplets: %" INTEGER_FMT "\n",
             ordered_triplet_count);
+    if(lya_forest_is_multipole_method(cmd->searchMethod) && cmd->lya3MuMode)
+        fprintf(stream,"# EXACT hard mu bins: certified segment/hierarchy products with pixel fallback; shared multipole discovery; independent of Lmax\n");
     fprintf(stream, "# zero-denominator policy: zeta=0; empty bins are %s\n",
             output_empty ? "included" : "omitted");
     fprintf(stream, "# columns: b1 b2 t1 t2 bmu r1 r2 theta1 theta2 mu zeta numerator denominator\n");
     fprintf(stream,"# pivot_frontier level=%d radius=%.17g max_pixels=%d; pivot_geometry_approximate=%d; neighbors=original_pixels\n",
         cmd->lyaScanLevel,(double)cmd->lyaPivotRadius,cmd->lyaPivotMax,cmd->lyaPivotRadius>0);
     fprintf(stream, "# geometry_slop mu=%.17g radial=%.17g polar=%.17g; kernel=%d; approximate=%d\n",
-        (double)cmd->lya3MuSlop,(double)cmd->lya3RadialSlop,(double)cmd->lya3PolarSlop,cmd->lya3Kernel,
+        (double)cmd->lya3MuSlop,(double)cmd->lya3RadialSlop,(double)cmd->lya3PolarSlop,cmd->lya3MuMode?5:cmd->lya3Kernel,
         cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0);
     for (b1 = 0; b1 < cmd->lya3RBins; b1++)
         for (b2 = 0; b2 < cmd->lya3RBins; b2++)
@@ -593,7 +667,8 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
 {
     double cpustart = CPUTIME;
     size_t bins2 = 0;
-    size_t bins3 = 0;
+    size_t bins3 = 0, exact_bins3 = 0;
+    REAL *exact_num3 = NULL, *exact_den3 = NULL;
     REAL *num2 = NULL;
     REAL *den2 = NULL;
     REAL *num3 = NULL;
@@ -606,11 +681,18 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
     int allocation_failed = FALSE;
     ErrorMsg worker_error = "";
     int status = FAILURE;
+    memset(gd->lyaHierarchyCounts,0,sizeof(gd->lyaHierarchyCounts));
+    gd->lyaHierarchyPixelFallback=FALSE;
+    memset(gd->lyaLOSCounts,0,sizeof(gd->lyaLOSCounts));
+    memset(gd->lyaMultipoleCounts,0,sizeof(gd->lyaMultipoleCounts));
     const int multipole = lya_forest_is_multipole_method(cmd->searchMethod);
+    const int exact_mu = multipole && cmd->lya3MuMode==1;
+    struct cmdline_data exact_cmd=*cmd;
+    exact_cmd.lya3Kernel=5; /* read-only view for the exact companion */
     const int persistent = compute_3pcf && !multipole && cmd->lya3Kernel>=3;
     const int pair_cells = compute_2pcf && cmd->lya2Kernel==1;
     const int legacy2 = compute_2pcf && !pair_cells;
-    const int use_los_tree = !persistent && (compute_3pcf || legacy2) && lya_forest_is_los_tree_method(cmd->searchMethod);
+    const int use_los_tree = (compute_3pcf || legacy2) && lya_forest_is_los_tree_method(cmd->searchMethod);
     lya_los_index *los_index = NULL;
     lya_pivot_frontier frontier={0};
     const int use_frontier=cmd->lyaScanLevel || cmd->lyaPivotRadius>0;
@@ -642,9 +724,14 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
             goto size_error;
     }
 
+    if(exact_mu && lya_size_mul(bins3/(size_t)(cmd->lya3LMax+1),
+                                (size_t)cmd->lya3MuBins,&exact_bins3)==FAILURE)
+        goto size_error;
+
     size_t grid_cells, grid_bytes, worker_bytes, all_bytes, base_bytes;
     if (cballs_resource_base(cmd,gd,&base_bytes)==FAILURE) goto setup_done;
     if (!cballs_size_add(bins2,bins3,&grid_cells)
+        || !cballs_size_add(grid_cells,exact_bins3,&grid_cells)
         || !cballs_size_mul(grid_cells,2*sizeof(real),&grid_bytes)
         || !cballs_size_mul(grid_cells,2*sizeof(real)+sizeof(size_t),&worker_bytes)
         || !cballs_size_mul(worker_bytes,(size_t)MAX(1,cmd->numthreads),&worker_bytes)
@@ -677,9 +764,14 @@ global int searchcalc_lya_forest_omp(struct cmdline_data *cmd,
                                      sizeof(cmd->error_message)) == FAILURE)
             goto setup_done;
     }
+    if(exact_mu && (cballs_calloc_checked((void **)&exact_num3,exact_bins3,sizeof(REAL),
+            "global Ly-alpha exact mu numerator",cmd->error_message,_ERRORMSGSIZE_)==FAILURE
+        || cballs_calloc_checked((void **)&exact_den3,exact_bins3,sizeof(REAL),
+            "global Ly-alpha exact mu denominator",cmd->error_message,_ERRORMSGSIZE_)==FAILURE))
+        goto setup_done;
     cutoff = MAX(cutoff2, compute_3pcf ? cmd->lya3RMax : 0.0);
 
-    if (use_los_tree && !pair_cells) {
+    if (use_los_tree && !persistent && !pair_cells) {
         double start = CPUTIME;
         if (lya_los_build(&los_index, btable[cat], nbody[cat],
                           (nodeptr)roottable[cat], cmd->error_message) == FAILURE)
@@ -708,7 +800,7 @@ setup_done:
                          + (pivot_count % pivot_block != 0);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: %s; 2PCF=%d 3PCF=%d cutoff=%g pivot_block=%ld\n",
-        cmd->searchMethod, multipole ? "anisotropic moments; approximate mu reconstruction" : (cmd->lyaPivotRadius>0 ? "approximate forest-local pivot geometry; original neighbors" : ((cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0 || cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0) ? "approximate geometry; exact forest exclusions/cutoffs" : "exact Ly-alpha estimator")), compute_2pcf, compute_3pcf, cutoff, (long)pivot_block);
+        cmd->searchMethod, multipole ? (exact_mu ? "anisotropic moments + exact mu bins; shared discovery" : "anisotropic moments; approximate mu reconstruction") : (cmd->lyaPivotRadius>0 ? "approximate forest-local pivot geometry; original neighbors" : ((cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0 || cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0) ? "approximate geometry; exact forest exclusions/cutoffs" : "exact Ly-alpha estimator")), compute_2pcf, compute_3pcf, cutoff, (long)pivot_block);
 
     if (pair_cells && !persistent) {
         lya_cells pair_tree;
@@ -738,11 +830,21 @@ setup_done:
     }
 
     if (persistent) {
-        allocation_failed=lya_cells_run(cmd,gd,btable[cat],nbody[cat],ipmin-1,ipmax[cat],
+        int cell_status=lya_cells_run(cmd,gd,btable[cat],nbody[cat],ipmin-1,ipmax[cat],
             (nodeptr)roottable[cat],compute_2pcf,bins2,bins3,all_bytes,num2,den2,num3,den3,
             &accepted_visits,&pair_count,&ordered_triplet_count,
-            &aggregated_pairs,&direct_pairs,&segment_accepts,&approximate_pairs)==FAILURE;
-        goto workers_done;
+            &aggregated_pairs,&direct_pairs,&segment_accepts,&approximate_pairs);
+        if(cell_status!=2) {allocation_failed=cell_status==FAILURE;goto workers_done;}
+        /* A requested pair-cell pass is already complete on the shared tree.
+         * Ordinary combined mode still needs pixel pairs during discovery. */
+        if(!legacy2) cutoff=cmd->lya3RMax;
+        if(use_los_tree) {
+            double start=CPUTIME;
+            allocation_failed=lya_los_build(&los_index,btable[cat],nbody[cat],
+                (nodeptr)roottable[cat],cmd->error_message)==FAILURE;
+            los_build_cpu=CPUTIME-start;
+            if(allocation_failed) goto workers_done;
+        }
     }
 
     if(use_frontier) {
@@ -789,6 +891,23 @@ setup_done:
             INTEGER first = use_frontier?(INTEGER)frontier.offsets[block]:ipmin-1+block*pivot_block;
             INTEGER end = use_frontier?(INTEGER)frontier.offsets[block+1]:first+MIN(pivot_block,ipmax[cat]-first);
             INTEGER pivot;
+            if(worker_ready && use_los_tree) {
+                /* Fixed blocks reuse forest discovery only when all actual
+                 * pivots fit a modest enlarged sphere. Wide blocks retain
+                 * individual queries and pay no expanded traversal cost. */
+                bodyptr center=NULL;long double radius=0;
+                for(INTEGER j=first;j<end;j++) {
+                    const lya_pivot_group *g=frontier.groups?&frontier.groups[frontier.order[j]]:NULL;
+                    bodyptr q=g?g->pivot:btable[cat]+(use_frontier?(INTEGER)frontier.order[j]:j);
+                    if(!center) center=q;
+                    long double d2=0;
+                    for(int k=0;k<NDIM;k++) {long double d=(long double)Pos(q)[k]-Pos(center)[k];d2+=d*d;}
+                    radius=fmaxl(radius,sqrtl(d2));
+                }
+                REAL bound=nextafter((REAL)radius,INFINITY);
+                lya_los_begin_block(&los_workspace,center,
+                    end-first>1 && sizeof(REAL)==sizeof(double) && isfinite(bound) && bound<=cutoff*.25 ? bound : -1);
+            }
             worker.accepted_visits = 0;
             worker.pair_count = 0;
             worker.ordered_triplet_count = 0;
@@ -801,6 +920,7 @@ setup_done:
                     worker.pivot_members=group->members;worker.pivot_idlo=group->idlo;worker.pivot_idhi=group->idhi;
                 }
                 worker.neighbor_count = 0;
+                worker.neighbors_sorted = FALSE;
                 if (!worker_failed && Update(p) != FALSE
                     && Mask(p) == MASK_NODE_VALID) {
                     lya_los_accumulator acc = {cmd, p, &worker,
@@ -823,7 +943,11 @@ setup_done:
                     } else if (compute_3pcf) {
                         int triplet_status=SUCCESS;
                         INTEGER before_triplets=worker.ordered_triplet_count;
-                        if (multipole) triplet_status=lya_accumulate_multipoles(cmd,p,&worker,local_error);
+                        if (multipole) {
+                            triplet_status=lya_accumulate_multipoles(cmd,p,&worker,local_error);
+                            if(triplet_status==SUCCESS && exact_mu)
+                                triplet_status=lya_accumulate_exact_mu(&exact_cmd,p,&worker,local_error);
+                        }
                         else if (cmd->lya3Kernel==1) lya_accumulate_3pcf(cmd,p,&worker);
                         else triplet_status=lya_accumulate_segments(cmd,p,&worker,local_error);
                         /* Scale represented counts once per pivot, outside the
@@ -849,6 +973,11 @@ setup_done:
                 if (worker_ready && !worker_failed) {
                     lya_commit_worker(&worker, num2, den2, num3, den3,
                                       legacy2, compute_3pcf);
+                    if(exact_mu) {
+                        lya_swap_mu_histogram(&worker);
+                        lya_commit_worker(&worker,NULL,NULL,exact_num3,exact_den3,0,1);
+                        lya_swap_mu_histogram(&worker);
+                    }
                     accepted_visits += worker.accepted_visits;
                     pair_count += worker.pair_count;
                     ordered_triplet_count += worker.ordered_triplet_count;
@@ -856,11 +985,15 @@ setup_done:
             }
         }
 #pragma omp critical(lya_segment_counters)
-        { aggregated_pairs+=worker.aggregated_pairs; direct_pairs+=worker.direct_pairs; segment_accepts+=worker.segment_accepts; approximate_pairs+=worker.approximate_pairs; }
+        { for(int k=0;k<5;k++) gd->lyaMultipoleCounts[k]+=worker.multipole_counts[k];
+          for(int k=0;k<4;k++) gd->lyaHierarchyCounts[k]+=worker.los_moment_counts[k];
+          aggregated_pairs+=worker.aggregated_pairs; direct_pairs+=worker.direct_pairs; segment_accepts+=worker.segment_accepts; approximate_pairs+=worker.approximate_pairs; }
         if (worker_ready) lya_worker_free(&worker);
         if (use_los_tree) {
 #pragma omp critical(lya_los_counters)
             {
+                los_totals.discoveries += los_workspace.discoveries;
+                los_totals.reuses += los_workspace.reuses;
                 los_totals.octree_nodes += los_workspace.octree_nodes;
                 los_totals.forest_skips += los_workspace.forest_skips;
                 los_totals.forest_hits += los_workspace.forest_hits;
@@ -882,11 +1015,18 @@ workers_done:
     status = lya_parallel_consensus(cmd, allocation_failed ? FAILURE : SUCCESS,
                                     "Ly-alpha 3D workers");
     if (status == FAILURE) goto cleanup;
+    gd->lyaLOSCounts[0]=los_totals.discoveries;
+    gd->lyaLOSCounts[1]=los_totals.reuses;
+    gd->lyaLOSCounts[2]=los_totals.pixel_tests;
+    if(lya_parallel_reduce_uint64(cmd,gd->lyaLOSCounts,3)==FAILURE) {status=FAILURE;goto cleanup;}
     INTEGER counters[3] = {accepted_visits, pair_count, ordered_triplet_count};
+    if(lya_parallel_reduce_uint64(cmd,gd->lyaHierarchyCounts,6)==FAILURE) {status=FAILURE;goto cleanup;}
     if (lya_parallel_reduce_reals(cmd, num2, bins2) == FAILURE
         || lya_parallel_reduce_reals(cmd, den2, bins2) == FAILURE
         || lya_parallel_reduce_reals(cmd, num3, bins3) == FAILURE
         || lya_parallel_reduce_reals(cmd, den3, bins3) == FAILURE
+        || lya_parallel_reduce_reals(cmd, exact_num3, exact_bins3) == FAILURE
+        || lya_parallel_reduce_reals(cmd, exact_den3, exact_bins3) == FAILURE
         || lya_parallel_reduce_integers(cmd, counters, 3) == FAILURE) {
         status = FAILURE;
         goto cleanup;
@@ -900,8 +1040,29 @@ workers_done:
     ordered_triplet_count = counters[2];
     status = FAILURE;
 
+    if(cmd->lya3Kernel==5 || exact_mu || gd->lyaHierarchyCounts[4])
+        verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+            "Ly-alpha hierarchy (global): nodes=%llu products=%llu certificates=%llu represented=%llu pair_ranges=%llu range_pairs=%llu\n",
+            (unsigned long long)gd->lyaHierarchyCounts[0],(unsigned long long)gd->lyaHierarchyCounts[1],
+            (unsigned long long)gd->lyaHierarchyCounts[2],(unsigned long long)gd->lyaHierarchyCounts[3],
+            (unsigned long long)gd->lyaHierarchyCounts[4],(unsigned long long)gd->lyaHierarchyCounts[5]);
+    if(multipole)
+        verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+            "Ly-alpha multipole reuse: hierarchical_pivots=%llu prefix_pivots=%llu blocks=%llu products=%llu prefix_products=%llu\n",
+            (unsigned long long)gd->lyaMultipoleCounts[0],(unsigned long long)gd->lyaMultipoleCounts[1],
+            (unsigned long long)gd->lyaMultipoleCounts[2],(unsigned long long)gd->lyaMultipoleCounts[3],
+            (unsigned long long)gd->lyaMultipoleCounts[4]);
     gd->nbbcalc += accepted_visits;
+    if(exact_mu) {
+        /* Apply the same finite raw-sum contract to file and Python results. */
+        for(size_t i=0;i<exact_bins3;i++) if(!isfinite(exact_num3[i]) || !isfinite(exact_den3[i])) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,"Ly-alpha exact mu raw sums overflowed; rescale catalog weights/field");
+            goto publication;
+        }
+    }
     if (!cballs_opt_no_out_hist(cmd)) {
+        if(exact_mu && lya_write_3pcf(cmd,gd,exact_num3,exact_den3,ordered_triplet_count)==FAILURE)
+            goto publication;
         if (compute_2pcf
             && lya_write_2pcf(cmd, gd, num2, den2, pair_count) == FAILURE)
             goto publication;
@@ -911,17 +1072,18 @@ workers_done:
             goto publication;
     }
 
-    if (compute_3pcf && !multipole && cmd->lya3Kernel!=1) verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+    if (compute_3pcf && ((!multipole && cmd->lya3Kernel!=1) || exact_mu)) verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
         "Ly-alpha 3PCF kernel=%d aggregated_pairs=%llu direct_pairs=%llu segment_accepts=%llu approximate_pairs=%llu (rank-local)\n",
-        cmd->lya3Kernel,aggregated_pairs,direct_pairs,segment_accepts,approximate_pairs);
+        exact_mu?5:cmd->lya3Kernel,aggregated_pairs,direct_pairs,segment_accepts,approximate_pairs);
     gd->cpusearch = CPUTIME - cpustart;
-    if (use_los_tree)
+    if (los_index)
         verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "LOS-tree: forests=%zu build_CPU=%g octree_nodes=%llu "
-            "forest_skips=%llu forest_hits=%llu radial_nodes=%llu pixel_tests=%llu\n",
+            "forest_skips=%llu forest_hits=%llu radial_nodes=%llu pixel_tests=%llu discoveries=%llu reuses=%llu (rank-local)\n",
             lya_los_forest_count(los_index), los_build_cpu,
             los_totals.octree_nodes, los_totals.forest_skips,
-            los_totals.forest_hits, los_totals.radial_nodes, los_totals.pixel_tests);
+            los_totals.forest_hits, los_totals.radial_nodes, los_totals.pixel_tests,
+            (unsigned long long)los_totals.discoveries,(unsigned long long)los_totals.reuses);
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "%s: accepted=%" INTEGER_FMT " pairs=%" INTEGER_FMT
         " ordered_triplets=%" INTEGER_FMT " CPU=%g\n",
@@ -946,6 +1108,11 @@ cleanup:
         cballs_result_adopt("pair_denominator",(void **)&den2,0,2,pair_shape);
         cballs_result_adopt(multipole?"moments_numerator":"triple_numerator",(void **)&num3,0,5,triple_shape);
         cballs_result_adopt(multipole?"moments_denominator":"triple_denominator",(void **)&den3,0,5,triple_shape);
+        if(exact_mu) {
+            triple_shape[4]=(size_t)cmd->lya3MuBins;
+            cballs_result_adopt("triple_numerator",(void **)&exact_num3,0,5,triple_shape);
+            cballs_result_adopt("triple_denominator",(void **)&exact_den3,0,5,triple_shape);
+        }
     }
     lya_pivot_frontier_free(&frontier);
     lya_los_free(los_index);
@@ -954,6 +1121,8 @@ cleanup:
     free(den2);
     free(num3);
     free(den3);
+    free(exact_num3);
+    free(exact_den3);
     return status;
 }
 

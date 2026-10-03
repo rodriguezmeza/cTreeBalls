@@ -32,13 +32,10 @@ jobs:
           python -m twine check --strict dist/*
           mkdir -p release-package
           python scripts/check_sdist.py dist/*.tar.gz --output release-package/sdist.json
-      - name: Test installation from the source distribution
+      - name: Build native and isolated wheel from the archive, then test installation
         run: |
-          python -m venv /tmp/ctreeballs-test
-          /tmp/ctreeballs-test/bin/python -m pip install dist/*.tar.gz
-          cd /tmp
-          /tmp/ctreeballs-test/bin/python "$GITHUB_WORKSPACE/scripts/check_installed_package.py" \
-            --source-root "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/release-package/installation.json"
+          python scripts/verify_sdist_install.py dist/*.tar.gz \
+            --output release-package/artifact-check --jobs 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,6 +43,10 @@ jobs:
           path: |
             release-gate/
             release-package/
+            !release-package/**/native-env/**
+            !release-package/**/install-env/**
+            !release-package/**/native-source/**
+            !release-package/**/wheel-source/**
       - uses: actions/upload-artifact@v4
         with:
           name: pypi-dist

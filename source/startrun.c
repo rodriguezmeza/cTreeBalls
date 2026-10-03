@@ -63,6 +63,36 @@ local int print_make_info(struct cmdline_data* cmd,
 local int print_options(struct cmdline_data* cmd,
                         struct  global_data* gd);
 
+typedef struct {
+    struct cmdline_data *cmd;
+    struct global_data *gd;
+    int (*call)(struct cmdline_data *, struct global_data *);
+} startup_step_context;
+
+local int startup_step_local(void *argument)
+{
+    startup_step_context *step = argument;
+    return step->call(step->cmd, step->gd);
+}
+
+local int startup_step(struct cmdline_data *cmd, struct global_data *gd,
+                        int (*call)(struct cmdline_data *, struct global_data *),
+                        const char *operation)
+{
+    startup_step_context step = {cmd, gd, call};
+    int status = cballs_allocation_guard(startup_step_local, &step,
+                                          cmd->error_message, _ERRORMSGSIZE_);
+#ifdef CBALLS_MPI_ENABLED
+    status = cballs_mpi_consensus(cmd, status, operation);
+#endif
+    return status;
+}
+
+local int startup_random(struct cmdline_data *cmd, struct global_data *gd)
+{
+    return random_init(cmd, gd, cmd->seed);
+}
+
 #ifndef USEGSL
 local long saveidum;
 #endif
@@ -709,51 +739,13 @@ fail:
 }
 //E
 
-int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
+local int startup_setup_local(struct cmdline_data *cmd, struct global_data *gd)
 {
     string routineName = "StartRun_Common";
     int ifile;
     double cpustartMiddle;
     const int memory_ninfiles = gd->bodytable_allocated ? gd->ninfiles : 0;
     const bool input_catalogs_in_memory = memory_ninfiles > 0;
-
-    cballs_refresh_option_cache(cmd);
-
-#ifdef THREEPCFCONVERGENCE
-    gd->computeTPCF = TRUE;
-#else
-    gd->computeTPCF = FALSE;
-#endif
-    gd->inputHeaderFlag = FALSE;
-    gd->cmd_allocated = TRUE;
-    gd->histograms_allocated = FALSE;
-    gd->random_allocated = FALSE;
-    gd->gd_allocated = FALSE;
-    gd->gd_allocated_2 = FALSE;
-    gd->tree_allocated = FALSE;
-    gd->bodytable_allocated = input_catalogs_in_memory;
-
-    //B
-#if defined(DEBUG) && defined(BODYTABBF_ON)
-    bodytabbf = NULL;
-#endif
-    //E
-
-    gd->outlog = NULL;
-    gd->outlogFlagFree = FALSE;
-    
-    if (strlen(cmd->rootDir)==0 || strnull(cmd->rootDir))
-        gd->rootDirFlag = FALSE;
-    else
-        gd->rootDirFlag = TRUE;
-
-    gd->flagPrint = TRUE;
-
-#ifdef CBALLS_MPI_ENABLED
-    if (cballs_mpi_prepare(cmd, gd) == FAILURE)
-        return FAILURE;
-#endif
-
     if (scanopt(cmd->options, "build-fingerprint")) {
         printf("%s\n", cballs_build_json());
         if (!scanopt(cmd->options, "no-stop")) {
@@ -800,15 +792,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
     gd->pivotNumber = cmd->nbody;
 
-    int output_setup_status = StartOutput(cmd, gd);
-#ifdef OCTREE3PCF3DMPI
-    output_setup_status = cb3d_mpi_consensus(
-        cmd, output_setup_status, "3D output initialization");
-#endif
-#ifdef LYAFORESTMPI
-    output_setup_status = lya_forest_mpi_consensus(
-        cmd, output_setup_status, "Ly-alpha output initialization");
-#endif
+    int output_setup_status = startup_step(cmd, gd, StartOutput,
+                                               "MPI output initialization");
     class_call_cballs(output_setup_status, errmsg, errmsg);
     output_setup_status = SUCCESS;
 #ifdef CBALLS_MPI_ENABLED
@@ -839,49 +824,21 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 #endif
     if (output_setup_status == FAILURE) return FAILURE;
 
-     int catalog_setup_status = startrun_getParamsSpecial(cmd, gd);
-#ifdef OCTREE3PCF3DMPI
-     catalog_setup_status = cb3d_mpi_consensus(
-         cmd, catalog_setup_status, "3D startup options");
-#endif
-#ifdef LYAFORESTMPI
-     catalog_setup_status = lya_forest_mpi_consensus(
-         cmd, catalog_setup_status, "Ly-alpha startup options");
-#endif
+     int catalog_setup_status = startup_step(cmd, gd, startrun_getParamsSpecial,
+                                               "MPI startup options");
      class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
      search_method_string_to_int(cmd->searchMethod, &gd->searchMethod_int);
-     catalog_setup_status = CheckParameters(cmd, gd);
-#ifdef OCTREE3PCF3DMPI
-     catalog_setup_status = cb3d_mpi_consensus(
-         cmd, catalog_setup_status, "3D parameter validation");
-#endif
-#ifdef LYAFORESTMPI
-     catalog_setup_status = lya_forest_mpi_consensus(
-         cmd, catalog_setup_status, "Ly-alpha parameter validation");
-#endif
+     catalog_setup_status = startup_step(cmd, gd, CheckParameters,
+                                               "MPI parameter validation");
      class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
-     catalog_setup_status = random_init(cmd, gd, cmd->seed);
-#ifdef OCTREE3PCF3DMPI
-     catalog_setup_status = cb3d_mpi_consensus(
-         cmd, catalog_setup_status, "3D random initialization");
-#endif
-#ifdef LYAFORESTMPI
-     catalog_setup_status = lya_forest_mpi_consensus(
-         cmd, catalog_setup_status, "Ly-alpha random initialization");
-#endif
+     catalog_setup_status = startup_step(cmd, gd, startup_random,
+                                               "MPI random initialization");
      class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
-     catalog_setup_status = startrun_memoryAllocation(cmd, gd);
-#ifdef OCTREE3PCF3DMPI
-     catalog_setup_status = cb3d_mpi_consensus(
-         cmd, catalog_setup_status, "3D startup allocation");
-#endif
-#ifdef LYAFORESTMPI
-     catalog_setup_status = lya_forest_mpi_consensus(
-         cmd, catalog_setup_status, "Ly-alpha startup allocation");
-#endif
+     catalog_setup_status = startup_step(cmd, gd, startrun_memoryAllocation,
+                                               "MPI startup allocation");
      class_call_cballs(catalog_setup_status, errmsg, errmsg);
 
     coordinate_string_to_int(cmd, gd);              // set coordTag
@@ -978,6 +935,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 //B In this section update computation of rSize
 //      and center-of-mass if necessary
 //      so we have a common root size and c-of-m
+
+    return SUCCESS;
+}
+
+local int startup_catalogs_local(struct cmdline_data *cmd, struct global_data *gd)
+{
+    string routineName = "StartRun_Common";
+    int ifile;
+    double cpustartMiddle;
+    const int memory_ninfiles = gd->bodytable_allocated ? gd->ninfiles : 0;
+    const bool input_catalogs_in_memory = memory_ninfiles > 0;
     if (input_catalogs_in_memory) {
         if (gd->ninfiles != memory_ninfiles)
             cBALLS_FAIL(cmd,
@@ -1144,6 +1112,17 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
                            routineName);
     }
 
+
+    return SUCCESS;
+}
+
+local int startup_geometry_local(struct cmdline_data *cmd, struct global_data *gd)
+{
+    string routineName = "StartRun_Common";
+    int ifile;
+    double cpustartMiddle;
+    const int memory_ninfiles = gd->bodytable_allocated ? gd->ninfiles : 0;
+    const bool input_catalogs_in_memory = memory_ninfiles > 0;
     bool preserve_common_catalog_frame = cballs_observer_frame(cmd);
 #ifdef OCTREESHEAROMP
     preserve_common_catalog_frame |=
@@ -1263,8 +1242,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         && gd->iCatalogs[0] != gd->iCatalogs[1])
         preserve_common_catalog_frame = TRUE;
 #endif
-    if (scanopt(cmd->options, "read-mask")) {
-        ifile=0;
+    if (scanopt(cmd->options, "read-mask") && gd->iCatalogs[0] == gd->iCatalogs[1]) {
+        ifile=gd->iCatalogs[0];
         //B
         cellptr root = NULL;                // Set it up a temporal root
         int rc = FAILURE;
@@ -1289,8 +1268,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
         cleanup_root_read_mask:
         free(root);
-#ifdef OCTREE3PCF3DMPI
-        rc = cb3d_mpi_consensus(cmd, rc, "3D masked root sizing");
+#ifdef CBALLS_MPI_ENABLED
+        rc = cballs_mpi_consensus(cmd, rc, "MPI masked root sizing");
 #endif
         if (rc == FAILURE)
             return FAILURE;
@@ -1326,8 +1305,8 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
 
             cleanup_root:
             free(root);
-#ifdef OCTREE3PCF3DMPI
-            rc = cb3d_mpi_consensus(cmd, rc, "3D root sizing");
+#ifdef CBALLS_MPI_ENABLED
+            rc = cballs_mpi_consensus(cmd, rc, "MPI root sizing");
 #endif
             if (rc == FAILURE)
                 return FAILURE;
@@ -1522,7 +1501,105 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
     gd->gd_allocated_2 = TRUE;
     gd->bodytable_allocated = TRUE;
 
+
     return SUCCESS;
+}
+
+local int startup_local_phase(struct cmdline_data *cmd, struct global_data *gd,
+                              int (*call)(struct cmdline_data *, struct global_data *),
+                              const char *operation)
+{
+    startup_step_context step = {cmd, gd, call};
+    cballs_mpi_local_begin();
+    int status = cballs_allocation_guard(startup_step_local, &step,
+                            cmd->error_message, _ERRORMSGSIZE_);
+    cballs_mpi_local_end();
+    return cballs_mpi_context_consensus(cmd, status, operation);
+}
+
+int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
+{
+    string routineName = "StartRun_Common";
+    int ifile;
+    double cpustartMiddle;
+    const int memory_ninfiles = gd->bodytable_allocated ? gd->ninfiles : 0;
+    const bool input_catalogs_in_memory = memory_ninfiles > 0;
+
+    cballs_refresh_option_cache(cmd);
+
+#ifdef THREEPCFCONVERGENCE
+    gd->computeTPCF = TRUE;
+#else
+    gd->computeTPCF = FALSE;
+#endif
+    /* A completed preprocessing task must not stop a later run on this object. */
+    gd->stopflag = FALSE;
+    gd->inputHeaderFlag = FALSE;
+    gd->cmd_allocated = TRUE;
+    gd->histograms_allocated = FALSE;
+    gd->histogram_results_ready = FALSE;
+    gd->histogram_products = 0;
+    gd->random_allocated = FALSE;
+    gd->gd_allocated = FALSE;
+    gd->gd_allocated_2 = FALSE;
+    gd->tree_allocated = FALSE;
+    gd->bodytable_allocated = input_catalogs_in_memory;
+
+    //B
+#if defined(DEBUG) && defined(BODYTABBF_ON)
+    bodytabbf = NULL;
+#endif
+    //E
+
+    gd->outlog = NULL;
+    gd->outlogFlagFree = FALSE;
+    
+    if (strlen(cmd->rootDir)==0 || strnull(cmd->rootDir))
+        gd->rootDirFlag = FALSE;
+    else
+        gd->rootDirFlag = TRUE;
+
+    gd->flagPrint = TRUE;
+
+#ifdef CBALLS_MPI_ENABLED
+    if (cballs_mpi_prepare(cmd, gd) == FAILURE)
+        return FAILURE;
+#endif
+
+    if (startup_local_phase(cmd, gd, startup_setup_local, "MPI startup setup") == FAILURE)
+        return FAILURE;
+    char controls[16384];
+    int n = snprintf(controls, sizeof(controls), "%s|%s|%d|%d|%d|%d|%d|%.17g|%.17g|%.17g|%s|%s|%d|%d|%d",
+        cmd->searchMethod, cmd->options, gd->ninfiles, cmd->sizeHistN,
+        cmd->mChebyshev, cmd->sizeHistPhi, cmd->useLogHist, cmd->rangeN,
+        cmd->rminHist, cmd->theta, cmd->iCatalogs, cmd->rsmooth,
+        input_catalogs_in_memory, gd->stopflag, gd->inputHeaderFlag);
+    if (n > 0 && n < sizeof(controls)) n += snprintf(controls+n,sizeof(controls)-n,
+        "|%d|%.17g|%d|%d", cmd->usePeriodic, cmd->lengthBox, cmd->seed, cmd->nsmooth);
+#if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
+    if (n > 0 && n < sizeof(controls)) n += snprintf(controls+n,sizeof(controls)-n,
+        "|%.17g|%.17g|%d|%d|%.17g|%d|%d|%d|%d|%d|%d|%.17g|%.17g|%.17g|%d|%d|%.17g|%.17g|%d|%.17g|%d",
+        cmd->lya2RpMax,cmd->lya2RtMax,cmd->lya2RpBins,cmd->lya2RtBins,
+        cmd->lya3RMax,cmd->lya3RBins,cmd->lya3ThetaBins,cmd->lya3MuBins,
+        cmd->lya3Kernel,cmd->lya3LMax,cmd->lya3PivotBlock,
+        cmd->lya3MuSlop,cmd->lya3RadialSlop,cmd->lya3PolarSlop,cmd->lya3PivotCellMax,
+        cmd->lya2Kernel,cmd->lya2RpSlop,cmd->lya2RtSlop,cmd->lyaScanLevel,cmd->lyaPivotRadius,cmd->lyaPivotMax);
+    if (n > 0 && n < sizeof(controls)) n += snprintf(controls+n,sizeof(controls)-n,"|%d",cmd->lya3MuMode);
+#endif
+    if (cballs_mpi_context_consensus(cmd,
+          n < 0 || n >= sizeof(controls) ? FAILURE : SUCCESS,
+          "MPI startup controls") == FAILURE) return FAILURE;
+    if (cballs_mpi_agree_text(cmd, controls, "MPI startup controls") == FAILURE)
+        return FAILURE;
+    if (gd->stopflag) return SUCCESS;
+    if (startup_local_phase(cmd, gd, startup_catalogs_local, "MPI catalog loading") == FAILURE)
+        return FAILURE;
+    snprintf(controls, sizeof(controls), "%d|%d|%d", gd->ninfiles, gd->stopflag, gd->inputHeaderFlag);
+    if (cballs_mpi_agree_text(cmd, controls, "MPI catalog completion") == FAILURE) return FAILURE;
+    if (gd->stopflag || gd->inputHeaderFlag) return SUCCESS;
+    if (startup_local_phase(cmd, gd, startup_geometry_local, "MPI catalog geometry and bins") == FAILURE)
+        return FAILURE;
+    return cballs_mpi_agree_catalogs(cmd, gd);
 }
 
 
@@ -1533,6 +1610,23 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
     string routineName = "CheckParameters";
 
     cballs_refresh_option_cache(cmd);
+    gd->scalarReuseEnabled=FALSE;
+    gd->scalarReusePhaseBudget=gd->scalarReuseBinTheta=0.0;
+    gd->scalarReusePairs=gd->scalarReuseRepresentedPairs=gd->scalarReuseParentReductions=0;
+    if (scanopt(cmd->options,"scalar-pivot-reuse")) {
+        const char *name=cmd->searchMethod ? cmd->searchMethod : "";
+        if (strcmp(name,"octree-2balls-omp") && strcmp(name,"octree-2balls-mpi")
+            && strcmp(name,"kdtree-2balls-omp") && strcmp(name,"kdtree-2balls-mpi")
+            && strcmp(name,"balltree-2balls-omp") && strcmp(name,"balltree-2balls-mpi"))
+            cBALLS_FAIL(cmd,"scalar-pivot-reuse requires a scalar octree/kdtree/balltree-2balls engine\n");
+        if (cballs_opt_legacy_one_ball(cmd) || scanopt(cmd->options,"dual-node-direct-triples"))
+            cBALLS_FAIL(cmd,"scalar-pivot-reuse cannot be combined with legacy-one-ball or dual-node-direct-triples\n");
+#ifndef THREEPCFCONVERGENCE
+        cBALLS_FAIL(cmd,"scalar-pivot-reuse requires TPCFON=1\n");
+#endif
+    }
+
+
 
     if (cballs_opt_smooth_pivot_requested(cmd)
         && cballs_opt_no_smooth_pivot(cmd))
@@ -2051,6 +2145,30 @@ local int startrun_getParamsSpecial(struct  cmdline_data* cmd,
     int nitems, ndummy=1;
     char inputnametmp[MAXLENGTHOFSTRSCMD];
     int i;
+
+    /* Histogram prefixes are not catalogs. Preserve spaces inside each path,
+     * require exactly one comma, and bypass catalog-format/index parsing. */
+    if (scanopt(cmd->options, "edge-corrections-from-files")) {
+        if (strnull(cmd->infile)
+            || copy_checked(inputnametmp, sizeof(inputnametmp), cmd->infile, "infile") != 0)
+            cBALLS_FAIL(cmd, "%s: exactly two prefixes required: in=signal_prefix,window_prefix\n", routineName);
+        char *comma = strchr(inputnametmp, ',');
+        if (!comma || strchr(comma+1, ','))
+            cBALLS_FAIL(cmd, "%s: exactly two prefixes required: in=signal_prefix,window_prefix\n", routineName);
+        *comma = '\0';
+        char *prefixes[2] = {inputnametmp, comma+1};
+        for (int k=0; k<2; k++) {
+            char *start = prefixes[k], *end = start+strlen(start);
+            while (*start == ' ' || *start == '\t') start++;
+            while (end > start && (end[-1] == ' ' || end[-1] == '\t')) *--end = '\0';
+            if (!*start || strchr(start, '\n') || strchr(start, '\r')
+                || copy_checked(gd->infilenames[k], sizeof(gd->infilenames[k]), start, "edge prefix") != 0)
+                cBALLS_FAIL(cmd, "%s: exactly two prefixes required; empty, multiline or oversized prefix\n", routineName);
+            gd->iCatalogs[k] = k;
+        }
+        gd->ninfiles = 2;
+        return SUCCESS;
+    }
 
     if (strnull(cmd->infile)) {
         verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -2861,6 +2979,25 @@ local int print_make_info(struct cmdline_data* cmd,
 #endif
 //E
 
+#if defined(OCTREESHEARSPHERE2BALLSOMP) || defined(OCTREESHEARSPHERE2BALLSMPI) \
+ || defined(KDTREESHEARSPHERE2BALLSOMP) || defined(KDTREESHEARSPHERE2BALLSMPI) \
+ || defined(BALLTREESHEARSPHERE2BALLSOMP) || defined(BALLTREESHEARSPHERE2BALLSMPI)
+    verb_print_zero(cmd->verbose,
+        "spherical shear input policy: HEALPix/NPZ/DES-Takahashi tables via "
+        "tests/python/shear_corr_all_engines.py; sparse FITS tables use stored x/y/z, "
+        "G2CONV sign conversion, unit weights, and no WTSUM rescaling.\n"
+        "spherical shear accuracy policy: theta=0 plus no-one-ball,no-smooth-pivot "
+        "for an exact body reference; qualification remains UNMEASURED until arrays "
+        "are compared on the same catalog, mask, bins, and multipoles.\n");
+#endif
+#if defined(OCTREESHEARSPHERE2BALLSMPI) || defined(KDTREESHEARSPHERE2BALLSMPI) \
+ || defined(BALLTREESHEARSPHERE2BALLSMPI)
+    verb_print_zero(cmd->verbose,
+        "spherical shear MPI policy: replicated catalogs, distributed pivot blocks, "
+        "collective failure handling and raw-sum reduction; root publishes results; "
+        "numberThreads is per rank; legacy-one-ball and shear-pivot-reuse are rejected.\n");
+#endif
+
 //B correlations
 #ifdef TWOPCF
     verb_print_zero(cmd->verbose,
@@ -2973,7 +3110,7 @@ local int print_make_info(struct cmdline_data* cmd,
 #endif
 
 #ifdef USEGSL
-#ifdef GSLINTERNAL
+#ifdef GSLINTER
     verb_print_zero(cmd->verbose, "using internal GSL\n");
 #else
     verb_print_zero(cmd->verbose, "using GSL\n");
@@ -3042,10 +3179,8 @@ local int print_options(struct cmdline_data* cmd,
          "interpret angular input as ecliptic coordinates"},
         {"edge-corrections", "multipoles",
          "solve the complex angular survey-window system from unnormalized signal and count multipoles; requires 3PCF and no-normalize-HistZeta"},
-        {"edge-effects", "legacy octree KKK searches",
-         "enable the legacy boundary/edge-effect accumulation path"},
         {"edge-corrections-from-files", "multipoles",
-         "compute edge corrections from previously generated histogram files"},
+         "solve versioned raw scalar exports: in=signal_prefix,window_prefix (see docs/saved_scalar_edge.md)"},
         {"ggg-full-window", "octree-2balls compatibility mode",
          "retain count/window modes through 2*mChebyshev for diagnostics or later correction; edge-corrections already implies this"},
         {"ggg-profile", "octree-2balls compatibility mode",
@@ -3075,7 +3210,7 @@ local int print_options(struct cmdline_data* cmd,
         {"kappa-constant-one", "input/test models",
          "use one, rather than two, for kappa-constant"},
         {"legacy-one-ball", "active scalar and spherical-shear two-ball methods",
-         "dispatch a two-ball search name to its privately linked one-node compatibility kernel; scalar octree compatibility rejects only-3pcf"},
+         "dispatch supported two-ball names to their one-node compatibility kernel; scalar octree compatibility rejects only-3pcf; spherical shear MPI methods reject legacy-one-ball"},
         {"lya-output-empty-bins", "Lyman-alpha addon",
          "write zero-denominator bins in radial scan/tree and five-dimensional 3PCF output; supported by OpenMP and MPI"},
         {"compute-2pcf-3d", "3D scalar OpenMP/MPI",
@@ -3116,12 +3251,6 @@ local int print_options(struct cmdline_data* cmd,
          "select number-count two-point correlation output"},
         {"NNEstimator", "correlation",
          "select the configured number-count correlation estimator"},
-        {"NNLandySzalay1", "octree NN addon",
-         "use the first Landy-Szalay number-count estimator"},
-        {"NNLandySzalay2", "octree NN addon",
-         "use the second Landy-Szalay number-count estimator"},
-        {"NNStandard", "octree NN addon",
-         "use the standard number-count estimator"},
         {"no-arfken", "coordinates",
          "use longitude/latitude ordering instead of the Arfken convention"},
         {"no-check-two-bodies-eq-pos", "tree search",
@@ -3129,7 +3258,7 @@ local int print_options(struct cmdline_data* cmd,
         {"no-normalize-HistZeta", "multipoles",
          "return raw three-point multipoles; active KD-tree, ball-tree and octree methods exclude repeated neighbors in this mode"},
         {"no-one-ball", "tree search",
-         "disable aggregate-node acceptance; shear engines return exact body-level results, while spherical octree/KD-tree/ball-tree two-ball engines retain their dual traversal and open both node sides to bodies"},
+         "disable aggregate-node acceptance; add no-smooth-pivot to disable pivot smoothing for an exact shear body reference; dual-node methods retain their traversal and open node sides to bodies"},
         {"no-out-Hist", "output",
          "suppress histogram files; raw unnormalized compatibility 3PCF may skip unused count/window multipoles"},
         {"no-two-ball", "legacy ball/octree searches",
@@ -3137,7 +3266,7 @@ local int print_options(struct cmdline_data* cmd,
         {"no-stop", "startup",
          "continue after make-info, print-options, or print-search-methods"},
         {"no-two-balls", "two-node tree searches",
-         "disable two-ball cell aggregation in supported scalar and full-sky spin-2 octree/KD-tree/ball-tree engines"},
+         "disable two-ball cell aggregation where supported; spherical shear 3PCF still accepts neighbor nodes, so use no-one-ball,no-smooth-pivot for an exact body reference"},
         {"no-balltree-tree-cache", "balltree-2balls-omp auto-correlations",
          "force cold compact-tree construction instead of process-local content-keyed reuse"},
         {"no-balltree-persistent-frontier", "balltree-2balls-omp LogMultipole 3PCF",
@@ -3148,10 +3277,12 @@ local int print_options(struct cmdline_data* cmd,
          "disable transient source-frame reuse during construction; direct member moments and conservative bounds are unchanged. The default scratch cache is capped at 256 MiB per tree build and freed before searching."},
         {"dual-node-bin-theta", "dual-node-style tree searches",
          "use dual-node-compatible Log/Linear bin-position-aware acceptance in supported scalar and spin-2 two-node pair and LogMultipole kernels; without it, accepted cells must fit wholly inside one bin"},
-#if defined(OCTREESHEARSPHERE2BALLSOMP) || defined(BALLTREESHEARSPHERE2BALLSOMP)
-        {"shear-pivot-reuse", "octree/balltree-shear-sphere-2balls-omp 3PCF",
-         "opt-in aggregate pivots and inherited unresolved neighbors; requires BALLS4SCANLEVON=1 and no-smooth-pivot. CBALLS_SHEAR_PIVOT_TOL sets a [0,3] radian phase budget (default 0.1; zero disables reuse), not a relative coefficient error guarantee. no-one-ball/no-two-balls disable reuse; use no-one-ball for an exact 3PCF. Unsupported shear engines and legacy mode reject this option. Calibrate against exact output before production use."},
+#if defined(OCTREESHEARSPHERE2BALLSOMP) || defined(KDTREESHEARSPHERE2BALLSOMP) || defined(BALLTREESHEARSPHERE2BALLSOMP)
+        {"shear-pivot-reuse", "octree/kdtree/balltree-shear-sphere-2balls-omp 3PCF",
+         "opt-in hierarchical multipoles and completion of resolved radial pairs; CBALLS_SHEAR_BIN_THETA sets internal bin-assignment slop in [0,1] bin widths (default 0); radial range cutoffs remain strict. nsmooth=1 provides finer binary pivot hierarchy. Requires BALLS4SCANLEVON=1 and no-smooth-pivot. CBALLS_SHEAR_PIVOT_TOL sets a [0,3] radian phase budget (default 0.1; zero disables reuse), not a relative coefficient error guarantee. no-one-ball/no-two-balls disable reuse; use no-one-ball for an exact 3PCF. Unsupported shear engines and legacy mode reject this option. Calibrate against exact output before production use."},
 #endif
+        {"scalar-pivot-reuse", "scalar octree/kdtree/balltree-2balls OMP and MPI 3PCF",
+         "opt-in hierarchical neighbor moments and radial-pair completion; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1), CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0). Strict radial cutoffs; no-smooth-pivot and positive theta required. Zero phase budget, exact controls, smoothing, periodic runs and only-2pcf retain the original path. MPI controls must match on all ranks. Calibrate each observable and geometry."},
         {"dual-node-profile", "scalar two-ball methods",
          "report tree build/cache, frontier, traversal, pivot, scratch, multipole-product, and reduction diagnostics supported by the active engine"},
         {"only-2pcf", "active scalar and shear two-ball methods",
@@ -3172,8 +3303,6 @@ local int print_options(struct cmdline_data* cmd,
          "restrict data to the configured angular patch"},
         {"patch-with-all", "multipoles",
          "combine patch selection with all-pivot edge-correction counting"},
-        {"pivot-loop", "legacy octree KKK searches",
-         "select the explicit pivot-loop implementation"},
         {"pivot-number", "GGG addon",
          "limit the search to the configured number of pivots"},
         {"plot-map-gif", "CFITSIO",
@@ -3183,7 +3312,7 @@ local int print_options(struct cmdline_data* cmd,
         {"pos-and-convergence-weight", "I/O addon",
          "read position columns followed by convergence and weight"},
         {"pos-and-shear", "I/O addon",
-         "read position columns followed by gamma1,gamma2; spherical shear engines interpret them in each point's local east/north basis"},
+         "read ASCII position columns followed by gamma1,gamma2 in each point's local east/north basis; DES/Takahashi FITS tables instead use the Python shear driver with --fits-format desy3 and G2CONV handling"},
         {"post-processing", "workflow",
          "run posScript after the main computation"},
         {"pre-processing", "workflow",
@@ -3216,14 +3345,6 @@ local int print_options(struct cmdline_data* cmd,
          "reuse the same input filename for multiple catalog entries"},
         {"save-ra-dec", "output",
          "preserve angular RA/DEC coordinates when saving converted data"},
-        {"set-Nb-noSel", "legacy smoothing",
-         "set the smoothing neighbor count without the selection pass"},
-        {"set-default-param", "legacy smoothing",
-         "replace unset smoothing controls with their legacy defaults"},
-        {"smooth", "legacy smoothing",
-         "enable smoothing-cell construction in legacy smoothing addons"},
-        {"smooth-min-cell", "legacy smoothing",
-         "use the minimum-cell smoothing-radius policy"},
         {"smooth-pivot", "supported tree engines",
          "backward-compatible explicit request; requires SMOOTHPIVOTON=1 and a method listed as smooth-pivot capable by print-search-methods"},
         {"no-smooth-pivot", "all searching engines",
@@ -3269,7 +3390,11 @@ local int print_options(struct cmdline_data* cmd,
                         registered_options[i].description);
     }
 
-    verb_print_zero(cmd->verbose, "\n");
+    verb_print_zero(cmd->verbose,
+        "\nPython shear input controls (not native options): --fits-format auto|healpix|desy3, "
+        "--des-shear-convention auto|takahashi|local-east-north, --sampling-seed, "
+        "--fits-chunk-rows, and --binning custom|sofia-fig1|paper-8-200-edges. "
+        "See tests/python/README_shear_corr_all_engines.md.\n");
 
     return SUCCESS;
 }

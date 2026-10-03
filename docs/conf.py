@@ -68,6 +68,6 @@ html_context = {
     'display_github': True,
     'github_user': 'rodriguezmeza',
     'github_repo': 'cTreeBalls',
-    'github_version': 'main',
+    'github_version': 'testing/current-state-2026-08-30',
     'conf_py_path': '/docs/',
 }

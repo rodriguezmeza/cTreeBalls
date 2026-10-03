@@ -271,6 +271,6 @@ if [ -d "$TMP_ROOT/mpi-compat-smooth" ]; then
 fi
 
 MPIEXEC="$MPIEXEC" MPIEXEC_ARGS="$MPIEXEC_ARGS" MPI_RANKS="$MPI_RANKS" \
-    "$PYTHON" ./make_tests/test_octree_2balls_mask.py --cballs "$CBALLS" --mpi
+    "$PYTHON" ./python/test_octree_2balls_mask.py --cballs "$CBALLS" --mpi
 
 echo "PASS: OCTREE2BALLSMPI native and octree-GGG compatibility modes"

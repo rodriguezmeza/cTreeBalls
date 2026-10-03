@@ -43,9 +43,16 @@ BUILD_LYA := lya
 endif
 
 BUILD_SHEAR := noshear
-SHEAR_SPHERE_ENABLED := $(if $(filter 1,$(OCTREESHEARSPHERE2BALLSOMPON) $(KDTREESHEARSPHERE2BALLSOMPON) $(BALLTREESHEARSPHERE2BALLSOMPON)),1,0)
-ifeq ($(SHEAR_SPHERE_ENABLED),1)
+SHEAR_FLAT_ENABLED := $(if $(filter 1,$(OCTREESHEAROMPON)),1,0)
+SHEAR_SPHERE_ENABLED := $(if $(filter 1,$(OCTREESHEARSPHEREOMPON) $(OCTREESHEARSPHERE2BALLSOMPON) $(OCTREESHEARSPHERE2BALLSMPION) $(KDTREESHEARSPHERE2BALLSOMPON) $(KDTREESHEARSPHERE2BALLSMPION) $(BALLTREESHEARSPHERE2BALLSOMPON) $(BALLTREESHEARSPHERE2BALLSMPION)),1,0)
+ifeq ($(SHEAR_FLAT_ENABLED)-$(SHEAR_SPHERE_ENABLED),1-0)
+BUILD_SHEAR := shear-flat
+endif
+ifeq ($(SHEAR_FLAT_ENABLED)-$(SHEAR_SPHERE_ENABLED),0-1)
 BUILD_SHEAR := shear-sphere
+endif
+ifeq ($(SHEAR_FLAT_ENABLED)-$(SHEAR_SPHERE_ENABLED),1-1)
+BUILD_SHEAR := shear-flat-sphere
 endif
 
 BUILD_PRECISION := double
@@ -372,6 +379,10 @@ else
     CFITSIO_RPATH = $(patsubst -L%,-Wl$(comma)-rpath$(comma)%,$(CFITSIO_LDFLAGS))
 endif
 
+ifeq ($(strip $(CFITSIO_LIBS)),)
+$(error External CFITSIO is required: install its development package and pkg-config, set PKG_CONFIG_PATH, or provide CFITSIO_INCLUDE and CFITSIO_LIB)
+endif
+
 CCFLAG += $(CFITSIO_INCL)
 LDFLAG += $(CFITSIO_LDFLAGS) $(CFITSIO_RPATH)
 FITSIOLIBS += $(CFITSIO_LIBS)
@@ -415,6 +426,10 @@ ifneq ($(GSL_LIB),)
 else
     GSL_LDFLAGS =
     GSL_LIBS := $(shell $(GSL_CONFIG) --libs 2>/dev/null)
+endif
+
+ifeq ($(strip $(GSL_LIBS)),)
+$(error External GSL is required: install its development package and gsl-config, set GSL_CONFIG, or provide GSL_INCLUDE and GSL_LIB)
 endif
 
 CCFLAG += $(GSL_CFLAGS)

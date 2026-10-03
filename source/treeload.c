@@ -130,7 +130,22 @@ local int pruningCells(struct  cmdline_data* cmd,
  Return (the error status):
     int SUCCESS or FAILURE
  */
-global int MakeTree(struct  cmdline_data* cmd,
+local int MakeTree_local(struct cmdline_data *, struct global_data *, bodyptr, INTEGER, int);
+typedef struct {
+    struct cmdline_data *cmd; struct global_data *gd;
+    bodyptr table; INTEGER count; int ifile;
+} tree_guard_context;
+local int tree_guard_call(void *argument) {
+    tree_guard_context *c=argument;
+    return MakeTree_local(c->cmd,c->gd,c->table,c->count,c->ifile);
+}
+global int MakeTree(struct cmdline_data *cmd, struct global_data *gd,
+                    bodyptr table, INTEGER count, int ifile) {
+    tree_guard_context c={cmd,gd,table,count,ifile};
+    return cballs_allocation_guard(tree_guard_call,&c,cmd->error_message,_ERRORMSGSIZE_);
+}
+
+local int MakeTree_local(struct  cmdline_data* cmd,
                     struct  global_data* gd,
                     bodyptr btab, INTEGER nbody, int ifile)
 {
@@ -563,7 +578,8 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
                                      cmd->error_message, _ERRORMSGSIZE_,
                                      "rsmooth") == FAILURE)
                 return FAILURE;
-#if defined(OCTREESHEARSPHEREOMP) || defined(OCTREESHEARSPHERE2BALLSOMP)
+#if defined(OCTREESHEARSPHEREOMP) || defined(OCTREESHEARSPHERE2BALLSOMP) \
+    || defined(OCTREESHEARSPHERE2BALLSMPI)
             if (
 #ifdef OCTREESHEARSPHEREOMP
                 gd->searchMethod_int == OCTREESHEARSPHEREMETHOD
@@ -572,6 +588,9 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 #endif
 #ifdef OCTREESHEARSPHERE2BALLSOMP
                 || gd->searchMethod_int == OCTREESHEARSPHERE2BALLSOMPMETHOD
+#endif
+#ifdef OCTREESHEARSPHERE2BALLSMPI
+                || gd->searchMethod_int == OCTREESHEARSPHERE2BALLSMPIMETHOD
 #endif
                )
                 gd->rsmooth[0] = 2.0*rsin(
@@ -816,7 +835,9 @@ global int freeTree(struct  cmdline_data* cmd, struct  global_data* gd)
     int ifile;
     long int cellcounter=0;
 
-    if (cballs_opt_read_mask(cmd)) {
+    /* Shear masks can select members of several independently built trees. */
+    if (cballs_opt_read_mask(cmd)
+        && !(cmd->searchMethod && strstr(cmd->searchMethod, "shear"))) {
         ifile=0;
 #ifdef MACONLY
         INTEGER allocated_cells = gd->ncellTable[ifile];
@@ -1022,6 +1043,7 @@ local int hackcellprop(struct  cmdline_data* cmd, struct  global_data* gd,
     Weight(p) = 0.0;
     Nb(p) = 0;
     Kappa(p) = 0.0;
+    ScalarWeight2(p) = ScalarField2(p) = 0.0;
 #ifdef THREEPCFSHEAR
     Gamma1(p) = 0.0;
     Gamma2(p) = 0.0;
@@ -1362,8 +1384,13 @@ local int walktree_scan_lev_balls4(struct cmdline_data* cmd,
     if (read_mask && Mask(q) == MASK_NODE_MASKED)
         return SUCCESS;
 
-    if ((Type(q) != CELL || Radius(q) < gd->deltaRmin*THETA
-         || lev >= scanLevel)
+    /* A fixed aggregate pivot cannot certify the radial bins for every
+     * neighbor or one shared tangent frame. Compatibility GGG keeps body
+     * pivots; its neighbor cells still use conservative one-ball acceptance. */
+    if ((Type(q) != CELL || (!cballs_opt_no_one_ball(cmd)
+         && !cballs_opt_legacy_one_ball(cmd)
+         && cmd->theta > 0.0
+         && (Radius(q) < gd->deltaRmin*THETA || lev >= scanLevel)))
         && (!read_mask || Mask(q) == MASK_NODE_VALID)) {
         if (inodelevB4 >= capacity) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,

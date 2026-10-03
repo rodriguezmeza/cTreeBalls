@@ -1,5 +1,13 @@
 # Ly-alpha forest all-engines driver
 
+All three drivers share `benchmark_timing.py`. Wall time uses a monotonic clock;
+CPU time includes the process's worker threads. MPI wall time takes the maximum
+rank measurement; CPU time sums ranks. Total wall time is the maximum *per-rank
+setup-plus-compute total*, not a sum of separate phase maxima. Invalid clock
+measurements, duplicate ranks and inconsistent timing scopes are rejected.
+Native `MainLoop`, complete Python `Run`, and launcher times stay separate.
+
+
 The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
 `MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
 Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
@@ -20,7 +28,7 @@ into the native timing table.
 `lya_corr_all_engines.py` reads a forest catalog once and runs the active
 cTreeBalls forest and physical-3D multipole methods. `LYAFORESTOMPON=1`
 provides twelve standard OpenMP names plus the experimental anisotropic multipole
-method (calibrated separately); `LYAFORESTMPION=1` provides eight MPI counterparts.
+method (calibrated separately); `LYAFORESTMPION=1` provides eleven MPI counterparts.
 `OCTREE3PCF3DOMPON=1` and `OCTREE3PCF3DMPION=1` add two physical-3D methods.
 
 List the methods compiled into the current extension:
@@ -281,8 +289,8 @@ Run regression and optional upstream integration tests:
 
 ```sh
 LYA2PCF_SOURCE=/path/to/lya2pcf python3 -m pytest \
-  tests/make_tests/test_lya_corr_all_engines.py \
-  tests/make_tests/test_lya_analysis.py
+  tests/python/test_lya_corr_all_engines.py \
+  tests/python/test_lya_analysis.py
 ```
 
 ## Updated input and benchmark workflow (2026-09-25)
@@ -363,3 +371,23 @@ For the separate `lyaScanLevel` spatial tasks and opt-in `lyaPivotRadius`
 forest-local smoothing, use [the pivot calibration guide](README_benchmark_lya_pivot_frontier.md).
 The latter changes pivot geometry and needs its own exact-reference calibration;
 the public all-engine comparison continues to use default exact settings.
+
+## Hierarchical radial moments
+
+`lya2Kernel=1` and `lya3Kernel=5` select certified pair-range sums and adaptive
+radial/polar moment combinations for the original 3D OpenMP/MPI methods.
+Combined runs share the forest tree; zero slop preserves the histogram estimator.
+Persistent kernels 3/4/5 also support MPI. The all-engines driver accepts
+`--lya2-kernel 1 --lya3-kernel 5 --lya3-pivot-cell-max 8`; these controls apply
+only to eligible 3D Ly-alpha statistics. Default kernels remain 0.
+See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.md).
+
+## LOS-tree MPI and hierarchical kernels
+
+`lya-los-tree-2pcf-mpi`, `lya-los-tree-3pcf-mpi` and
+`lya-los-tree-2pcf-3pcf-mpi` are included in `all-mpi` and `all-tree`.
+They use the same retained 3D forest catalog and hard-bin estimators as the
+OpenMP LOS variants. Select `--lya2-kernel 1 --lya3-kernel 5` for certified
+range/cell moments and the adaptive LOS radial hierarchy. MPI ranks retain
+replicated catalogs and reduce raw sums before rank-0 publication. See
+[implementation and validation](../../docs/LYA_LOS_HIERARCHICAL_REUSE.md).

@@ -7,6 +7,11 @@ typedef struct {
     size_t *seen;
     size_t *forests;
     size_t epoch;
+    bodyptr block_center;
+    REAL block_radius;
+    size_t cached_count;
+    int cache_ready;
+    uint64_t discoveries, reuses;
     unsigned long long octree_nodes, forest_skips, forest_hits;
     unsigned long long radial_nodes, pixel_tests;
 } lya_los_workspace;
@@ -25,6 +30,9 @@ void lya_los_workspace_free(lya_los_workspace *workspace);
 /* minimum_id=0 visits all IDs. Pair-only unsmoothed pivots may pass Id(pivot)
  * to discard reverse ownership before radial pixel geometry. Discovery must
  * remain independent of ownership: its witness may have any row ID. */
+/* Cache candidates for this bounded block only. A negative radius disables
+ * sharing. Exact per-pixel cuts and current pivot-forest exclusion remain. */
+void lya_los_begin_block(lya_los_workspace *workspace,bodyptr center,REAL radius);
 int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
                   bodyptr pivot, REAL cutoff, INTEGER minimum_id, lya_los_visit visit,
                   void *context, ErrorMsg error_message);

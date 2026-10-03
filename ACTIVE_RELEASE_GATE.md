@@ -93,6 +93,15 @@ The startup suite also checks successful large-tree runs and cleanup after the
 cellRadius overflow-bin repair; it no longer expects that repaired input to fail.
 It remains part of the active gate. Its memory check uses live malloc bytes on
 macOS (where freed allocator pages can remain resident) and RSS elsewhere.
+The input failure suite (`tests/python/test_input_failure_contracts.py`)
+uses isolated, time-limited workers to reject truncated binary and positional
+ASCII input, nonfinite selected ASCII/FITS columns and HEALPix values, and
+malformed multi-column rows. Every rejected catalog is followed by a valid
+run on the same Python object. The three scalar MPI engines also exercise
+rank-local input and parameter failures on either rank with both library-owned
+and borrowed MPI; both ranks must receive the same error and recover together.
+These checks use unconditional unittest/NumPy checks, including under Python -O.
+
 The gate records the two-rank mpi4py vendor/library probe and Python package list.
 
 The gate invokes the actual CLI entry points of mask, scalar edge, shear,
@@ -177,16 +186,16 @@ the source archive, and exercise a fresh installation outside the checkout:
 python -m build --sdist
 python -m twine check --strict dist/*.tar.gz
 python scripts/check_sdist.py dist/*.tar.gz
-python -m venv /absolute/path/to/install-env
-/absolute/path/to/install-env/bin/python -m pip install /absolute/path/to/dist/cyballs-VERSION.tar.gz
-cd /absolute/path/outside/the/checkout
-/absolute/path/to/install-env/bin/python /absolute/path/to/checkout/scripts/check_installed_package.py \
-  --source-root /absolute/path/to/checkout --output /absolute/path/to/install-result.json
+python scripts/verify_sdist_install.py dist/cyballs-VERSION.tar.gz \
+  --output /absolute/path/outside-the-checkout/artifact-check --jobs 4
 ```
 
-The installation check rejects a module loaded from the checkout, verifies the
-installed distribution and public registry, and computes known weighted pair
-and triplet products with all three LOS-tree modes. A successful import alone
+Source archive creation normalizes its staged dependency defaults without
+editing the development checkout. The verifier builds the native program and
+an isolated wheel from separate extractions of that archive, then installs the
+wheel in a fresh environment. It rejects a module loaded from the checkout,
+verifies dependency settings, source identity, ABI and the public registry, and
+computes independent scalar-window and weighted LOS pair/triplet oracles. A successful import alone
 does not count as an installation test. The source archive has its own build
 fingerprint because it deliberately excludes inactive development source trees.
 

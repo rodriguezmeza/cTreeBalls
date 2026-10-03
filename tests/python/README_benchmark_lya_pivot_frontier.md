@@ -61,7 +61,7 @@ enable these Ly-alpha controls implicitly. No legacy compile flag is required.
 - Pair-only uses `lya2Kernel=0`; 3PCF uses `lya3Kernel=0`, 1 or 2.
 - Combined runs may use `lya2Kernel=1`: the existing pair-cell pass retains its
   own geometry controls, while the new frontier/smoothing applies to 3PCF.
-- MPI, radial-only, anisotropic multipole and persistent 3PCF kernels 3/4 reject
+- MPI, radial-only, anisotropic multipole and persistent 3PCF kernels 3/4/5 reject
   active frontier/smoothing controls with an explicit error. Those kernels keep
   their existing algorithms and parameters.
 
@@ -146,7 +146,7 @@ Independent regression tests enumerate each original contribution at the
 declared representative geometry, without using products of group sums:
 
 ```bash
-PYTHONPATH="$PWD" python -m pytest -q tests/make_tests/test_lya_pivot_frontier.py
+PYTHONPATH="$PWD" python -m pytest -q tests/python/test_lya_pivot_frontier.py
 python scripts/generate_capabilities.py --check
 ```
 

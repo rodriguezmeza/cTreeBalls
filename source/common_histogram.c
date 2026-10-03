@@ -62,7 +62,7 @@ local int search_init_sincos_omp_unguarded(void *argument)
     if (!cballs_opt_only_2pcf(cmd)) {
         hist->histXithreadcos = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
         hist->histXithreadsin = dmatrix(1,cmd->mChebyshev+1,1,cmd->sizeHistN);
-
+        
         hist->histZetaMthreadcos = dmatrix3D(1,cmd->mChebyshev+1,
                                              1,cmd->sizeHistN,1,cmd->sizeHistN);
         hist->histZetaMthreadsin = dmatrix3D(1,cmd->mChebyshev+1,
@@ -236,6 +236,17 @@ global int computeBodyProperties_sincos(struct  cmdline_data* cmd,
 #endif
     }
     //E Normalization of histograms
+#ifdef SMOOTHPIVOT
+    if (!strcmp(cmd->searchMethod, "octree-sincos-omp")
+        && cballs_opt_smooth_pivot(cmd)) {
+        xi_2p = KappaRmin(p);
+#ifdef NOSTANDARNORMHIST
+        xi = ScalarPivotSum(p);
+#else
+        xi = ScalarPivotSum(p)/nbody;
+#endif
+    }
+#endif
     const bool raw_multipoles = cballs_raw_legacy_multipoles(cmd);
     if (raw_multipoles) {
         xi = Weight(p)*Kappa(p);
@@ -332,7 +343,7 @@ global int search_init_gd_hist(struct  cmdline_data* cmd, struct  global_data* g
 #endif
         gd->histXi2pcf[n] = 0.0;
     }
-
+    
 #ifdef TPCF
         if (gd->common_scalar_3pcf) for (m = 1; m <= cmd->mChebyshev+1; m++) {
             CLRM_ext(gd->histZetaGmRe[m], cmd->sizeHistN);
@@ -472,7 +483,12 @@ global int search_normalize_count_histograms(struct cmdline_data *cmd,
 global int search_compute_HistN(struct cmdline_data *cmd,
                                 struct global_data *gd, INTEGER nbody)
 {
-    return search_normalize_count_histograms(cmd, gd, nbody, gd->histNN, gd->histCF);
+    int status = search_normalize_count_histograms(cmd, gd, nbody, gd->histNN, gd->histCF);
+    if (status == SUCCESS) {
+        gd->histogram_products |= CBALLS_PRODUCT_NN;
+        if (cballs_opt_and_cf(cmd)) gd->histogram_products |= CBALLS_PRODUCT_CF;
+    }
+    return status;
 }
 
 
@@ -529,7 +545,9 @@ global int startrun_memoryAllocation(struct cmdline_data *cmd, struct global_dat
         gd->matPXD=dmatrix(0,cmd->sizeHistN-1,0,cmd->sizeHistN-1);
     /* histZetaMFlatten has no consumers; leave it NULL. */
 #endif
-#define VECTOR(name) gd->name=dvector(1,cmd->sizeHistN)
+/* Zeroing is hygiene; getters still require an explicitly computed product. */
+#define VECTOR(name) do { gd->name=dvector(1,cmd->sizeHistN); \
+    for (int bin=1; bin<=cmd->sizeHistN; bin++) gd->name[bin]=0.0; } while (0)
     VECTOR(histNN); VECTOR(histCF); VECTOR(histNNSub); VECTOR(histNNSubXi2pcf);
     VECTOR(histNNN); VECTOR(histXi2pcf); VECTOR(histXi2pcf12); VECTOR(histXi2pcf13);
     VECTOR(histNNSubN2pcf); VECTOR(histN2pcf);

@@ -108,9 +108,11 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         : shear ? (spherical_shear ? "full-sky spin-2 pair correlations and window-corrected natural 3PCF components" : "flat-sky spin-2 pair correlations and natural 3PCF components")
         : physical ? (survey ? "D-alpha*R survey Legendre 2PCF/3PCF with random-window correction" : "weighted Euclidean Legendre 2PCF/3PCF")
         : boxes ? (neighbor ? "periodic ordered pair counts" : "periodic unordered pair counts and optional N-squared shell density contrast")
+        : !strcmp(method, "octree-sincos-omp") ? "core scalar pivot-averaged neighbor-mean Fourier products (includes neighbor self terms)"
         : cballs_opt_edge_corrections(cmd) ? "scalar Fourier angular window deconvolution"
         : cballs_opt_no_normalize_histzeta(cmd) ? "raw scalar distinct-neighbor tangent-Fourier moments"
         : "weight-normalized scalar Fourier moments");
+    append(&b, ",\"qualification\":{\"schema_version\":1,\"status\":\"UNMEASURED\",\"observables\":{},\"reason\":\"No exact reference comparison was supplied for this catalog and these observables. Use getResults/qualifyAgainst or the qualification driver.\"}");
     append(&b, ",\"options\":"); string_value(&b, cmd->options);
 #if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
     if (forest && !radial_forest) {
@@ -121,8 +123,24 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         append(&b,",\"lya_2pcf\":{\"kernel\":%d,\"rp_slop\":%.17g,\"rt_slop\":%.17g,\"approximate\":%s}",
             cmd->lya2Kernel,(double)cmd->lya2RpSlop,(double)cmd->lya2RtSlop,
             (cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0 || (cmd->lyaPivotRadius>0 && cmd->lya2Kernel==0))?"true":"false");
+        append(&b,",\"lya_hierarchy\":{\"enabled\":%s,\"pixel_fallback\":%s,\"nodes\":%llu,\"products\":%llu,\"certificates\":%llu,\"represented\":%llu,\"pair_ranges\":%llu,\"range_pairs\":%llu}",
+            (cmd->lya3Kernel==5 || cmd->lya3MuMode)?"true":"false",gd->lyaHierarchyPixelFallback?"true":"false",(unsigned long long)gd->lyaHierarchyCounts[0],
+            (unsigned long long)gd->lyaHierarchyCounts[1],(unsigned long long)gd->lyaHierarchyCounts[2],
+            (unsigned long long)gd->lyaHierarchyCounts[3],(unsigned long long)gd->lyaHierarchyCounts[4],
+            (unsigned long long)gd->lyaHierarchyCounts[5]);
+        append(&b,",\"lya_los_tree\":{\"discoveries\":%llu,\"reuses\":%llu,\"pixel_tests\":%llu}",
+            (unsigned long long)gd->lyaLOSCounts[0],(unsigned long long)gd->lyaLOSCounts[1],
+            (unsigned long long)gd->lyaLOSCounts[2]);
+        if(lya_forest_is_multipole_method(method))
+            append(&b,",\"lya_multipole_reuse\":{\"hierarchical_pivots\":%llu,\"prefix_pivots\":%llu,\"blocks\":%llu,\"products\":%llu,\"prefix_products\":%llu}",
+                (unsigned long long)gd->lyaMultipoleCounts[0],(unsigned long long)gd->lyaMultipoleCounts[1],
+                (unsigned long long)gd->lyaMultipoleCounts[2],(unsigned long long)gd->lyaMultipoleCounts[3],
+                (unsigned long long)gd->lyaMultipoleCounts[4]);
         append(&b,",\"lya_3pcf\":{\"kernel\":%d,\"lmax\":%d,\"pivot_block_requested\":%d,\"mu_reconstruction_approximate\":%s}",
                cmd->lya3Kernel,cmd->lya3LMax,cmd->lya3PivotBlock,lya_forest_is_multipole_method(method)?"true":"false");
+        if(lya_forest_is_multipole_method(method))
+            append(&b,",\"lya_mu_output\":{\"mode\":%d,\"exact_bins_available\":%s,\"exact_product\":\"_lya5d\",\"finite_l_product\":\"_lya5d_multipole\",\"discovery_shared\":%s}",
+                cmd->lya3MuMode,cmd->lya3MuMode?"true":"false",cmd->lya3MuMode?"true":"false");
         append(&b,",\"lya_geometry\":{\"mu_slop\":%.17g,\"radial_slop\":%.17g,\"polar_slop\":%.17g,\"pivot_cell_max\":%d,\"three_point_approximate\":%s,\"pair_geometry_exact\":%s}",
             (double)cmd->lya3MuSlop,(double)cmd->lya3RadialSlop,(double)cmd->lya3PolarSlop,cmd->lya3PivotCellMax,
             (cmd->lya3MuSlop>0 || cmd->lya3RadialSlop>0 || cmd->lya3PolarSlop>0 || cmd->lyaPivotRadius>0)?"true":"false",
@@ -211,7 +229,7 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
     append(&b, "},\"effective_smoothing\":{\"supported\":%s,\"enabled\":%s,\"radius\":",
         cballs_run_supports_smooth_pivot(cmd)?"true":"false", cballs_opt_smooth_pivot(cmd)?"true":"false");
     number(&b, cballs_opt_smooth_pivot(cmd) ? gd->rsmooth[0] : 0);
-    append(&b, ",\"requested_radius_units\":"); string_value(&b,spherical_shear?"arcmin":"Cartesian catalog units");
+    append(&b, ",\"requested_radius_units\":"); string_value(&b,(spherical_shear || !strcmp(method,"octree-sincos-omp") || (!strncmp(method,"octree-",7) && cballs_opt_legacy_one_ball(cmd)))?"arcmin":"Cartesian catalog units");
     append(&b, ",\"effective_radius_units\":"); string_value(&b,spherical_shear?"unit-sphere chord":"Cartesian catalog units");
     append(&b, ",\"requested\":"); string_value(&b, cmd->rsmooth);
     append(&b, ",\"nsmooth\":%d},\"opening_tolerance\":{\"theta\":", cmd->nsmooth);
@@ -219,6 +237,26 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
     append(&b, ",\"no_one_ball\":%s,\"no_two_balls\":%s,\"legacy_one_ball\":%s},",
         cballs_opt_no_one_ball(cmd)?"true":"false", cballs_opt_no_two_balls(cmd)?"true":"false",
         cballs_opt_legacy_one_ball(cmd)?"true":"false");
+    if (!strcmp(method,"octree-2balls-omp") || !strcmp(method,"octree-2balls-mpi")
+        || !strcmp(method,"kdtree-2balls-omp") || !strcmp(method,"kdtree-2balls-mpi")
+        || !strcmp(method,"balltree-2balls-omp") || !strcmp(method,"balltree-2balls-mpi")) {
+        append(&b,"\"scalar_hierarchical_reuse\":{\"enabled\":%s,\"phase_budget_radians\":",gd->scalarReuseEnabled?"true":"false");
+        number(&b,gd->scalarReusePhaseBudget);
+        append(&b,",\"radial_bin_theta\":"); number(&b,gd->scalarReuseBinTheta);
+        append(&b,",\"radial_pairs\":%" INTEGER_FMT ",\"represented_pairs\":%" INTEGER_FMT
+                  ",\"parent_reductions\":%" INTEGER_FMT,gd->scalarReusePairs,
+                  gd->scalarReuseRepresentedPairs,gd->scalarReuseParentReductions);
+        append(&b,",\"radial_cutoffs\":\"strict\",\"accuracy\":\"requires observable-specific qualification\"},");
+    }
+#ifdef THREEPCFSHEAR
+    if (spherical_shear) {
+        append(&b, "\"shear_hierarchical_reuse\":{\"enabled\":%s,\"phase_budget_radians\":",
+               gd->shearReuseEnabled ? "true" : "false");
+        number(&b, gd->shearReusePhaseBudget);
+        append(&b, ",\"radial_bin_slop\":"); number(&b, gd->shearReuseBinSlop);
+        append(&b, ",\"radial_cutoffs\":\"strict\",\"accuracy\":\"requires observable-specific qualification\"},");
+    }
+#endif
     append(&b, "\"precision\":{\"storage_bits\":%u,\"compute_bits\":%u,\"accumulator_bits\":%u,\"integer_bits\":%u,\"long_double_bits\":%u},",
         (unsigned)(CHAR_BIT*sizeof(cballs_storage_real)), (unsigned)(CHAR_BIT*sizeof(cballs_compute_real)),
         (unsigned)(CHAR_BIT*sizeof(cballs_accum_real)), (unsigned)(CHAR_BIT*sizeof(INTEGER)), (unsigned)(CHAR_BIT*sizeof(long double)));

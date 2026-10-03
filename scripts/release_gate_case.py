@@ -7,11 +7,15 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / 'tests/make_tests'), str(ROOT/'scripts')]
+sys.path[:0] = [str(ROOT), str(ROOT / 'tests/python'), str(ROOT/'scripts')]
 from capabilities_generated import ENGINES, gate_plan
 
 
 def run(engine, output, threads):
+    # The gate launches this worker without optimization.  Direct invocations
+    # must not silently disable asserts in the imported independent oracles.
+    if sys.flags.optimize:
+        raise RuntimeError('release_gate_case requires Python assertions enabled; remove -O/-OO and PYTHONOPTIMIZE')
     import numpy as np
     declaration = ENGINES[engine]
     gate_plan({engine: declaration['id']})
@@ -76,7 +80,7 @@ def run(engine, output, threads):
         data = scalar.catalog()
         core = engine == 'octree-sincos-omp'
         options = 'KKKCorrelation,no-smooth-pivot,no-normalize-HistZeta,weights-norm'
-        options += ',no-one-ball' if core else ',edge-corrections,no-one-ball,no-two-balls'
+        options += ',compute-HistN,and-CF,no-one-ball' if core else ',edge-corrections,no-one-ball,no-two-balls'
         p.update(rangeN=scalar.RMAX, rminHist=scalar.RMIN, sizeHistN=scalar.BINS,
                  mChebyshev=scalar.MMAX, options=options)
         model.set(p)
@@ -121,8 +125,17 @@ def run(engine, output, threads):
         else:
             arrays['pair_counts'] = model.getHistNN().copy()
             arrays['xi'] = model.getHistCF().copy()
-            assert np.all(np.isfinite(arrays['xi']))
+            if not (np.all(np.isfinite(arrays['xi']))):
+                raise AssertionError('non-finite scalar correlation result')
         for path in sorted(output.glob('hist*.txt')):
+            # Saved-window metadata is a typed manifest, not a numeric table.
+            # Its numerical interpretation is checked by test_saved_scalar_edge.
+            if path.name.endswith('_edge_manifest.txt'):
+                text = path.read_text()
+                if not text.startswith('CBALLS_SCALAR_EDGE 1\n') or not text.endswith('complete\n'):
+                    raise AssertionError(f'incomplete scalar edge manifest: {path}')
+                metadata.setdefault('saved_manifests', {})[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+                continue
             # Shear and scalar raw arrays above retain full precision; retain text products too.
             values = np.loadtxt(path)
             if values.size:

@@ -13,6 +13,7 @@
     cmd->lya3Kernel = GetiParam("lya3Kernel");
 
     cmd->lya3LMax = GetiParam("lya3LMax");
+    cmd->lya3MuMode = GetiParam("lya3MuMode");
 
     cmd->lya3PivotBlock = GetiParam("lya3PivotBlock");
 

@@ -3,6 +3,8 @@
 #define SHEAR_SPHERE_BINARY_TWO_BALLS 1
 #define SHEAR_SPHERE_BINARY_POSITIONS_UNIT 1
 #define SHEAR_SPHERE_BINARY_GEODESIC_PAIRS 1
+/* Reuse the qualified fast arithmetic and fused exact binary-tree walk. */
+#define SHEAR_SPHERE_FAST_KERNEL 1
 #ifdef BALLS4SCANLEV
 #define SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER 1
 #define SHEAR_SPHERE_PIVOT_REUSE 1
@@ -17,4 +19,4 @@
     prepare_balltree_shear_sphere_2balls_catalogs
 #define searchcalc_octree_shear_omp \
     searchcalc_balltree_shear_sphere_2balls_omp
-#include "../shear_sphere_shared/shear_sphere_engine.c"
+#include "../../support/shear_kernel/search_octree_shear_omp.c"

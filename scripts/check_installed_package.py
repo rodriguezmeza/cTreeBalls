@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -11,13 +12,22 @@ import subprocess
 
 def check_profile(installed_build, intended_build, lookup):
     from capabilities_generated import expected_registry, ENGINES
+    for key in ('GSLINTERNAL', 'CFITSIOLIBON'):
+        if key in intended_build['resolved_settings'] and (
+                installed_build['resolved_settings'].get(key) != intended_build['resolved_settings'][key]):
+            raise AssertionError(f'installation dependency profile mismatch: {key}')
+    if intended_build.get('source_sha256') and installed_build.get('source_sha256') != intended_build['source_sha256']:
+        raise AssertionError('installed source identity differs from the tested archive')
     expected = expected_registry(intended_build['resolved_settings'])
     actual = expected_registry(installed_build['resolved_settings'])
-    assert actual == expected, f'installation profile mismatch: missing={set(expected)-set(actual)}, extra={set(actual)-set(expected)}'
-    assert expected, 'intended profile is empty'
+    if not (actual == expected):
+        raise AssertionError(f'installation profile mismatch: missing={set(expected) - set(actual)}, extra={set(actual) - set(expected)}')
+    if not (expected):
+        raise AssertionError('intended profile is empty')
     # Check absent canonical names too, so a stale extension cannot hide extras.
     for name in ENGINES:
-        assert lookup(name) == expected.get(name, -1), f'installed registry mismatch: {name}'
+        if not (lookup(name) == expected.get(name, -1)):
+            raise AssertionError(f'installed registry mismatch: {name}')
     return expected
 
 
@@ -27,10 +37,14 @@ def check(source_root, output, expected_build=None):
     from active_release_gate import expected_registry
     source_root = source_root.resolve()
     module = Path(cyballs.__file__).resolve()
-    assert not Path.cwd().resolve().is_relative_to(source_root), 'run outside the checkout'
-    assert not module.is_relative_to(source_root), 'imported cyballs from the checkout'
-    assert sys.prefix != sys.base_prefix, 'use a fresh virtual environment'
-    assert module.is_relative_to(Path(sys.prefix).resolve()), 'module is outside the install environment'
+    if not (not Path.cwd().resolve().is_relative_to(source_root)):
+        raise AssertionError('run outside the checkout')
+    if not (not module.is_relative_to(source_root)):
+        raise AssertionError('imported cyballs from the checkout')
+    if not (sys.prefix != sys.base_prefix):
+        raise AssertionError('use a fresh virtual environment')
+    if not (module.is_relative_to(Path(sys.prefix).resolve())):
+        raise AssertionError('module is outside the install environment')
     build = cyballs.build_info()
     if expected_build is None:
         text = subprocess.check_output(['make', '--no-print-directory', 'print-build-fingerprint',
@@ -40,7 +54,8 @@ def check(source_root, output, expected_build=None):
         intended = json.loads(Path(expected_build).read_text())
     expected = check_profile(build, intended, cyballs.search_method_id)
     distribution = importlib.metadata.distribution('cyballs')
-    assert distribution.metadata['Name'] == 'cyballs'
+    if not (distribution.metadata['Name'] == 'cyballs'):
+        raise AssertionError('installed distribution name is not cyballs')
     products = output.resolve().with_suffix('.products')
     products.mkdir(parents=True, exist_ok=False)
     positions = np.array([[10., 0., 0.], [9., 2., 0.], [8., 0., 3.]])
@@ -73,10 +88,37 @@ def check(source_root, output, expected_build=None):
                 if key in native:
                     np.testing.assert_allclose(native[key].sum(), total, rtol=2e-13)
             plan = cyballs.resource_plan(engine, len(positions), 2)
-            assert plan['known_total_bytes'] > 0
-            assert model.getAllocationInfo()['retained_result_bytes'] > 0
+            if not (plan['known_total_bytes'] > 0):
+                raise AssertionError('resource plan has no known allocation bytes')
+            if not (model.getAllocationInfo()['retained_result_bytes'] > 0):
+                raise AssertionError('model retained no result bytes')
             cases.append(dict(engine=engine, status='PASS', arrays=sorted(native),
                               resource_plan=plan, metadata=model.getRunMetadata()))
+        finally:
+            model.struct_cleanup()
+    # Independent ordered-triple oracle also covers the shared angular solver.
+    specification = importlib.util.spec_from_file_location('installed_edge_oracle',
+        source_root/'tests/python/test_two_ball_edge_corrections.py')
+    oracle = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(oracle)
+    data = oracle.catalog(count=32)
+    signal, window = oracle.brute_force(data)
+    reference = oracle.edge_solution(signal, window)
+    for engine in ('kdtree-2balls-omp', 'balltree-2balls-omp', 'octree-2balls-omp'):
+        model = cyballs.cballs()  # Construction verifies C/Cython ABI and build identity.
+        try:
+            model.set_catalog(data[0], kappa=data[1], weights=data[2])
+            model.set(searchMethod=engine, rootDir=str(products/engine), numberThreads=2,
+                verbose=0, verbose_log=0, rangeN=oracle.RMAX, rminHist=oracle.RMIN,
+                sizeHistN=oracle.BINS, mChebyshev=oracle.MMAX, sizeHistPhi=8,
+                usePeriodic=False, useLogHist=False, nsmooth=2, theta=0,
+                options='KKKCorrelation,weights-norm,only-3pcf,no-smooth-pivot,'
+                        'edge-corrections,no-normalize-HistZeta,no-out-Hist')
+            model.Run()
+            actual = np.array([model.getHistZetaM_EE_complex(m+1) for m in range(oracle.MMAX+1)])
+            np.testing.assert_allclose(actual, reference, rtol=2e-10, atol=2e-10)
+            cases.append(dict(engine=engine, status='PASS', oracle='independent ordered triples + NumPy solve',
+                              abi_sizes=model.abi_sizes(), build_id=model.getRunMetadata()['build']['id']))
         finally:
             model.struct_cleanup()
     result = dict(status='PASS', distribution=distribution.metadata['Name'],

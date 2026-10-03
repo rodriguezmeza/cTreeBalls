@@ -320,6 +320,7 @@ static int dual_node_search_direct_triples(
 #ifdef THREEPCFCONVERGENCE
 
 #include "dual_node_multipole.h"
+#include "dual_node_pivot_reuse.h"
 
 #include "dual_node_search_policy.h"
 #endif /* THREEPCFCONVERGENCE */

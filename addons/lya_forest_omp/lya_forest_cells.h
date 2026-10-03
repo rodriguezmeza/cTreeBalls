@@ -132,7 +132,7 @@ static int lya_cells_build(lya_cells *t,struct cmdline_data *cmd,bodyptr base,
         while(end<t->count && LyaForestId(t->points[end])==LyaForestId(t->points[begin])) end++;
         size_t root=lya_cell_build(t,begin,end,base,first,last);
         t->roots[t->roots_count++]=root;
-        lya_cell_tasks(t,root,cmd->lya3Kernel==4?(size_t)cmd->lya3PivotCellMax:1,
+        lya_cell_tasks(t,root,cmd->lya3Kernel>=4?(size_t)cmd->lya3PivotCellMax:1,
             cmd->lya3RBins>0?.125*(cmd->lya3RMax/cmd->lya3RBins):0);
         begin=end;
     }

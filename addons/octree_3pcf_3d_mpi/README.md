@@ -94,7 +94,7 @@ The angular-kappa driver deliberately excludes this physical 3D statistic.
 ```sh
 make test-octree-3pcf-3d-omp
 make MPIEXEC='mpiexec --oversubscribe' test-octree-3pcf-3d-mpi
-PYTHONPATH="$PWD:$PWD/python" python3 tests/make_tests/test_octree_3pcf_3d_mpi.py \
+PYTHONPATH="$PWD:$PWD/python" python3 tests/python/test_octree_3pcf_3d_mpi.py \
   --cballs ./cballs --mpi-command 'mpiexec -n 2' --cython
 ```
 

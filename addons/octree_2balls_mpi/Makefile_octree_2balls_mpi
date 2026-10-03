@@ -17,13 +17,13 @@ endif
 OCTREE2BALLSMPI = $(MDIR)/addons/octree_2balls_mpi/
 OCTREE2BALLSOMPSOURCE = $(MDIR)/addons/octree_2balls_omp/
 vpath %.c $(OCTREE2BALLSMPI):$(OCTREE2BALLSOMPSOURCE)
-vpath %.c $(MDIR)/addons/scalar_compat_shared:$(MDIR)/addons/scalar_compat_shared
+vpath %.c $(MDIR)/support/scalar_octree_mpi:$(MDIR)/support/scalar_octree
 INCLUDES += -I$(OCTREE2BALLSMPI) \
             -I$(OCTREE2BALLSOMPSOURCE) \
             -I$(MDIR)/addons/balltree_2balls_omp \
-            -I$(MDIR)/addons/balltree_shared \
-            -I$(MDIR)/addons/scalar_compat_shared \
-            -I$(MDIR)/addons/scalar_compat_shared
+            -I$(MDIR)/support/pca_tree \
+            -I$(MDIR)/support/scalar_octree_mpi \
+            -I$(MDIR)/support/scalar_octree
 HEADERFILES += $(wildcard $(OCTREE2BALLSMPI)/*.h)
 EXTERNAL += fcfc_octree_2balls_mpi.o search_octree_2balls_mpi.o
 ifneq ($(OCTREEGGGMPION),1)
@@ -37,6 +37,6 @@ search_octree_2balls_mpi.o: \
 	$(OCTREE2BALLSMPI)/search_octree_2balls_mpi.c \
 	$(MDIR)/addons/octree_2balls_omp/octree_2balls_tree.c \
 	$(MDIR)/addons/balltree_2balls_omp/search_balltree_2balls_omp.c \
-	$(MDIR)/addons/native_octree_pair/native_octree_pair.h \
-	$(MDIR)/addons/scalar_compat_shared/protodefs_octree_ggg_mpi.h
+	$(MDIR)/support/native_octree_pair/native_octree_pair.h \
+	$(MDIR)/support/scalar_octree_mpi/protodefs_octree_ggg_mpi.h
 endif

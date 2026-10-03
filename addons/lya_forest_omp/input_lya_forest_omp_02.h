@@ -13,6 +13,7 @@
     cmd->lya3Kernel = 0;
 
     cmd->lya3LMax = 8;
+    cmd->lya3MuMode = 0;
 
     cmd->lya3PivotBlock = 0;
 

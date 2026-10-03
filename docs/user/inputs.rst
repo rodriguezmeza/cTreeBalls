@@ -35,6 +35,21 @@ Standard Formats
     Text rows containing positions and a scalar value.  The conventional
     three-dimensional layout is ``x y z value``.
 
+    Native catalogs start with a comment line, then a header containing
+    ``# N NDIM Lx Ly Lz`` (omit ``Lz`` for 2D input), followed by exactly
+    the declared number of rows. For example::
+
+       # nbody NDIM Lx Ly Lz
+       # 3 3 4 4 4
+       1 0 0 -1
+       0 1 0 2
+       0 0 1 3
+
+    The legacy spelling ``#3 3 4 4 4`` is also accepted: whitespace between
+    ``#`` and the count is optional. This also applies to ``columns-ascii-all``,
+    ``columns-ascii-pos`` and ``columns-ascii-2d-to-3d``. Header counts,
+    dimensions and all required data values remain validated.
+
 ``binary``
     Native binary catalog format used by several bundled tests.
 

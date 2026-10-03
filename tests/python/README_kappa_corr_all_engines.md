@@ -1,5 +1,13 @@
 # Convergence all-engines driver
 
+All three drivers share `benchmark_timing.py`. Wall time uses a monotonic clock;
+CPU time includes the process's worker threads. MPI wall time takes the maximum
+rank measurement; CPU time sums ranks. Total wall time is the maximum *per-rank
+setup-plus-compute total*, not a sum of separate phase maxima. Invalid clock
+measurements, duplicate ranks and inconsistent timing scopes are rejected.
+Native `MainLoop`, complete Python `Run`, and launcher times stay separate.
+
+
 The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
 `MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
 Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
@@ -157,3 +165,15 @@ ref = correlation("KK", min_sep=0.01, max_sep=1.0, nbins=10,
 
 `bin_theta`/`angle_theta` are geometric tolerances, not relative-error bounds.
 The native `theta` parameter retains its existing meaning.
+
+## Optional hierarchical scalar 3PCF
+
+For the scalar `octree-2balls`, `kdtree-2balls`, and `balltree-2balls` engines
+(OpenMP or MPI), append `--more-options scalar-pivot-reuse --no-smooth-pivot`.
+Select these engines explicitly; other engine families reject this option.
+`CBALLS_SCALAR_PIVOT_TOL` (default 0.1 radians) and
+`CBALLS_SCALAR_BIN_THETA` (default 0 bin widths) are runtime environment
+variables; MPI ranks must receive matching values. Benchmark and qualify
+the actual scalar products before choosing looser values.
+The qualification packet retains the native hierarchy controls and counters.
+See [the algorithm, limits, and benchmark instructions](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

@@ -23,6 +23,8 @@
 
     PARSER_READ(parser_read_int(pfc, "lya3LMax", &param, &flag, errmsg));
     if (flag == TRUE) cmd->lya3LMax = param;
+    PARSER_READ(parser_read_int(pfc, "lya3MuMode", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->lya3MuMode = param;
 
     PARSER_READ(parser_read_int(pfc, "lya3PivotBlock", &param, &flag, errmsg));
     if (flag == TRUE) cmd->lya3PivotBlock = param;

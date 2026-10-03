@@ -13,6 +13,7 @@
     int lya3Kernel;
 
     int lya3LMax;
+    int lya3MuMode;
 
     int lya3PivotBlock;
 

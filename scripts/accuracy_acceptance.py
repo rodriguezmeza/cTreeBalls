@@ -18,8 +18,8 @@ SCALAR = [
     dict(engine='kdtree-2balls-omp',theta=.5,rtol=.02,smoothing=True),
     dict(engine='balltree-2balls-omp',theta=.2,rtol=.02,smoothing=True),
     dict(engine='octree-2balls-omp',theta=.025,rtol=.02,smoothing=False),
-    dict(engine='octree-sincos-omp',theta=.025,rtol=.02,smoothing=True,diagnostic=True),
-    dict(engine='octree-2balls-omp',theta=.025,rtol=.02,smoothing=True,compatibility=True,diagnostic=True),
+    dict(engine='octree-sincos-omp',theta=.025,rtol=.02,smoothing=True,estimator_family='core'),
+    dict(engine='octree-2balls-omp',theta=.025,rtol=.02,smoothing=True,compatibility=True),
 ]
 SHEAR = [dict(engine=f'{tree}-shear-sphere-2balls-omp',theta=.05,rtol=.02,smoothing=True)
          for tree in ('octree','kdtree','balltree')]
@@ -87,8 +87,8 @@ def main():
     report=dict(schema_version=1,status='RUNNING',build=build_info(),cases=[],
                 metric='complex Frobenius norm(error)/norm(exact), separately for pair and triple products',
                 absolute_l2_floor=1e-10,
-                scope='512-point signed full-sky and clustered smooth-field weighted exact subsamples; 6 log bins .02..1.8; modes 0..5; 2 threads; no edge correction; smoothing radius .0003 Cartesian units for scalar, 1 arcmin for shear, only on clustered fixture; raw shear Upsilon multipoles',
-                exclusions=['arbitrary larger theta or rsmooth','survey window conditioning','experimental shear-pivot-reuse','general accuracy guarantee outside these fixtures','octree-sincos and octree-GGG compatibility: diagnostic only; not accepted for clustered workload'])
+                scope='512-point signed full-sky and clustered smooth-field weighted exact subsamples; 6 log bins .02..1.8; modes 0..5; 2 threads; no edge correction; requested scalar rsmooth .0003 (arcmin in core/native-octree compatibility; Cartesian elsewhere), 1 arcmin for shear, only on clustered fixture; raw shear Upsilon multipoles',
+                exclusions=['arbitrary larger theta or rsmooth','survey window conditioning','experimental shear-pivot-reuse','experimental scalar-pivot-reuse','general accuracy guarantee outside these fixtures'])
     products={}; exact_families={}; report['exact_cross_engine']=[]
     try:
         for kind in ('signed_sky','clustered_smooth'):
@@ -100,7 +100,7 @@ def main():
                     exact,metadata,timing=run(case,data,'exact',Path(tmp)/'exact')
                     for name,value in exact.items():products[tag+'-exact-'+name]=value
                     if not case.get('diagnostic'):
-                        family=(kind,'shear' if 'shear' in case['engine'] else 'scalar')
+                        family=(kind,case.get('estimator_family','shear' if 'shear' in case['engine'] else 'scalar'))
                         if family not in exact_families: exact_families[family]=exact
                         for name,target in exact_families[family].items():
                             error=float(np.linalg.norm(exact[name]-target));norm=float(np.linalg.norm(target))

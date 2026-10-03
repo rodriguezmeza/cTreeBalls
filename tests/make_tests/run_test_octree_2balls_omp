@@ -441,8 +441,8 @@ fi
 
 if grep -q -- '-DTWOPCF\([[:space:]]\|$\)' <<<"$build_env" \
     && grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
-    "${PYTHON:-python3}" ./make_tests/test_octree_2balls_mask.py --cballs "$CBALLS"
-    "${PYTHON:-python3}" ./make_tests/test_octree_2balls_progress.py --cballs "$CBALLS"
+    "${PYTHON:-python3}" ./python/test_octree_2balls_mask.py --cballs "$CBALLS"
+    "${PYTHON:-python3}" ./python/test_octree_2balls_progress.py --cballs "$CBALLS"
 fi
 
 echo "PASS: octree-2balls-omp exactness, GGG compatibility, aggregation, and OpenMP determinism"

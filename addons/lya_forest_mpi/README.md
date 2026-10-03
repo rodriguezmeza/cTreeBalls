@@ -15,6 +15,9 @@ Build with an MPI C compiler (`MPICC`, normally `mpicc`), OpenMP, and
 | lya-1d-2pcf-3pcf-mpi | 190 | Both radial estimators |
 | lya-1d-tree-2pcf-mpi | 191 | Exact interval-tree radial 2PCF |
 | lya-1d-tree-3pcf-mpi | 194 | Exact interval-tree radial 3PCF |
+| lya-los-tree-2pcf-mpi | 210 | 3D LOS-tree 2PCF |
+| lya-los-tree-3pcf-mpi | 211 | 3D LOS-tree five-dimensional 3PCF |
+| lya-los-tree-2pcf-3pcf-mpi | 212 | Both 3D LOS-tree estimators |
 
 ## Run
 
@@ -43,7 +46,9 @@ Each rank reads the catalog and builds its own tree/index. Memory for the
 catalog and multidimensional histograms is replicated, not distributed.
 The shared OpenMP kernels evaluate disjoint cyclic subsets of work:
 
-- 3D modes partition body pivots.
+- Original 3D pixel modes partition body pivots; LOS pixel modes partition
+  fixed pivot blocks. Pair cells partition forest rows, and
+  persistent triple kernels 3/4/5 partition fixed pivot-task blocks.
 - Radial scans partition fixed `LYA1D_OMP_PIVOT_BLOCK_SIZE` pivot blocks.
 - The radial tree partitions fixed blocks of node-pair tasks and, separately,
   same-forest subtraction tasks.
@@ -72,7 +77,7 @@ writes histograms and logs. Output filenames and columns match the corresponding
 
 ## Cython
 
-Cython accepts the same eight method names and file-based input. Launch Python
+Cython accepts the same eleven method names and file-based input. Launch Python
 under `mpiexec`, import `mpi4py.MPI`, and have **every rank** call `Run` and
 cleanup in the same order. Read the output files only on rank 0 after `Run`
 returns. MPI initialized by Python is not finalized by a cyballs object.
@@ -88,7 +93,7 @@ selected engines. See `tests/python/README_lya_corr_all_engines.md`.
 ```sh
 make test-lya-forest-omp test-lya-forest-1d-omp
 make MPIEXEC='mpiexec --oversubscribe' test-lya-forest-mpi
-PYTHONPATH="$PWD:$PWD/python" python3 tests/make_tests/test_lya_forest_mpi.py \
+PYTHONPATH="$PWD:$PWD/python" python3 tests/python/test_lya_forest_mpi.py \
   --cballs ./cballs --mpi-command 'mpiexec -n 2' --cython
 ```
 
@@ -97,3 +102,18 @@ Use `--mpi-only` (or `LYA_MPI_TEST_ARGS=--mpi-only` with make) when the OpenMP-o
 siblings were intentionally disabled. Tests cover every method, independent
 2PCF/3PCF oracles, rank/thread comparisons, radial scan versus interval-tree
 results, zero windows, same-quasar exclusion, and recoverable input/output errors.
+
+## Hierarchical radial moments
+
+`lya2Kernel=1` and `lya3Kernel=5` select certified pair-range sums and adaptive
+radial/polar moment combinations for the original 3D OpenMP/MPI methods.
+Combined runs share the forest tree; zero slop preserves the histogram estimator.
+Persistent kernels 3/4/5 also support MPI. The all-engines driver accepts
+`--lya2-kernel 1 --lya3-kernel 5 --lya3-pivot-cell-max 8`; these controls apply
+only to eligible 3D Ly-alpha statistics. Default kernels remain 0.
+See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.md).
+
+The LOS-tree variants share exact block discovery and use `lya2Kernel=1
+lya3Kernel=5` for adaptive hierarchical moments. They retain the same startup,
+collective error, root-publication and cleanup contracts. See
+[LOS hierarchical reuse](../../docs/LYA_LOS_HIERARCHICAL_REUSE.md).

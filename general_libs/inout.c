@@ -17,6 +17,9 @@
 #include "inout.h"
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
+#include <limits.h>
+#include "input_contracts.h"
 
 
 // ------------[	inout normal definitions	 	]------------
@@ -821,564 +824,153 @@ void InputData_check_file(string filename)
     fclose(instr);
 }
 
-int InputData_2c(struct cmdline_data* cmd, string filename,
-                 int col1, int col2, int *npts)
+/* Read selected numeric columns without legacy fatal conversion helpers.
+ * getline preserves final lines without a newline and avoids fixed row limits.
+ * Publish only fully read arrays; a failed read leaves runtime buffers alone. */
+static int input_columns_checked(struct cmdline_data *cmd, string filename,
+                                  int nselected, const int *columns, int *npts)
 {
-    int ncol, nrow;
-    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-
-    //B
-    int rc = FAILURE;
-    stream instr = NULL;
-    real *row = NULL;
-    short int *lineQ = NULL;
-
-#define INOUT_FAIL(...) \
-    do { \
-        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
-        rc = FAILURE; \
-        goto fail; \
-    } while (0)
-
+    FILE *instr = NULL;
+    char *line = NULL;
+    size_t line_capacity = 0, rows = 0, capacity = 0, physical_row = 0;
+    real *values[5] = {NULL}, *grown = NULL;
+    int expected_columns = -1, rc = FAILURE;
+    ssize_t length;
+    *npts = 0;
+    for (int j = 0; j < nselected; ++j) {
+        if (columns[j] < 1) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "column input '%s': column numbers must be positive", filename);
+            goto done;
+        }
+    }
     if (stropen_checked(filename, "r", &instr, cmd->error_message,
                          _ERRORMSGSIZE_) == FAILURE)
-        goto fail;
-    //E
-
-    state = OUT;
-    nl = nw = nc = 0;
-    while ((c = getc(instr)) != EOF) {
-        ++nc;
-        if (c=='\n')
-            ++nl;
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else if (state == OUT) {
-            state = IN;
-            ++nw;
+        goto done;
+    while ((length = getline(&line, &line_capacity, instr)) >= 0) {
+        char *cursor = line, *end;
+        real selected[5] = {0};
+        int ncolumns = 0;
+        ++physical_row;
+        if (memchr(line, '\0', (size_t)length) != NULL) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "column input '%s': row %zu contains an embedded NUL", filename, physical_row);
+            goto done;
         }
-    }
-    
-    rewind(instr);
-    
-    lineQ = (short int *) allocate(nl * sizeof(short int));
-    for (i=0; i<nl; i++) lineQ[i]=FALSE;
-    
-    nw = nrow = ncol = nwxc = 0;
-    state = OUT;
-    salto = NO;
-    
-    i=0;
-    
-    while ((c = getc(instr)) != EOF) {
-        
-        if(c=='%' || c=='#') {
-            while ((c = getc(instr)) != EOF)
-                if (c=='\n') break;
-            ++i;
-            continue;
-        }
-        
-        if (c=='\n' && nw > 0) {
-            if (salto==NO) {
-                ++nrow;
-                salto=SI;
-                if (ncol != nwxc && nrow>1) {
-                    printf("\nvalores diferentes : ");
-                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                               nrow, ncol, nwxc);
+        while (1) {
+            double parsed;
+            while (isspace((unsigned char)*cursor)) ++cursor;
+            if (!*cursor || *cursor == '#' || *cursor == '%') break;
+            errno = 0;
+            parsed = strtod(cursor, &end);
+            if (end == cursor || (*end && !isspace((unsigned char)*end)
+                                  && *end != '#' && *end != '%')) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "column input '%s': row %zu, column %d: invalid real number",
+                         filename, physical_row, ncolumns + 1);
+                goto done;
+            }
+            ++ncolumns;
+            for (int j = 0; j < nselected; ++j) {
+                if (columns[j] == ncolumns) {
+                    char field[48];
+                    snprintf(field, sizeof(field), "column %d", ncolumns);
+                    if (cballs_input_finite(cmd, filename, physical_row, field, parsed) == FAILURE)
+                        goto done;
+                    if (errno == ERANGE) {
+                        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                                 "column input '%s': row %zu, %s: out-of-range value",
+                                 filename, physical_row, field);
+                        goto done;
+                    }
+                    selected[j] = (real)parsed;
+                    if (cballs_input_finite(cmd, filename, physical_row, field, selected[j]) == FAILURE)
+                        goto done;
                 }
-                ncol = nwxc;
-                lineQ[i]=TRUE;
-                ++i;
-                nwxc=0;
-            } else {
-                ++i;
             }
+            cursor = end;
         }
-        
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else
-            if (state == OUT) {
-                state = IN;
-                ++nw; ++nwxc;
-                salto=NO;
+        if (ncolumns == 0) continue;
+        if (expected_columns < 0) expected_columns = ncolumns;
+        if (ncolumns != expected_columns) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "column input '%s': row %zu: expected %d columns, found %d",
+                     filename, physical_row, expected_columns, ncolumns);
+            goto done;
+        }
+        for (int j = 0; j < nselected; ++j)
+            if (columns[j] > ncolumns) {
+                snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                         "column input '%s': row %zu: requested column %d exceeds %d columns",
+                         filename, physical_row, columns[j], ncolumns);
+                goto done;
             }
-    }
-    
-    rewind(instr);
-    
-    npoint=nrow;
-    row = (realptr) allocate(ncol * sizeof(real));
-
-    *npts = npoint;
-    inout_xval = (real *) allocate(npoint * sizeof(real));
-    inout_yval = (real *) allocate(npoint * sizeof(real));
-    
-    ip = 0;
-    for (i=0; i<nl; i++) {
-        if (lineQ[i]) {
-            in_vector_ndim(instr, row, ncol);
-            inout_xval[ip] = row[col1-1];
-            inout_yval[ip] = row[col2-1];
-            ++ip;
-        } else {
-            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
-                if (c=='\n') break;
+        if (rows == INT_MAX) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "column input '%s': row count exceeds INT_MAX", filename);
+            goto done;
         }
+        if (rows == capacity) {
+            size_t next = capacity ? (capacity > INT_MAX / 2 ? INT_MAX : 2 * capacity) : 256;
+            for (int j = 0; j < nselected; ++j) {
+                if (cballs_malloc_checked((void **)&grown, next, sizeof(real),
+                                           "ASCII column buffer", cmd->error_message,
+                                           _ERRORMSGSIZE_) == FAILURE)
+                    goto done;
+                if (rows) memcpy(grown, values[j], rows * sizeof(real));
+                free(values[j]); values[j] = grown; grown = NULL;
+            }
+            capacity = next;
+        }
+        for (int j = 0; j < nselected; ++j) values[j][rows] = selected[j];
+        ++rows;
     }
-
-    fprintf(stdout, "\n... done.\n");
+    if (!feof(instr) || ferror(instr) || rows == 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "column input '%s': %s", filename,
+                 rows == 0 ? "no data rows" : "read error");
+        goto done;
+    }
+    if (fclose(instr) != 0) {
+        instr = NULL;
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "column input '%s': close error", filename);
+        goto done;
+    }
+    instr = NULL;
+    for (int j = 0; j < nselected; ++j) {
+        cballs_runtime_current()->io_columns[j] = values[j];
+        values[j] = NULL;
+    }
+    *npts = (int)rows;
     rc = SUCCESS;
-    goto fail;
-    
-fail:
-    if (instr != NULL)
-        fclose(instr);
-
-    if (row != NULL)
-        free(row);
-
-    if (lineQ != NULL)
-        free(lineQ);
-
-#undef INOUT_FAIL
+done:
+    if (instr) fclose(instr);
+    free(line); free(grown);
+    for (int j = 0; j < nselected; ++j) free(values[j]);
     return rc;
 }
 
-int InputData_3c(struct cmdline_data* cmd, string filename,
-                  int col1, int col2, int col3,
-    int *npts)
+int InputData_2c(struct cmdline_data *cmd, string filename, int c1, int c2, int *npts)
 {
-    int ncol, nrow;
-    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-
-    //B
-    int rc = FAILURE;
-    stream instr = NULL;
-    real *row = NULL;
-    short int *lineQ = NULL;
-
-#define INOUT_FAIL(...) \
-    do { \
-        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
-        rc = FAILURE; \
-        goto fail; \
-    } while (0)
-
-    if (stropen_checked(filename, "r", &instr, cmd->error_message,
-                         _ERRORMSGSIZE_) == FAILURE)
-        goto fail;
-    //E
-    
-    verb_print(1, "\nReading columns %d, %d, and %d from file %s... ",
-                col1,col2,col3,filename);
-
-    state = OUT;
-    nl = nw = nc = 0;
-    while ((c = getc(instr)) != EOF) {
-        ++nc;
-        if (c=='\n')
-            ++nl;
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else if (state == OUT) {
-            state = IN;
-            ++nw;
-        }
-    }
-    verb_print(1, "\nGeneral statistics: %s %d %d %d",
-               "number of lines, words, and characters:", nl, nw, nc);
-
-    rewind(instr);
-
-    lineQ = (short int *) allocate(nl * sizeof(short int));
-    for (i=0; i<nl; i++) lineQ[i]=FALSE;
-
-    nw = nrow = ncol = nwxc = 0;
-    state = OUT;
-    salto = NO;
-
-    i=0;
-
-    while ((c = getc(instr)) != EOF) {
-
-        if(c=='%' || c=='#') {
-            while ((c = getc(instr)) != EOF)
-                if (c=='\n') break;
-            ++i;
-            continue;
-        }
-
-        if (c=='\n' && nw > 0) {
-            if (salto==NO) {
-                ++nrow;
-                salto=SI;
-                if (ncol != nwxc && nrow>1) {
-                    printf("\nvalores diferentes : ");
-                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                               nrow, ncol, nwxc);
-                }
-                ncol = nwxc;
-                lineQ[i]=TRUE;
-                ++i;
-                nwxc=0;
-            } else {
-                ++i;
-            }
-        }
-
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else
-            if (state == OUT) {
-                state = IN;
-                ++nw; ++nwxc;
-                salto=NO;
-            }
-    }
-    verb_print(1, "\nValid numbers statistics:  %s %d %d %d",
-               "nrow, ncol, nvalues:", nl, nw, nc);
-
-    if (ncol<3)
-        INOUT_FAIL("\n\nInputData_3c: Error: ncol must be >= 3\n");
-
-    rewind(instr);
-
-    npoint=nrow;
-    row = (realptr) allocate(ncol * sizeof(real));
-
-    *npts = npoint;
-    inout_xval = (real *) allocate(npoint * sizeof(real));
-    inout_yval = (real *) allocate(npoint * sizeof(real));
-    inout_zval = (real *) allocate(npoint * sizeof(real));
-
-    ip = 0;
-    for (i=0; i<nl; i++) {
-        if (lineQ[i]) {
-            in_vector_ndim(instr, row, ncol);
-            inout_xval[ip] = row[col1-1];
-            inout_yval[ip] = row[col2-1];
-            inout_zval[ip] = row[col3-1];
-            ++ip;
-        } else {
-            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
-                if (c=='\n') break;
-        }
-    }
-
-    fprintf(stdout, "\n... done.\n");
-    rc = SUCCESS;
-    goto fail;
-    
-fail:
-    if (instr != NULL)
-        fclose(instr);
-
-    if (row != NULL)
-        free(row);
-
-    if (lineQ != NULL)
-        free(lineQ);
-
-#undef INOUT_FAIL
-    return rc;
+    const int columns[] = {c1, c2};
+    return input_columns_checked(cmd, filename, 2, columns, npts);
+}
+int InputData_3c(struct cmdline_data *cmd, string filename, int c1, int c2, int c3, int *npts)
+{
+    const int columns[] = {c1, c2, c3};
+    return input_columns_checked(cmd, filename, 3, columns, npts);
+}
+int InputData_4c(struct cmdline_data *cmd, string filename, int c1, int c2, int c3, int c4, int *npts)
+{
+    const int columns[] = {c1, c2, c3, c4};
+    return input_columns_checked(cmd, filename, 4, columns, npts);
+}
+int InputData_5c(struct cmdline_data *cmd, string filename, int c1, int c2, int c3, int c4, int c5, int *npts)
+{
+    const int columns[] = {c1, c2, c3, c4, c5};
+    return input_columns_checked(cmd, filename, 5, columns, npts);
 }
 
-int InputData_4c(struct cmdline_data* cmd,
-                 string filename, int col1, int col2, int col3, int col4,
-    int *npts)
-{
-    int ncol, nrow;
-    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-
-    //B
-    int rc = FAILURE;
-    stream instr = NULL;
-    real *row = NULL;
-    short int *lineQ = NULL;
-
-#define INOUT_FAIL(...) \
-    do { \
-        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
-        rc = FAILURE; \
-        goto fail; \
-    } while (0)
-
-    if (stropen_checked(filename, "r", &instr, cmd->error_message,
-                         _ERRORMSGSIZE_) == FAILURE)
-        goto fail;
-    //E
-
-    fprintf(stdout,
-        "\nReading columns %d, %d, %d, and %d from file %s... ",
-        col1,col2,col3,col4,filename);
-
-    state = OUT;
-    nl = nw = nc = 0;
-    while ((c = getc(instr)) != EOF) {
-        ++nc;
-        if (c=='\n')
-            ++nl;
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else if (state == OUT) {
-            state = IN;
-            ++nw;
-        }
-    }
-    printf("\n\nGeneral statistics : ");
-    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
-
-    rewind(instr);
-
-    lineQ = (short int *) allocate(nl * sizeof(short int));
-    for (i=0; i<nl; i++) lineQ[i]=FALSE;
-
-    nw = nrow = ncol = nwxc = 0;
-    state = OUT;
-    salto = NO;
-
-    i=0;
-
-    while ((c = getc(instr)) != EOF) {
-
-        if(c=='%' || c=='#') {
-            while ((c = getc(instr)) != EOF)
-                if (c=='\n') break;
-            ++i;
-            continue;
-        }
-
-        if (c=='\n' && nw > 0) {
-            if (salto==NO) {
-                ++nrow;
-                salto=SI;
-                if (ncol != nwxc && nrow>1) {
-                    printf("\nvalores diferentes : ");
-                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                               nrow, ncol, nwxc);
-                }
-                ncol = nwxc;
-                lineQ[i]=TRUE;
-                ++i;
-                nwxc=0;
-            } else {
-                ++i;
-            }
-        }
-
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else
-            if (state == OUT) {
-                state = IN;
-                ++nw; ++nwxc;
-                salto=NO;
-            }
-    }
-    printf("\nValid numbers statistics : ");
-    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
-
-    if (ncol<4)
-        INOUT_FAIL("\n\nInputData_4c: Error: ncol must be >= 4\n");
-
-    rewind(instr);
-
-    npoint=nrow;
-    row = (realptr) allocate(ncol * sizeof(real));
-
-    *npts = npoint;
-    inout_xval = (real *) allocate(npoint * sizeof(real));
-    inout_yval = (real *) allocate(npoint * sizeof(real));
-    inout_zval = (real *) allocate(npoint * sizeof(real));
-    inout_uval = (real *) allocate(npoint * sizeof(real));
-
-    ip = 0;
-    for (i=0; i<nl; i++) {
-        if (lineQ[i]) {
-            in_vector_ndim(instr, row, ncol);
-            inout_xval[ip] = row[col1-1];
-            inout_yval[ip] = row[col2-1];
-            inout_zval[ip] = row[col3-1];
-            inout_uval[ip] = row[col4-1];
-            ++ip;
-        } else {
-            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
-                if (c=='\n') break;
-        }
-    }
-
-    fprintf(stdout, "\n... done.\n");
-    rc = SUCCESS;
-    goto fail;
-
-fail:
-    if (instr != NULL)
-        fclose(instr);
-
-    if (row != NULL)
-        free(row);
-
-    if (lineQ != NULL)
-        free(lineQ);
-
-#undef INOUT_FAIL
-    return rc;
-}
-
-
-int InputData_5c(struct cmdline_data* cmd,
-                 string filename, int col1, int col2, int col3,
-                  int col4, int col5,
-                  int *npts)
-{
-    int ncol, nrow;
-    int c, nl, nw, nc, state, salto, nwxc, i, npoint, ip;
-
-    //B
-    int rc = FAILURE;
-    stream instr = NULL;
-    real *row = NULL;
-    short int *lineQ = NULL;
-
-#define INOUT_FAIL(...) \
-    do { \
-        snprintf(cmd->error_message, _ERRORMSGSIZE_, __VA_ARGS__); \
-        rc = FAILURE; \
-        goto fail; \
-    } while (0)
-
-    if (stropen_checked(filename, "r", &instr, cmd->error_message,
-                         _ERRORMSGSIZE_) == FAILURE)
-        goto fail;
-    //E
-    
-    fprintf(stdout,
-        "\nReading columns %d, %d, %d, and %d from file %s... ",
-        col1,col2,col3,col4,filename);
-
-    state = OUT;
-    nl = nw = nc = 0;
-    while ((c = getc(instr)) != EOF) {
-        ++nc;
-        if (c=='\n')
-            ++nl;
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else if (state == OUT) {
-            state = IN;
-            ++nw;
-        }
-    }
-    printf("\n\nGeneral statistics : ");
-    printf("number of lines, words, and characters : %d %d %d\n", nl, nw, nc);
-
-    rewind(instr);
-
-    lineQ = (short int *) allocate(nl * sizeof(short int));
-    for (i=0; i<nl; i++) lineQ[i]=FALSE;
-
-    nw = nrow = ncol = nwxc = 0;
-    state = OUT;
-    salto = NO;
-
-    i=0;
-
-    while ((c = getc(instr)) != EOF) {
-
-        if(c=='%' || c=='#') {
-            while ((c = getc(instr)) != EOF)
-                if (c=='\n') break;
-            ++i;
-            continue;
-        }
-
-        if (c=='\n' && nw > 0) {
-            if (salto==NO) {
-                ++nrow;
-                salto=SI;
-                if (ncol != nwxc && nrow>1) {
-                    printf("\nvalores diferentes : ");
-                    INOUT_FAIL("(nrow, ncol before, ncol after) : %d %d %d\n\n",
-                               nrow, ncol, nwxc);
-                }
-                ncol = nwxc;
-                lineQ[i]=TRUE;
-                ++i;
-                nwxc=0;
-            } else {
-                ++i;
-            }
-        }
-
-        if (c==' ' || c=='\n' || c=='\t')
-            state = OUT;
-        else
-            if (state == OUT) {
-                state = IN;
-                ++nw; ++nwxc;
-                salto=NO;
-            }
-    }
-    printf("\nValid numbers statistics : ");
-    printf("nrow, ncol, nvalues : %d %d %d\n", nrow, ncol, nw);
-
-    if (ncol<5)
-        INOUT_FAIL("\n\nInputData_5c: Error : ncol must be >=5\n");
-
-    rewind(instr);
-
-    npoint=nrow;
-    row = (realptr) allocate(ncol * sizeof(real));
-
-    *npts = npoint;
-    inout_xval = (real *) allocate(npoint * sizeof(real));
-    inout_yval = (real *) allocate(npoint * sizeof(real));
-    inout_zval = (real *) allocate(npoint * sizeof(real));
-    inout_uval = (real *) allocate(npoint * sizeof(real));
-    inout_vval = (real *) allocate(npoint * sizeof(real));
-
-    ip = 0;
-    for (i=0; i<nl; i++) {
-        if (lineQ[i]) {
-            in_vector_ndim(instr, row, ncol);
-            inout_xval[ip] = row[col1-1];
-            inout_yval[ip] = row[col2-1];
-            inout_zval[ip] = row[col3-1];
-            inout_uval[ip] = row[col4-1];
-            inout_vval[ip] = row[col5-1];
-            ++ip;
-        } else {
-            while ((c = getc(instr)) != EOF)        // Reading dummy line ...
-                if (c=='\n') break;
-        }
-    }
-
-    fprintf(stdout, "\n... done.\n");
-    rc = SUCCESS;
-    goto fail;
-
-fail:
-    if (instr != NULL)
-        fclose(instr);
-
-    if (row != NULL)
-        free(row);
-
-    if (lineQ != NULL)
-        free(lineQ);
-
-#undef INOUT_FAIL
-    return rc;
-}
-
-
-//B additions
-
-// Column vector input
-//  offset as NR
 int inout_InputDataVector(
                           string filename, real *vec, int *npts,
                           short verbose, short verbose_log, FILE *outlog

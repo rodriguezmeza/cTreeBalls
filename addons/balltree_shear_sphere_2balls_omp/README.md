@@ -119,5 +119,105 @@ a universal percentage-error guarantee.
 
 The PCA split and initial enclosing-sphere strategy are adapted from FCFC by
 Cheng Zhao under the MIT license. The two-node traversal strategy is adapted
-from dual-node by Mike Jarvis under its BSD-style license; see
-`dual-node_LICENSE`.
+from dual-node by Mike Jarvis under its BSD-style license.
+
+## Fast shared kernels and combined orders
+
+This OpenMP wrapper enables the same qualified fast arithmetic used by the
+spherical octree and KD-tree: direct normalization of squared spin-2
+orientations, shared positive/negative ring products, and guarded lookup in
+small logarithmic histograms. The lookup shortcut requires double precision,
+at most 32 bins, `deltaR >= 1e-8`, `rminHist >= 1e-100`, and
+`rangeN <= 1e100`. Edge neighborhoods within `1e-10*distance`, linear bins,
+and fallback domains retain the original radial expression.
+
+Exact combined runs with `no-one-ball`, `no-two-balls`, or `theta=0` now
+collect pairs and 3PCF rings in the same body-pivot visits. Radial bin, bearing,
+and transported neighbor shear are computed once; pivot weight and weighted
+shear are cached per pivot. Node second moments still rotate by the squared
+spin-2 rotation. Smoothed combined visits also share this arithmetic while
+retaining the existing smoothing estimator and safety bound.
+
+Approximate unsmoothed combined runs retain independent pair and ring
+acceptance. Pivot reuse remains opt-in with its own phase budget; exact and
+smoothing controls still select its body-pivot fallback. The existing PCA
+builder, member cache, great-circle pair kernel, frontier scheduler, and
+reduction order are unchanged. These private fast switches do not enable a
+new path in the spherical ball-tree MPI wrapper. No opening or smoothing
+control was relaxed, and floating-point roundoff can differ from older builds.
+
+Run `make test-shear-sphere-balltree-2balls` for independent spin oracles,
+log/linear bins and edge ULPs, masked one/two/three catalog roles, exact/reuse
+fallbacks, thread determinism, serial/parallel construction, member-cache
+fallback, near-polar pairs, and reuse calibration. Scientific/profile checks
+in the ball-tree and shared reuse suites use explicit failures and remain
+active when these tests are run directly with Python `-O`. The active release
+gate now includes both ball-tree construction and reuse suites when this
+engine is enabled.
+
+`scripts/benchmark_shear_sphere.py` already supports this engine. Example:
+
+```bash
+python scripts/benchmark_shear_sphere.py \
+  --engine balltree-shear-sphere-2balls-omp --output /tmp/ball-exact \
+  --n 8192 --geometry clustered --order both --threads 4 --exact
+python scripts/benchmark_shear_sphere.py \
+  --engine balltree-shear-sphere-2balls-omp --output /tmp/ball-approx \
+  --n 8192 --geometry clustered --order both --threads 4 --theta .1 \
+  --reference /tmp/ball-exact/products-0.npz
+```
+
+For reuse, pass `--pivot-reuse` and set `CBALLS_SHEAR_PIVOT_TOL` explicitly.
+Use `--nsmooth` to compare leaf capacities and `--smooth` for an explicit
+arcminute radius. Match fixture, bins, modes, masks, and weights to the exact
+reference; an NPZ alone does not certify provenance. The example 2% L2 plus
+`1e-12` absolute policy is checked per raw/window/corrected observable and
+finite mask. Record per-bin errors too. Passing an A/B implementation check
+is separate from qualifying an approximation for a science application.
+
+Runtime `theta`, `rsmooth`, and `nsmooth` keep their existing meanings.
+`BALLS4SCANLEVON=1` retains adaptive task scheduling; compile-time `THETA`
+remains a legacy scan-level parameter, not a percentage-error bound. The
+active profile's default leaf capacity (8) and all accuracy defaults are
+unchanged by this optimization.
+
+
+### Hierarchical 3PCF reuse
+
+All three OpenMP spherical two-ball shear engines support `shear-pivot-reuse`.
+Partial multipole rings retain their original spherical acceptance frames.
+An unresolved neighbor marks only the radial bins that its enclosing distance
+interval can intersect. Once both legs of a radial pair are complete, that pair
+is accumulated at the current pivot cell. Descendants inherit a completion mask
+and never accumulate that pair again. Mixed resolved/unresolved pairs wait until
+both legs are complete; diagonal self-neighbor subtraction is retained.
+
+The option is off by default and requires `no-smooth-pivot`, positive `theta`,
+full pivot coverage, and `BALLS4SCANLEVON=1`. Exact controls and smoothing retain
+the body-pivot fallback. MPI shear methods continue to reject this experimental
+option. The independent 2PCF pass retains its own acceptance rules.
+
+- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `0.1`.
+- `CBALLS_SHEAR_BIN_THETA`: internal radial-bin assignment allowance, finite `[0,1]`
+  bin widths, default `0`. Zero requires complete containment inside a bin.
+  Positive values allow center-based assignment when the combined cap radius
+  fits within the selected fraction of the local bin width. The minimum and
+  maximum separation cuts remain strict. This is not an exact translation of
+  dual node's bin-slop rule.
+- `nsmooth=1`: exposes finer pivot groups in the KD and PCA ball trees. It increases
+  tree storage and can improve reuse; the octree already has individual-body leaves.
+
+For a performance/accuracy trial through the Python drivers, add
+`--nsmooth 1 --more-options shear-pivot-reuse` and explicitly set the two environment
+controls, for example `CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
+These are approximate trial settings, not an accuracy guarantee. Compare raw
+numerators, windows, and corrected complex multipoles against an exact reference
+for the actual catalog. Poorly conditioned windows can amplify small raw errors.
+
+Native provenance records `shear_hierarchical_reuse.enabled`,
+`phase_budget_radians`, and `radial_bin_slop` from the completed run. With
+`CBALLS_SHEAR_PROFILE=1`, `radial_pairs` counts actual radial-pair combinations,
+`represented_pairs` counts the equivalent individual-pivot combinations, and
+`partial_reductions` identifies completion above unresolved descendants. The
+64 MiB per-worker scratch limit includes completion masks. Reuse walk timers
+include reductions and must not be added to the reduction timer.

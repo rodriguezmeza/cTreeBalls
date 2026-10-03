@@ -45,6 +45,10 @@ def resource_plan(engine, pixels, threads=1, parameters=None, retained_cache_byt
         radial='1d-' in engine;pair='2pcf' in engine;triple='3pcf' in engine
         cells2=(rp if radial else rp*rt) if pair else 0
         cells3=(4*rb*rb if radial else rb*rb*tb*tb*(positive(p.get('lya3LMax',8)+1,'lya3LMax orders') if 'multipole' in engine else mu)) if triple else 0
+        mode=p.get('lya3MuMode',0)
+        if isinstance(mode,bool) or mode not in (0,1):raise ValueError('lya3MuMode must be 0 or 1')
+        if mode and 'anisotropic-multipole' not in engine:raise ValueError('lya3MuMode=1 requires anisotropic multipole engine')
+        if mode:cells3+=rb*rb*tb*tb*mu
         if not radial:
             known['estimator_global_and_worker_histograms']=(cells2+cells3)*(2*sizes['real']+t*(2*sizes['real']+sizes['size_t']))
         else:

@@ -242,17 +242,44 @@ static void lya_los_interval(const lya_los_forest *forest, bodyptr pivot,
     *upper = a + half + padding;
 }
 
+void lya_los_begin_block(lya_los_workspace *workspace,bodyptr center,REAL radius)
+{
+    workspace->block_center=radius>=0?center:NULL;
+    workspace->block_radius=radius;workspace->cache_ready=0;
+}
+
+static int lya_los_forest_compare(const void *aa,const void *bb)
+{
+    size_t a=*(const size_t*)aa,b=*(const size_t*)bb;
+    return a<b?-1:a>b;
+}
+
 int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
                   bodyptr pivot, REAL cutoff, INTEGER minimum_id, lya_los_visit visit,
                   void *context, ErrorMsg error_message)
 {
     size_t node = 0, found = 0, f;
     const size_t own = index->body_forest[pivot - index->table];
+    bodyptr discovery_pivot=workspace->block_center?workspace->block_center:pivot;
+    REAL discovery_cutoff=cutoff;
+    if(workspace->block_center) {
+        /* Cover stored-coordinate and norm roundoff in the enlarged sphere.
+         * The block radius was rounded upward by the caller. */
+        long double scale=fabsl(cutoff)+workspace->block_radius+1;
+        for(int k=0;k<NDIM;k++) scale+=fabsl(Pos(discovery_pivot)[k]);
+        long double bound=(long double)cutoff+workspace->block_radius+1024*DBL_EPSILON*scale;
+        discovery_cutoff=nextafter((REAL)bound,INFINITY);
+        if(!isfinite(discovery_cutoff)) {workspace->block_center=NULL;discovery_pivot=pivot;discovery_cutoff=cutoff;}
+    }
+    if(workspace->block_center && workspace->cache_ready) {
+        found=workspace->cached_count;workspace->reuses++;
+    } else {
+    workspace->discoveries++;
     if (++workspace->epoch == 0) {
         memset(workspace->seen, 0, index->forest_count * sizeof(*workspace->seen));
         workspace->epoch = 1;
     }
-    workspace->seen[own] = workspace->epoch;
+    if(!workspace->block_center) workspace->seen[own] = workspace->epoch;
     while (node < index->octant_count) {
         const lya_los_octant *entry = index->octants + node;
         nodeptr q = entry->node;
@@ -265,22 +292,28 @@ int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
             node = entry->escape;
             continue;
         }
-        DOTPSUBV(d2, displacement, Pos(pivot), Pos(q));
+        DOTPSUBV(d2, displacement, Pos(discovery_pivot), Pos(q));
         distance = rsqrt(d2);
         if (Type(q) == CELL) {
-            if (distance >= cutoff + Size(q) * rsqrt((REAL)NDIM))
+            if (distance >= discovery_cutoff + Size(q) * rsqrt((REAL)NDIM))
                 node = entry->escape;
             else node++;
         } else {
-            if (distance < cutoff && Update(q) != FALSE && Mask(q) == MASK_NODE_VALID) {
+            if (distance < discovery_cutoff && Update(q) != FALSE && Mask(q) == MASK_NODE_VALID) {
                 workspace->seen[entry->forest] = workspace->epoch;
                 workspace->forests[found++] = entry->forest;
             }
             node++;
         }
     }
+    /* Stable forest order makes summation independent of which pivot first
+     * discovers a forest, including across OpenMP scheduling and MPI ranks. */
+    qsort(workspace->forests,found,sizeof(*workspace->forests),lya_los_forest_compare);
+    if(workspace->block_center) {workspace->cached_count=found;workspace->cache_ready=1;}
+    }
     workspace->forest_hits += found;
     for (f = 0; f < found; f++) {
+        if(workspace->forests[f]==own) continue;
         const lya_los_forest *forest = index->forests + workspace->forests[f];
         long double lower, upper;
         size_t end = index->radial[forest->root].escape;

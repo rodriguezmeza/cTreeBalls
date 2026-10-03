@@ -1,0 +1,11 @@
+# Flat-sky weak-lensing shear 2PCF and 3PCF multipoles.
+
+ifeq ($(OCTREESHEAROMPON),1)
+OPT2 += -DOCTREESHEAROMP -DTHREEPCFSHEAR -DTWOPCF \
+	-DSHEAR_OMP_PIVOT_BLOCK_SIZE=$(SHEAR_OMP_PIVOT_BLOCK_SIZE)
+OCTREESHEAROMP = $(MDIR)/support/shear_kernel/
+vpath %.c $(OCTREESHEAROMP)
+INCLUDES += -I$(OCTREESHEAROMP)
+HEADERFILES += $(wildcard $(OCTREESHEAROMP)/*.h)
+EXTERNAL += search_octree_shear_omp.o
+endif

@@ -43,7 +43,7 @@ def main(argv=None):
     p.add_argument('--rp-bins',type=int,default=50);p.add_argument('--rt-bins',type=int,default=50)
     p.add_argument('--method',choices=['lya-2pcf-omp','lya-los-tree-2pcf-omp','lya-2pcf-3pcf-omp','lya-los-tree-2pcf-3pcf-omp'],default='lya-2pcf-omp')
     p.add_argument('--case',action='append',help='rp-slop:rt-slop; repeat to calibrate; defaults to exact 0:0 only')
-    p.add_argument('--kernel3',type=int,choices=range(5),default=0)
+    p.add_argument('--kernel3',type=int,choices=range(6),default=0)
     p.add_argument('--r3-max',type=float,default=160);p.add_argument('--r3-bins',type=int,default=4)
     p.add_argument('--theta-bins',type=int,default=4);p.add_argument('--mu-bins',type=int,default=4)
     p.add_argument('--relative-floor',type=float,default=1e-6);p.add_argument('--max-relative-error',type=float,default=.05)

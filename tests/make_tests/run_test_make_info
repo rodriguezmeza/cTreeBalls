@@ -90,14 +90,27 @@ if [[ "${smooth_setting}" == 1 ]]; then
     for expected in \
         'smooth-pivot policy: compiled=yes' \
         'default=enabled' \
-        'opt-out=options=no-smooth-pivot' \
-        'kdtree-2balls-omp' \
-        'kdtree-2balls-mpi' \
-        'balltree-shear-sphere-2balls-omp'; do
+        'opt-out=options=no-smooth-pivot'; do
         if ! grep -Fq -- "${expected}" "${output}"; then
             printf 'FAIL: enabled smooth-pivot policy is missing: %s\n' \
                 "${expected}" >&2
             exit 1
+        fi
+    done
+    # A disabled compatibility engine must not be advertised as supported.
+    smooth_policy=$(grep '^smooth-pivot policy:' "${output}")
+    for pair in OCTREEGGGOMPON:octree-ggg-omp KDTREEOMPON:kdtree-omp \
+        KDTREEMPION:kdtree-mpi KDTREE2BALLSOMPON:kdtree-2balls-omp \
+        KDTREE2BALLSMPION:kdtree-2balls-mpi \
+        BALLTREESHEARSPHERE2BALLSOMPON:balltree-shear-sphere-2balls-omp \
+        BALLTREESHEARSPHERE2BALLSMPION:balltree-shear-sphere-2balls-mpi; do
+        setting=${pair%%:*}
+        method=${pair#*:}
+        if grep -Eq "^[[:space:]]+${setting}[[:space:]]+= 1$" "${output}"; then
+            if ! printf '%s\n' "${smooth_policy}" | grep -Fq -- "${method}"; then
+                printf 'FAIL: enabled smooth-pivot method is missing: %s\n' "${method}" >&2
+                exit 1
+            fi
         fi
     done
 elif [[ "${smooth_setting}" == 0 ]]; then

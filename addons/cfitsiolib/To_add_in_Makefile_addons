@@ -1,0 +1,29 @@
+# ----- MAKE FILE machine definitions (AddOns) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+#
+
+#B To add in ../Makefile_addons
+#
+# CFITSIOLIB
+# internal cfitsio lib.
+#   Default is 0,
+#   means you have to install cfitsio library by your self
+#   or ask administrator to have it for you.
+#   If set to 1,
+#   no collision of CFITSIO addon with python interface
+#
+# This line is added to ../Makefile_addons_settings
+#CFITSIOLIBON = 1
+#   ... then comment it
+#
+ifeq ($(CFITSIOLIBON),1)
+include $(MACHINES_DIR)/addons/cfitsiolib/Makefile_cfitsiolib
+endif
+#E
+
+

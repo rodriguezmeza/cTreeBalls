@@ -1,6 +1,8 @@
 /* Shared Fourier moments, self-term removal, transport and pivot traversal.
  * Included under THREEPCFCONVERGENCE with backend specialization in scope. */
 typedef struct {
+    const unsigned char *selected_pairs;
+    INTEGER reuse_pairs, reuse_represented_pairs, reuse_parent_reductions;
     real *field_cos;
     real *field_sin;
     real *self_coscos;
@@ -453,108 +455,82 @@ static void dual_node_multipole_finish_pivot_range(
         const dual_node_multipole_scratch *scratch,
         int first_radial_bin, int radial_bin_limit, int radial_bins)
 {
-    for (int n1 = first_radial_bin; n1 < radial_bin_limit; n1++) {
-        for (int n2 = n1; n2 <= radial_bins; n2++) {
-            /* A rounded (sum w)^2 - sum(w^2) is not a cardinality test. */
-            if (scratch->neighbor_count[n1] == 0.0
-                || scratch->neighbor_count[n2] == 0.0
-                || (n1 == n2 && scratch->neighbor_count[n1] < 2.0))
-                continue;
-            const size_t hist_index = (size_t)n1 * hist->stride
-                                    + (size_t)n2;
-            const size_t transpose_index = (size_t)n2 * hist->stride
-                                         + (size_t)n1;
-            real denominator = scratch->normalization[n1]
-                             * scratch->normalization[n2];
-
-            if (n1 == n2) denominator -= scratch->normalization_sq[n1];
-            hist->normalization[hist_index] +=
-                pivot->normalization_sum * denominator;
-            if (n1 != n2)
-                hist->normalization[transpose_index] +=
-                    pivot->normalization_sum * denominator;
-            for (int order = 0; order < scratch->window_orders; order++) {
-                const size_t i = (size_t)order * scratch->stride + (size_t)n1;
-                const size_t j = (size_t)order * scratch->stride + (size_t)n2;
-                const size_t h = (size_t)order * hist->plane;
-                real re = scratch->window_cos[i] * scratch->window_cos[j]
-                        + scratch->window_sin[i] * scratch->window_sin[j];
-                const real im = scratch->window_sin[i] * scratch->window_cos[j]
-                              - scratch->window_cos[i] * scratch->window_sin[j];
-                /* The q==r contribution is w_q^2 at every complex order. */
-                if (n1 == n2) re -= scratch->normalization_sq[n1];
-                hist->window_re[h + hist_index] += pivot->normalization_sum * re;
-                hist->window_im[h + hist_index] += pivot->normalization_sum * im;
-                if (n1 != n2) {
-                    hist->window_re[h + transpose_index] +=
-                        pivot->normalization_sum * re;
-                    hist->window_im[h + transpose_index] -=
-                        pivot->normalization_sum * im;
+    /* Keep each order's contiguous histogram row hot. The former pair-major
+     * loop jumped between all order/component planes for every radial pair.
+     * Each SIMD iteration owns one distinct upper/lower symmetric pair. */
+    const size_t stride=hist->stride;
+    const unsigned char *selected=scratch->selected_pairs;
+#define DUAL_NODE_PAIR_PRESENT(n1,n2) \
+    (scratch->neighbor_count[n2] > 0.0 \
+     && ((n1)!=(n2) || scratch->neighbor_count[n1]>=2.0) \
+     && (selected==NULL || selected[(size_t)(n1)*stride+(n2)]))
+    for (int n1=first_radial_bin;n1<radial_bin_limit;n1++) {
+        if (scratch->neighbor_count[n1]==0.0) continue;
+        const size_t row=(size_t)n1*stride;
+        for (int n2=n1;n2<=radial_bins;n2++) {
+            if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
+            real denominator=scratch->normalization[n1]*scratch->normalization[n2];
+            if (n1==n2) denominator-=scratch->normalization_sq[n1];
+            hist->normalization[row+n2]+=pivot->normalization_sum*denominator;
+            if (n1!=n2) hist->normalization[(size_t)n2*stride+n1]+=pivot->normalization_sum*denominator;
+        }
+        for (int order=0;order<scratch->window_orders;order++) {
+            const size_t offset=(size_t)order*scratch->stride;
+            const real x=scratch->window_cos[offset+n1],y=scratch->window_sin[offset+n1];
+            real *restrict re=hist->window_re+(size_t)order*hist->plane;
+            real *restrict im=hist->window_im+(size_t)order*hist->plane;
+#pragma omp simd
+            for (int n2=n1;n2<=radial_bins;n2++) {
+                if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
+                real a=x*scratch->window_cos[offset+n2]+y*scratch->window_sin[offset+n2];
+                const real b=y*scratch->window_cos[offset+n2]-x*scratch->window_sin[offset+n2];
+                if (n1==n2) a-=scratch->normalization_sq[n1];
+                re[row+n2]+=pivot->normalization_sum*a;
+                im[row+n2]+=pivot->normalization_sum*b;
+                if (n1!=n2) {
+                    re[(size_t)n2*stride+n1]+=pivot->normalization_sum*a;
+                    im[(size_t)n2*stride+n1]-=pivot->normalization_sum*b;
                 }
             }
-            {
-                real coscos = scratch->field_cos[n1]
-                            * scratch->field_cos[n2];
-
-                if (n1 == n2)
-                    coscos -= scratch->self_coscos[n1];
-                dual_node_zeta_component(
-                    hist, DUAL_NODE_ZETA_COS, 0)[hist_index]
-                    += pivot->field_sum * coscos;
-                if (n1 != n2)
-                    dual_node_zeta_component(
-                        hist, DUAL_NODE_ZETA_COS, 0)[transpose_index]
-                        += pivot->field_sum * coscos;
-            }
-            for (int order = 1; order < scratch->orders; order++) {
-                const size_t index1 = (size_t)order * scratch->stride
-                                    + (size_t)n1;
-                const size_t index2 = (size_t)order * scratch->stride
-                                    + (size_t)n2;
-                real coscos = scratch->field_cos[index1]
-                            * scratch->field_cos[index2];
-                real sinsin = scratch->field_sin[index1]
-                            * scratch->field_sin[index2];
-                real sincos = scratch->field_sin[index1]
-                            * scratch->field_cos[index2];
-                real cossin = scratch->field_cos[index1]
-                            * scratch->field_sin[index2];
-
-                if (n1 == n2) {
-                    coscos -= scratch->self_coscos[index1];
-                    sinsin -= scratch->self_sinsin[index1];
-                    sincos -= scratch->self_sincos[index1];
-                    cossin -= scratch->self_sincos[index1];
+        }
+        real *restrict monopole=dual_node_zeta_component(hist,DUAL_NODE_ZETA_COS,0);
+#pragma omp simd
+        for (int n2=n1;n2<=radial_bins;n2++) {
+            if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
+            real value=scratch->field_cos[n1]*scratch->field_cos[n2];
+            if (n1==n2) value-=scratch->self_coscos[n1];
+            monopole[row+n2]+=pivot->field_sum*value;
+            if (n1!=n2) monopole[(size_t)n2*stride+n1]+=pivot->field_sum*value;
+        }
+        for (int order=1;order<scratch->orders;order++) {
+            const size_t offset=(size_t)order*scratch->stride;
+            const real x=scratch->field_cos[offset+n1],y=scratch->field_sin[offset+n1];
+            real *restrict cc=dual_node_zeta_component(hist,DUAL_NODE_ZETA_COS,order);
+            real *restrict ss=dual_node_zeta_component(hist,DUAL_NODE_ZETA_SIN,order);
+            real *restrict sc=dual_node_zeta_component(hist,DUAL_NODE_ZETA_SINCOS,order);
+            real *restrict cs=dual_node_zeta_component(hist,DUAL_NODE_ZETA_COSSIN,order);
+#pragma omp simd
+            for (int n2=n1;n2<=radial_bins;n2++) {
+                if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
+                real a=x*scratch->field_cos[offset+n2];
+                real b=y*scratch->field_sin[offset+n2];
+                real c=y*scratch->field_cos[offset+n2];
+                real d=x*scratch->field_sin[offset+n2];
+                if (n1==n2) {
+                    a-=scratch->self_coscos[offset+n1];b-=scratch->self_sinsin[offset+n1];
+                    c-=scratch->self_sincos[offset+n1];d-=scratch->self_sincos[offset+n1];
                 }
-                dual_node_zeta_component(
-                    hist, DUAL_NODE_ZETA_COS, order)[hist_index]
-                    += pivot->field_sum * coscos;
-                dual_node_zeta_component(
-                    hist, DUAL_NODE_ZETA_SIN, order)[hist_index]
-                    += pivot->field_sum * sinsin;
-                dual_node_zeta_component(
-                    hist, DUAL_NODE_ZETA_SINCOS, order)[hist_index]
-                    += pivot->field_sum * sincos;
-                dual_node_zeta_component(
-                    hist, DUAL_NODE_ZETA_COSSIN, order)[hist_index]
-                    += pivot->field_sum * cossin;
-                if (n1 != n2) {
-                    dual_node_zeta_component(
-                        hist, DUAL_NODE_ZETA_COS, order)[transpose_index]
-                        += pivot->field_sum * coscos;
-                    dual_node_zeta_component(
-                        hist, DUAL_NODE_ZETA_SIN, order)[transpose_index]
-                        += pivot->field_sum * sinsin;
-                    dual_node_zeta_component(
-                        hist, DUAL_NODE_ZETA_SINCOS, order)[transpose_index]
-                        += pivot->field_sum * cossin;
-                    dual_node_zeta_component(
-                        hist, DUAL_NODE_ZETA_COSSIN, order)[transpose_index]
-                        += pivot->field_sum * sincos;
+                cc[row+n2]+=pivot->field_sum*a;ss[row+n2]+=pivot->field_sum*b;
+                sc[row+n2]+=pivot->field_sum*c;cs[row+n2]+=pivot->field_sum*d;
+                if (n1!=n2) {
+                    const size_t column=(size_t)n2*stride+n1;
+                    cc[column]+=pivot->field_sum*a;ss[column]+=pivot->field_sum*b;
+                    sc[column]+=pivot->field_sum*d;cs[column]+=pivot->field_sum*c;
                 }
             }
         }
     }
+#undef DUAL_NODE_PAIR_PRESENT
 }
 
 static void dual_node_multipole_finish_pivot(
@@ -1397,6 +1373,9 @@ static void dual_node_initialize_multipole_scratch(
 {
     const size_t order_values = (size_t)orders * stride;
 
+    scratch->selected_pairs = NULL;
+    scratch->reuse_pairs = scratch->reuse_represented_pairs = 0;
+    scratch->reuse_parent_reductions = 0;
     scratch->field_cos = base;
     scratch->field_sin = scratch->field_cos + order_values;
     scratch->self_coscos = scratch->field_sin + order_values;

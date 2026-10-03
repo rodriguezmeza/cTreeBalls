@@ -214,6 +214,9 @@ typedef struct cballs_runtime_state {
     cballs_result_array results[8];
     int retain_results;
     cballs_mpi_engine_state mpi[CBALLS_MPI_ENGINE_COUNT];
+    int mpi_local_depth;
+    char mpi_test_failure[256];
+    char mpi_boundary_trace[32768];
     cballs_tree_workspace tree_workspace;
 #ifdef USEGSL
     gsl_rng *rng;

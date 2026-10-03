@@ -109,7 +109,8 @@ def compare(left, right, method):
             metrics[label] = dict(max_absolute=float(np.max(np.abs(diff), initial=0)),
                                  relative_l2=float(np.linalg.norm(diff)) / max(norm, 1e-300))
         counts = lambda p: re.findall(r"(?:pairs|triplets): (\d+)", (p / name).read_text())
-        assert counts(left) == counts(right), f"count mismatch: {name}"
+        if not (counts(left) == counts(right)):
+            raise AssertionError(f'count mismatch: {name}')
         results[name] = dict(rows=len(a), occupied_rows=int(np.count_nonzero(a[:, col+1])), metrics=metrics,
                              byte_identical=(left/name).read_bytes() == (right/name).read_bytes())
     return results
@@ -170,13 +171,14 @@ def main():
                     if label in first_accuracy:
                         for name, _, _ in PRODUCTS:
                             if (dirs[label]/name).exists():
-                                assert (dirs[label]/name).read_bytes() == (first_accuracy[label]/name).read_bytes(), (
-                                    f"{label} output depends on thread count: {method}")
+                                if not ((dirs[label] / name).read_bytes() == (first_accuracy[label] / name).read_bytes()):
+                                    raise AssertionError(f'{label} output depends on thread count: {method}')
                     first_accuracy[label] = dirs[label]
                 # Accepted visits measure implementation work and may fall
                 # after earlier ownership pruning; scientific counts may not.
                 for counter in ("pairs", "ordered_triplets"):
-                    assert validations["baseline"][counter] == validations["candidate"][counter], counter
+                    if not (validations['baseline'][counter] == validations['candidate'][counter]):
+                        raise AssertionError(counter)
                 report["accuracy"].append(dict(method=method, threads=threads,
                                                 products=compare(dirs["baseline"], dirs["candidate"], method)))
                 save()
@@ -184,7 +186,8 @@ def main():
                     for label in (("baseline", "candidate") if repeat % 2 == 0 else ("candidate", "baseline")):
                         row = run(binaries[label], input_path, root / f"{prefix}-{label}-{repeat}", method, threads, False)
                         for counter in ("accepted", "pairs", "ordered_triplets"):
-                            assert row[counter] == validations[label][counter], counter
+                            if not (row[counter] == validations[label][counter]):
+                                raise AssertionError(counter)
                         row.update(method=method, threads=threads, label=label, repeat=repeat,
                                    host_load=os.getloadavg() if hasattr(os, "getloadavg") else None)
                         report["samples"].append(row)

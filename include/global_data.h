@@ -33,6 +33,13 @@
 #endif
 
 
+/* Result availability is independent of allocation and initialization. */
+#define CBALLS_PRODUCT_NN     (1u << 0)
+#define CBALLS_PRODUCT_CF     (1u << 1)
+#define CBALLS_PRODUCT_XI     (1u << 2)
+#define CBALLS_PRODUCT_XI12   (1u << 3)
+#define CBALLS_PRODUCT_XI13   (1u << 4)
+
 struct global_data{
 
     //B PXD functions
@@ -177,7 +184,18 @@ struct global_data{
     real **histXicos;
     real **histXisin;
 
+    bool lyaHierarchyPixelFallback;
+    uint64_t lyaHierarchyCounts[6];
+    uint64_t lyaLOSCounts[3];
+    uint64_t lyaMultipoleCounts[5];
+    bool scalarReuseEnabled;
+    real scalarReusePhaseBudget, scalarReuseBinTheta;
+    INTEGER scalarReusePairs, scalarReuseRepresentedPairs, scalarReuseParentReductions;
+
 // Flat-sky weak-lensing shear correlations (octree-shear-omp).
+    bool shearReuseEnabled;
+    real shearReusePhaseBudget;
+    real shearReuseBinSlop;
     real *histShearXiPlusRe;
     real *histShearXiPlusIm;
     real *histShearXiMinusRe;
@@ -295,6 +313,8 @@ struct global_data{
     bool gd_allocated;
     bool gd_allocated_2;
     bool histograms_allocated;
+    bool histogram_results_ready;
+    unsigned int histogram_products;
     bool common_scalar_3pcf;
     size_t common_histogram_bytes;
     size_t memory_budget_bytes;

@@ -42,7 +42,7 @@ def main(argv=None):
     for i,spec in enumerate(args.case or ['0:.01:0:0','0:.05:0:0','3:.01:0:0','4:.01:0:0','4:.01:.01:.01']):
         try:
             fields=spec.split(':');kernel=int(fields[0]);mu,radial,polar=map(float,fields[1:4]);cap=int(fields[4]) if len(fields)==5 else 8
-            if len(fields) not in (4,5) or kernel not in (0,3,4) or not 1<=cap<=64 or not all(np.isfinite(v) and 0<=v<=1 for v in [mu,radial,polar]) or (kernel==0 and (radial or polar)):raise ValueError()
+            if len(fields) not in (4,5) or kernel not in (0,3,4,5) or not 1<=cap<=64 or not all(np.isfinite(v) and 0<=v<=1 for v in [mu,radial,polar]) or (kernel==0 and (radial or polar)):raise ValueError()
         except (ValueError,IndexError):p.error(f'invalid case {spec!r}')
         cases.append((f'case-{i}-k{kernel}-m{mu:g}-r{radial:g}-p{polar:g}-c{cap}',kernel,mu,radial,polar,cap))
     if args.fits:

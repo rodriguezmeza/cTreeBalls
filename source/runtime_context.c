@@ -19,7 +19,7 @@
 #include "globaldefs.h"
 #include "tree_contracts.h"
 #include "resource_contracts.h"
-#include "../addons/balltree_shared/fcfc_balltree.h"
+#include "../support/pca_tree/fcfc_balltree.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -206,6 +206,12 @@ local int cballs_guard_stage(struct cmdline_data *cmd,
     gsl_set_error_handler(previous_gsl_handler);
     cballs_previous_gsl_handler = NULL;
 #endif
+    if (callback != cballs_call_end_run_free_memory)
+        status = cballs_mpi_context_consensus(cmd, status,
+            callback == cballs_call_print_parameter_file ? "MPI parameter output" :
+            callback == cballs_call_set_number_threads ? "MPI thread configuration" :
+            callback == cballs_call_start_run_common ? "MPI startup completion" :
+            callback == cballs_call_main_loop ? "MPI computation completion" : "MPI run finalization");
     return status;
 }
 
@@ -233,7 +239,12 @@ global int cballs_set_number_threads_guarded(struct cmdline_data *cmd)
 global int cballs_main_loop_guarded(struct cmdline_data *cmd,
                                     struct global_data *gd)
 {
-    return cballs_guard_stage(cmd, gd, NULL, cballs_call_main_loop);
+    int status = cballs_guard_stage(cmd, gd, NULL, cballs_call_main_loop);
+    if (status == FAILURE && gd != NULL) {
+        gd->histogram_results_ready = FALSE;
+        gd->histogram_products = 0;
+    }
+    return status;
 }
 
 global int cballs_end_run_guarded(struct cmdline_data *cmd,

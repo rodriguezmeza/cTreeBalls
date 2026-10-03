@@ -25,6 +25,14 @@ static size_t lya_segment_build(lya_worker_hist *w, size_t begin, size_t end)
     size_t index=w->segment_count++;
     lya_segment *s=&w->segments[index];
     s->begin=begin; s->end=end; s->left=s->right=SIZE_MAX;
+    if (end-begin > 8) {
+        size_t middle=begin+(end-begin)/2;
+        s->left=lya_segment_build(w,begin,middle);
+        s->right=lya_segment_build(w,middle,end);
+        const lya_segment *a=&w->segments[s->left],*b=&w->segments[s->right];
+        s->weight=a->weight+b->weight;s->weighted_delta=a->weighted_delta+b->weighted_delta;
+        for(int k=0;k<3;k++) {s->lo[k]=MIN(a->lo[k],b->lo[k]);s->hi[k]=MAX(a->hi[k],b->hi[k]);}
+    } else {
     s->weight=s->weighted_delta=0;
     for (int k=0;k<3;k++) {s->lo[k]=1; s->hi[k]=-1;}
     for (size_t j=begin;j<end;j++) {
@@ -40,10 +48,6 @@ static size_t lya_segment_build(lya_worker_hist *w, size_t begin, size_t end)
             } else {s->lo[k]=MIN(s->lo[k],u); s->hi[k]=MAX(s->hi[k],u);}
         }
     }
-    if (end-begin > 8) {
-        size_t middle=begin+(end-begin)/2;
-        s->left=lya_segment_build(w,begin,middle);
-        s->right=lya_segment_build(w,middle,end);
     }
     return index;
 }
@@ -193,10 +197,12 @@ static void lya_segment_pair(struct cmdline_data *cmd, bodyptr p,
     }
 }
 
+#include "lya_los_moments.h"
+
 static int lya_accumulate_segments(struct cmdline_data *cmd, bodyptr p,
                                    lya_worker_hist *w, ErrorMsg err)
 {
-    size_t count=w->neighbor_count, bytes, scratch, total, roots=0;
+    size_t count=w->neighbor_count, bytes, scratch, total, roots=0, forests=0;
     if (count<2) return SUCCESS;
     if (cmd->lya3Kernel==2) {
         for (size_t i=0;i<count;i++) lya_direct_ranges(cmd,p,w,i,i+1,i+1,count);
@@ -209,6 +215,7 @@ static int lya_accumulate_segments(struct cmdline_data *cmd, bodyptr p,
             || !cballs_size_mul(w->neighbor_capacity,sizeof(lya_neighbor),&scratch)
             || !cballs_size_mul(bytes,2,&bytes)
             || !cballs_size_add(bytes,scratch,&total)
+            || !cballs_size_add(total,w->los_moment_bytes,&total)
             || !cballs_size_mul(total,w->scratch_workers,&total)
             || !cballs_size_add(total,w->histogram_plan_bytes,&total)) {
             snprintf(err,_ERRORMSGSIZE_,"Ly-alpha segment scratch dimensions overflow"); return FAILURE;
@@ -228,14 +235,22 @@ static int lya_accumulate_segments(struct cmdline_data *cmd, bodyptr p,
         REAL d=fabs(w->neighbors[i].weighted_delta), v=w->neighbors[i].weight;
         if ((v!=0 && (v<1e-50 || v>1e50)) || (d!=0 && (d<1e-50 || d>1e50))) w->aggregation_safe=0;
     }
-    lya_sort_neighbors(w->neighbors,count);
+    if(!w->neighbors_sorted) lya_sort_neighbors(w->neighbors,count);
     w->segment_count=0;
     for (size_t begin=0;begin<count;) {
+        if(begin==0 || w->neighbors[begin].forest_id!=w->neighbors[begin-1].forest_id) forests++;
         size_t end=begin+1;
         while (end<count && w->neighbors[end].forest_id==w->neighbors[begin].forest_id
                && w->neighbors[end].first_index==w->neighbors[begin].first_index) end++;
         w->segment_roots[roots++]=lya_segment_build(w,begin,end); begin=end;
     }
+    /* Repeated forest membership across many leg bins forces the mixed
+     * hierarchy to refine almost every product. Keep the compact per-forest
+     * loop when the frontier averages more than three roots per forest.
+     * This work estimate depends only on geometry, never thread/rank count. */
+    if(cmd->lya3Kernel==5 && lya_forest_is_los_tree_method(cmd->searchMethod)
+        && roots>=32 && (roots-1)/forests<3 && w->aggregation_safe && cmd->lya3MuSlop==0)
+        return lya_los_moments_run(cmd,p,w,roots,err);
     for (size_t i=0;i<roots;i++) for (size_t j=i+1;j<roots;j++) {
         size_t a=w->segment_roots[i], b=w->segment_roots[j];
         if (w->neighbors[w->segments[a].begin].forest_id

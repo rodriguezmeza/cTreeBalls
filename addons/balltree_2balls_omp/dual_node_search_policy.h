@@ -95,7 +95,8 @@ static int dual_node_search_log_multipole(
     INTEGER pivot_restart_total = 0;
     INTEGER pivot_finish_total = 0;
     INTEGER frontier_failure_total = 0;
-    INTEGER distributed_statistics[3] = {0, 0, 0};
+    INTEGER reuse_pairs=0, reuse_represented_pairs=0, reuse_parent_reductions=0;
+    INTEGER distributed_statistics[6] = {0};
     real distributed_profile_statistics[3] = {0.0, 0.0, 0.0};
     double pivot_transport_total = 0.0;
     double scratch_clear_total = 0.0;
@@ -137,6 +138,8 @@ static int dual_node_search_log_multipole(
         return FAILURE;
     }
 
+    if (dual_node_reuse_prepare(&context, cmd, gd, run_3pcf) == FAILURE)
+        goto cleanup;
     context.profile = scanopt(cmd->options, "dual-node-profile");
     context.timers = &phase_timers;
 
@@ -175,6 +178,9 @@ static int dual_node_search_log_multipole(
     verb_print(cmd->verbose,
                "balanced scan-level task frontier enabled by BALLS4SCANLEV\n");
 #endif
+    if (context.reuse_enabled)
+        verb_print(cmd->verbose, "scalar-pivot-reuse: phase_budget=%g bin_theta=%g; strict radial cutoffs\n",
+                   (double)gd->scalarReusePhaseBudget, (double)gd->scalarReuseBinTheta);
     if (run_3pcf)
         verb_print(cmd->verbose, "3PCF multipoles: %s\n",
                    dual_node_normalize_3pcf(cmd)
@@ -284,6 +290,7 @@ static int dual_node_search_log_multipole(
 #else
     scratch_level_count = dual_node_balltree_depth(tree1, 0) + 1;
 #endif
+    if (context.reuse_enabled) scratch_level_count = 1;
     operation_status = dual_node_allocate_triple_histograms(
         cmd, task_count, stride, orders,
         &task_histograms, &hist_values_per_task,
@@ -315,7 +322,7 @@ static int dual_node_search_log_multipole(
 #endif
     if (context.profile) phase_started = dual_node_timer_now();
 #pragma omp parallel for schedule(dynamic,1) \
-    reduction(+:pair_test_total,pivot_restart_total,pivot_finish_total,frontier_failure_total,pivot_transport_total,scratch_clear_total,multipole_product_total)
+    reduction(+:pair_test_total,pivot_restart_total,pivot_finish_total,frontier_failure_total,pivot_transport_total,scratch_clear_total,multipole_product_total,reuse_pairs,reuse_represented_pairs,reuse_parent_reductions)
     for (INTEGER itask = 0; itask < task_count; itask++) {
         real *hist_base = task_histograms
                         + (size_t)itask * hist_values_per_task;
@@ -331,6 +338,11 @@ static int dual_node_search_log_multipole(
         dual_node_initialize_multipole_scratch(
             &scratch, scratch_base, stride, orders,
             dual_node_window_orders(cmd), scratch_values_per_level);
+        if (context.reuse_enabled) {
+            if (dual_node_reuse_task(&context,tree1,frontier[itask],tree2,
+                    auto_correlation,&scratch,&hist) == FAILURE)
+                frontier_failure_total++;
+        } else {
 #ifdef DUAL_NODE_PERSISTENT_PARTIAL_FRONTIER
         if (context.use_two_balls) {
             const INTEGER neighbor_root = 0;
@@ -403,6 +415,10 @@ static int dual_node_search_log_multipole(
                 auto_correlation, &scratch, &hist);
         }
 #endif
+        }
+        reuse_pairs += scratch.reuse_pairs;
+        reuse_represented_pairs += scratch.reuse_represented_pairs;
+        reuse_parent_reductions += scratch.reuse_parent_reductions;
 #ifdef DUAL_NODE_PIVOT_PROGRESS
         dual_node_publish_pivot_progress(&context, scratch.progress_pending);
 #endif
@@ -438,6 +454,9 @@ static int dual_node_search_log_multipole(
     distributed_statistics[0] = pair_test_total;
     distributed_statistics[1] = pivot_restart_total;
     distributed_statistics[2] = pivot_finish_total;
+    distributed_statistics[3] = reuse_pairs;
+    distributed_statistics[4] = reuse_represented_pairs;
+    distributed_statistics[5] = reuse_parent_reductions;
     distributed_profile_statistics[0] = (real)pivot_transport_total;
     distributed_profile_statistics[1] = (real)scratch_clear_total;
     distributed_profile_statistics[2] = (real)multipole_product_total;
@@ -453,7 +472,7 @@ static int dual_node_search_log_multipole(
             cmd, task_cell_counts, (size_t)task_count) == FAILURE)
         reduction_status = FAILURE;
     if (dual_node_distributed_reduce_integers(
-            cmd, distributed_statistics, 3) == FAILURE)
+            cmd, distributed_statistics, 6) == FAILURE)
         reduction_status = FAILURE;
     if (context.profile
         && dual_node_distributed_reduce_reals(
@@ -468,6 +487,13 @@ static int dual_node_search_log_multipole(
     pair_test_total = distributed_statistics[0];
     pivot_restart_total = distributed_statistics[1];
     pivot_finish_total = distributed_statistics[2];
+    gd->scalarReusePairs = distributed_statistics[3];
+    gd->scalarReuseRepresentedPairs = distributed_statistics[4];
+    gd->scalarReuseParentReductions = distributed_statistics[5];
+    if (context.reuse_enabled && context.profile)
+        verb_print(cmd->verbose,"scalar-pivot-reuse: radial_pairs=%" INTEGER_FMT
+                   " represented_pairs=%" INTEGER_FMT " parent_reductions=%" INTEGER_FMT "\n",
+                   gd->scalarReusePairs,gd->scalarReuseRepresentedPairs,gd->scalarReuseParentReductions);
     if (context.profile) {
         phase_timers.pivot_transport_thread =
             (double)distributed_profile_statistics[0];

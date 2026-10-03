@@ -9,12 +9,12 @@
 DEFDIMENSION = 3
 #
 #
-# Default GSL public (not the internal sources version, not included).
+# Development profile includes bundled GSL; public sdists use external GSL.
 # GSL can be switched off by setting USEGSL to 0, by default is 0,
 #   means GSL is not used:
 USEGSL = 1
 # If you want the internal gsl version set it to 1, gsl sources files are included.
-GSLINTERNAL = 0
+GSLINTERNAL = 1
 # When USEGSL = 1 and GSLINTERNAL = 0 you may need to configure GSL in the system
 #   in order to be found. Makefile and setup.py have been configured to find it
 #   automatically. In case of problems see Makefile_machine for details

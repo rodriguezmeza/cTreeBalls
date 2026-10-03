@@ -45,6 +45,9 @@ typedef struct _node {
     real shear_transport_error;
 #endif
 
+    /* Cell-only scalar sums of squares; distinct neighbors use sum(x*x). */
+    real scalar_weight2, scalar_field2;
+    real scalar_pivot_sum;
     real weight;                                    // to weight fields...
 
     vector pos;
@@ -128,6 +131,10 @@ typedef struct _node {
 #define ShearTransportError(x) (((nodeptr) (x))->shear_transport_error)
 //E
 #endif
+
+#define ScalarWeight2(x) (((nodeptr)(x))->scalar_weight2)
+#define ScalarField2(x) (((nodeptr)(x))->scalar_field2)
+#define ScalarPivotSum(x) (((nodeptr)(x))->scalar_pivot_sum)
 
 #define Weight(x)   (((nodeptr) (x))->weight)
 

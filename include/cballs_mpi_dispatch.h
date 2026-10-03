@@ -162,51 +162,7 @@ static inline int cballs_mpi_consensus(struct cmdline_data *cmd,
                                        int local_status,
                                        const char *operation)
 {
-    int status = local_status;
-#ifdef OCTREE3PCF3DMPI
-    status = cb3d_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef LYAFORESTMPI
-    status = lya_forest_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef OCTREEBALLS4MPI
-    status = fcfc_octree_balls4_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef KDTREEMPI
-    status = fcfc_kdtree_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef KDTREE2BALLSMPI
-    status = fcfc_kdtree_2balls_mpi_consensus(cmd, status, operation);
-#endif
-#if defined(BALLTREEMPI) || defined(BALLTREE2BALLS_LEGACY_MPI_COMPAT)
-    status = fcfc_balltree_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef BALLTREE2BALLSMPI
-    status = fcfc_balltree_2balls_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef OCTREE2BALLSMPI
-    status = fcfc_octree_2balls_mpi_consensus(cmd, status, operation);
-#endif
-#ifdef OCTREESHEARSPHERE2BALLSMPI
-    status = fcfc_octree_shear_sphere_2balls_mpi_consensus(
-        cmd, status, operation);
-#endif
-#ifdef KDTREESHEARSPHERE2BALLSMPI
-    status = fcfc_kdtree_shear_sphere_2balls_mpi_consensus(
-        cmd, status, operation);
-#endif
-#ifdef BALLTREESHEARSPHERE2BALLSMPI
-    status = fcfc_balltree_shear_sphere_2balls_mpi_consensus(
-        cmd, status, operation);
-#endif
-#ifdef BALLTREE2BALLSMPI3PCF
-    status = fcfc_balltree_2balls_mpi_3pcf_consensus(
-        cmd, status, operation);
-#endif
-#if defined(OCTREEGGGMPI) || defined(OCTREE2BALLS_GGG_MPI_COMPAT)
-    status = fcfc_octree_ggg_mpi_consensus(cmd, status, operation);
-#endif
-    return status;
+    return cballs_mpi_context_consensus(cmd, local_status, operation);
 }
 
 #endif /* CBALLS_MPI_ENABLED */

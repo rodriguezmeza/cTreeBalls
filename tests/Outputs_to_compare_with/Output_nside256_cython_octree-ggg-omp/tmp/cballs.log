@@ -1,0 +1,242 @@
+
+scanrOption: Processing 'rsmooth' option:
+scanrOption: Splitting string "rsmooth" in tokens:
+scaniOption: Splitting string "iCatalogs=1" in tokens:
+startrun_getParamsSpecial: option: iCatalogs final values: 0
+startrun_getParamsSpecial: option: iCatalogs final values: 0
+scaniOption: Splitting string "columns=1,2,3,4" in tokens:
+	startrun_getParamsSpecial: columns[0]: 1...
+	startrun_getParamsSpecial: columns[1]: 2...
+	startrun_getParamsSpecial: columns[2]: 3...
+	startrun_getParamsSpecial: columns[3]: 4...
+
+startrun_memoryAllocation: Allocated 0.181274 MByte for histograms storage.
+
+StartRun_Common: coordTag: 0
+
+InputData: reading data catalog...
+
+	Input in binary format...
+	done reading.
+	inputdata :: reading time = 1.207808 sec.
+deltaRV (deltaR=0.073576 logscale):
+ 0 0.00253283
+ 2 0.00300042 0.000467588
+ 3 0.00355433 0.000553909
+ 4 0.00421049 0.000656167
+ 5 0.0049878 0.000777303
+ 6 0.0059086 0.000920801
+ 7 0.00699939 0.00109079
+ 8 0.00829155 0.00129216
+ 9 0.00982226 0.00153071
+ 10 0.0116356 0.0018133
+ 11 0.0137836 0.00214805
+ 12 0.0163282 0.0025446
+ 13 0.0193426 0.00301437
+ 14 0.0229134 0.00357085
+ 15 0.0271435 0.00423007
+ 16 0.0321545 0.00501098
+ 17 0.0380905 0.00593607
+ 18 0.0451225 0.00703193
+ 19 0.0534526 0.0083301
+ 20 0.0633205 0.00986793
+deltaRV min and max: 0.000467588 0.00986793
+
+Rcut, deltaR: 0.0633205 0.0735757
+StartRun_Common: lbox: 1.99999 1.99999 1.99999
+StartRun_Common: Warning!! lbox size was changed!! 
+... make sure lengthBox was given right!!
+StartRun_Common: lbox: 2 2 2
+Box volume = 7.999905e+00
+(V/N)^(1/3): 0.0216675
+
+Unit sphere (Takahasi): (S/N)^(1/2): 0.00399737
+and Nsmooth (Takahasi): (N*rs^2)/4: 3.14159
+
+
+Nyquist frequency in phi bins = 2.54648
+
+	evalHist: with octree-ggg-omp method
+
+
+MakeTree: making the tree...
+
+deltaRadius = 0.0606061
+
+MakeTree: radius histogram:
+0 386208
+33 1160
+66 0
+99 272
+132 0
+165 0
+198 56
+231 0
+264 0
+297 0
+330 0
+363 0
+396 0
+429 8
+462 0
+495 0
+528 0
+561 0
+594 0
+627 0
+660 0
+693 0
+726 0
+759 0
+792 0
+825 0
+858 0
+891 1
+924 0
+957 0
+990 0
+1023 0
+1056 0
+
+MakeTree: threadtree CPU time: 0.011833 sec.
+
+Maximum and minimum cell size: 2.000000e+00 7.812500e-03
+
+MakeTree: Nb histogram:
+0 0
+1 0
+2 142884
+3 61668
+4 52500
+5 38016
+6 19756
+7 3552
+8 2656
+9 3016
+10 2884
+11 2156
+12 3580
+13 3204
+14 3660
+15 7568
+16 4328
+17 4336
+18 5212
+19 2780
+20 2160
+21 1932
+22 760
+23 332
+24 292
+25 116
+26 216
+27 140
+28 264
+29 204
+30 252
+31 204
+32 248
+
+
+Allocated 68.033 MByte for (387705) cells storage.
+
+MakeTree: root number of bodies = 786432
+
+MakeTree: radius histogram (after pruning):
+0 386208
+33 1160
+66 144
+99 128
+132 0
+165 32
+198 24
+231 0
+264 0
+297 0
+330 0
+363 0
+396 0
+429 8
+462 0
+495 1
+528 0
+561 0
+594 0
+627 0
+660 0
+693 0
+726 0
+759 0
+792 0
+825 0
+858 0
+891 0
+924 0
+957 0
+990 0
+1023 0
+1056 0
+
+
+MakeTree: Nb histogram (after pruning):
+0 0
+1 0
+2 142884
+3 61668
+4 52500
+5 38016
+6 19756
+7 3552
+8 2656
+9 3016
+10 2884
+11 2156
+12 3580
+13 3204
+14 3660
+15 7568
+16 4328
+17 4336
+18 5212
+19 2780
+20 2160
+21 1932
+22 760
+23 332
+24 292
+25 116
+26 216
+27 140
+28 264
+29 204
+30 252
+31 204
+32 248
+
+MakeTree: pruningCells CPU time: 0.075121 sec.
+	done with the tree.
+making tree CPU time : 1.818980 sec.
+
+searchcalc: Using octree-ggg-omp... 
+with 2pcf convergence computation... 
+with 3pcf convergence computation... 
+with NMultipoles... 
+with NONORMHIST... 
+
+search_init_gd_octree_ggg: Allocated 0.26947 MByte for histograms storage.
+search_init_gd_octree_ggg_N: Allocated 0.26947 MByte for histograms storage.
+
+searchcalc_octree_ggg_omp: Total allocated 68.7535 MByte storage so far.
+
+Running...
+ - Completed pivot node:
+
+	 Total allocated 76.7984 MByte storage so far (threads).
+.......
+
+
+
+	searchcalc_octree_ggg_omp: printing octree-ggg-omp method...
+
+
+Going out: CPU time = 72.085874 sec.

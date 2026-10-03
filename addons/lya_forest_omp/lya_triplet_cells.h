@@ -30,7 +30,7 @@ typedef struct {
     size_t *point_tags, *pixel_tags;
     size_t task_begin;
     size_t cached_pivot;
-    size_t count, capacity;
+    size_t count, capacity, radial_bytes;
     REAL radial_scale, angular_scale, polar_scale;
     unsigned long long pivot_aggregates;
     unsigned long long geometry_evaluations, cache_hits, pruned_nodes, leaf_evaluations, pair_cache_hits;
@@ -275,7 +275,9 @@ static int lya_cell_append(lya_cell_workspace *ws,lya_cell_leg leg,
     if(ws->count==ws->capacity) {
         size_t cap=ws->capacity?ws->capacity*2:128,bytes,total;
         if(cap<ws->capacity || !cballs_size_mul(cap,sizeof(leg),&bytes)
-            || !cballs_size_mul(bytes,2*(size_t)MAX(1,cmd->numthreads),&total)
+            || !cballs_size_mul(bytes,2,&total)
+            || !cballs_size_add(total,ws->radial_bytes,&total)
+            || !cballs_size_mul(total,(size_t)MAX(1,cmd->numthreads),&total)
             || !cballs_size_add(total,tree->plan,&total)) {
             snprintf(err,_ERRORMSGSIZE_,"Ly-alpha node frontier size overflow");return FAILURE;
         }
@@ -465,6 +467,8 @@ static int lya_cell_triple(const lya_cells *tree,struct cmdline_data *cmd,size_t
     return SUCCESS;
 }
 
+#include "lya_radial_moments.h"
+
 static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
                           bodyptr base,INTEGER count,INTEGER first,INTEGER last,
                           nodeptr root,int compute2,size_t bins2,size_t bins3,size_t plan,
@@ -487,6 +491,18 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
         compute2=0; /* Pair products are complete; preserve the shared hierarchy. */
 
     }
+    /* Sparse pivot groups cannot amortize persistent per-pivot geometry and
+     * mixed-forest frontier setup. Preserve the exact segment path in that
+     * regime. This fixed geometric decision is independent of threads/ranks;
+     * explicitly requested geometry slop retains the cell traversal. */
+    if(cmd->lya3Kernel==5 && cmd->lya3MuSlop==0 && cmd->lya3RadialSlop==0
+        && cmd->lya3PolarSlop==0 && tree.tasks_count>tree.count/4) {
+        lya_cells_free(&tree);
+        gd->lyaHierarchyPixelFallback=TRUE;
+        verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+            "Ly-alpha hierarchy: sparse pivot groups; exact pixel-segment fallback\n");
+        return 2; /* private dispatch result, distinct from SUCCESS/FAILURE */
+    }
     build_start=CPUTIME; /* Cache setup excludes the already measured pair pass. */
     size_t cache_bytes,cache_total,pixel_slots,pixel_bytes;
     if(!cballs_size_mul(tree.max_pivots>1?tree.max_pivots:0,tree.count,&pixel_slots)
@@ -503,12 +519,14 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
     int failed=0;ErrorMsg error="";
     size_t block_size=cmd->lya3PivotBlock?(size_t)cmd->lya3PivotBlock:8;
     size_t blocks=tree.tasks_count/block_size+(tree.tasks_count%block_size!=0);
+    const size_t first_block=lya_parallel_first(cmd),block_stride=lya_parallel_stride(cmd);
     unsigned long long pivot_aggregates=0;
     unsigned long long geometry_evaluations=0,cache_hits=0,pruned_nodes=0,leaf_evaluations=0,pair_cache_hits=0;
 #pragma omp parallel
     {
         lya_worker_hist w;
         lya_cell_workspace ws={0};
+        lya_radial_workspace radial={0};
         ErrorMsg local_error="";
         int ready=lya_worker_init(cmd,&w,bins2,bins3,compute2,1,tree.plan,local_error)==SUCCESS;
         if(ready && (cballs_calloc_checked((void**)&ws.point_cache,tree.nodes_count,sizeof(lya_cell_leg),
@@ -527,7 +545,7 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
         ws.angular_scale=.5*cmd->lya3MuBins;
         int worker_failed=!ready;
 #pragma omp for schedule(static,1) ordered
-        for(size_t block=0;block<blocks;block++) {
+        for(size_t block=first_block;block<blocks;block+=block_stride) {
             w.accepted_visits=w.pair_count=w.ordered_triplet_count=0;
             size_t begin=block*block_size,end=MIN(tree.tasks_count,begin+block_size);
             for(size_t task=begin;!worker_failed && task<end;task++) {
@@ -538,7 +556,9 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
                 ws.count=0;ws.cached_pivot=p->left==SIZE_MAX?ip:SIZE_MAX;ws.task_begin=p->begin;
                 for(size_t j=0;!worker_failed && j<tree.roots_count;j++)
                     if(lya_cell_frontier(&tree,cmd,ip,tree.roots[j],&ws,local_error)==FAILURE) worker_failed=1;
-                for(size_t j=0;!worker_failed && j<ws.count;j++) for(size_t k=j+1;!worker_failed && k<ws.count;k++) {
+                if(cmd->lya3Kernel==5) {
+                    if(!worker_failed && lya_radial_run(&tree,cmd,ip,&w,&ws,&radial,local_error)==FAILURE) worker_failed=1;
+                } else for(size_t j=0;!worker_failed && j<ws.count;j++) for(size_t k=j+1;!worker_failed && k<ws.count;k++) {
                     if(tree.nodes[ws.legs[j].node].forest==tree.nodes[ws.legs[k].node].forest) continue;
                     if(lya_cell_triple(&tree,cmd,ip,ws.legs[j],ws.legs[k],&w,&ws,local_error)==FAILURE) worker_failed=1;
                 }
@@ -560,11 +580,13 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
         {
             if(worker_failed && !failed) {failed=1;snprintf(error,sizeof(error),"%s",local_error);}
             *aggregated+=w.aggregated_pairs;*direct+=w.direct_pairs;*accepts+=w.segment_accepts;*approximate+=w.approximate_pairs;
+            gd->lyaHierarchyCounts[0]+=radial.built;gd->lyaHierarchyCounts[1]+=radial.visited;
+            gd->lyaHierarchyCounts[2]+=radial.accepted;gd->lyaHierarchyCounts[3]+=radial.represented;
             pivot_aggregates+=ws.pivot_aggregates;
             geometry_evaluations+=ws.geometry_evaluations;cache_hits+=ws.cache_hits;pruned_nodes+=ws.pruned_nodes;
             leaf_evaluations+=ws.leaf_evaluations;pair_cache_hits+=ws.pair_cache_hits;
         }
-        free(ws.legs);free(ws.point_cache);free(ws.point_tags);free(ws.pair_cache);free(ws.pixel_cache);free(ws.pixel_tags);if(ready) lya_worker_free(&w);
+        free(radial.nodes);free(ws.legs);free(ws.point_cache);free(ws.point_tags);free(ws.pair_cache);free(ws.pixel_cache);free(ws.pixel_tags);if(ready) lya_worker_free(&w);
     }
     verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
         "Persistent forest cells: forests=%zu nodes=%zu pivot_tasks=%zu pivot_aggregates=%llu build_CPU=%g task_block=%zu\n",

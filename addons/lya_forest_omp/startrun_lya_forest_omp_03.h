@@ -13,6 +13,7 @@
     IPName(cmd->lya3Kernel, "lya3Kernel");
 
     IPName(cmd->lya3LMax, "lya3LMax");
+    IPName(cmd->lya3MuMode, "lya3MuMode");
 
     IPName(cmd->lya3PivotBlock, "lya3PivotBlock");
 

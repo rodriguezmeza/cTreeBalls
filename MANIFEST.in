@@ -2,9 +2,6 @@ include LICENSE
 include README.md
 include pyproject.toml
 recursive-include requirements *.txt
-recursive-include capabilities *.json
-include ACTIVE_RELEASE_GATE.md RESOURCE_SCIENTIFIC_CONTRACTS.md
-include ENGINE_CAPABILITIES.md MAINTAINABILITY_CONTRACTS.md
 include Makefile
 include Makefile_machine
 include Makefile_settings
@@ -13,53 +10,66 @@ recursive-include main *.c
 recursive-include include *.h
 recursive-include general_libs *.c *.h
 recursive-include getparam *.c *.h
-recursive-include scripts *.py *.sh *.md
+include scripts/generate_make_info_header.sh
+recursive-include scripts *.py
+include scripts/README_benchmark_lya_optimization.md
+include ACTIVE_RELEASE_GATE.md
+recursive-include tests *.c
 recursive-include python *.pyx *.pxi
 include python/ccyballs.pxd.in
 recursive-include tests/python *.py *.md *.txt
 include examples/download_desi_lya_example.sh
 recursive-include examples *.py *.ipynb
 recursive-include docs *.rst *.py Makefile
-include docs/requirements.txt
-recursive-include docs/man cballs.1 cballs.m cballs.html *.sh
+recursive-include docs/man cballs.1 cballs.m cballs.html
 prune docs/_build
-recursive-include tests/make_tests README.md run_test* *.py
-recursive-include tests/fixtures *
-recursive-include tests/In *
-recursive-include tests *.c
+recursive-include tests/make_tests run_test*
+recursive-include tests/fixtures/io_stabilization *
+recursive-include tests/fixtures/runtime_stabilization *
+include tests/test_runtime_stabilization.c
+include tests/test_scalar_window.c
+recursive-include tests/fixtures/provenance_window *
 
 prune addons
 
 include addons/Makefile_addons
 include addons/Makefile_addons_settings
 include addons/Makefile_gsl
+include addons/cfitsiolib/Makefile_cfitsiolib
+
 recursive-include addons/addons_include *.h
+recursive-include support/kd_tree *.c *.h Makefile*
 recursive-include addons/kdtree_2balls_omp *.c *.h *.md Makefile*
 recursive-include addons/kdtree_2balls_mpi *.c *.h *.md Makefile*
-recursive-include addons/kdtree_shared *.c *.h Makefile*
-recursive-include addons/balltree_shared *.c *.h Makefile*
-recursive-include addons/shear_sphere_shared *.c *.h
-recursive-include addons/scalar_compat_shared *.c *.h
+recursive-include support/pca_tree *.c *.h *.md Makefile*
 recursive-include addons/balltree_2balls_omp *.c *.h *.md Makefile*
 recursive-include addons/balltree_2balls_mpi *.c *.h *.md Makefile*
 recursive-include addons/octree_2balls_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_2balls_mpi *.c *.h *.md Makefile*
-recursive-include addons/native_octree_pair *.c *.h Makefile*
+recursive-include support/native_octree_pair *.c *.h *.md Makefile*
+recursive-include support/scalar_octree *.c *.h Makefile*
+recursive-include support/scalar_octree_mpi *.c *.h *.md Makefile*
 recursive-include addons/kdtree_box_omp *.c *.h Makefile*
 recursive-include addons/neighbor_boxes_omp *.c *.h Makefile*
 recursive-include addons/lya_forest_omp *.c *.h *.py *.md Makefile*
 recursive-include addons/lya_forest_mpi *.c *.h *.md *.ini *.txt Makefile*
+recursive-include support/shear_kernel *.c *.h *.md Makefile*
+recursive-include support/spherical_shear *.c *.h *.md Makefile*
 recursive-include addons/octree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
+recursive-include addons/octree_shear_sphere_2balls_mpi *.c *.h *.md Makefile*
 recursive-include addons/kdtree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
+recursive-include addons/kdtree_shear_sphere_2balls_mpi *.c *.h *.md Makefile*
 recursive-include addons/balltree_shear_sphere_2balls_omp *.c *.h *.md Makefile*
-recursive-include addons/shear_sphere_binary_2balls *.h
+recursive-include addons/balltree_shear_sphere_2balls_mpi *.c *.h *.md Makefile*
+recursive-include support/shear_binary *.h
 recursive-include addons/octree_3pcf_3d_omp *.c *.h *.md Makefile*
 recursive-include addons/octree_3pcf_3d_mpi *.c *.h *.md *.ini *.txt Makefile*
+prune addons/octree_3pcf_3d_omp/backup_before_correction_following_Encore
 recursive-include addons/gadget_io *.c *.h Makefile*
 recursive-include addons/class_lib *.c *.h Makefile*
-recursive-include addons/iolib *.h Makefile*
+recursive-include addons/iolib *.c *.h Makefile*
 recursive-include addons/cfitsio *.c *.h Makefile*
-recursive-include addons/pxd *.h Makefile*
+recursive-include addons/pxd *.c *.h Makefile*
 recursive-include addons/cmdline_defs_settings *.h Makefile*
 
 global-exclude .DS_Store
@@ -69,4 +79,30 @@ global-exclude *.o *.a *.so *.dylib
 global-exclude __pycache__/*
 global-exclude *.pyc
 
+include RESOURCE_SCIENTIFIC_CONTRACTS.md
+
+recursive-include capabilities *.json
+include ENGINE_CAPABILITIES.md
+include MAINTAINABILITY_CONTRACTS.md
+include addons/*/startrun_*.h
+
 include RELEASE_WORK_SEQUENCE.md
+
+include ENGINEERING_COMPLETION.md
+
+include docs/SCALAR_HIERARCHICAL_REUSE.md
+
+include docs/LYA_HIERARCHICAL_REUSE.md
+
+include docs/LYA_LOS_HIERARCHICAL_REUSE.md
+
+include docs/LYA_MULTIPOLE_HIERARCHICAL_REUSE.md
+include docs/LYA_MULTIPOLE_RECONSTRUCTION.md
+
+include docs/RESULT_AVAILABILITY_AND_IDENTITY.md
+include docs/saved_scalar_edge.md
+include docs/SOURCE_DISTRIBUTION.md
+
+recursive-include support *.c *.h Makefile* *.md *.txt
+
+include docs/ACTIVE_PROFILE.md

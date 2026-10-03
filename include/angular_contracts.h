@@ -1,8 +1,8 @@
 #ifndef CBALLS_ANGULAR_CONTRACTS_H
 #define CBALLS_ANGULAR_CONTRACTS_H
 
-/* Scalar Fourier multipoles in 3D use observer-relative tangent directions,
- * not the interior angle between three-dimensional chords. */
+/* Scalar angular multipoles and full-sky shear retain the observer origin.
+ * Recentring before spherical normalization changes positions and spin frames. */
 static inline bool cballs_observer_frame(const struct cmdline_data *cmd)
 {
 #if NDIM == 3
@@ -11,7 +11,8 @@ static inline bool cballs_observer_frame(const struct cmdline_data *cmd)
         /* The physical 3D estimator's legacy name shares the ggg prefix,
          * but uses Euclidean opening angles, just like its canonical name. */
         && strncmp(method, "octree-ggg-3d-", 14) != 0
-        && (!strcmp(method, "octree-sincos-omp")
+        && (!strncmp(method, "octree-shear-sphere-", 20)
+            || !strcmp(method, "octree-sincos-omp")
             || !strncmp(method, "octree-ggg-", 11)
             || !strncmp(method, "octree-balls4-", 14)
             || !strncmp(method, "octree-2balls-", 14)

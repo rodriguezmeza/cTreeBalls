@@ -877,10 +877,12 @@ local int make_CF(struct cmdline_data *cmd,
             rho_r=DD[ii]/(nD*vr);
             corr[ii]=rho_r/rho_av-1;
             ercorr[ii]=(1+corr[ii])*edd[ii];
-            gd->histNN[ii+1] = DD[ii];
-            gd->histCF[ii+1] = corr[ii];
         }
+        /* Empty bins must publish the same values as the file output. */
+        gd->histNN[ii+1] = DD[ii];
+        gd->histCF[ii+1] = corr[ii];
     }
+    gd->histogram_products |= CBALLS_PRODUCT_NN | CBALLS_PRODUCT_CF;
 
   free(edd);
 

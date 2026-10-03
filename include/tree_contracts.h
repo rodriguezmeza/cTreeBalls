@@ -164,6 +164,10 @@ static inline bool cballs_cell_accumulate_child(nodeptr parent, nodeptr child,
                                       + weighted_gamma2*weighted_gamma2;
         }
 #endif
+        ScalarWeight2(parent) += Type(child) == CELL ? ScalarWeight2(child)
+            : Weight(child)*Weight(child);
+        ScalarField2(parent) += Type(child) == CELL ? ScalarField2(child)
+            : Weight(child)*Kappa(child)*Weight(child)*Kappa(child);
         Weight(parent) += Weight(child);
 #ifndef NOWKAvg
         Kappa(parent) += Weight(child)*Kappa(child);

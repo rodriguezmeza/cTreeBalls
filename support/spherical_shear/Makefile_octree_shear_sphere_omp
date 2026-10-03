@@ -1,0 +1,14 @@
+# Full-sky weak-lensing shear 2PCF and 3PCF multipoles.
+
+ifeq ($(OCTREESHEARSPHEREOMPON),1)
+OPT2 += -DOCTREESHEARSPHEREOMP -DTHREEPCFSHEAR -DTWOPCF \
+	-DSHEAR_OMP_PIVOT_BLOCK_SIZE=$(SHEAR_OMP_PIVOT_BLOCK_SIZE)
+OCTREESHEARSPHEREOMP = $(MDIR)/support/spherical_shear/
+vpath %.c $(OCTREESHEARSPHEREOMP)
+INCLUDES += -I$(OCTREESHEARSPHEREOMP)
+HEADERFILES += $(wildcard $(OCTREESHEARSPHEREOMP)/*.h)
+EXTERNAL += search_octree_shear_sphere_omp.o
+search_octree_shear_sphere_omp.o: \
+	$(MDIR)/support/shear_kernel/search_octree_shear_omp.c \
+	$(MDIR)/support/spherical_shear/shear_sphere_dual_tree.h
+endif

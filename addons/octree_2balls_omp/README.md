@@ -137,8 +137,7 @@ otherwise Linux retains the scalar logarithm path.
 
 `options=dual-node-direct-triples` retains the cubic triple-node traversal as a
 validation oracle for moderate catalogs. The traversal is adapted from
-dual-node by Mike Jarvis under its BSD license; the full notice is in
-`addons/balltree_2balls_omp/dual-node_LICENSE`.
+dual-node by Mike Jarvis under its BSD license.
 
 ## Octree-GGG compatibility
 
@@ -157,3 +156,13 @@ kernel. `only-2pcf` is supported. `only-3pcf` is rejected because the GGG
 kernel does not yet provide a true skip-2PCF execution path. Without
 `legacy-one-ball`, smooth-pivot remains unsupported and the compact two-ball
 algorithm is unchanged.
+
+## Optional hierarchical scalar 3PCF
+
+`options=scalar-pivot-reuse,no-smooth-pivot` enables shared neighbor moments
+and completion of resolved radial-bin pairs at parent pivots. It supports
+both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
+2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
+and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
+depend on the observable, controls, and geometry. See the
+[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

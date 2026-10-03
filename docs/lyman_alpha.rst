@@ -26,7 +26,8 @@ replace ``omp`` with ``mpi`` for its distributed sibling:
 * ``lya-los-tree-2pcf-omp``, ``lya-los-tree-3pcf-omp`` and
   ``lya-los-tree-2pcf-3pcf-omp``: exact anisotropic 3D statistics with an octree
   for forest discovery and per-LOS radial trees for neighbor ranges. Unlike
-  radial-only methods, transverse distance matters. These have no MPI siblings.
+  radial-only methods, transverse distance matters. MPI siblings use fixed
+  pivot blocks, replicated catalogs and collective raw-sum reductions.
 * ``octree-3pcf-3d-omp`` and ``octree-3pcf-3d-mpi``: scalar Legendre 3PCF
   multipoles with ``exclude-all-same-los`` enforcing three distinct forests.
 
@@ -114,3 +115,40 @@ task blocks. Thread-count changes are deterministic at fixed rank count;
 changing ranks may change rounding. Native and Cython tests cover independent
 oracles, scan/tree agreement, exclusions, strict in-memory multipoles, and
 recoverable failures.
+
+LOS Hierarchical Reuse
+----------------------
+
+Select ``lya2Kernel=1 lya3Kernel=5`` (Python: ``--lya2-kernel 1
+--lya3-kernel 5``) for certified pair-range and adaptive triple moments.
+The LOS sparse fallback retains forest discovery and builds a hierarchy
+above per-forest radial/polar segments. Compact fixed pivot blocks also
+share a conservative discovery frontier, including with the default pair
+kernel. Every pivot retains its own cuts and forest exclusions.
+
+Zero slops preserve the hard-bin estimator to summation rounding. These
+methods do not replace the five-dimensional histogram by truncated
+multipoles. MPI counterparts support the same kernels. See the
+:download:`LOS implementation and validation guide <LYA_LOS_HIERARCHICAL_REUSE.md>`
+for contracts, work counters, benchmark commands and limits.
+
+Anisotropic Legendre moment acceleration
+----------------------------------------
+
+``lya-anisotropic-multipole-3pcf-omp`` now reuses forest-block harmonic
+moments with an occupancy-based automatic choice at ``lya3Kernel=0``.
+For this engine, kernel 1 preserves the prefix reference and kernel 2 forces
+four-forest groups. Raw moments retain exact radial/polar bins; finite-order
+reconstruction of hard opening-angle bins remains approximate. See
+``docs/LYA_MULTIPOLE_HIERARCHICAL_REUSE.md`` and the addon README.
+
+
+Exact angular-bin companion
+---------------------------
+
+For the anisotropic multipole OpenMP engine, ``lya3MuMode=1`` additionally
+computes exact hard opening-angle bins using shared neighbor discovery and
+certified hierarchy products with pixel fallback. Their ``_lya5d`` output is
+independent of Lmax; ``_lya5d_multipole`` remains approximate. Mode 0 preserves
+the existing behavior. The exact companion requires extra memory and runtime.
+See :download:`the reconstruction guide <LYA_MULTIPOLE_RECONSTRUCTION.md>`.

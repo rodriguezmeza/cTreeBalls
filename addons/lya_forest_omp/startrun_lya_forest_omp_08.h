@@ -13,6 +13,7 @@
     WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI, "lya3Kernel", cmd->lya3Kernel);
 
     WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI, "lya3LMax", cmd->lya3LMax);
+    WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI, "lya3MuMode", cmd->lya3MuMode);
 
     WRITE_OUTPUT_OR_FAIL(fdout, buf, FMTI, "lya3PivotBlock", cmd->lya3PivotBlock);
 

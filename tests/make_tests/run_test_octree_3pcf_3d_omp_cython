@@ -5,4 +5,4 @@ cd "$(dirname "$0")/../.."
 
 PYTHON=${PYTHON:-python3}
 
-"$PYTHON" tests/make_tests/test_cython_octree_3pcf_3d_omp.py
+"$PYTHON" tests/python/test_cython_octree_3pcf_3d_omp.py

@@ -74,8 +74,10 @@ def main(argv=None):
     p.add_argument('--theta-bins',type=int,default=4);p.add_argument('--mu-bins',type=int,default=4)
     p.add_argument('--pivot-block',type=int,default=0,help='0 automatic, or 1..4096')
     p.add_argument('--lmax',type=int,nargs='*',default=[4,8,16],help='empty list runs exact kernels only')
+    p.add_argument('--multipole-kernel',type=int,choices=(0,1,2),default=0,help='0 automatic reuse, 1 original prefix, 2 forced four-forest hierarchy')
+    p.add_argument('--mu-mode',choices=('finite-multipole','exact'),default='finite-multipole',help='exact adds certified hard bins sharing discovery with the raw moments; retains finite-L diagnostics')
     p.add_argument('--relative-floor',type=float,default=1e-6);p.add_argument('--max-relative-error',type=float,default=.05)
-    p.add_argument('--require-accepted-multipole',action='store_true')
+    p.add_argument('--require-accepted-multipole',action='store_true',help='require a multipole run whose selected mu product meets the accuracy limit; exact mode tests the exact companion')
     args=p.parse_args(argv)
     if not 0<=args.pivot_block<=4096:p.error('pivot-block must be in 0..4096')
     if min(args.threads,args.repeats,args.r3_bins,args.theta_bins,args.mu_bins,args.pixel_stride)<1 or args.warmups<0:
@@ -107,8 +109,9 @@ def main(argv=None):
     def save(): (out/'summary.json').write_text(json.dumps(report,indent=2,default=str,allow_nan=False)+'\n')
     cases=[('reference','lya-3pcf-omp',1,0),('tiled','lya-3pcf-omp',2,0),
            ('segments','lya-3pcf-omp',0,0),('los-segments','lya-los-tree-3pcf-omp',0,0)]
-    cases.extend((f'multipole-L{l}',METHOD,0,l) for l in dict.fromkeys(args.lmax))
+    cases.extend((f'multipole-L{l}',METHOD,args.multipole_kernel,l) for l in dict.fromkeys(args.lmax))
     reference=None
+    report["reconstruction_comparisons"]=[]
     for label,method,kernel,lmax in cases:
         timings=[];table=None
         for rep in range(-args.warmups,args.repeats):
@@ -116,10 +119,10 @@ def main(argv=None):
             params=dict(search=method,infile=cat,infileformat='lya-ascii',iCatalogs=1,rootDir=folder,
                 numberThreads=args.threads,usePeriodic='false',useLogHist='false',rangeN=args.r3_max,rminHist=.1,sizeHistN=4,
                 lya3RMax=args.r3_max,lya3RBins=args.r3_bins,lya3ThetaBins=args.theta_bins,lya3MuBins=args.mu_bins,
-                lya3Kernel=kernel,lya3LMax=lmax,lya3PivotBlock=args.pivot_block,verbose=2,verbose_log=1,options='no-smooth-pivot,lya-output-empty-bins')
+                lya3Kernel=kernel,lya3LMax=lmax,lya3MuMode=int(method==METHOD and args.mu_mode=='exact'),lya3PivotBlock=args.pivot_block,verbose=2,verbose_log=1,options='no-smooth-pivot,lya-output-empty-bins')
             command=[str(binary),*(f'{k}={v}' for k,v in params.items())]
             measurement=run_process(command,folder/'process.log')
-            filename='histZetaM_lya5d_multipole.txt' if method==METHOD else 'histZetaM_lya5d.txt'
+            filename='histZetaM_lya5d_multipole.txt' if method==METHOD and args.mu_mode=='finite-multipole' else 'histZetaM_lya5d.txt'
             new=np.loadtxt(folder/filename,ndmin=2)
             if table is not None:np.testing.assert_allclose(new,table,rtol=0,atol=0,equal_nan=True)
             table=new
@@ -127,7 +130,14 @@ def main(argv=None):
             if rep>=0:timings.append(measurement['wall_seconds'])
         if reference is None:reference=table.copy()
         metrics=accuracy(reference,table,args.relative_floor,args.max_relative_error)
-        metrics.update(case=label,median_wall_seconds=float(np.median(timings)))
+        metrics.update(case=label,median_wall_seconds=float(np.median(timings)),
+            mu_product=args.mu_mode if method==METHOD else 'exact',filename=filename)
+        if method==METHOD and args.mu_mode=='exact':
+            diagnostic=accuracy(reference,np.loadtxt(folder/'histZetaM_lya5d_multipole.txt',ndmin=2),args.relative_floor,args.max_relative_error)
+            diagnostic.update(case=label,mu_product='finite-multipole')
+            report['reconstruction_comparisons'].append(diagnostic)
+            np.testing.assert_allclose(table[:,-3:],reference[:,-3:],rtol=1e-9,atol=3e-11)
+            metrics['exact_raw_check_passed']=True
         if method!=METHOD:
             # Reassociation of hundreds of billions of contributions changes
             # rounding; raw sums must still agree tightly on the retained grid.
@@ -136,6 +146,6 @@ def main(argv=None):
         report['comparisons'].append(metrics);save();print(json.dumps(metrics),flush=True)
     accepted=[r['case'] for r in report['comparisons'] if r['case'].startswith('multipole') and r['accepted']]
     report['accepted_multipoles']=accepted;save()
-    if args.require_accepted_multipole and not accepted:raise SystemExit('No multipole order met the requested accuracy; exact kernels remain available.')
+    if args.require_accepted_multipole and not accepted:raise SystemExit('No selected multipole mu product met the requested accuracy; use --mu-mode exact or an exact hard-bin engine.')
 
 if __name__=='__main__':main()

@@ -7,7 +7,7 @@ case OCTREE2BALLSMPIMETHOD: {
     verb_print(cmd->verbose,
                "\n\tevalHist: with distributed octree two-ball 2PCF "
                "and LogMultipole 3PCF\n\n");
-    if (cballs_opt_read_mask(cmd)) {
+    if (cballs_opt_read_mask(cmd) && gd->iCatalogs[0] == gd->iCatalogs[1]) {
         bool cached_tree;
         int leaf_capacity;
 
@@ -52,7 +52,7 @@ case OCTREE2BALLSMPIMETHOD: {
             cmd, tree_status, "MPI native-octree construction");
     if (tree_status == FAILURE) return FAILURE;
 
-    if (cballs_opt_read_mask(cmd)) {
+    if (cballs_opt_read_mask(cmd) && gd->iCatalogs[0] == gd->iCatalogs[1]) {
         if (searchcalc_octree_2balls_mpi(
                 cmd, gd, bodytable, gd->nbodyTable, 1, gd->nbodyTable,
                 ifile, ifile) == FAILURE)

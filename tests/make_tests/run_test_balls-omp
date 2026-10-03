@@ -21,7 +21,7 @@ CBALLS=../cballs
 #CBALLS=../cballs_sincos
 PYTHON='python'
 InDir='./In'
-scriptsDir='./scripts'
+scriptsDir='./python'
 
 # Test 01 ::
 echo ""

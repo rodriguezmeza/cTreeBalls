@@ -25,6 +25,13 @@ import time
 from typing import Any, Iterable, Optional, Sequence
 
 import numpy as np
+from benchmark_timing import timing_metadata as _timing_metadata, aggregate_rank_timings
+
+from shear_fits_catalog import (
+    add_fits_table_arguments, apply_binning_preset, load_des_shear_catalog,
+    resolve_fits_format, validate_des_controls,
+)
+from shear_products import attach_products
 
 
 # healpy imports matplotlib.  Keep its cache stable when a locked home
@@ -168,6 +175,9 @@ class RunConfig:
     bins: int = 6
     multipoles: int = 3
     phi_bins: int = 32
+    qualification_reference: Optional[Path] = None
+    qualification_rtol: float = .02
+    qualification_atol: float = 1e-10
     threads: int = max(1, (os.cpu_count() or 2) - 1)
     mpi_ranks: int = 2
     mpiexec: str = "mpiexec"
@@ -861,21 +871,6 @@ def solve_mode_coupling(upsilon: np.ndarray, window: np.ndarray,
     return result
 
 
-def _timing_metadata(setup_wall: float, setup_cpu: float,
-                     compute_wall: float, compute_cpu: float,
-                     scope: str) -> dict[str, Any]:
-    return {
-        "setup_wall_time": float(setup_wall),
-        "setup_cpu_time": float(setup_cpu),
-        "compute_wall_time": float(compute_wall),
-        "compute_cpu_time": float(compute_cpu),
-        "total_wall_time": float(setup_wall + compute_wall),
-        "total_cpu_time": float(setup_cpu + compute_cpu),
-        "timing_scope": scope,
-    }
-
-
-
 def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
                    engine: Optional[str] = None, *,
                    _mpi_rank: Optional[int] = None) -> dict[str, Any]:
@@ -939,6 +934,11 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
             elapsed = time.perf_counter() - started
             elapsed_cpu = time.process_time() - started_cpu
             native_timings = model.getTimings()
+            if _mpi_rank is None or _mpi_rank == 0:
+                from cyballs import publish_result_packet
+                publish_result_packet(model,config.output_dir/engine/'qualification',
+                    Path(config.qualification_reference)/engine/'qualification' if config.qualification_reference else None,
+                    rtol=config.qualification_rtol,atol=config.qualification_atol)
             result: dict[str, Any] = {
                 "engine": engine,
                 "provenance": model.getRunMetadata(),
@@ -952,6 +952,8 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
                 "native_mainloop_cpu_time": float(native_timings["process_cpu_seconds"]),
                 "parameters": {key: value for key, value in parameters.items()
                                if key != "rootDir"},
+                "shear_radial_bin_slop": os.environ.get("CBALLS_SHEAR_BIN_THETA", "0")
+                    if "shear-pivot-reuse" in options else None,
                 "shear_pivot_phase_budget": os.environ.get("CBALLS_SHEAR_PIVOT_TOL", "0.1")
                     if "shear-pivot-reuse" in options else None,
             }
@@ -1051,41 +1053,9 @@ def run_ctreeballs_mpi(catalog: ShearCatalog, config: RunConfig,
             for rank in range(config.mpi_ranks)
         ]
         result.update(metadata)
-        result["setup_wall_time"] = max(
-            row["setup_wall_time"] for row in rank_timings
-        )
-        result["setup_cpu_time"] = sum(
-            row["setup_cpu_time"] for row in rank_timings
-        )
-        result["compute_wall_time"] = max(
-            row["compute_wall_time"] for row in rank_timings
-        )
-        result["compute_cpu_time"] = sum(
-            row["compute_cpu_time"] for row in rank_timings
-        )
-        result["total_wall_time"] = max(
-            row["total_wall_time"] for row in rank_timings
-        )
-        result["total_cpu_time"] = sum(
-            row["total_cpu_time"] for row in rank_timings
-        )
-        result["native_reported_cpu_time"] = sum(
-            row["native_reported_cpu_time"] for row in rank_timings
-        )
-        result["native_mainloop_wall_time"] = max(
-            row["native_mainloop_wall_time"] for row in rank_timings
-        )
-        result["native_mainloop_cpu_time"] = sum(
-            row["native_mainloop_cpu_time"] for row in rank_timings
-        )
+        result.update(aggregate_rank_timings(rank_timings))
         result[f"elapsed_{config.statistics}"] = result["compute_wall_time"]
         result[f"cpu_{config.statistics}"] = result["compute_cpu_time"]
-        result["ranks"] = config.mpi_ranks
-        result["rank_timings"] = rank_timings
-        result["timing_scope"] = (
-            "MPI max-rank MainLoop wall and summed rank CPU; launcher and "
-            "catalog packet transfer excluded"
-        )
         result["launcher_wall_time"] = time.perf_counter() - launched
         return result
 
@@ -1121,6 +1091,7 @@ def mpi_worker(root: Path) -> int:
     )
     rank_timing = {name: float(result[name]) for name in timing_keys}
     rank_timing["rank"] = rank
+    rank_timing["timing_scope"] = result["timing_scope"]
     (root / f"rank-{rank}.json").write_text(
         json.dumps(rank_timing, indent=2), encoding="utf-8"
     )
@@ -1144,14 +1115,14 @@ def mpi_worker(root: Path) -> int:
 
 def symmetric_relative_difference(candidate: np.ndarray, reference: np.ndarray,
                                   floor: float = 1.0e-10) -> np.ndarray:
-    candidate = np.asarray(candidate)
-    reference = np.asarray(reference)
+    candidate, reference = np.broadcast_arrays(candidate, reference)
     denominator = np.abs(candidate) + np.abs(reference)
-    scale = max(float(np.max(np.abs(candidate), initial=0.0)),
-                float(np.max(np.abs(reference), initial=0.0)),
+    valid = np.isfinite(candidate) & np.isfinite(reference)
+    scale = max(float(np.max(np.abs(candidate[valid]), initial=0.0)),
+                float(np.max(np.abs(reference[valid]), initial=0.0)),
                 np.finfo(float).tiny)
-    result = np.full(np.broadcast_shapes(candidate.shape, reference.shape), np.nan)
-    valid = denominator > floor*scale
+    result = np.full(candidate.shape, np.nan)
+    valid &= denominator > floor*scale
     result[valid] = 2.0*np.abs(candidate[valid] - reference[valid])/denominator[valid]
     return result
 
@@ -1303,6 +1274,16 @@ def _display_radius(radius: np.ndarray, config: RunConfig,
 def make_plots(results: dict[str, dict[str, Any]], config: RunConfig) -> list[str]:
     import matplotlib.pyplot as plt
 
+    # Hide unsupported bins in figures without modifying retained observables.
+    results = {name: dict(row) for name, row in results.items()}
+    for row in results.values():
+        if "gamma" in row and "gamma_valid" in row:
+            row["gamma"] = np.where(row["gamma_valid"][None, :, :, None],
+                                    row["gamma"], np.nan + 1j*np.nan)
+        if "pair_valid" in row:
+            for key in ("xi_plus", "xi_minus"):
+                row[key] = np.where(row["pair_valid"], row[key], np.nan + 1j*np.nan)
+
     paths: list[str] = []
     colors = {
         SHEAR_SPHERE_TWO_BALLS_ENGINE: "C0",
@@ -1420,6 +1401,8 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
         )
         try:
             result = run_ctreeballs(catalog, config, engine)
+            if catalog.geometry == "sphere":
+                result = attach_products(result, config, catalog)
         except Exception as exc:
             if not config.continue_on_error:
                 raise
@@ -1434,6 +1417,8 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
     timings = timing_summary(results)
     summary = {
         "ctreeballs_runtime": runtime_info,
+        "requested_engines": list(engines),
+        "failures": [name for name in engines if name not in results],
         "catalog": {**catalog.metadata, "nbody": catalog.nbody,
                     "geometry": catalog.geometry},
         "config": {
@@ -1484,8 +1469,14 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
 
 def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    add_fits_table_arguments(parser)
+    parser.add_argument("--binning", choices=("custom", "sofia-fig1", "paper-8-200-edges"), default="custom",
+                        help="DES presets: 20 log-chord bins with 8/200 arcmin centers or edges")
+    parser.add_argument('--qualification-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
+    parser.add_argument('--qualification-rtol',type=float,default=.02)
+    parser.add_argument('--qualification-atol',type=float,default=1e-10)
     sources = parser.add_mutually_exclusive_group()
-    sources.add_argument("--fits", type=Path, help="two-field HEALPix shear FITS map")
+    sources.add_argument("--fits", type=Path, help="HEALPix map or sparse DES x/y/z/gamma1/gamma2 FITS table")
     sources.add_argument("--catalog-npz", type=Path,
                          help="positions/gamma1/gamma2 NPZ catalog")
     sources.add_argument("--synthetic-nbody", type=int, default=None)
@@ -1597,6 +1588,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return mpi_worker(Path(raw[1]))
     args = parse_arguments(raw)
     try:
+        args.min_sep, args.max_sep, args.nbins, args.sep_units = apply_binning_preset(
+            args.binning, args.min_sep, args.max_sep, args.nbins, args.sep_units,
+            linear=args.linear_bins, geometry=args.geometry)
+        if args.fits is None and (args.fits_format != "auto" or args.des_shear_convention != "auto"):
+            raise ValueError("--fits-format/--des-shear-convention require --fits")
         runtime_info = inspect_cballs_runtime(args.cballs)
         available = available_engines(args.cballs, runtime_info=runtime_info)
         if args.list_engines:
@@ -1633,6 +1629,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             multipoles=args.multipoles,
             phi_bins=args.phi_bins,
             threads=args.threads,
+            qualification_reference=args.qualification_reference,
+            qualification_rtol=args.qualification_rtol,
+            qualification_atol=args.qualification_atol,
             mpi_ranks=args.mpi_ranks,
             mpiexec=args.mpiexec,
             mpi_extra_args=tuple(args.mpi_extra_arg),
@@ -1664,7 +1663,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "input_shear_frame": args.input_shear_frame,
                 "conjugate_input": args.conjugate_input_shear,
             }
-            if args.geometry == "sphere":
+            fits_format = resolve_fits_format(args.fits, args.fits_format)
+            if fits_format == "desy3":
+                validate_des_controls(geometry=args.geometry, **{
+                    key: input_keywords[value] for key, value in (
+                        ("mask", "mask_path"), ("weight_field", "weight_field"),
+                        ("input_shear_frame", "input_shear_frame"), ("conjugate_input", "conjugate_input"),
+                        ("gamma1_field", "gamma1_field"), ("gamma2_field", "gamma2_field"))})
+                catalog = ShearCatalog(**load_des_shear_catalog(
+                    args.fits, max_points=args.max_points, seed=args.sampling_seed,
+                    chunk_rows=args.fits_chunk_rows, convention=args.des_shear_convention)).normalized()
+            elif args.des_shear_convention != "auto":
+                raise ValueError("--des-shear-convention requires a DES catalog table")
+            elif args.geometry == "sphere":
                 catalog = catalog_from_healpix_sphere(args.fits, **input_keywords)
             else:
                 catalog = catalog_from_healpix_patch(
@@ -1685,6 +1696,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if args.geometry == "sphere" else
                 synthetic_shear_catalog(args.synthetic_nbody or 128)
             )
+        catalog.metadata["binning_preset"] = args.binning
         if args.save_catalog_npz is not None:
             save_catalog_npz(args.save_catalog_npz, catalog)
         run_engine_suite(catalog, engines, config, runtime_info=runtime_info)

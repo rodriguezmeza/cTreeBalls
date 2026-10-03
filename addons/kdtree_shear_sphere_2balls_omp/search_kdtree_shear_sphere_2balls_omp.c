@@ -2,8 +2,13 @@
 #define OCTREE_SHEAR_SPHERICAL 1
 #define SHEAR_SPHERE_BINARY_TWO_BALLS 1
 #define SHEAR_SPHERE_BINARY_POSITIONS_UNIT 1
+/* Keep these arithmetic/traversal specializations private to this engine. */
+#define SHEAR_SPHERE_FAST_KERNEL 1
+#define SHEAR_SPHERE_BINARY_GEODESIC_PAIRS 1
 #ifdef BALLS4SCANLEV
 #define SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER 1
+#define SHEAR_SPHERE_PIVOT_REUSE 1
+#define SHEAR_SPHERE_BINARY_PIVOT_REUSE 1
 #endif
 #define SHEAR_SPHERE_BINARY_TREE_HEADER "kdtree_shear_sphere_tree.h"
 #define SHEAR_SPHERE_BINARY_TREE_BUILD kdtree_shear_sphere_build
@@ -14,4 +19,4 @@
     prepare_kdtree_shear_sphere_2balls_catalogs
 #define searchcalc_octree_shear_omp \
     searchcalc_kdtree_shear_sphere_2balls_omp
-#include "../shear_sphere_shared/shear_sphere_engine.c"
+#include "../../support/shear_kernel/search_octree_shear_omp.c"

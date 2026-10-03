@@ -1,3 +1,6 @@
+case LYAFORESTLOSTREE2PCFMPIMETHOD:
+case LYAFORESTLOSTREE3PCFMPIMETHOD:
+case LYAFORESTLOSTREE2PCF3PCFMPIMETHOD:
 /* Multidimensional products are written by the search, on rank 0. */
 case 185:
 case 186:

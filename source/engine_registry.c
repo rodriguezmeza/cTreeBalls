@@ -93,6 +93,17 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
                 "quasars. Histograms are weight-normalized; empty bins are zero. "
                 "Use tests/python/lya_corr_all_engines.py for DESI/eBOSS FITS, NPZ or ASCII, "
                 "one-time loading and MPI broadcasting. Legacy options=smooth-pivot is unsupported.\n");
+        if (strstr(cballs_engine_registry[i].name, "shear-sphere-2balls-") != NULL)
+            verb_print_zero(cmd->verbose,
+                "  input: observer-centered unit vectors with local east/north gamma1,gamma2; "
+                "tests/python/shear_corr_all_engines.py accepts HEALPix maps, NPZ, and "
+                "DES/Takahashi x/y/z/gamma1/gamma2 FITS tables (--fits-format desy3). "
+                "The Python table reader uses G2CONV or --des-shear-convention, unit pixel weights, "
+                "preselected footprints, and deterministic --max-points/--sampling-seed row selection. "
+                "These are Python driver arguments, not native options or infileformat values.\n"
+                "  accuracy: use theta=0 and no-one-ball,no-smooth-pivot for an unsmoothed "
+                "body reference. no-two-balls alone does not make the 3PCF neighbor scan exact. "
+                "UNMEASURED means no matching exact-reference comparison was supplied.\n");
         if (strncmp(cballs_engine_registry[i].name, "octree-3pcf-3d-", 15) == 0)
             verb_print_zero(cmd->verbose,
                 "  modes: only-2pcf-3d, only-3pcf-3d, or "

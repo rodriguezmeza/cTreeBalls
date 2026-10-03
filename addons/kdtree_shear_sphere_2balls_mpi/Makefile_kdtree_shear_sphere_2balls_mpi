@@ -1,0 +1,39 @@
+# MPI full-sky weak-lensing shear estimator over the median KD tree.
+
+ifeq ($(KDTREESHEARSPHERE2BALLSMPION),1)
+OPT2 += -DKDTREESHEARSPHERE2BALLSMPI -DCBALLS_MPI_ENABLED \
+	-DTHREEPCFSHEAR -DTWOPCF \
+	-DSHEAR_OMP_PIVOT_BLOCK_SIZE=$(SHEAR_OMP_PIVOT_BLOCK_SIZE)
+KDTREESHEARSPHERE2BALLSMPI = $(MDIR)/addons/kdtree_shear_sphere_2balls_mpi/
+vpath %.c $(KDTREESHEARSPHERE2BALLSMPI)
+INCLUDES += -I$(KDTREESHEARSPHERE2BALLSMPI) \
+	-I$(MDIR)/addons/kdtree_shear_sphere_2balls_omp \
+	-I$(MDIR)/addons/octree_shear_sphere_2balls_omp \
+	-I$(MDIR)/support/spherical_shear \
+	-I$(MDIR)/support/shear_kernel
+HEADERFILES += $(wildcard $(KDTREESHEARSPHERE2BALLSMPI)/*.h)
+EXTERNAL += fcfc_kdtree_shear_sphere_2balls_mpi.o \
+	search_kdtree_shear_sphere_2balls_mpi.o
+ifneq ($(KDTREESHEARSPHERE2BALLSOMPON),1)
+vpath %.c $(MDIR)/addons/kdtree_shear_sphere_2balls_omp
+EXTERNAL += kdtree_shear_sphere_tree.o
+kdtree_shear_sphere_tree.o: \
+	$(MDIR)/addons/kdtree_shear_sphere_2balls_omp/kdtree_shear_sphere_tree.c \
+	$(MDIR)/addons/kdtree_shear_sphere_2balls_omp/kdtree_shear_sphere_tree.h \
+	$(MDIR)/support/spherical_shear/shear_sphere_dual_tree.h
+endif
+ifneq ($(OCTREESHEARSPHEREOMPON),1)
+vpath %.c $(MDIR)/support/spherical_shear
+EXTERNAL += search_octree_shear_sphere_omp.o
+endif
+search_kdtree_shear_sphere_2balls_mpi.o: \
+	$(KDTREESHEARSPHERE2BALLSMPI)/search_kdtree_shear_sphere_2balls_mpi.c \
+	$(MDIR)/support/shear_kernel/search_octree_shear_omp.c \
+	$(MDIR)/addons/kdtree_shear_sphere_2balls_omp/kdtree_shear_sphere_tree.h \
+	$(MDIR)/support/spherical_shear/shear_sphere_dual_tree.h \
+	$(MDIR)/support/spherical_shear/protodefs_octree_shear_sphere_omp.h \
+	$(KDTREESHEARSPHERE2BALLSMPI)/fcfc_kdtree_shear_sphere_2balls_mpi.h
+fcfc_kdtree_shear_sphere_2balls_mpi.o: \
+	$(KDTREESHEARSPHERE2BALLSMPI)/fcfc_kdtree_shear_sphere_2balls_mpi.c \
+	$(KDTREESHEARSPHERE2BALLSMPI)/fcfc_kdtree_shear_sphere_2balls_mpi.h
+endif

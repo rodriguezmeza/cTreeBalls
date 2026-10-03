@@ -124,7 +124,10 @@ def run(output):
                         if completed.returncode:raise RuntimeError('worker failed: '+label)
                         row=json.loads((directory/'sample.json').read_text());values=dict(np.load(directory/'products.npz'))
                         if exact is None:exact=values;digest=row['fixture_sha256']
-                        assert digest==row['fixture_sha256'];assert set(values)==set(exact)
+                        if not (digest == row['fixture_sha256']):
+                            raise AssertionError('changed fixture across workloads')
+                        if not (set(values) == set(exact)):
+                            raise AssertionError('product sets differ')
                         metrics={key:compare(target,values[key],3e-11 if variant['mode'] in ('exact','aggregate_exact') else .05) for key,target in exact.items()}
                         passed=all(v['passed'] for v in metrics.values())
                         if variant['mode'] in ('exact','aggregate_exact') and not passed:exact_fail=True

@@ -23,3 +23,12 @@ if (strcmp(method_str, "lya-1d-tree-2pcf-mpi") == 0) *method_int = 191;
 #if (defined(ADDONS)) && (defined(LYAFORESTMPI))
 if (strcmp(method_str, "lya-1d-tree-3pcf-mpi") == 0) *method_int = 194;
 #endif
+#if (defined(ADDONS)) && (defined(LYAFORESTMPI))
+if (strcmp(method_str, "lya-los-tree-2pcf-mpi") == 0) *method_int = 210;
+#endif
+#if (defined(ADDONS)) && (defined(LYAFORESTMPI))
+if (strcmp(method_str, "lya-los-tree-3pcf-mpi") == 0) *method_int = 211;
+#endif
+#if (defined(ADDONS)) && (defined(LYAFORESTMPI))
+if (strcmp(method_str, "lya-los-tree-2pcf-3pcf-mpi") == 0) *method_int = 212;
+#endif

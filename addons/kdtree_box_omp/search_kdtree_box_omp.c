@@ -13,7 +13,7 @@
 #include "globaldefs.h"
 
 #include "kdtree.h"
-#include "../kdtree_shared/kdtree_scan_frontier.h"
+#include "../../support/kd_tree/kdtree_scan_frontier.h"
 
 //B Some macros and definitions
 #define KD_COORD_DELTA(a, b) ((real)(a) - (real)(b))
@@ -400,6 +400,7 @@ global int searchcalc_kdtree_box_omp(struct cmdline_data* cmd,
     }
     //E
 
+    gd->histogram_products |= CBALLS_PRODUCT_XI;
     if (cballs_opt_compute_histn(cmd)) {
         if (search_compute_HistN(cmd, gd, nbody[cat1]) == FAILURE) {
             finish_kdtree(kd);

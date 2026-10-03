@@ -82,7 +82,8 @@ def run(args):
     save()
     try:
         for engine in args.engines:
-            assert ENGINES[engine]['gate'].get('oracle'),engine
+            if not (ENGINES[engine]['gate'].get('oracle')):
+                raise AssertionError(engine)
             for fixture in ('signed_sky','clustered_smooth'):
                 exact=None;fixture_digest=None
                 modes=['exact','approx']
@@ -100,7 +101,8 @@ def run(args):
                         row=json.loads((directory/'sample.json').read_text());arrays=np.load(directory/'products.npz')
                         if exact is None:
                             exact={k:arrays[k].copy() for k in arrays.files};fixture_digest=row['fixture_sha256']
-                        assert row['fixture_sha256']==fixture_digest,'changed fixture across samples'
+                        if not (row['fixture_sha256'] == fixture_digest):
+                            raise AssertionError('changed fixture across samples')
                         row.update(directory=label,repeat=repeat,accuracy={})
                         row['native_phases_seconds']=[{key:float(value) for key,value in re.findall(r'(\w+)\s*=\s*([0-9.eE+-]+)',line)}
                                                      for line in log.read_text().splitlines() if 'phase-timers:' in line]

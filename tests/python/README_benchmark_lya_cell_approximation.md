@@ -28,18 +28,21 @@ All three slops default to zero. `lya3MuSlop`, `lya3RadialSlop`, and
 representative cell-center bin. Positive slop is an explicit approximation.
 These parameters are **not** bounds on relative correlation error.
 
-Radial/polar slop requires kernel 3 or 4. Kernels 1 (independent direct reference)
-and 2 (tiled direct) reject positive slop. Kernels 3/4 currently support the four
-OpenMP 3PCF/combined names only; MPI selection fails with an explicit message.
+Radial/polar slop requires kernel 3, 4 or 5. Kernels 1 (independent direct reference)
+and 2 (tiled direct) reject positive slop. Kernels 3/4/5 support the original OpenMP/MPI 3PCF and combined names
+and the corresponding LOS-tree OpenMP names.
 The original and `lya-los-tree-*` names share the persistent backend when kernel
-3/4 is requested, so their 3PCF traversal is then the same. Kernels 0..2 retain
+3/4/5 is requested. Kernel 5 can select the exact pixel-segment fallback at zero
+slop when pivot groups are sparse; see [hierarchical reuse](../../docs/LYA_HIERARCHICAL_REUSE.md). Kernels 0..2 retain
 the existing engine-specific discovery path. Pair-only methods reject active
 3PCF approximation settings. The separate experimental multipole method is not
 combined with these controls.
 
 ## What remains exact
 
-Every accepted cell is from one forest. All three forest IDs must differ. Both
+Each base cell is from one forest. Kernel 5 can combine source cells from
+several forests only when their membership sets are certified disjoint. Every
+represented triangle has three distinct forest IDs. Both
 pivot-neighbor legs must satisfy `0 < r < lya3RMax`; slop never expands this
 physical domain. With zero slop a cell product must fit one bin on every axis,
 otherwise it is subdivided until reference pixel arithmetic resolves it.
@@ -55,8 +58,8 @@ direction extrema include the changing pivot LOS. Bent/noncollinear forests do
 not assume an ideal ray; their capsule simply becomes wider. Unsafe exponent
 ranges fall back to pixels.
 
-Combined runs compute their 2PCF with the existing exact pixel traversal; these
-slops affect only 3PCF. Forest nodes are private to one search and freed afterward.
+Combined runs select their 2PCF through `lya2Kernel` (pixel traversal or pair
+cells); these triple slops affect only 3PCF. Forest nodes are private to one search and freed afterward.
 Point pivots reject unreachable subtrees before computing their pixel geometry,
 then cache actual leaf geometry and bottom-up extrema on demand. Pivot-cell
 subdivisions reuse a bounded 8,192-entry cache keyed by both node IDs; collisions
@@ -74,7 +77,7 @@ cache add per-worker storage. Checked arithmetic and the combined
 histogram+nodes+geometry-cache+frontier memory preflight guard these allocations.
 A larger pivot cap may therefore increase memory and is not a speed guarantee.
 Task blocks and reduction order are fixed independently of thread count.
-`lya3PivotBlock` counts pivot-cell tasks for kernels 3/4 (automatic block size 8),
+`lya3PivotBlock` counts pivot-cell tasks for kernels 3/4/5 (automatic block size 8),
 and pixel pivots for kernels 0..2. `accepted`/`nbbcalc` count pixel-tree visits;
 pure persistent 3PCF does not make such visits, so use its separate cell counters.
 
@@ -158,6 +161,16 @@ slop-relaxed bound; `ordered_triplets` counts both leg orders.
 `pivot_aggregates` counts accepted node products with more than one pivot.
 These diagnostics are not a count of actually misplaced triplets.
 
-Regression module: `tests/make_tests/test_lya_cell_approximation.py`. Run it with
+Regression module: `tests/python/test_lya_cell_approximation.py`. Run it with
 pytest and `CBALLS=/absolute/path/to/cballs`. It is also selected by the capability
 manifest and active release gate.
+
+## Hierarchical radial moments
+
+`lya2Kernel=1` and `lya3Kernel=5` select certified pair-range sums and adaptive
+radial/polar moment combinations for the original 3D OpenMP/MPI methods.
+Combined runs share the forest tree; zero slop preserves the histogram estimator.
+Persistent kernels 3/4/5 also support MPI. The all-engines driver accepts
+`--lya2-kernel 1 --lya3-kernel 5 --lya3-pivot-cell-max 8`; these controls apply
+only to eligible 3D Ly-alpha statistics. Default kernels remain 0.
+See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.md).

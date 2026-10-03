@@ -17,22 +17,22 @@ static int analytic_solver(void)
 {
     double ratio;
     double complex identity[9] = {1,0,0,0,1,0,0,0,1}, zero[3] = {0};
-    CHECK(dual_node_edge_solve(identity, zero, 3, &ratio) == CBALLS_WINDOW_VALID);
+    CHECK(cballs_scalar_edge_solve(identity, zero, 3, &ratio) == CBALLS_WINDOW_VALID);
     CHECK(ratio == 1 && zero[0] == 0 && zero[1] == 0 && zero[2] == 0);
     double complex singular[9] = {1,1,1,1,1,1,1,1,1};
-    CHECK(dual_node_edge_solve(singular, zero, 3, &ratio) == CBALLS_WINDOW_SINGULAR);
+    CHECK(cballs_scalar_edge_solve(singular, zero, 3, &ratio) == CBALLS_WINDOW_SINGULAR);
     CHECK(ratio == 0);
     double complex narrow[9] = {1,0,0,0,1,0,0,0,1e-16};
-    CHECK(dual_node_edge_solve(narrow, zero, 3, &ratio) == CBALLS_WINDOW_SINGULAR);
+    CHECK(cballs_scalar_edge_solve(narrow, zero, 3, &ratio) == CBALLS_WINDOW_SINGULAR);
     CHECK(ratio == 0); /* The original pivot threshold must not be loosened. */
     double complex nonfinite[1] = {NAN};
-    CHECK(dual_node_edge_solve(nonfinite, zero, 1, &ratio) == CBALLS_WINDOW_NONFINITE);
+    CHECK(cballs_scalar_edge_solve(nonfinite, zero, 1, &ratio) == CBALLS_WINDOW_NONFINITE);
     CHECK(isnan(ratio));
     double complex matrix[9] = {2,I,0,-I,3,1,0,1,4};
     const double complex expected[3] = {1+2*I, -2+I, .5-I};
     double complex rhs[3] = {0};
     for (int i=0; i<3; i++) for (int j=0; j<3; j++) rhs[i] += matrix[3*i+j]*expected[j];
-    CHECK(dual_node_edge_solve(matrix, rhs, 3, &ratio) == CBALLS_WINDOW_VALID);
+    CHECK(cballs_scalar_edge_solve(matrix, rhs, 3, &ratio) == CBALLS_WINDOW_VALID);
     CHECK(ratio > 0 && ratio <= 1);
     for (int i=0; i<3; i++) CHECK(cabs(rhs[i]-expected[i]) < 1e-14);
     puts("PASS: valid zero, complex solution, singular, near-singular, nonfinite solver");

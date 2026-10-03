@@ -239,9 +239,31 @@ int get_rBins(struct  cmdline_data* cmd, struct  global_data* gd)
 }
 
 //B added by cBalls
+local int require_hist_product(struct cmdline_data *cmd,
+                                struct global_data *gd,
+                                unsigned int product, const char *name)
+{
+    if (!gd->histogram_results_ready || !(gd->histogram_products & product)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s was not computed; complete a run that produces this observable", name);
+        return FAILURE;
+    }
+#ifdef CBALLS_MPI_ENABLED
+    if (!cballs_mpi_output_enabled(cmd)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s is not published on this MPI rank", name);
+        return FAILURE;
+    }
+#endif
+    return SUCCESS;
+}
+
 int get_HistNN(struct cmdline_data* cmd, struct global_data* gd)
 {
     int n;
+
+    if (require_hist_product(cmd, gd, CBALLS_PRODUCT_NN, "histNN") == FAILURE)
+        return FAILURE;
 
     if (require_live_hist_vector(cmd, gd, "get_HistNN", gd->histNN, "histNN") == FAILURE)
         return FAILURE;
@@ -258,6 +280,9 @@ int get_HistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
 
+    if (require_hist_product(cmd, gd, CBALLS_PRODUCT_CF, "histCF") == FAILURE)
+        return FAILURE;
+
     if (require_live_hist_vector(cmd, gd, "get_HistCF", gd->histCF, "histCF") == FAILURE)
         return FAILURE;
 
@@ -271,6 +296,9 @@ int get_HistCF(struct  cmdline_data* cmd, struct  global_data* gd)
 int get_HistXi2pcf(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
+
+    if (require_hist_product(cmd, gd, CBALLS_PRODUCT_XI, "histXi2pcf") == FAILURE)
+        return FAILURE;
 
     if (require_live_hist_vector(cmd, gd, "get_HistXi2pcf", gd->histXi2pcf, "histXi2pcf") == FAILURE)
         return FAILURE;
@@ -287,6 +315,9 @@ int get_HistXi2pcf12(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
 
+    if (require_hist_product(cmd, gd, CBALLS_PRODUCT_XI12, "histXi2pcf12") == FAILURE)
+        return FAILURE;
+
     if (require_live_hist_vector(cmd, gd, "get_HistXi2pcf12", gd->histXi2pcf12, "histXi2pcf12") == FAILURE)
         return FAILURE;
 
@@ -300,6 +331,9 @@ int get_HistXi2pcf12(struct  cmdline_data* cmd, struct  global_data* gd)
 int get_HistXi2pcf13(struct  cmdline_data* cmd, struct  global_data* gd)
 {
     int n;
+
+    if (require_hist_product(cmd, gd, CBALLS_PRODUCT_XI13, "histXi2pcf13") == FAILURE)
+        return FAILURE;
 
     if (require_live_hist_vector(cmd, gd, "get_HistXi2pcf13", gd->histXi2pcf13, "histXi2pcf13") == FAILURE)
         return FAILURE;

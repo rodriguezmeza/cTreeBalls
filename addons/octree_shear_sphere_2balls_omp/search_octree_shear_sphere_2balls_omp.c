@@ -2,6 +2,7 @@
 #define OCTREE_SHEAR_SPHERICAL 1
 #define OCTREE_SHEAR_SPHERICAL_TWO_BALLS 1
 #define SHEAR_SPHERE_BODY_POSITIONS_UNIT 1
+#define SHEAR_SPHERE_FAST_KERNEL 1
 #ifdef BALLS4SCANLEV
 #define SHEAR_SPHERE_NATIVE_FRONTIER_SCHEDULER 1
 #define SHEAR_SPHERE_PIVOT_REUSE 1
@@ -11,4 +12,4 @@
     prepare_octree_shear_sphere_2balls_catalogs
 #define searchcalc_octree_shear_omp \
     searchcalc_octree_shear_sphere_2balls_omp
-#include "../shear_sphere_shared/shear_sphere_engine.c"
+#include "../../support/shear_kernel/search_octree_shear_omp.c"

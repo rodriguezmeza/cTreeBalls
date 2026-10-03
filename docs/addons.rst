@@ -42,9 +42,9 @@ Full-Sky Spin-2 Trees
 
 The active shear methods are:
 
-* ``octree-shear-sphere-2balls-omp``;
-* ``kdtree-shear-sphere-2balls-omp``;
-* ``balltree-shear-sphere-2balls-omp``.
+* ``octree-shear-sphere-2balls-omp`` and ``octree-shear-sphere-2balls-mpi``;
+* ``kdtree-shear-sphere-2balls-omp`` and ``kdtree-shear-sphere-2balls-mpi``;
+* ``balltree-shear-sphere-2balls-omp`` and ``balltree-shear-sphere-2balls-mpi``.
 
 They share unit-sphere normalization, great-circle parallel transport, local
 east/north shear input, 2PCF normalization, natural 3PCF multipoles, masks,
@@ -72,8 +72,8 @@ Input and Utility Add-ons
 -------------------------
 
 The maintained profile also enables ``GADGETIOON``, ``CLASSLIBON``,
-``PXDON``, ``IOLIBON``, and ``CFITSIOON``. CFITSIO is discovered as an
-external dependency. ``kdtree-box-omp`` and ``neighbor-boxes-omp``
+``PXDON``, ``IOLIBON``, and ``CFITSIOON``. The development profile includes
+bundled CFITSIO; public source archives select external GSL and CFITSIO. ``kdtree-box-omp`` and ``neighbor-boxes-omp``
 provide periodic Cartesian 2PCF methods.
 
 Parallel Rules
@@ -90,8 +90,8 @@ Validation
 Run the focused launchers from ``tests/make_tests`` and the driver contracts::
 
    make test-search-methods test-two-ball-edge
-   python3 -m pytest -q tests/make_tests/test_kappa_corr_all_engines.py
-   python3 -m pytest -q tests/make_tests/test_shear_corr_all_engines.py
-   python3 -m pytest -q tests/make_tests/test_lya_corr_all_engines.py
+   python3 -m pytest -q tests/python/test_kappa_corr_all_engines.py
+   python3 -m pytest -q tests/python/test_shear_corr_all_engines.py
+   python3 -m pytest -q tests/python/test_lya_corr_all_engines.py
 
 Tests requiring MPI or large external catalogs remain opt-in.

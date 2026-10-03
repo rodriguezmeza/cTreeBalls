@@ -20,7 +20,7 @@ These controls adapt the legacy `BALLS4SCANLEV`/`SMOOTHPIVOT` ideas without
 changing the input catalog or mixing forests. They do not depend on the legacy
 compile flags or `smooth-pivot`/`rsmooth` options. They support the six original
 and LOS-tree OpenMP 3D methods with pixel-pivot kernels; persistent 3PCF kernels
-3/4, MPI, radial and multipole paths reject active controls. See the
+3/4/5, MPI, radial and multipole paths reject active controls. See the
 [complete contract and calibration script](../../tests/python/README_benchmark_lya_pivot_frontier.md)
 for supported combinations, equations, Cython use and accuracy/timing/memory
 measurements.
@@ -49,7 +49,7 @@ All methods require `DEFDIMENSION=3`, OpenMP, `usePeriodic=false`, exactly one
 input file, and `infileformat=lya-ascii`.
 
 Set `LYAFORESTMPION=1` for an MPI+OpenMP counterpart of every method above
-except `lya-1d-tree-same-los-2pcf-omp` and the three `lya-los-tree-*` methods,
+except `lya-1d-tree-same-los-2pcf-omp`,
 replacing the final `-omp` with `-mpi`.
 See
 [`addons/lya_forest_mpi/README.md`](../lya_forest_mpi/README.md) for the
@@ -104,9 +104,19 @@ while avoiding a synchronized merge and scratch clearing after every pivot.
 The original three 3D OpenMP methods use the same fixed publication policy;
 their MPI counterparts retain the existing per-pivot rank ownership and order.
 
-This accelerates neighbor discovery, not the quadratic neighbor-pair loop
-of the five-dimensional 3PCF. Dense 3PCF neighborhoods can therefore remain
-dominated by triangle accumulation. Index memory is linear in pixels and
+LOS pixel kernels share a conservatively enlarged forest-discovery sphere
+inside compact, fixed pivot blocks. Each pivot still applies its own exact
+radial interval, distance cuts, and forest exclusion. Wide blocks retain
+independent discovery. Sorted forest frontiers keep the accumulation order
+independent of which pivot first discovered a forest.
+
+`lya2Kernel=1 lya3Kernel=5` additionally enables certified pair-range moments,
+persistent triple moments and a hierarchy above per-forest radial/polar
+segments in the sparse fallback. The fallback retains LOS discovery. These
+controls also work for the three `lya-los-tree-*-mpi` variants; see
+[LOS hierarchical reuse](../../docs/LYA_LOS_HIERARCHICAL_REUSE.md).
+Dense, poorly separable 3PCF neighborhoods can still require extensive exact
+triangle work. Index memory is linear in pixels and
 native octree nodes, with `O(forests * threads)` discovery scratch. Trees are
 rebuilt per correlation call and do not retain Python pointers after cleanup.
 With `verbose=2`, `LOS-tree:` reports index-build CPU time and discovery/radial
@@ -347,7 +357,7 @@ The September 2026 exact optimization pass adds:
   16,384 pivots and 64 above that. `lya3PivotBlock=1..4096` remains an explicit
   override. The partition remains independent of OpenMP thread count.
   The original MPI methods retain individual-pivot ownership. Persistent
-  kernels 3/4 retain their existing task policy.
+  kernels 3/4/5 use fixed task blocks, cyclic across MPI ranks.
 
 These changes do not enable any approximation. `theta`, compile-time `THETA`,
 `rsmooth` and `nsmooth` keep their existing tree/legacy meanings; they are not
@@ -387,3 +397,51 @@ seconds sum process CPU time over all threads; end-to-end wall seconds include
 startup, catalog reading, and tree construction. Peak RSS is measured for each
 child process with `wait4`, in bytes. Use an otherwise idle host and report the
 recorded ranges and thread count alongside speedup, especially for short runs.
+
+## Hierarchical radial moments
+
+`lya2Kernel=1` and `lya3Kernel=5` select certified pair-range sums and adaptive
+radial/polar moment combinations for the original 3D OpenMP/MPI methods.
+Combined runs share the forest tree; zero slop preserves the histogram estimator.
+Persistent kernels 3/4/5 also support MPI. The all-engines driver accepts
+`--lya2-kernel 1 --lya3-kernel 5 --lya3-pivot-cell-max 8`; these controls apply
+only to eligible 3D Ly-alpha statistics. Default kernels remain 0.
+See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.md).
+
+## Anisotropic Legendre moment reuse
+
+`lya-anisotropic-multipole-3pcf-omp` uses exact per-pixel radial/polar bins
+and Legendre raw numerator/denominator moments. Its default `lya3Kernel=0`
+now chooses a two-level forest hierarchy when the measured bin occupancy
+predicts at least a 15% reduction in harmonic dot products. Otherwise it uses
+an optimized prefix pass. Completed forest groups reuse their radial moments;
+no same-forest self-product is subtracted from a large total. Harmonic square
+roots and output strides are cached, and only occupied moment bins are cleared.
+
+For this method, `lya3Kernel=1` retains the original prefix reference, while
+`lya3Kernel=2` forces four-forest groups for qualification. These meanings are
+specific to the multipole method. `lya3LMax=0..32` controls angular truncation;
+`theta`, `rsmooth` and scalar smoothing switches do not provide a calibrated
+approximation for these moments. The reconstructed hard mu-bin 3PCF remains
+approximate at finite Lmax and must be qualified separately on the actual
+geometry and observable. The automatic hierarchy introduces no new geometric
+approximation, but its summation order differs from the reference.
+
+`run-metadata.json` includes `lya_multipole_reuse` counters for hierarchical
+and prefix pivots, completed blocks, actual radial products, and the estimated
+prefix product count. Fixed pivot publication blocks preserve repeatability
+across thread counts for each kernel. See
+[the multipole reuse guide](../../docs/LYA_MULTIPOLE_HIERARCHICAL_REUSE.md)
+for validation, resource costs and before/after benchmarking.
+
+
+## Exact opening-angle bins with multipoles
+
+Set `lya3MuMode=1` on `lya-anisotropic-multipole-3pcf-omp` to compute an
+additional exact `_lya5d` product using the same neighbor discovery and sort.
+`_lya_multipoles` retains raw moments and `_lya5d_multipole` remains an explicitly
+approximate diagnostic. Exact bins are independent of Lmax and require extra
+histogram memory and angular computation. Default mode 0 is unchanged.
+The Python getter returns both moment and exact triple arrays even with
+`no-out-Hist`; metadata records their separate meanings. See
+[the reconstruction guide](../../docs/LYA_MULTIPOLE_RECONSTRUCTION.md) for use, resource costs and validation.

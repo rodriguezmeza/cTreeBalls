@@ -1,0 +1,30 @@
+# MPI full-sky weak-lensing shear estimator over the native octree.
+
+ifeq ($(OCTREESHEARSPHERE2BALLSMPION),1)
+OPT2 += -DOCTREESHEARSPHERE2BALLSMPI -DCBALLS_MPI_ENABLED \
+	-DTHREEPCFSHEAR -DTWOPCF \
+	-DSHEAR_OMP_PIVOT_BLOCK_SIZE=$(SHEAR_OMP_PIVOT_BLOCK_SIZE)
+OCTREESHEARSPHERE2BALLSMPI = $(MDIR)/addons/octree_shear_sphere_2balls_mpi/
+vpath %.c $(OCTREESHEARSPHERE2BALLSMPI)
+INCLUDES += -I$(OCTREESHEARSPHERE2BALLSMPI) \
+	-I$(MDIR)/addons/octree_shear_sphere_2balls_omp \
+	-I$(MDIR)/support/spherical_shear \
+	-I$(MDIR)/support/shear_kernel
+HEADERFILES += $(wildcard $(OCTREESHEARSPHERE2BALLSMPI)/*.h)
+EXTERNAL += fcfc_octree_shear_sphere_2balls_mpi.o \
+	search_octree_shear_sphere_2balls_mpi.o
+ifneq ($(OCTREESHEARSPHEREOMPON),1)
+vpath %.c $(MDIR)/support/spherical_shear
+EXTERNAL += search_octree_shear_sphere_omp.o
+endif
+search_octree_shear_sphere_2balls_mpi.o: \
+	$(OCTREESHEARSPHERE2BALLSMPI)/search_octree_shear_sphere_2balls_mpi.c \
+	$(MDIR)/support/shear_kernel/search_octree_shear_omp.c \
+	$(MDIR)/support/spherical_shear/shear_sphere_dual_tree.h \
+	$(MDIR)/support/spherical_shear/shear_sphere_frontier_scheduler.h \
+	$(MDIR)/support/spherical_shear/protodefs_octree_shear_sphere_omp.h \
+	$(OCTREESHEARSPHERE2BALLSMPI)/fcfc_octree_shear_sphere_2balls_mpi.h
+fcfc_octree_shear_sphere_2balls_mpi.o: \
+	$(OCTREESHEARSPHERE2BALLSMPI)/fcfc_octree_shear_sphere_2balls_mpi.c \
+	$(OCTREESHEARSPHERE2BALLSMPI)/fcfc_octree_shear_sphere_2balls_mpi.h
+endif

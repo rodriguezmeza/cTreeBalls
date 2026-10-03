@@ -81,6 +81,8 @@ local int correlation_string_to_int(struct  cmdline_data* cmd,
  */
 int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 {
+    gd->histogram_results_ready = FALSE;
+    gd->histogram_products = 0;
     string routineName = "MainLoop";
     bodyptr p,q;
     real kavg;
@@ -193,6 +195,8 @@ int MainLoop(struct  cmdline_data* cmd, struct  global_data* gd)
 #ifdef CBALLS_MPI_ENABLED
     metadata_status = cballs_mpi_consensus(cmd, metadata_status, "MPI run metadata output");
 #endif
+    gd->histogram_results_ready = metadata_status == SUCCESS;
+    if (!gd->histogram_results_ready) gd->histogram_products = 0;
     return metadata_status;
 }
 

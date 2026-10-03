@@ -245,3 +245,57 @@ global int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
 #endif
 }
 
+
+/* Export interpreted input rows before any tree/smoothing mutation. The Python
+ * caller hashes bounded chunks with SHA-256 in canonical little-endian form.
+ * Values: position[NDIM], scalar, weight, shear[2], distance, LOS[NDIM].
+ * IDs: mask, body ID, forest ID, physical LOS ID, physical LOS-ID presence.
+ * Unused family fields are zero; no uninitialized structure bytes are exposed. */
+global int cballs_catalog_identity_chunk(struct cmdline_data *cmd,
+                                          struct global_data *gd, int catalog,
+                                          size_t offset, size_t count,
+                                          double *values, int64_t *ids)
+{
+    const size_t width = 2*NDIM+5;
+    const char *method = cmd->searchMethod ? cmd->searchMethod : "";
+    const int shear = strstr(method, "shear") != NULL;
+    const int forest = !strncmp(method, "lya-", 4);
+    const int physical = strstr(method, "3pcf-3d") != NULL;
+    if (catalog < 0 || catalog >= gd->ninfiles || bodytable[catalog] == NULL
+        || gd->nbodyTable[catalog] < 0 || values == NULL || ids == NULL
+        || offset > (size_t)gd->nbodyTable[catalog]
+        || count > (size_t)gd->nbodyTable[catalog]-offset
+        || count > SIZE_MAX / (width*sizeof(double))) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "invalid catalog identity chunk");
+        return FAILURE;
+    }
+    for (size_t i=0; i<count; i++) {
+        bodyptr p=bodytable[catalog]+offset+i;
+        double *row=values+i*width;
+        int64_t *identity=ids+5*i;
+        memset(row, 0, width*sizeof(*row));
+        memset(identity, 0, 5*sizeof(*identity));
+        for (int k=0; k<NDIM; k++) row[k]=Pos(p)[k];
+        row[NDIM]=shear ? 0.0 : Kappa(p);
+        row[NDIM+1]=Weight(p);
+#ifdef THREEPCFSHEAR
+        if (shear) { row[NDIM+2]=Gamma1(p); row[NDIM+3]=Gamma2(p); }
+#endif
+        identity[0]=(int64_t)Mask(p);
+        identity[1]=(int64_t)Id(p);
+#if (defined(LYAFORESTOMP) || defined(LYAFORESTMPI)) && NDIM == 3
+        if (forest) {
+            identity[2]=(int64_t)LyaForestId(p);
+            row[NDIM+4]=LyaDistance(p);
+            for (int k=0; k<NDIM; k++) row[NDIM+5+k]=LyaLOS(p)[k];
+        }
+#endif
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
+        if (physical && gd->octree3pcf3d_los_ids[catalog]) {
+            identity[3]=(int64_t)Octree3pcf3dLosId(p);
+            identity[4]=1;
+        }
+#endif
+    }
+    return SUCCESS;
+}

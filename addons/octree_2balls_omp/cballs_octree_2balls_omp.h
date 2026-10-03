@@ -4,7 +4,7 @@
     case OCTREE2BALLSMETHOD:
         verb_print(cmd->verbose,
                    "\n\tevalHist: with octree two-ball 2PCF and LogMultipole 3PCF\n\n");
-        if (cballs_opt_read_mask(cmd)) {
+        if (cballs_opt_read_mask(cmd) && gd->iCatalogs[0] == gd->iCatalogs[1]) {
             bool cached_tree;
             int leaf_capacity;
 

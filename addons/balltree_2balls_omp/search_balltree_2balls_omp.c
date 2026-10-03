@@ -1,5 +1,6 @@
 /*
- * dual-node-style dual-ball 2PCF and triple-node scalar 3PCF search.
+ * dual-node-style dual-ball 2PCF and body-pivot LogMultipole scalar 3PCF.
+ * Direct triples remain available only as an explicit validation option.
  *
  * The node-pair recursion and split heuristic are adapted from dual-node:
  * Copyright (c) 2003-2024 Mike Jarvis, used under its BSD-style license.
@@ -207,6 +208,8 @@ typedef struct {
 typedef struct {
     struct cmdline_data *cmd;
     struct global_data *gd;
+    bool reuse_enabled;
+    real reuse_bin_theta, reuse_phase_ratio, reuse_max_relative_width;
     bool use_two_balls;
     bool use_bin_theta;
     bool use_three_cells;
@@ -1591,6 +1594,7 @@ static int dual_node_run_pair_tasks(
             gd->histXi2pcf[n], denominator);
     }
 
+    gd->histogram_products |= CBALLS_PRODUCT_NN | CBALLS_PRODUCT_XI;
     if (cballs_opt_compute_histn(cmd) && cballs_opt_and_cf(cmd)) {
         for (int n = 1; n <= cmd->sizeHistN; n++) gd->histNN[n] *= 2.0;
         if (search_compute_HistN(cmd, gd, tree1->npoint) == FAILURE)

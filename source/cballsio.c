@@ -15,7 +15,11 @@
 //
 
 #include "globaldefs.h"
+#include "input_contracts.h"
 #include <errno.h>
+#include <ctype.h>
+#include <limits.h>
+#include <stdint.h>
 
 #ifdef CLASSLIB
 #define cBALLS_FAIL(cmd, ...)                                           \
@@ -80,12 +84,35 @@ local int outfilefmt_int;
 local int InputData_local(struct cmdline_data* cmd,
                           struct global_data* gd, string filename, int ifile);
 
+typedef struct {
+    struct cmdline_data *cmd;
+    struct global_data *gd;
+    string filename;
+    int ifile;
+} inputdata_context;
+
+local int inputdata_guarded_local(void *argument)
+{
+    inputdata_context *context = argument;
+    return InputData_local(context->cmd, context->gd,
+                           context->filename, context->ifile);
+}
+
 int InputData(struct cmdline_data* cmd,
               struct global_data* gd, string filename, int ifile)
 {
-    int status = InputData_local(cmd, gd, filename, ifile);
-#ifdef OCTREE3PCF3DMPI
-    status = cb3d_mpi_consensus(cmd, status, "3D catalog input");
+    inputdata_context context = {cmd, gd, filename, ifile};
+    /* Catch local allocation failures before the collective, not outside it.
+     * Every rank must enter this checkpoint, including successful readers. */
+    int status = cballs_allocation_guard(inputdata_guarded_local, &context,
+                                          cmd->error_message, _ERRORMSGSIZE_);
+    if (status == FAILURE && strstr(cmd->error_message, filename) == NULL) {
+        char detail[_ERRORMSGSIZE_];
+        snprintf(detail, sizeof(detail), "%s", cmd->error_message);
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "catalog input '%s': %.1024s", filename, detail);
+    }
+#ifdef CBALLS_MPI_ENABLED
+    status = cballs_mpi_consensus(cmd, status, "MPI catalog input");
 #endif
     return status;
 }
@@ -161,6 +188,18 @@ local int InputData_local(struct cmdline_data* cmd,
                                               errmsg, errmsg);
             break;
     }
+    /* A final common boundary also checks values produced by coordinate
+     * conversion. Header-only and mask-only readers may not publish a body. */
+    const int separate_mask = scanopt(cmd->options, "read-mask") && ifile == 1;
+    if (!gd->inputHeaderFlag && !gd->stopflag && !separate_mask
+        && cballs_input_validate_bodies(cmd, filename, bodytable[ifile],
+                                         gd->nbodyTable[ifile]) == FAILURE)
+        return FAILURE;
+    if (!gd->inputHeaderFlag)
+        for (int k = 0; k < NDIM; ++k)
+            if (cballs_input_finite(cmd, filename, 0, "box dimension",
+                                    gd->Box[k]) == FAILURE)
+                return FAILURE;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
             "\tdone reading.\n");
 
@@ -389,171 +428,120 @@ global int InputData_all_in_one(struct cmdline_data* cmd,
 }
 #undef EPSILON
 
-local int inputdata_ascii(struct cmdline_data* cmd, struct  global_data* gd,
-                           string filename, int ifile)
+/* Native ASCII catalogs are also read inside Python.  Never call the legacy
+ * in_* helpers here: their conversion failures terminate the host process. */
+local int ascii_input_error(struct cmdline_data *cmd, const char *filename,
+                            INTEGER row, const char *field, const char *reason)
 {
-    stream instr;
-    int ndim;
-    bodyptr p;
-    char gato[2], firstline[200];
-    real mass=1;
-    real weight=1;
+    if (row == 0)
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "inputdata_ascii: %s: header %s: %s", filename, field, reason);
+    else
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "inputdata_ascii: %s: data row %" INTEGER_FMT ", %s: %s",
+                 filename, row, field, reason);
+    return FAILURE;
+}
 
-    gd->input_comment = "Column form input file";
-
-    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
-
-    if (scanopt(cmd->options, "header-info")){
-        InputData_check_file(filename);
-        fgets(firstline,sizeof(firstline),instr);
-        verb_print(cmd->verbose, "\n\tinputdata_ascii: header of %s\n", filename);
-        verb_print(cmd->verbose, "\t1st line: %s", firstline);
-        fgets(firstline,sizeof(firstline),instr);
-        verb_print(cmd->verbose, "\t2nd line: %s\n", firstline);
-        rewind(instr);
-        if (scanopt(cmd->options, "stop")) {
-            fclose(instr);
-            gd->inputHeaderFlag = TRUE;
-            gd->stopflag = TRUE;
-            return SUCCESS;
-        }
-    }
-
-    fgets(firstline, sizeof(firstline), instr);
-    fscanf(instr,"%1s",gato);
-    in_int_long(instr, &cmd->nbody);
-    if (cmd->nbody < 1)
-        cBALLS_FAIL(cmd, "inputdata: nbody = %" INTEGER_FMT " is absurd\n",
-                    cmd->nbody);
-    in_int(instr, &ndim);
-    if (ndim != NDIM)
-        cBALLS_FAIL(cmd, "inputdata: ndim = %d; expected %d\n", ndim, NDIM);
-
-    gd->nbodyTable[ifile] = cmd->nbody;
-
-// Check the center of the box!!!
-#if NDIM == 3
-    real Lx, Ly, Lz;
-#ifdef SINGLEP
-    in_real_double(instr, &Lx);
-    in_real_double(instr, &Ly);
-    in_real_double(instr, &Lz);
-#else
-    in_real(instr, &Lx);
-    in_real(instr, &Ly);
-    in_real(instr, &Lz);
-#endif
-    gd->Box[0] = Lx;
-    gd->Box[1] = Ly;
-    gd->Box[2] = Lz;
-#else
-    real Lx, Ly;
-    in_real(instr, &Lx);
-    in_real(instr, &Ly);
-    gd->Box[0] = Lx;
-    gd->Box[1] = Ly;
-#endif
-
-    verb_print(cmd->verbose,
-               "\tinputdata_ascii: nbody and ndim: %" INTEGER_FMT " %d...\n",
-               cmd->nbody, ndim);
-    verb_print(cmd->verbose,
-               "\tinputdata_ascii: lbox dimensions: ");
-    int k;
-    DO_COORD(k)
-    verb_print(cmd->verbose,
-               "%g ", gd->Box[k]);
-    verb_print(cmd->verbose,"\n\n");
-
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-    gd->bodytable_allocated = TRUE;
-    gd->bytes_tot += cmd->nbody*sizeof(body);
-
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        in_vector(instr, Pos(p));
-        in_real(instr, &Kappa(p));
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;
-        if (scanopt(cmd->options, "kappa-constant-one"))
-            Kappa(p) = 1.0;
-
-#ifdef THREEPCFSHEAR
-        //B 3pcf shear
-        Gamma1(p) = 1.0;
-        Gamma2(p) = 1.0;
-        //E
-#endif
-
-    }
-
-    fclose(instr);
-
-    real kavg=0.0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        Type(p) = BODY;
-        Mass(p) = mass;
-        Weight(p) = weight;
-        Mask(p) = TRUE;                             // initialize body's Mask
-        Id(p) = p-bodytable[ifile]+1;
-        kavg += Kappa(p);
-    }
-    kavg /= ((real)cmd->nbody);
-    real kstd;
-    real sum=0.0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        sum += rsqr(Kappa(p) - kavg);
-    }
-    kstd = rsqrt( sum/((real)cmd->nbody - 1.0) );
-    verb_print(cmd->verbose,
-               "inputdata_ascii: average and std dev of kappa ");
-    verb_print(cmd->verbose,
-               "(%" INTEGER_FMT " particles) = %le %le\n",
-               cmd->nbody, kavg, kstd);
-
-//B Locate particles with same position
-    if (scanopt(cmd->options, "check-eq-pos")) {
-    bodyptr q;
-    real dist2;
-    vector distv;
-    bool flag=0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody-1)
-        DO_BODY(q, p+1, bodytable[ifile]+cmd->nbody)
-            if (p != q) {
-            DOTPSUBV(dist2, distv, Pos(p), Pos(q));
-                if (dist2 == 0.0) {
-                    flag=1;
-                }
-            }
-    if (flag)
-        cBALLS_FAIL(cmd, "inputdata_ascii: at least two bodies have same position\n");
-    }
-//E
-
+local int ascii_token(struct cmdline_data *cmd, stream instr,
+                      const char *filename, INTEGER row, const char *field,
+                      char token[256])
+{
+    int next;
+    if (fscanf(instr, "%255s", token) != 1)
+        return ascii_input_error(cmd, filename, row, field,
+                                 ferror(instr) ? "read error" : "unexpected end of file");
+    /* A width-limited scanf must not accept a valid prefix of a longer token. */
+    next = fgetc(instr);
+    if (next != EOF && !isspace((unsigned char)next))
+        return ascii_input_error(cmd, filename, row, field, "token exceeds 255 characters");
+    if (ferror(instr))
+        return ascii_input_error(cmd, filename, row, field, "read error");
     return SUCCESS;
 }
 
-local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
-                           string filename, int ifile)
+local int ascii_integer(struct cmdline_data *cmd, stream instr,
+                        const char *filename, INTEGER row, const char *field,
+                        long minimum, long maximum, long *value)
 {
-    string routineName = "inputdata_ascii_all";
-    stream instr;
-    int ndim;
-    bodyptr p;
-    char gato[2], firstline[200];
-    real mass=1;
-    real weight=1;
+    char token[256], *end;
+    if (ascii_token(cmd, instr, filename, row, field, token) == FAILURE)
+        return FAILURE;
+    errno = 0;
+    *value = strtol(token, &end, 10);
+    if (errno == ERANGE || end == token || *end != '\0'
+        || *value < minimum || *value > maximum)
+        return ascii_input_error(cmd, filename, row, field, "invalid or out-of-range integer");
+    return SUCCESS;
+}
 
-    gd->input_comment = "Column form input file all";
+local int ascii_real(struct cmdline_data *cmd, stream instr,
+                     const char *filename, INTEGER row, const char *field,
+                     real *value)
+{
+    char token[256], *end;
+    double parsed;
+    if (ascii_token(cmd, instr, filename, row, field, token) == FAILURE)
+        return FAILURE;
+    errno = 0;
+    parsed = strtod(token, &end);
+    if (end == token || *end != '\0')
+        return ascii_input_error(cmd, filename, row, field, "invalid real number");
+    if (!isfinite(parsed))
+        return ascii_input_error(cmd, filename, row, field, "non-finite real number");
+    if (errno == ERANGE)
+        return ascii_input_error(cmd, filename, row, field, "out-of-range real number");
+    *value = (real)parsed;
+    if (!isfinite(*value))
+        return ascii_input_error(cmd, filename, row, field, "non-finite stored value");
+    return SUCCESS;
+}
 
+/* Consume a whole header/comment line, including comments longer than 199
+ * characters.  Header inspection uses the same checked path as normal input. */
+local int ascii_header_line(struct cmdline_data *cmd, stream instr,
+                            const char *filename, const char *field, int show)
+{
+    char line[200];
+    do {
+        if (fgets(line, sizeof(line), instr) == NULL)
+            return ascii_input_error(cmd, filename, 0, field,
+                                     ferror(instr) ? "read error" : "unexpected end of file");
+        if (show) verb_print(cmd->verbose, "%s", line);
+    } while (strchr(line, '\n') == NULL && !feof(instr));
+    return SUCCESS;
+}
+
+local int inputdata_ascii_columns(struct cmdline_data *cmd,
+                                   struct global_data *gd, string filename,
+                                   int ifile, int layout)
+{
+    const int all_columns = layout == 1;
+    const int positions_only = layout == 2;
+    const int angles = layout == 3;
+    const int file_ndim = angles ? 2 : NDIM;
+    stream instr = NULL;
+    bodyptr catalog = NULL, p;
+    INTEGER nbody, iselect = 0;
+    long count, ndim, mask;
+    real box[NDIM], kavg = 0.0, sum = 0.0;
+    int marker;
+    int k;
+#ifdef LONGINT
+    const long integer_max = LONG_MAX;
+#else
+    const long integer_max = INT_MAX;
+#endif
+    const char *routineName = all_columns ? "inputdata_ascii_all" : "inputdata_ascii";
+
+    gd->input_comment = all_columns ? "Column form input file all" : "Column form input file";
     OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
 
-    if (scanopt(cmd->options, "header-info")){
-        InputData_check_file(filename);
-        fgets(firstline,sizeof(firstline),instr);
-        verb_print(cmd->verbose, "\n\t%s: header of %s\n", routineName,filename);
-        verb_print(cmd->verbose, "\t1st line: %s", firstline);
-        fgets(firstline,sizeof(firstline),instr);
-        verb_print(cmd->verbose, "\t2nd line: %s\n", firstline);
+    if (scanopt(cmd->options, "header-info")) {
+        verb_print(cmd->verbose, "\n\t%s: header of %s\n", routineName, filename);
+        if (ascii_header_line(cmd, instr, filename, "comment", TRUE) == FAILURE
+            || ascii_header_line(cmd, instr, filename, "dimensions", TRUE) == FAILURE)
+            goto fail;
         rewind(instr);
         if (scanopt(cmd->options, "stop")) {
             fclose(instr);
@@ -563,349 +551,283 @@ local int inputdata_ascii_all(struct cmdline_data* cmd, struct  global_data* gd,
         }
     }
 
-    fgets(firstline, sizeof(firstline), instr);
-    fscanf(instr,"%1s",gato);
-    in_int_long(instr, &cmd->nbody);
-    if (cmd->nbody < 1)
-        cBALLS_FAIL(cmd, "%s: nbody = %" INTEGER_FMT " is absurd\n",
-                    routineName, cmd->nbody);
-    in_int(instr, &ndim);
-    if (ndim != NDIM)
-        cBALLS_FAIL(cmd,
-                    "%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
+    if (ascii_header_line(cmd, instr, filename, "comment", FALSE) == FAILURE)
+        goto fail;
+    /* The legacy format permits both "#123" and "# 123". Consume only the
+     * marker character; the checked integer reader validates the full count. */
+    do {
+        marker = fgetc(instr);
+    } while (marker != EOF && isspace((unsigned char)marker));
+    if (marker != '#') {
+        ascii_input_error(cmd, filename, 0, "marker",
+                          marker == EOF ? (ferror(instr) ? "read error"
+                                                       : "unexpected end of file")
+                                        : "expected #");
+        goto fail;
+    }
+    if (ascii_integer(cmd, instr, filename, 0, "nbody", 1, integer_max, &count) == FAILURE
+        || ascii_integer(cmd, instr, filename, 0, "ndim", file_ndim, file_ndim, &ndim) == FAILURE)
+        goto fail;
+    /* bytes_tot uses INTEGER; check before multiplication, allocation or cast. */
+    if ((uintmax_t)count > (uintmax_t)integer_max / sizeof(body)
+        || (uintmax_t)count > (uintmax_t)SIZE_MAX / sizeof(body)
+        || gd->bytes_tot > integer_max - count * (long)sizeof(body)) {
+        ascii_input_error(cmd, filename, 0, "nbody", "catalog byte size is not representable");
+        goto fail;
+    }
+    nbody = (INTEGER)count;
+    for (k = 0; k < file_ndim; ++k) {
+        if (ascii_real(cmd, instr, filename, 0, "box dimension", &box[k]) == FAILURE)
+            goto fail;
+    }
+    if (angles) box[NDIM - 1] = box[1];
+    if (cballs_calloc_checked((void **)&catalog, (size_t)nbody, sizeof(body),
+                              "native ASCII catalog", cmd->error_message,
+                              _ERRORMSGSIZE_) == FAILURE)
+        goto fail;
 
-    gd->nbodyTable[ifile] = cmd->nbody;
-
-// Check the center of the box!!!
-#if NDIM == 3
-    real Lx, Ly, Lz;
-#ifdef SINGLEP
-    in_real_double(instr, &Lx);
-    in_real_double(instr, &Ly);
-    in_real_double(instr, &Lz);
-#else
-    in_real(instr, &Lx);
-    in_real(instr, &Ly);
-    in_real(instr, &Lz);
-#endif
-    gd->Box[0] = Lx;
-    gd->Box[1] = Ly;
-    gd->Box[2] = Lz;
-#else // ! NDIM
-    real Lx, Ly;
-    in_real(instr, &Lx);
-    in_real(instr, &Ly);
-    gd->Box[0] = Lx;
-    gd->Box[1] = Ly;
-#endif
-
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\t%s: nbody and ndim: %" INTEGER_FMT " %d...\n",
-                        routineName, cmd->nbody, ndim);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\t%s: lbox dimensions: ", routineName);
-    int k;
-    DO_COORD(k)
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "%g ", gd->Box[k]);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog, "\n");
-
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-    gd->bodytable_allocated = TRUE;
-    gd->bytes_tot += cmd->nbody*sizeof(body);
-
-    INTEGER iselect = 0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        in_vector(instr, Pos(p));
-        in_real(instr, &Kappa(p));
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;
-        if (scanopt(cmd->options, "kappa-constant-one"))
-            Kappa(p) = 1.0;
-        in_real(instr, &Weight(p));
-        in_short(instr, &Mask(p));
-        if (Mask(p) == 0) {
-            iselect++;
+    DO_BODY(p, catalog, catalog + nbody) {
+        INTEGER row = (INTEGER)(p - catalog) + 1;
+        for (k = 0; k < file_ndim; ++k) {
+            real coordinate;
+            if (ascii_real(cmd, instr, filename, row, "position", &coordinate) == FAILURE)
+                goto fail;
+            Pos(p)[k] = coordinate;
+            if (!isfinite(Pos(p)[k])) {
+                ascii_input_error(cmd, filename, row, "position", "non-finite stored value");
+                goto fail;
+            }
         }
+        Kappa(p) = 2.0;
+        if (!positions_only
+            && ascii_real(cmd, instr, filename, row, "kappa", &Kappa(p)) == FAILURE)
+            goto fail;
+#if NDIM == 3
+        if (angles) {
+            real theta = Pos(p)[0], phi = Pos(p)[1];
+            coordinate_transformation(cmd, gd, theta, phi, Pos(p));
+        }
+#endif
+        /* Validate the input even when a constant-field override is requested. */
+        if (!positions_only) {
+            if (scanopt(cmd->options, "kappa-constant")) Kappa(p) = 2.0;
+            if (scanopt(cmd->options, "kappa-constant-one")
+                && (!angles || scanopt(cmd->options, "kappa-constant")))
+                Kappa(p) = 1.0;
+        }
+        Weight(p) = 1.0;
+        Mask(p) = TRUE;
+        if (all_columns) {
+            if (ascii_real(cmd, instr, filename, row, "weight", &Weight(p)) == FAILURE
+                || ascii_integer(cmd, instr, filename, row, "mask", SHRT_MIN, SHRT_MAX, &mask) == FAILURE)
+                goto fail;
+            Mask(p) = (short)mask;
+            if (Mask(p) == 0) iselect++;
+        }
+        Type(p) = BODY;
+        Mass(p) = 1.0;
+        Id(p) = row;
 #ifdef THREEPCFSHEAR
         Gamma1(p) = 1.0;
         Gamma2(p) = 1.0;
 #endif
-    }
-
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "\t%s: masked pixels = %ld\n",
-                           routineName, iselect);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "\t%s: unmasked pixels = %ld\n",
-                           routineName, gd->nbodyTable[ifile]-iselect);
-
-    fclose(instr);
-
-    real kavg=0.0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        Type(p) = BODY;
-        Mass(p) = mass;
-        Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
     }
-    kavg /= ((real)cmd->nbody);
-    real kstd;
-    real sum=0.0;
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        sum += rsqr(Kappa(p) - kavg);
+    if (cballs_input_validate_bodies(cmd, filename, catalog, nbody) == FAILURE)
+        goto fail;
+    if (fclose(instr) != 0) {
+        instr = NULL;
+        ascii_input_error(cmd, filename, 0, "stream", "close error");
+        goto fail;
     }
-    kstd = rsqrt( sum/((real)cmd->nbody - 1.0) );
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "\t%s: average and std dev of kappa ", routineName);
-    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                           "(%" INTEGER_FMT " particles) = %le %le\n",
-                           cmd->nbody, kavg, kstd);
+    instr = NULL;
 
-//B Locate particles with same position
     if (scanopt(cmd->options, "check-eq-pos")) {
         bodyptr q;
         real dist2;
         vector distv;
-        bool flag=0;
-        DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody-1)
-            DO_BODY(q, p+1, bodytable[ifile]+cmd->nbody)
-                if (p != q) {
-                    DOTPSUBV(dist2, distv, Pos(p), Pos(q));
-                    if (dist2 == 0.0)
-                        flag=1;
+        DO_BODY(p, catalog, catalog + nbody - 1)
+            DO_BODY(q, p + 1, catalog + nbody) {
+                DOTPSUBV(dist2, distv, Pos(p), Pos(q));
+                if (dist2 == 0.0) {
+                    ascii_input_error(cmd, filename, (INTEGER)(q - catalog) + 1,
+                                      "position", "at least two bodies have same position");
+                    goto fail;
                 }
-        if (flag)
-            cBALLS_FAIL(cmd, "%s: at least two bodies have same position\n",
-                        routineName);
+            }
     }
-//E
 
+    /* Publish only a completely read and validated catalog.  Earlier catalogs
+     * remain owned by the caller's normal cleanup if this one fails. */
+    bodytable[ifile] = catalog;
+    gd->bodytable_allocated = TRUE;
+    gd->nbodyTable[ifile] = cmd->nbody = nbody;
+    gd->bytes_tot += (INTEGER)((size_t)nbody * sizeof(body));
+    DO_COORD(k) gd->Box[k] = box[k];
+
+    verb_print(cmd->verbose, "\t%s: nbody and ndim: %" INTEGER_FMT " %ld...\n",
+               routineName, nbody, ndim);
+    verb_print(cmd->verbose, "\t%s: lbox dimensions: ", routineName);
+    DO_COORD(k) verb_print(cmd->verbose, "%g ", box[k]);
+    verb_print(cmd->verbose, "\n");
+    if (all_columns) {
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\t%s: masked pixels = %" INTEGER_FMT "\n", routineName, iselect);
+        verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                               "\t%s: unmasked pixels = %" INTEGER_FMT "\n", routineName, nbody - iselect);
+    }
+    kavg /= (real)nbody;
+    DO_BODY(p, catalog, catalog + nbody) sum += rsqr(Kappa(p) - kavg);
+    verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+                           "%s: average and std dev of kappa (%" INTEGER_FMT " particles) = %le %le\n",
+                           routineName, nbody, kavg, nbody > 1 ? rsqrt(sum / ((real)nbody - 1.0)) : 0.0);
     return SUCCESS;
+
+fail:
+    if (instr != NULL) fclose(instr);
+    free(catalog);
+    return FAILURE;
 }
 
-local int inputdata_bin(struct cmdline_data* cmd, struct  global_data* gd,
-                         string filename, int ifile)
+local int inputdata_ascii(struct cmdline_data *cmd, struct global_data *gd,
+                          string filename, int ifile)
 {
-    stream instr;
-    int ndim;
-    bodyptr p;
-    real mass=1;
-    real weight=1;
+    return inputdata_ascii_columns(cmd, gd, filename, ifile, FALSE);
+}
 
-    gd->input_comment = "Binary input file";
+local int inputdata_ascii_all(struct cmdline_data *cmd, struct global_data *gd,
+                              string filename, int ifile)
+{
+    return inputdata_ascii_columns(cmd, gd, filename, ifile, TRUE);
+}
 
-    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
+/* Keep the native binary layout: INTEGER count, int dimension, real box,
+ * position arrays, scalar arrays, and optional real weights / short masks. */
+local int binary_input_read(struct cmdline_data *cmd, stream instr,
+                             const char *filename, INTEGER row,
+                             const char *field, void *value,
+                             size_t item_size, size_t count)
+{
+    if (fread(value, item_size, count, instr) == count) return SUCCESS;
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "inputdata_binary: %s: %s row %" INTEGER_FMT ", %s: %s",
+             filename, row ? "data" : "header", row, field,
+             ferror(instr) ? "read error" : "unexpected end of file");
+    return FAILURE;
+}
 
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose, "\n\tinputdata_bin: header of %s\n", 
-                   filename);
-        in_int_bin_long(instr, &cmd->nbody);
-        verb_print(cmd->verbose, "\t1st line: %" INTEGER_FMT "\n", cmd->nbody);
-        in_int_bin(instr, &ndim);
-        verb_print(cmd->verbose, "\t2nd line: %d\n", ndim);
-#ifdef SINGLEP
-        in_real_bin_double(instr, &gd->Box[0]);
-        in_real_bin_double(instr, &gd->Box[1]);
-#if NDIM == 3
-        in_real_bin_double(instr, &gd->Box[2]);
-#endif
+local int inputdata_binary_columns(struct cmdline_data *cmd,
+                                    struct global_data *gd, string filename,
+                                    int ifile, int all_columns)
+{
+    stream instr = NULL;
+    bodyptr catalog = NULL, p;
+    INTEGER nbody;
+    int ndim, k;
+    real box[NDIM], disk_position[NDIM];
+#ifdef LONGINT
+    const uintmax_t integer_max = LONG_MAX;
 #else
-        in_real_bin(instr, &gd->Box[0]);
-        in_real_bin(instr, &gd->Box[1]);
-#if NDIM == 3
-        in_real_bin(instr, &gd->Box[2]);
+    const uintmax_t integer_max = INT_MAX;
 #endif
-#endif
-#if NDIM == 3
-        verb_print(cmd->verbose, "\tinputdata_bin: Box: %g %g %g\n\n",
-                   gd->Box[0], gd->Box[1], gd->Box[2]);
-#else
-        verb_print(cmd->verbose, "\tinputdata_bin: Box: %g %g %g\n\n",
-                   gd->Box[0], gd->Box[1]);
-#endif
-        rewind(instr);
+    gd->input_comment = all_columns ? "Binary-all input file" : "Binary input file";
+    if (stropen_checked(filename, "rb", &instr, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE)
+        return FAILURE;
+#define BINARY_READ(row, field, value, size, count) \
+    do { if (binary_input_read(cmd, instr, filename, row, field, value, size, count) \
+              == FAILURE) goto fail; } while (0)
+    BINARY_READ(0, "nbody", &nbody, sizeof(nbody), 1);
+    BINARY_READ(0, "ndim", &ndim, sizeof(ndim), 1);
+    if (nbody < 1 || (uintmax_t)nbody > integer_max / sizeof(body)
+        || (uintmax_t)nbody > SIZE_MAX / sizeof(body)
+        || gd->bytes_tot < 0
+        || (uintmax_t)gd->bytes_tot > integer_max - (uintmax_t)nbody * sizeof(body)
+        || ndim != NDIM) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "inputdata_binary: %s: invalid header dimensions or catalog byte size",
+                 filename);
+        goto fail;
+    }
+    BINARY_READ(0, "box dimension", box, sizeof(real), NDIM);
+    DO_COORD(k)
+        if (cballs_input_finite(cmd, filename, 0, "box dimension", box[k]) == FAILURE)
+            goto fail;
+    if (scanopt(cmd->options, "header-info")) {
+        verb_print(cmd->verbose, "\nBinary header of %s: %" INTEGER_FMT " %d\n",
+                   filename, nbody, ndim);
+        DO_COORD(k) verb_print(cmd->verbose, " %g", box[k]);
+        verb_print(cmd->verbose, "\n");
         if (scanopt(cmd->options, "stop")) {
-            fclose(instr);
+            if (fclose(instr) != 0) { instr = NULL; goto close_fail; }
             gd->inputHeaderFlag = TRUE;
             gd->stopflag = TRUE;
             return SUCCESS;
         }
     }
-
-    in_int_bin_long(instr, &cmd->nbody);
-    verb_print(cmd->verbose, "\tInput: nbody %" INTEGER_FMT "\n", cmd->nbody);
-    if (cmd->nbody < 1)
-        cBALLS_FAIL(cmd, "inputdata: nbody = %" INTEGER_FMT " is absurd\n",
-                    cmd->nbody);
-    in_int_bin(instr, &ndim);
-    if (ndim != NDIM)
-        cBALLS_FAIL(cmd, "inputdata: ndim = %d; expected %d\n", ndim, NDIM);
-    verb_print(cmd->verbose, "\tInput: nbody and ndim: %" INTEGER_FMT " %d...\n",
-               cmd->nbody, ndim);
-
-#ifdef SINGLEP
-    in_real_bin_double(instr, &gd->Box[0]);
-    in_real_bin_double(instr, &gd->Box[1]);
-#if NDIM == 3
-    in_real_bin_double(instr, &gd->Box[2]);
+    if (cballs_calloc_checked((void **)&catalog, (size_t)nbody, sizeof(body),
+                              "native binary catalog", cmd->error_message,
+                              _ERRORMSGSIZE_) == FAILURE)
+        goto fail;
+    DO_BODY(p, catalog, catalog + nbody) {
+        INTEGER row = p - catalog + 1;
+        BINARY_READ(row, "position", disk_position, sizeof(real), NDIM);
+        DO_COORD(k) {
+            if (cballs_input_finite(cmd, filename, (size_t)row,
+                                    "position", disk_position[k]) == FAILURE)
+                goto fail;
+            Pos(p)[k] = (cballs_storage_real)disk_position[k];
+        }
+        Type(p) = BODY; Mass(p) = 1.0; Weight(p) = 1.0;
+        Mask(p) = TRUE; Id(p) = row;
+#ifdef THREEPCFSHEAR
+        Gamma1(p) = Gamma2(p) = 1.0;
 #endif
-#else
-    in_real_bin(instr, &gd->Box[0]);
-    in_real_bin(instr, &gd->Box[1]);
-#if NDIM == 3
-    in_real_bin(instr, &gd->Box[2]);
-#endif
-#endif
-
-#if NDIM == 3
-    verb_print(cmd->verbose, "\tInput: Box: %g %g %g\n", 
-               gd->Box[0], gd->Box[1], gd->Box[2]);
-#else
-    verb_print(cmd->verbose, "\tInput: Box: %g %g %g\n", gd->Box[0], gd->Box[1]);
-#endif
-
-    gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    }
+    DO_BODY(p, catalog, catalog + nbody) {
+        INTEGER row = p - catalog + 1;
+        BINARY_READ(row, "kappa", &Kappa(p), sizeof(real), 1);
+        if (cballs_input_finite(cmd, filename, (size_t)row, "kappa", Kappa(p)) == FAILURE)
+            goto fail;
+        if (scanopt(cmd->options, "kappa-constant")) Kappa(p) = 2.0;
+        if (scanopt(cmd->options, "kappa-constant-one")) Kappa(p) = 1.0;
+    }
+    if (all_columns) {
+        DO_BODY(p, catalog, catalog + nbody)
+            BINARY_READ(p - catalog + 1, "weight", &Weight(p), sizeof(real), 1);
+        DO_BODY(p, catalog, catalog + nbody)
+            BINARY_READ(p - catalog + 1, "mask", &Mask(p), sizeof(short), 1);
+    }
+    if (cballs_input_validate_bodies(cmd, filename, catalog, nbody) == FAILURE)
+        goto fail;
+    if (fclose(instr) != 0) { instr = NULL; goto close_fail; }
+    bodytable[ifile] = catalog;
     gd->bodytable_allocated = TRUE;
-
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
-        in_vector_bin(instr, Pos(p));
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        in_real_bin(instr, &Kappa(p));
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;
-        if (scanopt(cmd->options, "kappa-constant-one"))
-            Kappa(p) = 1.0;
-    }
-    fclose(instr);
-
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        Type(p) = BODY;
-        Mass(p) = mass;
-        Weight(p) = weight;
-        Mask(p) = TRUE;                             // initialize body's Mask
-        Id(p) = p-bodytable[ifile]+1;
-    }
-
+    gd->nbodyTable[ifile] = cmd->nbody = nbody;
+    gd->bytes_tot += (INTEGER)((size_t)nbody * sizeof(body));
+    DO_COORD(k) gd->Box[k] = box[k];
     return SUCCESS;
+close_fail:
+    snprintf(cmd->error_message, _ERRORMSGSIZE_,
+             "inputdata_binary: %s: close error", filename);
+fail:
+    if (instr != NULL) fclose(instr);
+    free(catalog);
+    return FAILURE;
+#undef BINARY_READ
 }
 
-local int inputdata_bin_all(struct cmdline_data* cmd, struct  global_data* gd,
+local int inputdata_bin(struct cmdline_data *cmd, struct global_data *gd,
                          string filename, int ifile)
 {
-    string routineName = "inputdata_bin_all";
-    stream instr;
-    int ndim;
-    bodyptr p;
-    real mass=1;
-    real weight=1;
-
-    gd->input_comment = "Binary-all input file";
-
-    OPEN_OUTPUT_OR_FAIL(instr, filename, "r");
-
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose, "\n\t%s: header of %s\n",
-                   routineName, filename);
-        in_int_bin_long(instr, &cmd->nbody);
-        verb_print(cmd->verbose, "\t1st line: %" INTEGER_FMT "\n", cmd->nbody);
-        in_int_bin(instr, &ndim);
-        verb_print(cmd->verbose, "\t2nd line: %d\n", ndim);
-#ifdef SINGLEP
-        in_real_bin_double(instr, &gd->Box[0]);
-        in_real_bin_double(instr, &gd->Box[1]);
-#if NDIM == 3
-        in_real_bin_double(instr, &gd->Box[2]);
-#endif
-#else
-        in_real_bin(instr, &gd->Box[0]);
-        in_real_bin(instr, &gd->Box[1]);
-#if NDIM == 3
-        in_real_bin(instr, &gd->Box[2]);
-#endif
-#endif
-#if NDIM == 3
-        verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n\n",
-                   routineName, gd->Box[0], gd->Box[1], gd->Box[2]);
-#else
-        verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n\n",
-                   routineName, gd->Box[0], gd->Box[1]);
-#endif
-        rewind(instr);
-        if (scanopt(cmd->options, "stop")) {
-            fclose(instr);
-            gd->inputHeaderFlag = TRUE;
-            gd->stopflag = TRUE;
-            return SUCCESS;
-        }
-    }
-
-    in_int_bin_long(instr, &cmd->nbody);
-    verb_print(cmd->verbose, "\t%s: nbody %" INTEGER_FMT "\n",
-               routineName, cmd->nbody);
-    if (cmd->nbody < 1)
-        cBALLS_FAIL(cmd, "%s: nbody = %" INTEGER_FMT " is absurd\n",
-                    routineName, cmd->nbody);
-    in_int_bin(instr, &ndim);
-    if (ndim != NDIM)
-        cBALLS_FAIL(cmd,
-                    "%s: ndim = %d; expected %d\n", routineName, ndim, NDIM);
-    verb_print(cmd->verbose,
-               "\t%s: nbody and ndim: %" INTEGER_FMT " %d...\n",
-               routineName, cmd->nbody, ndim);
-
-#ifdef SINGLEP
-    in_real_bin_double(instr, &gd->Box[0]);
-    in_real_bin_double(instr, &gd->Box[1]);
-#if NDIM == 3
-    in_real_bin_double(instr, &gd->Box[2]);
-#endif
-#else
-    in_real_bin(instr, &gd->Box[0]);
-    in_real_bin(instr, &gd->Box[1]);
-#if NDIM == 3
-    in_real_bin(instr, &gd->Box[2]);
-#endif
-#endif
-
-#if NDIM == 3
-    verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n",
-               routineName, gd->Box[0], gd->Box[1], gd->Box[2]);
-#else
-    verb_print(cmd->verbose, "\t%s: Box: %g %g %g\n",
-               routineName, gd->Box[0], gd->Box[1]);
-#endif
-
-    gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
-    gd->bodytable_allocated = TRUE;
-    gd->bytes_tot += cmd->nbody*sizeof(body);
-
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
-        in_vector_bin(instr, Pos(p));
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        in_real_bin(instr, &Kappa(p));
-        if (scanopt(cmd->options, "kappa-constant"))
-            Kappa(p) = 2.0;
-        if (scanopt(cmd->options, "kappa-constant-one"))
-            Kappa(p) = 1.0;
-    }
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
-        in_real_bin(instr, &Weight(p));
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody)
-        in_short_bin(instr, &Mask(p));
-    fclose(instr);
-
-    DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
-        Type(p) = BODY;
-        Mass(p) = mass;
-        Id(p) = p-bodytable[ifile]+1;
-    }
-
-    return SUCCESS;
+    return inputdata_binary_columns(cmd, gd, filename, ifile, FALSE);
 }
 
+local int inputdata_bin_all(struct cmdline_data *cmd, struct global_data *gd,
+                             string filename, int ifile)
+{
+    return inputdata_binary_columns(cmd, gd, filename, ifile, TRUE);
+}
 
 //B BEGIN:: Reading Takahasi simulations
 //From Takahashi web page. Adapted to our needs
@@ -919,11 +841,11 @@ void pix2ang(long pix, int nside, double *theta, double *phi);
 
 local int Takahasi_region_selection(struct cmdline_data* cmd, 
             struct  global_data* gd,
-            int nside, int npix,
+            int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat, int ifile);
 local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd, 
             struct  global_data* gd,
-            int nside, int npix,
+            int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
             real dphi_rot, real phiL, real phiR,
@@ -931,7 +853,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
             real *zmin, real *zmax, int ifile);
 local int Takahasi_region_selection_3d(struct cmdline_data* cmd, 
             struct  global_data* gd,
-            int nside, int npix,
+            int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
             real dphi_rot, real phiL, real phiR,
@@ -941,105 +863,87 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
 #if NDIM == 2
 local int Takahasi_region_selection_2d(struct cmdline_data* cmd, 
             struct  global_data* gd,
-            int nside, int npix,
+            int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
             real dphi_rot, real phiL, real phiR,
             real *xmin, real *xmax, real *ymin, real *ymax, int ifile);
 #endif
 
-local int inputdata_takahashi(struct cmdline_data* cmd, struct  global_data* gd,
-                             string filename, int ifile)
+/* Native Takahashi layout: fixed header followed by four float maps and
+ * legacy inter-record markers. Check every transfer before selection/override. */
+local int inputdata_takahashi(struct cmdline_data *cmd, struct global_data *gd,
+                              string filename, int ifile)
 {
-    string routinename = "inputdata_takahashi";
-    FILE *fp;
-    long i,j,npix,dummy;
-    long jj[6]={536870908,1073741818,1610612728,2147483638,2684354547,3221225457};
-    int negi,nside;
-//    double theta,phi;
-//    char file[200];
-
-    gd->input_comment = "Takahasi input file";
-
-//E Begin reading Takahashi file
-//    fp = stropen(filename, "rb");
-    OPEN_OUTPUT_OR_FAIL(fp, filename, "rb");
-
-    if (scanopt(cmd->options, "header-info")){
-        verb_print(cmd->verbose, "\n\t%s: header of %s... ",
-                   routinename, filename);
-        verb_print(cmd->verbose, "not available yet... sorry!\n\n");
+    FILE *fp = NULL;
+    int marker, nside, status = FAILURE;
+    long npix, record;
+    float *maps[4] = {NULL, NULL, NULL, NULL};
+    const char *fields[] = {"convergence", "gamma1", "gamma2", "rotation"};
+    const long boundaries[] = {536870908L, 1073741818L, 1610612728L,
+                              2147483638L, 2684354547L, 3221225457L};
+    gd->input_comment = "Takahashi input file";
+    if (stropen_checked(filename, "rb", &fp, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE) return FAILURE;
+#define TAK_READ(row, field, ptr, size, count) \
+    do { if (binary_input_read(cmd, fp, filename, row, field, ptr, size, count) \
+                == FAILURE) goto cleanup; } while (0)
+    TAK_READ(0, "record marker", &marker, sizeof(marker), 1);
+    TAK_READ(0, "nside", &nside, sizeof(nside), 1);
+    TAK_READ(0, "npix", &npix, sizeof(npix), 1);
+    TAK_READ(0, "record marker", &record, sizeof(record), 1);
+    if (nside <= 0 || npix <= 0
+        || (uintmax_t)nside > (uintmax_t)LONG_MAX / 12 / (uintmax_t)nside
+        || (uintmax_t)npix != 12 * (uintmax_t)nside * (uintmax_t)nside
+        || (uintmax_t)npix > SIZE_MAX / sizeof(body)
+        || (uintmax_t)npix > (uintmax_t)LONG_MAX / sizeof(body)) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "Takahashi input '%s': invalid nside/npix or catalog byte size", filename);
+        goto cleanup;
+    }
+    if (scanopt(cmd->options, "header-info")) {
+        verb_print(cmd->verbose, "Takahashi header: nside=%d npix=%ld\n", nside, npix);
         if (scanopt(cmd->options, "stop")) {
-            fclose(fp);
-            gd->inputHeaderFlag = TRUE;
-            gd->stopflag = TRUE;
-            return SUCCESS;
+            gd->inputHeaderFlag = gd->stopflag = TRUE;
+            status = SUCCESS;
+            goto cleanup;
         }
     }
-
-    
-    fread(&negi, sizeof(int), 1, fp);
-    fread(&nside, sizeof(int), 1, fp);
-    fread(&npix, sizeof(long), 1, fp);
-    fread(&dummy, sizeof(long), 1, fp);
-
-    float(*conv);     // convergence
-    conv=(float *)malloc(sizeof(float)*npix);
-    float(*shear1);   // shear 1
-    shear1=(float *)malloc(sizeof(float)*npix);
-    float(*shear2);   // shear 2
-    shear2=(float *)malloc(sizeof(float)*npix);
-    float(*rotat);    // rotation
-    rotat=(float *)malloc(sizeof(float)*npix);
-
-    verb_print(cmd->verbose,
-               "\nAllocated %g MByte for pixel storage.\n",
-               sizeof(float)*npix*4/(1024.0*1024.0));
-
-    for(j=0;j<npix;j++){
-      fread(&conv[j], sizeof(float), 1, fp);
-      for(i=0;i<6;i++) if(j==jj[i]) fread(&dummy, sizeof(long), 1, fp);
+    for (int field = 0; field < 4; ++field) {
+        if (field) TAK_READ(0, "record marker", &record, sizeof(record), 1);
+        if (cballs_malloc_checked((void **)&maps[field], (size_t)npix, sizeof(float),
+                                   "Takahashi map", cmd->error_message,
+                                   _ERRORMSGSIZE_) == FAILURE) goto cleanup;
+        /* Chunking preserves the historical record boundaries without one
+         * fread call per pixel on survey-size maps. */
+        long first = 0;
+        for (int block = 0; block <= 6 && first < npix; ++block) {
+            long end = block < 6 && boundaries[block] < npix
+                ? boundaries[block] + 1 : npix;
+            TAK_READ(first + 1, fields[field], maps[field] + first,
+                     sizeof(float), (size_t)(end - first));
+            if (block < 6 && end == boundaries[block] + 1)
+                TAK_READ(end, "record marker", &record, sizeof(record), 1);
+            first = end;
+        }
+        if (cballs_input_finite_array(cmd, filename, maps[field], (size_t)npix,
+                                      sizeof(float), fields[field]) == FAILURE) goto cleanup;
     }
-
-    fread(&dummy, sizeof(long), 1, fp);
-    for(j=0;j<npix;j++){
-      fread(&shear1[j], sizeof(float), 1, fp);
-      for(i=0;i<6;i++) if(j==jj[i]) fread(&dummy, sizeof(long), 1, fp);
+    status = Takahasi_region_selection(cmd, gd, nside, npix,
+                                       maps[0], maps[1], maps[2], maps[3], ifile);
+cleanup:
+    if (fp && fclose(fp) != 0 && status == SUCCESS) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Takahashi input '%s': close error", filename);
+        status = FAILURE;
     }
-
-    fread(&dummy, sizeof(long), 1, fp);
-    for(j=0;j<npix;j++){
-      fread(&shear2[j], sizeof(float), 1, fp);
-      for(i=0;i<6;i++) if(j==jj[i]) fread(&dummy, sizeof(long), 1, fp);
-    }
-
-    fread(&dummy, sizeof(long), 1, fp);
-    for(j=0;j<npix;j++){
-      fread(&rotat[j], sizeof(float), 1, fp);
-      for(i=0;i<6;i++) if(j==jj[i]) fread(&dummy, sizeof(long), 1, fp);
-    }
-
-    fclose(fp);                                     // Close Takahashi file.
-
-    verb_print(cmd->verbose,
-               "\n\t%s: total read points = %ld\n",routinename, npix);
-
-//E End reading Takahashi file
-
-    Takahasi_region_selection(cmd, gd,
-                              nside, npix, conv, shear1, shear2, rotat, ifile);
-
-    free(conv);
-    free(shear1);
-    free(shear2);
-    free(rotat);
-
-    return SUCCESS;
+    for (int i = 0; i < 4; ++i) free(maps[i]);
+#undef TAK_READ
+    return status;
 }
 
 local int Takahasi_region_selection(struct cmdline_data* cmd, 
                                     struct  global_data* gd,
-                                    int nside, int npix,
+                                    int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat, int ifile)
 {
     string routinename = "Takahasi_region_selection";
@@ -1176,24 +1080,27 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
     real xmax, ymax, zmax;
 
     if (scanopt(cmd->options, "patch")) {
-        Takahasi_region_selection_3d(cmd, gd,
+        if (Takahasi_region_selection_3d(cmd, gd,
                                      nside, npix, conv, shear1, shear2, rotat,
                 dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
-                &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile);
+                &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile) == FAILURE)
+            return FAILURE;
     } else {
-        Takahasi_region_selection_3d_all(cmd, gd,
+        if (Takahasi_region_selection_3d_all(cmd, gd,
                                          nside, npix, conv, shear1, shear2, rotat,
             dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
-            &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile);
+            &xmin, &xmax, &ymin, &ymax, &zmin, &zmax, ifile) == FAILURE)
+            return FAILURE;
     }
 #else   // ! TREEDIM
     real xmin, ymin;
     real xmax, ymax;
 
-    Takahasi_region_selection_2d(cmd, gd,
+    if (Takahasi_region_selection_2d(cmd, gd,
                 nside, npix, conv, shear1, shear2, rotat,
                 dtheta_rot, thetaL, thetaR, dphi_rot, phiL, phiR,
-                &xmin, &xmax, &ymin, &ymax, ifile);
+                &xmin, &xmax, &ymin, &ymax, ifile) == FAILURE)
+            return FAILURE;
 #endif
 
 #if NDIM == 3
@@ -1210,7 +1117,7 @@ local int Takahasi_region_selection(struct cmdline_data* cmd,
 #if NDIM == 3
 local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd, 
                                            struct  global_data* gd,
-                                           int nside, int npix,
+                                           int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
             real dphi_rot, real phiL, real phiR,
@@ -1228,7 +1135,13 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
 
     cmd->nbody = npix;
     gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Takahashi input: selection contains no bodies");
+        return FAILURE;
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody,
+                               sizeof(body), "Takahashi catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) return FAILURE;
     gd->bodytable_allocated = TRUE;
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for all particle (%ld) storage.\n",
@@ -1347,7 +1260,7 @@ local int Takahasi_region_selection_3d_all(struct cmdline_data* cmd,
 
 local int Takahasi_region_selection_3d(struct cmdline_data* cmd, 
                                        struct  global_data* gd,
-                                       int nside, int npix,
+                                       int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
             real dphi_rot, real phiL, real phiR,
@@ -1364,7 +1277,9 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
     
     bodyptr bodytabtmp;
     cmd->nbody = npix;
-    bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)cmd->nbody,
+                               sizeof(body), "Takahashi selection", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) return FAILURE;
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for particle (%ld) storage.\n",
                cmd->nbody*sizeof(body)/(1024.0*1024.0),cmd->nbody);
@@ -1477,7 +1392,13 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Takahashi input: selection contains no bodies");
+        free(bodytabtmp); return FAILURE;
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody,
+                               sizeof(body), "Takahashi catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(bodytabtmp); return FAILURE; }
     gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
@@ -1537,7 +1458,7 @@ local int Takahasi_region_selection_3d(struct cmdline_data* cmd,
 
 local int Takahasi_region_selection_2d(struct cmdline_data* cmd, 
             struct  global_data* gd,
-            int nside, int npix,
+            int nside, long npix,
             float *conv, float *shear1, float *shear2, float *rotat,
             real dtheta_rot, real thetaL, real thetaR,
             real dphi_rot, real phiL, real phiR,
@@ -1554,7 +1475,9 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
 
     bodyptr bodytabtmp;
     cmd->nbody = npix;
-    bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)cmd->nbody,
+                               sizeof(body), "Takahashi selection", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) return FAILURE;
     verb_print(cmd->verbose, "\nAllocated %g MByte for particle storage.\n",
                cmd->nbody*sizeof(body)/(1024.0*1024.0));
 
@@ -1645,7 +1568,13 @@ local int Takahasi_region_selection_2d(struct cmdline_data* cmd,
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "Takahashi input: selection contains no bodies");
+        free(bodytabtmp); return FAILURE;
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody,
+                               sizeof(body), "Takahashi catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(bodytabtmp); return FAILURE; }
     gd->bodytable_allocated = TRUE;
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for all particle (%ld) storage.\n",
@@ -2546,6 +2475,8 @@ global int EndRun_FreeMemory_histograms(struct cmdline_data* cmd,
     //E Histogram arrays PXD versions
 
     gd->histograms_allocated = FALSE;
+    gd->histogram_results_ready = FALSE;
+    gd->histogram_products = 0;
 
 #undef FREE_DVECTOR_NULL
 #undef FREE_DMATRIX_NULL

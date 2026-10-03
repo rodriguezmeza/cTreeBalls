@@ -183,8 +183,8 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
                             ((real)NbRmin(p))*hist.histNNSubXi2pcfthreadp[n];
                 hist.histNNSubXi2pcfthreadtotal[n] +=
                             hist.histNNSubXi2pcfthreadp[n];
-                    hist.histNNSubthread[n] =
-                                ((real)NbRmin(p))*hist.histNNSubthread[n];
+                    /* A representative retains the neighbor mean; only the
+                     * pivot field and pair denominator carry group size. */
             }
 #endif
             computeBodyProperties_sincos(cmd, gd, p, nbody[cat1], &hist);
@@ -266,7 +266,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
 #ifdef NOSTANDARNORMHIST
         xi = 1.0;
 #else
-        xi = num/den;
+        xi = 1.0; /* The pivot field already sums each owned group. */
 #endif // ! NONORMHIST
         verb_print(cmd->verbose,
                    "tree-omp-sincos: p falses found = %ld and %e %e %e\n",
@@ -325,6 +325,7 @@ global int searchcalc_normal_sincos(struct  cmdline_data* cmd,
         }
     }
 
+    gd->histogram_products |= CBALLS_PRODUCT_XI;
     if (cballs_opt_compute_histn(cmd)) {
 #ifdef SMOOTHPIVOT
             if (search_compute_HistN(cmd, gd, nbody[cat1]-ipfalse) == FAILURE) {
@@ -524,6 +525,9 @@ local void sumnode_sincos(struct  cmdline_data* cmd, struct  global_data* gd,
                         hist->histNthread[n] = hist->histNthread[n] + 1.;
                         hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] + 1.;
+#ifdef SMOOTHPIVOT
+                        hist->histNNSubXi2pcfthreadp[n] += 1.;
+#endif
                         hist->histNNSubthread[n] = hist->histNNSubthread[n] + 1.;
 #ifndef NOWKAvg
                         xi = Weight(q)*Kappa(q);
@@ -574,6 +578,9 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
                         hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] +  Nb(q);
+#ifdef SMOOTHPIVOT
+                        hist->histNNSubXi2pcfthreadp[n] += Nb(q);
+#endif
                         hist->histNNSubthread[n] = hist->histNNSubthread[n]
                                                     +  Nb(q);
 #ifndef NOWKAvg
@@ -599,6 +606,9 @@ local void sumnode_sincos_cell(struct  cmdline_data* cmd,
                         hist->histNthread[n] = hist->histNthread[n] +  Nb(q);
                         hist->histNNSubXi2pcfthread[n] =
                         hist->histNNSubXi2pcfthread[n] +  Nb(q);
+#ifdef SMOOTHPIVOT
+                        hist->histNNSubXi2pcfthreadp[n] += Nb(q);
+#endif
                         hist->histNNSubthread[n] = hist->histNNSubthread[n]
                                                     +  Nb(q);
 #ifndef NOWKAvg

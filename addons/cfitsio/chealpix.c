@@ -1048,7 +1048,7 @@ int read_healpix_map_status(const char *infile, long *nside,
 {
     long naxes = 0, *naxis = NULL, npix = 0;
     int status = 0, close_status = 0, hdutype = 0, nfound = 0, anynul = 0;
-    float nulval = HEALPIX_NULLVAL, *map = NULL;
+    float nulval = NAN, *map = NULL;
     fitsfile *fptr = NULL;
 
     if (!infile || !nside || !coordsys || !ordering || !map_out)

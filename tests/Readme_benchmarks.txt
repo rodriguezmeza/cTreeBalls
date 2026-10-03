@@ -21,7 +21,7 @@ masking, normalization, and rank ownership. They retain in-memory input across
 engines rather than rereading files. Examples and notebooks are in examples/.
 
 Before timing, from the root with matching C/Cython builds:
-    python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
+    python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
 
 Use no-normalize-HistZeta,weights-norm for shared raw scalar 3PCF comparisons.
 Native kernels now exclude repeated neighbors; do not subtract them again.

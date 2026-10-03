@@ -6,7 +6,7 @@
 #ifndef CBALLS_DUAL_NODE_EDGE_CORRECTION_H
 #define CBALLS_DUAL_NODE_EDGE_CORRECTION_H
 
-#include <complex.h>
+#include "scalar_window_solver.h"
 
 static inline double dual_node_edge_timer_now(void)
 {
@@ -60,61 +60,6 @@ static int dual_node_write_edge_matrix(
     return SUCCESS;
 }
 
-/* Scaled complex LU with partial pivoting. Preserve the acceptance threshold;
- * expose rejected solves rather than publishing them as measured zeros. */
-static int dual_node_edge_solve(double complex *a, double complex *rhs, int n,
-                                double *pivot_ratio)
-{
-    double smallest_pivot = DBL_MAX, largest_pivot = 0.0;
-    *pivot_ratio = NAN;
-    const double tolerance = 128.0 * DBL_EPSILON * n;
-    for (int col = 0; col < n; col++) {
-        int pivot = col;
-        double largest = cabs(a[(size_t)col * n + col]);
-        for (int row = col + 1; row < n; row++) {
-            const double value = cabs(a[(size_t)row * n + col]);
-            if (!isfinite(value)) return CBALLS_WINDOW_NONFINITE;
-            if (value > largest) {
-                pivot = row;
-                largest = value;
-            }
-        }
-        if (!isfinite(largest)) return CBALLS_WINDOW_NONFINITE;
-        if (largest <= tolerance) {
-            *pivot_ratio = 0.0;
-            return CBALLS_WINDOW_SINGULAR;
-        }
-        smallest_pivot = fmin(smallest_pivot, largest);
-        largest_pivot = fmax(largest_pivot, largest);
-        if (pivot != col) {
-            for (int j = col; j < n; j++) {
-                const double complex swap = a[(size_t)col * n + j];
-                a[(size_t)col * n + j] = a[(size_t)pivot * n + j];
-                a[(size_t)pivot * n + j] = swap;
-            }
-            const double complex swap = rhs[col];
-            rhs[col] = rhs[pivot];
-            rhs[pivot] = swap;
-        }
-        for (int row = col + 1; row < n; row++) {
-            const double complex factor = a[(size_t)row * n + col]
-                                        / a[(size_t)col * n + col];
-            for (int j = col + 1; j < n; j++)
-                a[(size_t)row * n + j] -= factor * a[(size_t)col * n + j];
-            rhs[row] -= factor * rhs[col];
-        }
-    }
-    for (int row = n - 1; row >= 0; row--) {
-        for (int j = row + 1; j < n; j++)
-            rhs[row] -= a[(size_t)row * n + j] * rhs[j];
-        rhs[row] /= a[(size_t)row * n + row];
-        if (!isfinite(creal(rhs[row])) || !isfinite(cimag(rhs[row])))
-            return CBALLS_WINDOW_NONFINITE;
-    }
-    *pivot_ratio = smallest_pivot / largest_pivot;
-    return CBALLS_WINDOW_VALID;
-}
-
 static int dual_node_publish_edge(
         struct cmdline_data *cmd, struct global_data *gd,
         const real *tasks, INTEGER task_count, size_t values_per_task,
@@ -125,7 +70,7 @@ static int dual_node_publish_edge(
     const size_t plane = stride * stride;
     size_t window_values;
     real *window = NULL;
-    double complex *matrix = NULL, *rhs = NULL;
+    double complex *matrix = NULL, *rhs = NULL, *modes = NULL;
     double solve_cpu_started = 0.0, solve_wall_started = 0.0;
     int singular = 0, empty = 0;
     int solve_timing_active = FALSE;
@@ -151,7 +96,8 @@ static int dual_node_publish_edge(
     window = calloc(window_values, sizeof(*window));
     matrix = calloc((size_t)window_orders * (size_t)window_orders, sizeof(*matrix));
     rhs = calloc((size_t)window_orders, sizeof(*rhs));
-    if (!window || !matrix || !rhs) {
+    modes = calloc((size_t)window_orders + orders, sizeof(*modes));
+    if (!window || !matrix || !rhs || !modes) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: edge workspace allocation failed", DUAL_NODE_METHOD_NAME);
         goto cleanup;
@@ -163,14 +109,6 @@ static int dual_node_publish_edge(
             + (DUAL_NODE_ZETA_COMPONENTS * (size_t)orders + 1) * plane;
         for (size_t i = 0; i < window_values; i++) window[i] += source[i];
     }
-    for (size_t i = 0; i < window_values; i++) {
-        if (!isfinite(window[i])) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "%s: nonfinite angular window", DUAL_NODE_METHOD_NAME);
-            goto cleanup;
-        }
-    }
-
     solve_cpu_started = CPUTIME;
     solve_wall_started = dual_node_edge_timer_now();
     solve_timing_active = TRUE;
@@ -185,39 +123,24 @@ static int dual_node_publish_edge(
                 gd->histZetaM_EE[m][i][j] = NAN;
                 gd->histZetaM_EE_Im[m][i][j] = NAN;
             }
-            if (!(wzero > 0.0)) {
-                empty++;
-                continue;
+            for (int m=0; m<orders; m++) {
+                const double re = gd->histZetaMcos[m+1][i][j]
+                                + gd->histZetaMsin[m+1][i][j];
+                const double im = gd->histZetaMsincos[m+1][i][j]
+                                - gd->histZetaMcossin[m+1][i][j];
+                modes[m] = cballs_scalar_complex(re, im);
             }
-            for (int row = 0; row < window_orders; row++) {
-                const int ell = row - mmax;
-                const int m = abs(ell) + 1;
-                const double re = gd->histZetaMcos[m][i][j]
-                                + gd->histZetaMsin[m][i][j];
-                const double im = gd->histZetaMsincos[m][i][j]
-                                - gd->histZetaMcossin[m][i][j];
-                if (!isfinite(re) || !isfinite(im)) {
-                    snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                             "%s: nonfinite signal multipole", DUAL_NODE_METHOD_NAME);
-                    goto cleanup;
-                }
-                rhs[row] = (re + I * (ell < 0 ? -im : im)) / wzero;
-                for (int col = 0; col < window_orders; col++) {
-                    const int difference = row - col;
-                    const size_t wi = (size_t)abs(difference) * plane + bin;
-                    const double wr = window[wi];
-                    const double wm = window[(size_t)window_orders * plane + wi];
-                    matrix[(size_t)row * window_orders + col] =
-                        (wr + I * (difference < 0 ? -wm : wm)) / wzero;
-                }
-            }
+            for (int m=0; m<window_orders; m++)
+                modes[orders+m] = cballs_scalar_complex(window[(size_t)m*plane+bin],
+                    window[((size_t)window_orders+m)*plane+bin]);
             double pivot_ratio;
-            const int solve_status = dual_node_edge_solve(
-                matrix, rhs, window_orders, &pivot_ratio);
+            const int solve_status = cballs_scalar_edge_deconvolve(
+                modes, modes+orders, mmax, matrix, rhs, &pivot_ratio);
             gd->scalar_window_status[diagnostic_bin] = solve_status;
             gd->scalar_window_pivot_ratio[diagnostic_bin] = pivot_ratio;
             if (solve_status != CBALLS_WINDOW_VALID) {
-                singular++;
+                if (solve_status == CBALLS_WINDOW_EMPTY) empty++;
+                else singular++;
                 continue;
             }
             for (int m = 0; m < orders; m++) {
@@ -234,6 +157,7 @@ static int dual_node_publish_edge(
         "%d empty and %d rejected radial-bin pairs set to NaN\n",
         DUAL_NODE_METHOD_NAME, window_orders - 1, empty, singular);
     if (!scanopt(cmd->options, "no-out-Hist")) {
+        if (cballs_scalar_edge_manifest(cmd, gd, FALSE) == FAILURE) goto cleanup;
         for (int order = 0; order < window_orders; order++) {
             if (dual_node_write_edge_matrix(cmd, gd, "window_Re", order,
                     window + (size_t)order * plane, NULL, stride) == FAILURE
@@ -243,6 +167,14 @@ static int dual_node_publish_edge(
                 goto cleanup;
         }
         for (int order = 0; order < orders; order++) {
+            if (dual_node_write_edge_matrix(cmd, gd, "edge_cos", order, NULL,
+                    gd->histZetaMcos[order+1], stride) == FAILURE
+                || dual_node_write_edge_matrix(cmd, gd, "edge_sin", order, NULL,
+                    gd->histZetaMsin[order+1], stride) == FAILURE
+                || dual_node_write_edge_matrix(cmd, gd, "edge_sincos", order, NULL,
+                    gd->histZetaMsincos[order+1], stride) == FAILURE
+                || dual_node_write_edge_matrix(cmd, gd, "edge_cossin", order, NULL,
+                    gd->histZetaMcossin[order+1], stride) == FAILURE) goto cleanup;
             if (dual_node_write_edge_matrix(cmd, gd, "EE", order, NULL,
                     gd->histZetaM_EE[order + 1], stride) == FAILURE
                 || dual_node_write_edge_matrix(cmd, gd, "EE_Im", order, NULL,
@@ -251,6 +183,8 @@ static int dual_node_publish_edge(
         }
     }
     if (cballs_scalar_window_write(cmd, gd) == FAILURE) goto cleanup;
+    if (!cballs_opt_no_out_hist(cmd)
+        && cballs_scalar_edge_manifest(cmd, gd, TRUE) == FAILURE) goto cleanup;
     gd->scalar_window_ready = TRUE;
     status = SUCCESS;
 cleanup:
@@ -258,6 +192,7 @@ cleanup:
         gd->cpu_edge_correction += CPUTIME - solve_cpu_started;
         gd->wall_edge_correction += dual_node_edge_timer_now() - solve_wall_started;
     }
+    free(modes);
     free(rhs);
     free(matrix);
     free(window);

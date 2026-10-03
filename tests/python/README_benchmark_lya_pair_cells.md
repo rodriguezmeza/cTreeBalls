@@ -3,7 +3,8 @@
 `lya2Kernel=1` enables persistent cell-pair traversal for `lya-2pcf-omp`,
 `lya-los-tree-2pcf-omp`, and their `2pcf-3pcf-omp` variants. The original
 pixel traversal remains the default (`lya2Kernel=0`) and calibration reference.
-MPI and radial-only 1D methods do not accept the new controls. Existing MPI/1D
+Radial-only 1D methods do not accept these controls. The original 3D MPI
+methods now support pair cells; existing 1D
 methods remain available with their original settings.
 
 ## Scientific contract
@@ -127,3 +128,13 @@ raw sums to match within roundoff (`rtol=3e-11`, `atol=1e-9`). Every repeat must
 produce identical arrays. A failed exact case exits 1. `--require-accepted` exits
 2 unless at least one requested positive-slop case passes. A passing calibration
 only supports the measured catalog, domain, binning and build.
+
+## Hierarchical radial moments
+
+`lya2Kernel=1` and `lya3Kernel=5` select certified pair-range sums and adaptive
+radial/polar moment combinations for the original 3D OpenMP/MPI methods.
+Combined runs share the forest tree; zero slop preserves the histogram estimator.
+Persistent kernels 3/4/5 also support MPI. The all-engines driver accepts
+`--lya2-kernel 1 --lya3-kernel 5 --lya3-pivot-cell-max 8`; these controls apply
+only to eligible 3D Ly-alpha statistics. Default kernels remain 0.
+See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.md).

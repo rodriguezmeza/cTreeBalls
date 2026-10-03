@@ -40,9 +40,9 @@ PROFILE_LIB = $(WRKDIR)/lib$(EXEC).a
 
 OBJS = main.o cballsio.o cballs.o startrun.o testdata.o treeload.o \
 	cballsutils.o search.o abi_check.o run_metadata.o engine_registry.o \
-	runtime_context.o memory_catalog.o common_histogram.o smooth_pivots.o mpi_runtime.o
+	runtime_context.o memory_catalog.o common_histogram.o smooth_pivots.o mpi_runtime.o scalar_window_io.o
 
-PYTHON_FILES = python/cyballs.pyx setup.py python/ccyballs.pxd.in
+PYTHON_FILES = python/cyballs.pyx python/resource_api.pxi python/qualification_api.pxi setup.py python/ccyballs.pxd.in
 CBALLS_OBJECTS = $(sort $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
 CBALLS_COMPILE_CONFIG = $(WRKDIR)/compile-settings.json
 CBALLS_LINK_CONFIG = $(WRKDIR)/link-settings.json
@@ -51,6 +51,8 @@ export CBALLS_OBJECTS VENDORED_SOURCE_PATTERNS
 all: $(EXEC) lib$(EXEC).a cyballs
 
 # Reader headers may be dropped by later legacy HEADERFILES assignments.
+main.o: $(MDIR)/include/cli_contracts.h
+
 cballsio.o: $(wildcard $(MDIR)/addons/iolib/*.h) \
             $(wildcard $(MDIR)/addons/cfitsio/*.h)
 
@@ -88,6 +90,13 @@ print-cyballs-build-env:
 	@printf '__CBALLS_MPICC__=%s\n' '$(MPICC)'
 	@printf '__CBALLS_LIB__=%s\n' '$(EXEC)'
 	@printf '__CBALLS_CPPFLAGS__=%s\n' '$(OPT2) $(INCLUDES)'
+	@printf '__CBALLS_GSL_CFLAGS__=%s\n' '$(GSL_CFLAGS)'
+	@printf '__CBALLS_GSL_LDFLAGS__=%s\n' '$(GSL_LDFLAGS)'
+	@printf '__CBALLS_GSL_LIBS__=%s\n' '$(GSL_LIBS)'
+	@printf '__CBALLS_CFITSIO_CFLAGS__=%s\n' '$(CFITSIO_INCL)'
+	@printf '__CBALLS_CFITSIO_LDFLAGS__=%s\n' '$(CFITSIO_LDFLAGS)'
+	@printf '__CBALLS_CFITSIO_LIBS__=%s\n' '$(CFITSIO_LIBS)'
+	@printf '__CBALLS_CFITSIO_RPATH__=%s\n' '$(CFITSIO_RPATH)'
 	@printf '__CBALLS_ADDONSON__=%s\n' '$(ADDONSON)'
 	@printf '__CBALLS_CLASSLIBON__=%s\n' '$(CLASSLIBON)'
 	@printf '__CBALLS_PXDON__=%s\n' '$(PXDON)'
@@ -125,22 +134,52 @@ print-cyballs-build-env:
 #
 #B to test cBalls under different profiles
 #
-.PHONY: test-default test-cell-production test-kdtree-box-frontier \
-	test-balltree-2balls-omp test-balltree-2balls-mpi \
-	test-balltree-2balls-3pcf test-octree-2balls-omp \
-	test-octree-2balls-mask test-octree-2balls-mpi \
-	test-kdtree-2balls-omp test-kdtree-2balls-mpi \
-	test-octree-3pcf-3d-omp test-octree-3pcf-3d-mpi \
-	test-lya-forest-omp test-lya-forest-mpi test-lya-forest-1d-omp \
-	test-lya-corr-all-engines test-lya2pcf-reference \
-	test-p3-cython test-sanitizer-smoke test-two-ball-edge \
+.PHONY: test-default test-balls test-p0-regressions test-p1-regressions \
+	test-p2-regressions test-p2-cython test-cell-production \
+	test-openmp-determinism test-octree-ggg-fast-path test-kdtree-no-one-ball \
+	test-kdtree-box-frontier \
+	test-balltree-omp test-balltree-2balls-omp test-balltree-2balls-mpi \
+	test-balltree-2balls-3pcf \
+	test-balltree-2balls-omp-3pcf test-balltree-2balls-mpi-3pcf \
+	test-octree-2balls-omp test-octree-2balls-mask \
+	test-balltree-mpi test-octree-2balls-mpi test-octree-ggg-mpi \
+	test-octree-3pcf-3d-omp test-octree-balls4-no-smoothing \
+		test-lya-forest-omp test-lya-forest-1d-omp \
+	test-lya2pcf-reference \
+	test-p3-cython test-sanitizer-smoke \
+	test-balls0357-recovery \
 	test-healpix-ordering test-parameter-parser \
 	test-parameter-file-parser test-standalone-parser test-option-cache \
 	test-sleef-vector-log \
 	test-mixed-precision-profile test-singlep-search test-singlep \
 	test-make-info test-make-info-profiles test-search-methods
 
-test-default: all test-search-methods test-make-info test-option-cache
+test-default: all
+	cd tests && ./scripts/run_all_tests
+
+test-balls:
+	$(MAKE) -B BALLSON=1 OCTREESMOOTHINGON=0 all
+	cd tests && MAKE_PROFILE_ARGS="BALLSON=1 OCTREESMOOTHINGON=0" ./make_tests/run_test_balls-omp
+
+test-octree-ggg-omp:
+	$(MAKE) -B OCTREEGGGOMPON=1 all
+	cd tests && MAKE_PROFILE_ARGS="OCTREEGGGOMPON=1" ./make_tests/run_test_octree-ggg-omp
+
+test-cython:
+	$(MAKE) -B OCTREEGGGOMPON=1 all
+	cd tests && MAKE_PROFILE_ARGS="OCTREEGGGOMPON=1" ./make_tests/run_test_cython
+
+test-in-stop-out-run:
+	$(MAKE) -B OCTREEGGGOMPON=1 all
+	cd tests && MAKE_PROFILE_ARGS="OCTREEGGGOMPON=1" ./make_tests/run_test_in-stop-out_run
+
+test-p0-regressions: $(EXEC) cyballs
+	cd tests && bash ./make_tests/run_test_p0_regressions
+	cd /tmp && $(PYTHON) $(CURDIR)/tests/python/test_p0_cython_instances.py
+
+test-p1-regressions: $(EXEC) cyballs test-healpix-ordering \
+	test-parameter-parser test-parameter-file-parser test-standalone-parser
+	bash ./tests/make_tests/run_test_p1_regressions
 
 test-parameter-parser: lib$(EXEC).a
 	mkdir -p $(WRKDIR)/tests
@@ -204,6 +243,16 @@ test-healpix-ordering:
 	@echo "SKIP: CFITSIO support is disabled"
 endif
 
+test-p2-regressions: $(EXEC)
+	cd tests && bash ./make_tests/run_test_p2_regressions
+
+test-p2-cython: cyballs
+	$(PYTHON) tests/python/test_p2_cython.py
+
+test-balls0357-recovery:
+	$(MAKE) -B BALLS0357ON=1 OCTREESMOOTHINGON=0 SMOOTHPIVOTON=1 all
+	$(PYTHON) tests/python/test_balls0357_recovery.py
+
 test-cell-production: .base
 	mkdir -p $(WRKDIR)/tests
 	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) \
@@ -249,11 +298,31 @@ test-singlep-search:
 
 .PHONY: test-scalar-numerical-contract
 test-scalar-numerical-contract: $(EXEC) cyballs
-	$(PYTHON) tests/make_tests/test_scalar_numerical_contract.py
+	$(PYTHON) tests/python/test_scalar_numerical_contract.py
+
+test-octree-ggg-fast-path:
+	$(MAKE) -B OCTREEGGGOMPON=1 all
+	$(PYTHON) tests/python/test_octree_ggg_fast_path.py
+	$(PYTHON) tests/python/test_octree_ggg_only_2pcf.py
+	$(PYTHON) tests/python/test_octree_ggg_edge_corrections.py
+
+test-openmp-determinism: $(EXEC) cyballs
+	cd tests && bash ./make_tests/run_test_openmp_determinism
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
+		bash ./make_tests/run_test_kdtree_no_one_ball
+
+test-kdtree-no-one-ball: $(EXEC)
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
+		bash ./make_tests/run_test_kdtree_no_one_ball
 
 test-kdtree-box-frontier: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./make_tests/run_test_kdtree_box_frontier
+
+test-balltree-omp:
+	$(MAKE) -B BALLTREEOMPON=1 KDTREEOMPON=1 $(EXEC)
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
+		bash ./make_tests/run_test_balltree_omp
 
 test-balltree-2balls-omp: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
@@ -270,17 +339,43 @@ test-balltree-2balls-3pcf: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./make_tests/run_test_balltree_2balls_3pcf
 
+test-balltree-2balls-omp-3pcf: $(EXEC)
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
+		ENGINE=balltree-2balls-omp_3pcf \
+		ENGINE_MACRO=BALLTREE2BALLSOMP3PCF \
+		bash ./make_tests/run_test_balltree_2balls_3pcf
+
+test-balltree-2balls-mpi-3pcf:
+	$(MAKE) -B BALLTREE2BALLSMPI3PCFON=1 TPCFON=1 cballs
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
+		bash ./make_tests/run_test_balltree_2balls_mpi_3pcf
+
 test-octree-2balls-omp: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./make_tests/run_test_octree_2balls_omp
 
 test-octree-2balls-mask: $(EXEC)
-	$(PYTHON) tests/make_tests/test_octree_2balls_mask.py --cballs $(CURDIR)/$(EXEC)
+	$(PYTHON) tests/python/test_octree_2balls_mask.py --cballs $(CURDIR)/$(EXEC)
 
 .PHONY: test-two-ball-edge
 test-two-ball-edge: $(EXEC)
-	$(PYTHON) tests/make_tests/test_two_ball_edge_corrections.py \
+	$(PYTHON) tests/python/test_two_ball_edge_corrections.py \
 		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION)
+
+.PHONY: test-kdtree-edge test-kdtree-mpi
+test-kdtree-edge:
+	$(MAKE) -B KDTREEOMPON=1 $(EXEC)
+	$(PYTHON) tests/python/test_two_ball_edge_corrections.py \
+		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION) \
+		--engine kdtree-omp
+
+test-kdtree-mpi:
+	$(MAKE) -B KDTREEMPION=1 TWOPCFON=1 TPCFON=1 cballs
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
+		bash ./make_tests/run_test_kdtree_mpi
+	$(PYTHON) tests/python/test_two_ball_edge_corrections.py \
+		--cballs $(CURDIR)/$(EXEC) --dimension $(DEFDIMENSION) \
+		--engine kdtree-mpi --mpi-command "$(MPIEXEC) -n 2"
 
 .PHONY: test-kdtree-2balls-omp test-kdtree-2balls-mpi
 test-kdtree-2balls-omp: $(EXEC)
@@ -298,15 +393,55 @@ test-octree-2balls-mpi:
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
 		bash ./make_tests/run_test_octree_2balls_mpi
 
+test-balltree-mpi:
+	$(MAKE) -B BALLTREEMPION=1 cballs
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
+		bash ./make_tests/run_test_balltree_mpi
+
+test-octree-ggg-mpi:
+	$(MAKE) -B OCTREEGGGMPION=1 cballs
+	cd tests && CBALLS=$(CURDIR)/$(EXEC) MPIEXEC='$(MPIEXEC)' \
+		bash ./make_tests/run_test_octree_ggg_mpi
+
 .PHONY: test-octree-3pcf-3d-mpi
 test-octree-3pcf-3d-mpi: $(EXEC)
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_octree_3pcf_3d_mpi.py \
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_octree_3pcf_3d_mpi.py \
 		--cballs $(CURDIR)/$(EXEC) \
 		--mpi-command "$(MPIEXEC) -n 2" $(CB3D_MPI_TEST_ARGS)
 
 test-octree-3pcf-3d-omp: $(EXEC)
 	CBALLS=$(CURDIR)/$(EXEC) \
 		bash ./tests/make_tests/run_test_octree_3pcf_3d_omp
+
+.PHONY: test-octree-balls4-no-smoothing test-octree-balls4-profile
+test-octree-balls4-no-smoothing:
+	$(MAKE) -B OCTREESMOOTHINGON=0 BALLSON=0 BALLS4SCANLEVON=0 \
+		OCTREEBALLS4OMPON=1 test-octree-balls4-profile
+
+test-octree-balls4-profile: $(EXEC) cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	CBALLS=$(CURDIR)/$(EXEC) PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(PYTHONPATH) \
+		$(PYTHON) tests/python/test_octree_balls4_no_smoothing.py
+
+.PHONY: test-octree-balls4-edge test-octree-balls4-mpi
+test-octree-balls4-edge: $(EXEC) cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) \
+		$(PYTHON) tests/python/test_octree_balls4_edge.py --cballs $(CURDIR)/$(EXEC) --cython
+
+test-octree-balls4-mpi: $(EXEC)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_octree_balls4_edge.py \
+		--cballs $(CURDIR)/$(EXEC) --mpi-command "$(if $(MPIEXEC),$(MPIEXEC),mpiexec) -n 2"
+
+.PHONY: test-lya-forest-los-tree
+test-lya-forest-los-tree: $(EXEC)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m pytest -q tests/python/test_lya_forest_los_tree.py
+
+.PHONY: test-lya-pivot-frontier
+test-lya-pivot-frontier: $(EXEC) cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) \
+		$(PYTHON) -m pytest -q tests/python/test_lya_pivot_frontier.py
 
 test-lya-forest-omp: $(EXEC)
 	cd tests && CBALLS=$(CURDIR)/$(EXEC) \
@@ -316,11 +451,11 @@ test-lya-forest-omp: $(EXEC)
 test-lya-corr-all-engines: cyballs-static-lib
 	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
 	PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) \
-		$(PYTHON) -m pytest -q tests/make_tests/test_lya_corr_all_engines.py
+		$(PYTHON) -m pytest -q tests/python/test_lya_corr_all_engines.py
 
 .PHONY: test-lya-forest-mpi
 test-lya-forest-mpi: $(EXEC)
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_lya_forest_mpi.py \
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_lya_forest_mpi.py \
 		--cballs $(CURDIR)/$(EXEC) \
 		--mpi-command "$(if $(MPIEXEC),$(MPIEXEC),mpiexec) -n 2" $(LYA_MPI_TEST_ARGS)
 
@@ -334,44 +469,40 @@ test-lya2pcf-reference: $(EXEC)
 		$(PYTHON) ./make_tests/test_lya2pcf_reference.py
 
 test-p3-cython: cyballs
-	$(PYTHON) tests/make_tests/test_p3_cython_startup.py
+	$(PYTHON) tests/python/test_p3_cython_startup.py
+
+.PHONY: test-shear
+test-shear: cyballs
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_octree_omp.py
 
 .PHONY: test-shear-sphere
 test-shear-sphere: cyballs
-	CBALLS_SHEAR_SPHERE_ENGINE=octree-shear-sphere-2balls-omp \
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_sphere_octree_omp.py
 
 .PHONY: test-shear-sphere-2balls
 test-shear-sphere-2balls: cyballs
 	CBALLS_SHEAR_SPHERE_ENGINE=octree-shear-sphere-2balls-omp \
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_pivot_reuse.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_sphere_octree_omp.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_pivot_reuse.py
 
 .PHONY: test-shear-sphere-kdtree-2balls
 test-shear-sphere-kdtree-2balls: cyballs
 	CBALLS_SHEAR_SPHERE_ENGINE=kdtree-shear-sphere-2balls-omp \
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_sphere_octree_omp.py
+
+	CBALLS_SHEAR_SPHERE_ENGINE=kdtree-shear-sphere-2balls-omp \
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_pivot_reuse.py
 
 .PHONY: test-shear-sphere-balltree-2balls
 test-shear-sphere-balltree-2balls: cyballs
 	CBALLS_SHEAR_SPHERE_ENGINE=balltree-shear-sphere-2balls-omp \
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_shear_sphere_octree_omp.py
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_balltree_shear_build.py
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/make_tests/test_balltree_shear_pivot_reuse.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_sphere_octree_omp.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_balltree_shear_build.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_balltree_shear_pivot_reuse.py
 
 .PHONY: test-shear-all-engines
 test-shear-all-engines: cyballs
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m pytest -q tests/make_tests/test_shear_corr_all_engines.py
-
-.PHONY: test-lya-los-tree test-benchmark-drivers
-test-lya-los-tree: $(EXEC) cyballs
-	CBALLS=$(CURDIR)/$(EXEC) $(PYTHON) -m pytest -q tests/make_tests/test_lya_forest_los_tree.py
-
-test-benchmark-drivers: $(EXEC) cyballs
-	$(PYTHON) -m pytest -q tests/make_tests/test_benchmark_timing.py \
-		tests/make_tests/test_kappa_corr_all_engines.py tests/make_tests/test_kappa_corr_patch.py \
-		tests/make_tests/test_shear_corr_all_engines.py tests/make_tests/test_lya_corr_all_engines.py \
-		tests/make_tests/test_lya_analysis.py -k 'not mpi'
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/python/test_shear_corr_all_engines.py
 
 test-sanitizer-smoke: $(EXEC) test-cell-production
 	cd tests && bash ./make_tests/run_test_sanitizer_smoke
@@ -414,12 +545,12 @@ clean: .base
 .PHONY: test-io-stabilization test-io-stabilization-cython
 ifeq ($(GADGETIOON)$(CFITSIOON)$(OCTREE2BALLSOMPON)$(OCTREE3PCF3DOMPON),1111)
 test-io-stabilization: $(EXEC)
-	$(PYTHON) tests/make_tests/test_io_stabilization.py --cballs $(CURDIR)/$(EXEC)
+	$(PYTHON) tests/python/test_io_stabilization.py --cballs $(CURDIR)/$(EXEC)
 
 test-io-stabilization-cython: $(EXEC) cyballs-static-lib $(PYTHON_FILES)
 	@test "$(CLASSLIBON)" = "1" || { echo "ERROR: requires CLASSLIBON=1"; exit 1; }
 	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace --force
-	$(PYTHON) tests/make_tests/test_io_stabilization.py --cballs $(CURDIR)/$(EXEC) --cython
+	$(PYTHON) tests/python/test_io_stabilization.py --cballs $(CURDIR)/$(EXEC) --cython
 else
 test-io-stabilization test-io-stabilization-cython:
 	@echo "ERROR: requires GADGETIOON=1 CFITSIOON=1 OCTREE2BALLSOMPON=1 OCTREE3PCF3DOMPON=1"
@@ -437,11 +568,11 @@ test-runtime-stabilization-native: cyballs-static-lib
 	$(WRKDIR)/tests/test_runtime_stabilization
 
 test-runtime-stabilization: $(EXEC) test-runtime-stabilization-native
-	$(PYTHON) tests/make_tests/test_runtime_stabilization.py --cballs $(CURDIR)/$(EXEC)
+	$(PYTHON) tests/python/test_runtime_stabilization.py --cballs $(CURDIR)/$(EXEC)
 
 test-runtime-stabilization-cython: $(EXEC) cyballs-static-lib test-runtime-stabilization-native $(PYTHON_FILES)
 	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace --force
-	$(PYTHON) tests/make_tests/test_runtime_stabilization.py --cballs $(CURDIR)/$(EXEC) --cython
+	$(PYTHON) tests/python/test_runtime_stabilization.py --cballs $(CURDIR)/$(EXEC) --cython
 
 # Provenance, scalar-window support, and observer-relative mask regressions.
 .PHONY: test-provenance-window-native test-provenance-window
@@ -457,12 +588,12 @@ test-provenance-window-native: cyballs-static-lib
 test-provenance-window: $(EXEC) test-provenance-window-native $(PYTHON_FILES)
 	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace --force
 	PYTHONPATH=$(CURDIR):$(PYTHONPATH) $(PYTHON) -m pytest -q \
-		tests/make_tests/test_provenance_window.py \
-		tests/make_tests/test_kappa_corr_all_engines.py \
-		tests/make_tests/test_two_ball_edge_cython.py -k 'not mpi'
-	PYTHONPATH=$(CURDIR):$(PYTHONPATH) $(PYTHON) tests/make_tests/test_octree_2balls_mask.py \
+		tests/python/test_provenance_window.py \
+		tests/python/test_kappa_corr_all_engines.py \
+		tests/python/test_two_ball_edge_cython.py -k 'not mpi'
+	PYTHONPATH=$(CURDIR):$(PYTHONPATH) $(PYTHON) tests/python/test_octree_2balls_mask.py \
 		--cballs $(CURDIR)/$(EXEC) --cython
-	$(PYTHON) tests/make_tests/test_two_ball_edge_corrections.py --cballs $(CURDIR)/$(EXEC) \
+	$(PYTHON) tests/python/test_two_ball_edge_corrections.py --cballs $(CURDIR)/$(EXEC) \
 		--engine kdtree-2balls-omp --engine balltree-2balls-omp --engine octree-2balls-omp
 
 # Resolve settings before stamping both native and Cython compilation units.
@@ -501,16 +632,23 @@ active-release-gate:
 
 .PHONY: test-incremental-build
 test-incremental-build:
-	$(PYTHON) tests/make_tests/test_incremental_build.py
+	$(PYTHON) tests/python/test_incremental_build.py
 
 .PHONY: test-two-ball-pivot-progress
 test-two-ball-pivot-progress: $(EXEC)
-	$(PYTHON) tests/make_tests/test_octree_2balls_progress.py --cballs $(CURDIR)/$(EXEC) \
+	$(PYTHON) tests/python/test_octree_2balls_progress.py --cballs $(CURDIR)/$(EXEC) \
 		--engine octree-2balls-omp --engine kdtree-2balls-omp --engine balltree-2balls-omp
 
 # Do not treat .d files as profile Makefiles in the fingerprint prerequisites.
 -include $(wildcard $(addprefix $(WRKDIR)/,$(CBALLS_OBJECTS:.o=.d)))
 
+.PHONY: test-resource-contracts
+test-resource-contracts: cyballs-static-lib
+	mkdir -p $(WRKDIR)/tests
+	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_resource_contracts.c lib$(EXEC).a -o $(WRKDIR)/tests/test_resource_contracts $(MLIBS) $(FITSIOLIBS)
+	$(WRKDIR)/tests/test_resource_contracts
+
+# Generation is explicit; every build rejects a stale checked-in catalogue.
 .PHONY: check-capabilities generate-capabilities
 check-capabilities:
 	@$(PYTHON) scripts/generate_capabilities.py --check
@@ -518,11 +656,7 @@ generate-capabilities:
 	@$(PYTHON) scripts/generate_capabilities.py
 $(CBALLS_OBJECTS): | check-capabilities
 
-.PHONY: test-resource-contracts test-runtime-context test-mpi-runtime-build affected-regressions benchmark-contracts
-test-resource-contracts: cyballs-static-lib
-	mkdir -p $(WRKDIR)/tests
-	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_resource_contracts.c lib$(EXEC).a -o $(WRKDIR)/tests/test_resource_contracts $(MLIBS) $(FITSIOLIBS)
-	$(WRKDIR)/tests/test_resource_contracts
+.PHONY: test-runtime-context test-mpi-runtime-build affected-regressions benchmark-contracts
 test-runtime-context: cyballs-static-lib
 	mkdir -p $(WRKDIR)/tests
 	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_runtime_context.c lib$(EXEC).a -o $(WRKDIR)/tests/test_runtime_context $(MLIBS) $(FITSIOLIBS)
@@ -535,6 +669,26 @@ affected-regressions:
 benchmark-contracts:
 	$(PYTHON) scripts/benchmark_contracts.py $(BENCHMARK_ARGS)
 
-.PHONY: test-lya-pivot-frontier
-test-lya-pivot-frontier: $(EXEC) cyballs
-	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(CURDIR):$(CURDIR)/tests/python:$(PYTHONPATH) $(PYTHON) -m pytest -q tests/make_tests/test_lya_pivot_frontier.py
+.PHONY: test-scalar-pivot-reuse test-scalar-pivot-reuse-mpi
+test-scalar-pivot-reuse: $(EXEC) cyballs
+	$(PYTHON) -O tests/python/test_scalar_pivot_reuse.py
+
+test-scalar-pivot-reuse-mpi: $(EXEC) cyballs
+	$(MPIEXEC) -n 2 $(PYTHON) -O tests/python/test_scalar_pivot_reuse.py --mpi
+
+.PHONY: test-lya-hierarchy test-lya-hierarchy-mpi
+test-lya-hierarchy: $(EXEC)
+	$(PYTHON) -O tests/python/test_lya_hierarchy.py --cballs $(CURDIR)/$(EXEC)
+test-lya-hierarchy-mpi: $(EXEC)
+	$(PYTHON) -O tests/python/test_lya_hierarchy.py --cballs $(CURDIR)/$(EXEC) --mpi-command "$(if $(MPIEXEC),$(MPIEXEC),mpiexec) -n 2"
+
+.PHONY: test-lya-los-hierarchy test-lya-los-hierarchy-mpi
+test-lya-los-hierarchy: $(EXEC)
+	$(PYTHON) -O tests/python/test_lya_los_hierarchy.py --cballs $(CURDIR)/$(EXEC)
+test-lya-los-hierarchy-mpi: $(EXEC)
+	$(PYTHON) -O tests/python/test_lya_los_hierarchy.py --cballs $(CURDIR)/$(EXEC) --mpi-command "$(if $(MPIEXEC),$(MPIEXEC),mpiexec) -n 2"
+
+.PHONY: test-lya-multipole-hierarchy
+test-lya-multipole-hierarchy: $(EXEC) cyballs-static-lib
+	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
+	PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) $(PYTHON) -m pytest -q tests/python/test_lya_multipole_hierarchy.py tests/python/test_lya_multipole_reconstruction.py tests/python/test_lya_triplet_acceleration.py

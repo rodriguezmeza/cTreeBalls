@@ -6,6 +6,7 @@
 
 #B new imports
 from setuptools import setup, Extension
+from setuptools.command.sdist import sdist as setuptools_sdist
 from Cython.Distutils import build_ext as cython_build_ext
 
 import os
@@ -88,13 +89,6 @@ def first_existing_fftw_path(kind):
 #    return default
 
 
-def get_gsl_config(flag):
-    try:
-        res = subprocess.check_output(["gsl-config", flag], text=True)
-        return res.strip()
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return ""
-
 def read_makefile_setting(path, key, default="0"):
     try:
         with open(path, "r") as f:
@@ -105,29 +99,6 @@ def read_makefile_setting(path, key, default="0"):
     except FileNotFoundError:
         pass
     return os.environ.get(key, default)
-
-# gsl definition
-def parse_gsl_config():
-    cflags = get_gsl_config("--cflags").split()
-    libs_flags = get_gsl_config("--libs").split()
-
-    include_dirs = [
-        flag[2:] for flag in cflags
-        if flag.startswith("-I") and len(flag) > 2
-    ]
-
-    library_dirs = [
-        flag[2:] for flag in libs_flags
-        if flag.startswith("-L") and len(flag) > 2
-    ]
-
-    libraries = [
-        flag[2:] for flag in libs_flags
-        if flag.startswith("-l") and len(flag) > 2
-    ]
-
-    return include_dirs, library_dirs, libraries
-#
 
 #B to get any pkg-config pkg
 def parse_pkg_config(package):
@@ -231,24 +202,6 @@ addons_settings = os.path.join(root_folder, "addons", "Makefile_addons_settings"
 #    if make_cc:
 #        os.environ["CC"] = make_cc
 
-#B GSL...
-gsl_include_dirs, gsl_library_dirs, gsl_libraries = parse_gsl_config()
-
-if os.environ.get("GSL_INCLUDE"):
-    gsl_include_dirs = [os.environ["GSL_INCLUDE"]]
-
-if os.environ.get("GSL_LIB"):
-    gsl_library_dirs = [os.environ["GSL_LIB"]]
-
-if not gsl_include_dirs:
-    gsl_include_dirs = ["/usr/local/include"]
-
-if not gsl_library_dirs:
-    gsl_library_dirs = ["/usr/local/lib"]
-
-if not gsl_libraries:
-    gsl_libraries = ["gsl", "gslcblas", "m"]
-
 #B to fix NDIM problem, the long term version...
 def read_make_cyballs_env():
     try:
@@ -261,7 +214,8 @@ def read_make_cyballs_env():
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         raise RuntimeError(
             "could not query Makefile build flags; build with `make cyballs` "
-            "or fix the `print-cyballs-build-env` target"
+            "or fix the `print-cyballs-build-env` target:\n"
+            + str(getattr(exc, "output", exc))
         ) from exc
 
     values = {}
@@ -424,7 +378,12 @@ if MPI_ENABLED:
     )
     mpi_compile_args, mpi_link_args = mpi_wrapper_flags(mpi_wrapper)
 
-#B
+# Native and Cython builds consume the same resolved discovery flags.
+gsl_compile_args = []
+gsl_link_args = []
+gsl_include_dirs = []
+gsl_library_dirs = []
+gsl_libraries = []
 if GSLINTERNAL == "1":
     gsl_include_dirs = [
         os.path.join(root_folder, "addons", "gsl"),
@@ -434,6 +393,9 @@ if GSLINTERNAL == "1":
     gsl_libraries = []
 else:
     define_macros.append(("NOINTERNALGSL", None))
+    gsl_compile_args = shlex.split(make_env["__CBALLS_GSL_CFLAGS__"])
+    gsl_link_args = shlex.split(make_env["__CBALLS_GSL_LDFLAGS__"]
+                               + " " + make_env["__CBALLS_GSL_LIBS__"])
 
 liblist = [libname] + gsl_libraries
 
@@ -598,6 +560,8 @@ cfitsio_include_dirs = []
 cfitsio_library_dirs = []
 cfitsio_libraries = []
 cfitsio_rpath_args = []
+cfitsio_compile_args = []
+cfitsio_link_args = []
 
 if CFITSIOON == "1":
     define_macros.append(("CFITSIO", None))
@@ -609,11 +573,10 @@ if CFITSIOON == "1":
         ]
         # No external libcfitsio: objects should be inside libcballs.a
     else:
-        cfitsio_include_dirs, cfitsio_library_dirs, cfitsio_libraries = parse_pkg_config("cfitsio")
-        cfitsio_rpath_args = [
-            f"-Wl,-rpath,{libdir}"
-            for libdir in cfitsio_library_dirs
-        ]
+        cfitsio_compile_args = shlex.split(make_env["__CBALLS_CFITSIO_CFLAGS__"])
+        cfitsio_link_args = shlex.split(make_env["__CBALLS_CFITSIO_LDFLAGS__"]
+            + " " + make_env["__CBALLS_CFITSIO_LIBS__"]
+            + " " + make_env["__CBALLS_CFITSIO_RPATH__"])
 #E
 
 
@@ -663,9 +626,10 @@ cyballs_ext = Extension(
         *cfitsio_library_dirs,
     ],
     extra_link_args=(openmp_link_args + mpi_link_args + macos_link_args
-                     + ['-lz'] + sleef_rpath_args + cfitsio_rpath_args),
+                     + ['-lz'] + sleef_rpath_args + cfitsio_rpath_args
+                     + gsl_link_args + cfitsio_link_args),
     extra_compile_args=(openmp_compile_args + mpi_compile_args + macos_compile_args
-                        + make_cppflags),
+                        + make_cppflags + gsl_compile_args + cfitsio_compile_args),
 )
 
 cyballs_ext.cython_directives = {
@@ -725,6 +689,17 @@ class build_ext(cython_build_ext):
             subprocess.check_call(make_command, cwd=root_folder)
         super().run()
 
+class sdist(setuptools_sdist):
+    def make_release_tree(self, base_dir, files):
+        super().make_release_tree(base_dir, files)
+        if Path(base_dir).resolve() == Path(root_folder).resolve():
+            raise RuntimeError("refusing to rewrite the development checkout")
+        # PEP 517 does not promise that the source root is on sys.path.
+        import runpy
+        helper = runpy.run_path(str(Path(root_folder)/'scripts/release_profile.py'))
+        helper['normalize_release_tree'](base_dir)
+
+
 #B for using with pip -m install...
 setup(
     name='cyballs',
@@ -733,7 +708,7 @@ setup(
     long_description=(Path(root_folder) / 'README.md').read_text(encoding='utf-8'),
     long_description_content_type='text/markdown',
     url='http://github.com/rodriguezmeza/cTreeBalls.git',
-    cmdclass={'build_ext': build_ext},
+    cmdclass={'build_ext': build_ext, 'sdist': sdist},
     ext_modules=[cyballs_ext],
     install_requires=install_requires,
 )

@@ -1,5 +1,12 @@
 <p align="left">
-    <img src="https://github.com/rodriguezmeza/cTreeBalls/blob/main/addons/cBalls_04.png" width="300" height="300">
+
+This update targets `testing/current-state-2026-08-30`. The branch contains only
+the enabled addon profile, with required shared kernels under `support/` and all
+Python benchmarks/regressions under `tests/python/`. See the
+[active profile](docs/ACTIVE_PROFILE.md) for its 41 methods and directory list.
+The main branch is unchanged; merging follows a separate full validation.
+
+    <img src="addons/cBalls_04.png" width="300" height="300">
 </p>
 
 # cTreeBalls: Correlation functions computation with Tree/Balls methods
@@ -39,7 +46,7 @@ accepts every geometry, field, mask, or normalization.
 - [Active capability catalogue](ENGINE_CAPABILITIES.md) and [validation contracts](docs/capabilities.rst)
 - [Scalar numerical contract](docs/3pcf.rst)
 - [Python API](docs/api.rst) and [in-memory catalogs](docs/user/python.rst)
-- [Benchmarking](docs/benchmarks.rst) and [regressions](tests/make_tests/README.md)
+- [Benchmarking](docs/benchmarks.rst) and [regressions](tests/python/README_regression_tests.md)
 
 These source docs describe this checkout. Published packages and hosted docs
 may lag behind local changes; uploading source does not publish a PyPI release.
@@ -73,9 +80,11 @@ The project name is cTreeBalls; both the distribution and import names are
 checkout's `cballs` command, examples, or benchmark source trees.
 
 Configure `Makefile_settings`, `Makefile_machine`, and
-`addons/Makefile_addons_settings` before building. This public profile uses
-external GSL and CFITSIO, discovered with `gsl-config` and `pkg-config cfitsio`.
-Disabled bundled-library addons are not included. Keep C and Cython
+`addons/Makefile_addons_settings` before building. Source archive creation sets
+its staged defaults to external GSL and CFITSIO (`GSLINTERNAL=0`,
+`CFITSIOLIBON=0`), discovered with `gsl-config` and `pkg-config cfitsio`.
+It preserves the development checkout's settings. Bundled-library sources are
+not included in the archive. See [source artifact verification](docs/SOURCE_DISTRIBUTION.md). Keep C and Cython
 flags identical and rebuild both after changing a profile. Do not hand-edit
 the generated `python/ccyballs.pxd`.
 
@@ -181,8 +190,8 @@ The documentation toolchain requires Python 3.11 or newer.
 
 ```sh
 make test-make-info test-search-methods
-python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
-CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/make_tests/test_scalar_numerical_contract.py
+python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
+CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/python/test_scalar_numerical_contract.py
 python3 -m pip install -r docs/requirements.txt
 python3 -m sphinx -E -a -n -W --keep-going -b html docs docs/_build/html
 ```
@@ -196,17 +205,17 @@ Open `docs/_build/html/index.html` after the Sphinx build. Additional plotting
 notebooks are maintained in
 [CBalls_plots](https://github.com/joar-cafe/CBalls_plots/tree/main/benchmarks).
 
-## Active-profile contracts
-
-See [Release work sequence](RELEASE_WORK_SEQUENCE.md) for exact-profile release checks,
-resource forecasts, held-out accuracy qualification, owned forest/physical result
-APIs, and matching-science scaling benchmarks.
-
 ## License
 
 **cBalls** is written by Mario A. Rodriguez-Meza, is open source and distributed under the [MIT license](LICENSE). If you use this program in research work that results in publications, please cite the following paper:
 
 Abraham Arvizu et al., [arXiv:2408.16847](https://arxiv.org/abs/2408.16847)
+
+## Active-profile contracts
+
+See [Release work sequence](RELEASE_WORK_SEQUENCE.md) for exact-profile release checks,
+resource forecasts, held-out accuracy qualification, owned forest/physical result
+APIs, and matching-science scaling benchmarks.
 
 ## Acknowledgments
 

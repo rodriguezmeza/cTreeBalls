@@ -27,6 +27,9 @@
 #include <stdio.h>
 #include "globaldefs.h"
 #include "cmdline_defs.h"
+#ifdef CLASSLIB
+#include "cli_contracts.h"
+#endif
 
 /*
  Main routine:
@@ -52,10 +55,19 @@ int main(int argc, string argv[])
     gd.cpuinit = CPUTIME;                           // init register of cpu time
     gd.cpurealinit = rcpu_time();                   // init register of real time
 
-#ifdef GETPARAM
+#if defined(GETPARAM) && defined(CLASSLIB)
+    /* Preserve the informational CLI commands; normal input uses the checked
+     * parser below. These commands deliberately finish without starting MPI. */
+    if (argc > 1 && (!strcmp(argv[1],"--help") || !strcmp(argv[1],"-help")
+        || !strcmp(argv[1],"-h") || !strcmp(argv[1],"--clue")
+        || !strcmp(argv[1],"-c") || !strcmp(argv[1],"--version")))
+        InitParam(argv, defv);
+#endif
+
+#if defined(GETPARAM) && !defined(CLASSLIB)
     InitParam(argv, defv);                          // init command parameters
                                                     //  structure
-#else
+#elif !defined(CLASSLIB)
     if(argc < 2) {
         verb_print(1, "Parameters are missing.\n");
         verb_print(1, "Call with <ParameterFile>\n");
@@ -70,7 +82,12 @@ int main(int argc, string argv[])
 
     //B get parameters, init global structure, and do other useful
     //      process, like param check, read data points to analyze
-    if (StartRun(&cmd, &gd, argv[0], HEAD1, HEAD2, HEAD3) == FAILURE) {
+#ifdef CLASSLIB
+    int startup_status = cballs_cli_start(&cmd, &gd, argc, argv);
+#else
+    int startup_status = StartRun(&cmd, &gd, argv[0], HEAD1, HEAD2, HEAD3);
+#endif
+    if (startup_status == FAILURE) {
         if (cmd.error_message[0] != '\0')
             fprintf(stderr, "\nError in cballs: %s\n", cmd.error_message);
         EndRun_FreeMemory(&cmd, &gd);
@@ -78,14 +95,14 @@ int main(int argc, string argv[])
     }
     //E
 
-    if (MainLoop(&cmd, &gd) == FAILURE) {           // make tree and search data
+    if (cballs_main_loop_guarded(&cmd, &gd) == FAILURE) {           // make tree and search data
         if (cmd.error_message[0] != '\0')
             fprintf(stderr, "\nError in cballs: %s\n", cmd.error_message);
         EndRun(&cmd, &gd);                          // close streams and free mem
         goto finish;
     }
 
-    if (EndRun(&cmd, &gd) == FAILURE)               // close streams and free mem
+    if (cballs_end_run_guarded(&cmd, &gd) == FAILURE)               // close streams and free mem
         goto finish;
 
     run_status = SUCCESS;

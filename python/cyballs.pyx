@@ -170,6 +170,7 @@ cdef class cballs:
     cdef int computed
     cdef int allocated
     cdef object _pars
+    cdef object _qualification
     cdef object _run_settings
     cdef object _memory_catalogs
     cdef object ncp
@@ -245,8 +246,10 @@ cdef class cballs:
             self.struct_cleanup()
 
         self.computed = False
+        self.gd.histogram_results_ready = False
         self.ncp = set()
         self._pars = {}
+        self._qualification = None
         self._run_settings = None
         self._memory_catalogs = []
 
@@ -272,7 +275,9 @@ cdef class cballs:
 
         self.allocated = False
         self.computed = False
+        self.gd.histogram_results_ready = False
         self._pars = {}
+        self._qualification = None
         self._run_settings = None
         self._memory_catalogs = []
         self.gd.startrun_cputime = False
@@ -305,6 +310,7 @@ cdef class cballs:
             cballs_end_run_free_memory_guarded(&self.cmd, &self.gd)
             self.allocated = False
             self.computed = False
+            self.gd.histogram_results_ready = False
         # Reset all the fc to zero if its not already done
         if self.fc.size !=0:
             self.fc.size=0
@@ -334,14 +340,18 @@ cdef class cballs:
         if newpars == self._pars:
             return
         self._pars = newpars
+        self._qualification = None
         self._run_settings = None
         self.computed = False
+        self.gd.histogram_results_ready = False
         return True
 
     def clean(self):
         self._pars = {}
+        self._qualification = None
         self._run_settings = None
         self.computed = False
+        self.gd.histogram_results_ready = False
 
     # Create an equivalent of the parameter file. Non specified values will be
     # taken at their default (in cballs)
@@ -467,6 +477,7 @@ cdef class cballs:
         self.ncp = set()
         self.allocated = False
         self.computed = False
+        self.gd.histogram_results_ready = False
         
 
     def clean_all(self):
@@ -584,6 +595,8 @@ cdef class cballs:
         else:
             self._memory_catalogs[catalog] = entry
         self.computed = False
+        self.gd.histogram_results_ready = False
+        self._qualification = None
         self._run_settings = None
         self.ncp = set()
         return True
@@ -621,8 +634,10 @@ cdef class cballs:
         if self.allocated:
             self.struct_cleanup()
         self._memory_catalogs = []
+        self._qualification = None
         self._run_settings = None
         self.computed = False
+        self.gd.histogram_results_ready = False
         self.ncp = set()
 
     @property
@@ -785,7 +800,11 @@ cdef class cballs:
                 "ownership": "independent NumPy copies; survive cleanup", "normalization": "raw sums; consult estimator metadata before dividing"}
 
     def getForestResults(self):
-        """Copied raw forest products and axes, including with no-out-Hist."""
+        """Copied raw forest products and axes, including with no-out-Hist.
+
+        Multipole lya3MuMode=1 includes exact triple_numerator/denominator
+        alongside moments_numerator/denominator, with independent last axes.
+        """
         return self._dedicated_results("forest")
 
     def getPhysicalResults(self):
@@ -803,6 +822,61 @@ cdef class cballs:
                 "scalar_tensor_allocated": bool(self.gd.histZetaMcos != NULL),
                 "square_export_allocated": bool(self.gd.matPXD != NULL)}
 
+    def _mpi_test_boundary(self, operation=""):
+        """Inject one application error at a named collective boundary (tests only)."""
+        self._activate_runtime()
+        data = str(operation).encode()
+        cballs_mpi_test_boundary(data)
+
+    def _mpi_boundary_trace(self):
+        self._activate_runtime()
+        return (<bytes>cballs_mpi_boundary_trace()).decode().splitlines()
+
+    def getResults(self):
+        """Copy the available observables together with provenance and qualification."""
+        if self._run_settings is None:
+            raise CosmoSevereError("results unavailable; complete MainLoop first")
+        metadata = self.getRunMetadata()
+        method = metadata['engine']
+        if '-mpi' in method and metadata['parallel']['rank'] != 0:
+            raise CosmoSevereError('no published native products on this rank')
+        if method.startswith('lya-'):
+            return self.getForestResults()
+        if '3pcf-3d' in method or 'ggg-3d' in method:
+            return self.getPhysicalResults()
+        options = set(metadata['options'].split(','))
+        arrays = {}
+        if 'shear' in method:
+            if 'only-3pcf' not in options:
+                arrays['xi_plus'] = self.getShearXiPlus()
+                arrays['xi_minus'] = self.getShearXiMinus()
+            if 'only-2pcf' not in options:
+                arrays['upsilon_raw'] = self.getShearUpsilonMultipoles()
+                arrays['gamma_corrected'] = self.getShearGammaMultipoles()
+                arrays['window'] = self.getShearWindowMultipoles()
+        else:
+            if 'only-3pcf' not in options:
+                arrays['xi'] = self.getHistXi2pcf()
+            if 'only-2pcf' not in options:
+                orders = self._run_settings['effective']['mChebyshev']+1
+                arrays['zeta_raw'] = np.asarray([
+                    self.getHistZetaMsincos(i,1)+self.getHistZetaMsincos(i,2)
+                    +1j*(self.getHistZetaMsincos(i,3)-self.getHistZetaMsincos(i,4))
+                    for i in range(1,orders+1)])
+                if metadata.get('scalar_window_ready') and 'edge-corrections' in options:
+                    arrays['zeta_corrected'] = np.asarray([
+                        self.getHistZetaM_EE_complex(i) for i in range(1,orders+1)])
+        return dict(engine=method,arrays=arrays,metadata=metadata,
+                    ownership='independent NumPy copies; survive cleanup')
+
+    def qualifyAgainst(self, reference, *, rtol=.02, atol=1e-10):
+        """Attach observable-specific evidence from an exact matching result packet."""
+        if hasattr(reference, 'getResults'):
+            reference = reference.getResults()
+        report = qualification_report(self.getResults(), reference, rtol=rtol, atol=atol)
+        self._qualification = report
+        return json.loads(json.dumps(report))
+
     def getTimings(self):
         """MainLoop wall and total process CPU seconds on this rank.
 
@@ -818,9 +892,41 @@ cdef class cballs:
         """Copy the last successful run provenance, including after cleanup."""
         if self._run_settings is None:
             raise CosmoSevereError("run metadata unavailable; complete MainLoop first")
-        return _thaw_metadata(self._run_settings["provenance"])
+        metadata = _thaw_metadata(self._run_settings["provenance"])
+        if self._qualification is not None:
+            metadata['qualification'] = json.loads(json.dumps(self._qualification))
+        return metadata
 
-    cdef object _capture_run_settings(self):
+    cdef object _capture_catalog_identity(self):
+        """Hash native interpreted fields in input order, before approximation."""
+        cdef int ndim = cballs_compiled_ndim()
+        cdef int catalog
+        cdef size_t offset, count, total
+        cdef np.ndarray values = np.empty((4096, 2*ndim+5), dtype=np.float64)
+        cdef np.ndarray ids = np.empty((4096, 5), dtype=np.int64)
+        catalogs = []
+        for catalog in range(self.gd.ninfiles):
+            total = self.gd.nbodyTable[catalog]
+            fields_digest = hashlib.sha256()
+            ids_digest = hashlib.sha256()
+            offset = 0
+            while offset < total:
+                count = min(<size_t>4096, total-offset)
+                if cballs_catalog_identity_chunk(&self.cmd, &self.gd, catalog,
+                        offset, count, <double *>values.data, <int64_t *>ids.data) == FAILURE:
+                    raise CosmoSevereError((<bytes>self.cmd.error_message).decode('utf-8', 'replace'))
+                # Canonicalize signed zero, which cannot change these estimators.
+                values[:count][values[:count] == 0] = 0.0
+                fields_digest.update(values[:count].astype('<f8', copy=False).tobytes(order='C'))
+                ids_digest.update(ids[:count].astype('<i8', copy=False).tobytes(order='C'))
+                offset += count
+            catalogs.append(dict(rows=int(total), fields_sha256=fields_digest.hexdigest(),
+                                 identities_sha256=ids_digest.hexdigest()))
+        return dict(schema_version=1, ndim=ndim, row_order='interpreted input order',
+                    encoding='little-endian float64 fields and int64 identities; signed zero canonicalized',
+                    catalogs=catalogs)
+
+    cdef object _capture_run_settings(self, effective_catalogs):
         cdef char *metadata_text = NULL
         if cballs_run_metadata(&self.cmd, &self.gd, &metadata_text) == FAILURE:
             raise CosmoSevereError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
@@ -839,6 +945,20 @@ cdef class cballs:
                 fields["mask_selected_count"] = int(np.count_nonzero(entry[3]))
             catalogs.append(fields)
         provenance["inputs"]["memory_catalogs"] = catalogs
+        provenance["inputs"]["effective_catalogs"] = effective_catalogs
+        if not catalogs:
+            fingerprints=[]
+            for path in _parameter_text(self.cmd.infile).split(','):
+                if not path.strip(): continue
+                digest=hashlib.sha256()
+                with open(path.strip(), 'rb') as catalog_file:
+                    while True:
+                        chunk=catalog_file.read(1024*1024)
+                        if not chunk: break
+                        digest.update(chunk)
+                fingerprints.append(dict(sha256=digest.hexdigest()))
+            provenance['inputs']['file_fingerprints']=fingerprints
+
         provenance = _freeze_metadata(provenance)
         effective = {
             "searchMethod": _parameter_text(self.cmd.searchMethod),
@@ -908,17 +1028,37 @@ cdef class cballs:
         cdef bint resume
         cdef object successful_settings = self._run_settings
 
-        # Append to the list level all the modules necessary to compute.
-        level = self._check_task_dependency(level)
-
-        # Check if this function ran before (self.computed should be true), and
-        # if no other modules were requested, i.e. if self.ncp contains (or is
-        # equivalent to) level. If it is the case, simply stop the execution of
-        # the function.
-        if self.computed and self.ncp.issuperset(level):
-            return self.cputime
-
+        # Even a cached Run participates: another rank may have changed its
+        # parameters or requested stages. Reject divergent state before returns.
         self._activate_runtime()
+        self.cmd.error_message[0] = 0
+        method_bytes = str(self._pars.get("searchMethod", "octree-2balls-omp")).encode("utf-8")
+        if cballs_mpi_bootstrap(&self.cmd, &self.gd, method_bytes) == FAILURE:
+            raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
+        try:
+            stage_error = None
+            try:
+                level = self._check_task_dependency(level)
+                entry_signature = json.dumps(dict(level=sorted(level),completed=sorted(self.ncp),
+                    computed=bool(self.computed),allocated=bool(self.allocated)),sort_keys=True).encode()
+            except Exception as exc:
+                stage_error = exc
+                encoded_error = str(exc).encode("utf-8", "replace")
+                snprintf(self.cmd.error_message, sizeof(self.cmd.error_message), "%s", <char *>encoded_error)
+            if cballs_mpi_context_consensus(&self.cmd, FAILURE if stage_error is not None else 0,
+                                            "MPI Python run entry") == FAILURE:
+                if stage_error is not None and "-mpi" not in str(self._pars.get("searchMethod", "")):
+                    raise stage_error
+                raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
+            if cballs_mpi_agree_text(&self.cmd, entry_signature, "MPI Python run state") == FAILURE:
+                raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
+            if self.computed and self.ncp.issuperset(level):
+                return self.cputime
+        except Exception:
+            self._qualification = None
+            self._run_settings = None
+            self.struct_cleanup()
+            raise
 
         # A later level may continue a live, successfully initialized run.
         # This is useful for separating catalog/startup work from MainLoop
@@ -933,51 +1073,47 @@ cdef class cballs:
         # Otherwise, proceed with the normal computation. A resumed run keeps
         # its parsed file_content, C-owned catalogs, and startup allocations.
         self.computed = False
+        self.gd.histogram_results_ready = False
+        self._qualification = None
         self._run_settings = None
 
-        if not resume:
-            self.cputime = 0.0
-            successful_settings = None
-            # Equivalent of writing a parameter file
-            self._fillparfile()
-
-            # self.ncp will contain the list of computed modules (under the form of
-            # a set, instead of a python list)
-            self.ncp=set()
-
-#B correction
-            # Up until the empty set, all modules are allocated
-            # (And then we successively keep track of the ones we allocate additionally)
-            self.allocated = True
-
+        self.cmd.error_message[0] = 0
+        method_bytes = str(self._pars.get("searchMethod", "octree-2balls-omp")).encode("utf-8")
+        if cballs_mpi_bootstrap(&self.cmd, &self.gd, method_bytes) == FAILURE:
+            raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
         try:
-            # --------------------------------------------------------------------
-            # Check the presence for all cballs modules in the list 'level'. If a
-            # module is found in level, execute its routine.
-            # --------------------------------------------------------------------
-            # The input module should raise a CosmoSevereError, because
-            # non-understood parameters asked to the wrapper is a problematic
-            # situation.
-            if "input" in level and "input" not in self.ncp:
-                if input_read_from_file_guarded(&self.cmd, &self.gd, &self.fc, errmsg) == FAILURE:
-                    raise CosmoSevereError(errmsg)
-                self.ncp.add("input")
-
-                problem_flag = False
-                problematic_parameters = []
-                for i in range(self.fc.size):
-                    if self.fc.read[i] == FALSE:
-                        problem_flag = True
-                        problematic_parameters.append((<char *> self.fc.name[i]).decode("utf-8"))
-
-                if problem_flag:
-                    raise CosmoSevereError(
-                        "cballs did not read input parameter(s): %s\n" %
-                        ', '.join(problematic_parameters)
-                    )
-
-                if self._memory_catalogs:
-                    self._load_memory_catalogs()
+            preflight_error = None
+            try:
+                if not resume:
+                    self.cputime = 0.0
+                    successful_settings = None
+                    self.ncp = set()
+                    self.allocated = True
+                    self._fillparfile()
+                if "input" in level and "input" not in self.ncp:
+                    if input_read_from_file_guarded(&self.cmd, &self.gd, &self.fc, errmsg) == FAILURE:
+                        raise CosmoSevereError(errmsg)
+                    self.ncp.add("input")
+                    problematic_parameters = [(<char *> self.fc.name[i]).decode("utf-8")
+                        for i in range(self.fc.size) if self.fc.read[i] == FALSE]
+                    if problematic_parameters:
+                        raise CosmoSevereError("cballs did not read input parameter(s): %s" % ', '.join(problematic_parameters))
+                    if self._memory_catalogs:
+                        self._load_memory_catalogs()
+            except Exception as exc:
+                preflight_error = exc
+                encoded_error = str(exc).encode("utf-8", "replace")
+                snprintf(self.cmd.error_message, sizeof(self.cmd.error_message), "%s", <char *>encoded_error)
+            if cballs_mpi_context_consensus(&self.cmd, FAILURE if preflight_error is not None else 0,
+                                            "MPI Python input preflight") == FAILURE:
+                if preflight_error is not None and "-mpi" not in str(self._pars.get("searchMethod", "")):
+                    raise preflight_error
+                raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
+            # All ranks must enter the same set of subsequent stage boundaries.
+            stage_signature = json.dumps(dict(level=sorted(level), completed=sorted(self.ncp),
+                method=str(self._pars.get("searchMethod", ""))), sort_keys=True).encode()
+            if cballs_mpi_agree_text(&self.cmd, stage_signature, "MPI Python run stages") == FAILURE:
+                raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
 
             # The following list of computation is straightforward. If the "_init"
             # methods fail, call `struct_cleanup` and raise a CosmoComputationError
@@ -986,6 +1122,17 @@ cdef class cballs:
                 if cballs_start_run_common_guarded(&(self.cmd), &(self.gd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("StartRun_Common")
+                # Saved-prefix preprocessing has already completed. It has no
+                # loaded catalogs or in-memory histogram products to fingerprint.
+                if self.gd.stopflag and "edge-corrections-from-files" in _parameter_text(self.cmd.options).split(','):
+                    if cballs_end_run_guarded(&self.cmd, &self.gd) == FAILURE:
+                        raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
+                    self.allocated = False
+                    self.ncp.update(level)
+                    self.ncp.add("EndRun")
+                    self.cputime = 0.0
+                    self.computed = True
+                    return self.cputime
 
             # keep the rest of the C stages here too
 
@@ -1006,6 +1153,18 @@ cdef class cballs:
                 self.ncp.add("Initial")
 
             if "MainLoop" in level and "MainLoop" not in self.ncp:
+                identity_error = None
+                try:
+                    effective_catalogs = self._capture_catalog_identity()
+                except Exception as exc:
+                    identity_error = exc
+                    encoded_error = str(exc).encode('utf-8', 'replace')
+                    snprintf(self.cmd.error_message, sizeof(self.cmd.error_message), "%s", <char *>encoded_error)
+                # A local hashing/allocation failure must not strand other ranks
+                # inside the collective numerical stage.
+                if cballs_mpi_context_consensus(&self.cmd, FAILURE if identity_error is not None else 0,
+                                                "MPI Python catalog identity") == FAILURE:
+                    raise CosmoComputationError((<bytes>self.cmd.error_message).decode('utf-8', 'replace'))
                 start_wall_time_p = time.perf_counter()
                 start_cpu_time_p = time.process_time()
                 if cballs_main_loop_guarded(&(self.cmd), &(self.gd)) == FAILURE:
@@ -1014,7 +1173,16 @@ cdef class cballs:
                 wall_seconds = time.perf_counter()-start_wall_time_p
                 cpu_seconds = time.process_time()-start_cpu_time_p
                 self.cputime = cpu_seconds/max(1,self.nthreads)
-                successful_settings = self._capture_run_settings()
+                publication_error = None
+                try:
+                    successful_settings = self._capture_run_settings(effective_catalogs)
+                except Exception as exc:
+                    publication_error = exc
+                    encoded_error = str(exc).encode("utf-8", "replace")
+                    snprintf(self.cmd.error_message, sizeof(self.cmd.error_message), "%s", <char *>encoded_error)
+                if cballs_mpi_context_consensus(&self.cmd, FAILURE if publication_error is not None else 0,
+                                                "MPI Python result publication") == FAILURE:
+                    raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
                 timing = {"scope": "MainLoop on this MPI rank; no rank reduction",
                           "wall_seconds": wall_seconds, "process_cpu_seconds": cpu_seconds,
                           "requested_threads": self.nthreads,
@@ -1031,6 +1199,7 @@ cdef class cballs:
                 self.allocated = False
 
         except Exception:
+            self._qualification = None
             self._run_settings = None
             self.struct_cleanup()
             raise
@@ -1699,3 +1868,5 @@ cdef class cballs:
 #E cballs definitions
 
 include "resource_api.pxi"
+
+include "qualification_api.pxi"

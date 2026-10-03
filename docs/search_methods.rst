@@ -82,7 +82,8 @@ These consume observer-centered three-dimensional vectors and
 ``gamma1+i*gamma2`` in each point's local east/north basis. They normalize
 positions to the unit sphere, bin chord distance, parallel transport spin-2
 fields along great circles, and compute xi+/xi- plus natural 3PCF multipoles.
-See :doc:`shear`.
+The three corresponding ``-mpi`` methods are also enabled; see :doc:`shear`
+and :doc:`active_profile` for the exact list.
 
 With ``BALLS4SCANLEVON=1``, ``balltree-shear-sphere-2balls-omp`` schedules its
 body-pivot 3PCF through an adaptive PCA-cell frontier.  It repeatedly splits
@@ -96,9 +97,9 @@ spatial order after the parallel region for deterministic results.  The
 Lyman-alpha Forest Methods
 --------------------------
 
-``LYAFORESTOMPON=1`` enables thirteen OpenMP names, including the experimental
-``lya-anisotropic-multipole-3pcf-omp`` method. ``LYAFORESTMPION=1`` enables
-eight MPI names; the same-LOS and three LOS-tree methods are OpenMP only.
+``LYAFORESTOMPON=1`` enables thirteen OpenMP names, including the separately
+calibrated anisotropic multipole engine. ``LYAFORESTMPION=1`` enables
+eleven MPI names; the equal-weight same-LOS method remains OpenMP only.
 
 The families are:
 
@@ -110,8 +111,8 @@ The families are:
   scans;
 * ``lya-1d-tree-same-los-2pcf-omp`` for an equal-forest average of within-LOS
   pairs.
-* ``lya-los-tree-2pcf-omp``, ``lya-los-tree-3pcf-omp`` and
-  ``lya-los-tree-2pcf-3pcf-omp`` use 3D forest discovery followed by per-forest
+* ``lya-los-tree-2pcf-*``, ``lya-los-tree-3pcf-*`` and
+  ``lya-los-tree-2pcf-3pcf-*`` use 3D forest discovery followed by per-forest
   radial trees. They preserve transverse separation and return the same
   estimators as the corresponding anisotropic 3D methods, not radial-only
   statistics.

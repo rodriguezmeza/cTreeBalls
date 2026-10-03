@@ -14,9 +14,11 @@ body-pair fallback.
 
 The 3PCF retains the spherical LogMultipole tree scan. This preserves the
 existing cTreeBalls radial-multipole result contract rather than changing to
-the paper's `(r,u,v)` triangle histogram. In a combined 2PCF+3PCF run, the
-dual-node pair pass is performed separately and the pivot scan computes only
-the 3PCF. With `BALLS4SCANLEVON=1`, an adaptive work-estimated pivot-cell
+the paper's `(r,u,v)` triangle histogram. Approximate combined 2PCF+3PCF runs
+retain a separate dual-node pair pass because pair and ring acceptance differ.
+When `no-one-ball` is set or `theta=0`, the combined run instead accumulates
+both statistics during the same body visits, sharing radial lookup, bearing,
+and transport. `no-two-balls` alone does not enable this exact fused path. With `BALLS4SCANLEVON=1`, an adaptive work-estimated pivot-cell
 frontier replaces fixed pivot blocks. Each task retains exact body pivots,
 conservatively prefilters disjoint neighbor roots, and publishes a task-local
 histogram in spatial order under a 256 MiB memory cap.
@@ -88,10 +90,16 @@ transport, radial lookup, ring accumulation, and reduction timings.
 The pair traversal reuses normalized centers and radii for acceptance,
 splitting, and accumulation. Tangent bases and angular radii are evaluated
 only when needed. The pivot scan rejects cells before computing bearings
-and caches its angular acceptance constants. Logarithmic bin assignment
-retains the original expression and boundary behavior. These are implementation
-optimizations; they do not loosen acceptance thresholds or change histogram
-normalization.
+and caches its angular acceptance constants. In double precision, logarithmic histograms with at most 32 bins use a short
+reverse scan of the existing bin edges. Distances within `1e-10*distance` of
+an edge retain the original logarithmic expression and tie behavior. Narrow
+bins (`deltaR < 1e-8`), extreme domains (`rminHist < 1e-100` or
+`rangeN > 1e100`), and larger histograms use the original expression throughout.
+Spin-2 transport normalizes the squared complex orientation directly, and
+positive/negative ring modes share their four real products. Combined pivot
+visits cache the pivot weight and weighted shear outside the neighbor loop.
+These changes do not loosen acceptance thresholds or change normalization;
+roundoff and summation order can differ from older binaries.
 
 For exact unsmoothed 3PCF validation use `options=no-smooth-pivot,no-one-ball,only-3pcf`.
 The `no-two-balls` switch alone disables pair-node acceptance in the 2PCF
@@ -121,4 +129,82 @@ performs one transport solve per unordered pair, reuses the conjugate reverse
 rotation, and merges tasks deterministically.
 
 The split heuristic is adapted from dual-node, copyright Mike Jarvis, under
-dual-node's BSD-style license. See `dual-node_LICENSE`.
+dual-node's BSD-style license.
+
+## Performance and accuracy checks
+
+Run `make test-shear-sphere-2balls` for the numerical oracle, deterministic
+threads, masked cross-catalog/order checks, bin-boundary differential test,
+and experimental reuse regressions. The bin test compiles the actual radial
+helper with and without the optimization and compares millions of ordinary,
+edge-ULP, guard-transition, and fallback classifications.
+
+`scripts/benchmark_shear_sphere.py` records the exact fixture, build identity,
+settings, per-repeat wall/CPU time, raw products, corrected products, and
+window multipoles. A cold native context is created for every repeat; file
+compression and result serialization are outside the timed interval. Example:
+
+```bash
+python scripts/benchmark_shear_sphere.py --output /tmp/shear-exact \
+  --n 8192 --geometry uniform --order both --threads 4 --exact --repeat 3
+python scripts/benchmark_shear_sphere.py --output /tmp/shear-theta01 \
+  --n 8192 --geometry uniform --order both --threads 4 --theta .1 --repeat 3 \
+  --reference /tmp/shear-exact/products-0.npz
+```
+
+Use `--module` to select a preserved baseline extension in a separate process.
+Performance comparisons require the same fixture, bins, modes, weights, mask,
+threads, and approximation settings. A phase bound is not a relative error
+bound after cancellations or mode-coupling correction. Check each observable
+and its finite mask before promoting any approximation to production.
+
+`theta` remains the runtime opening/phase control; `rsmooth` is an optional
+spherical smoothing radius in arcminutes. Smoothing changes the estimator and
+still requires the internal chord bound `2*rsmooth <= rminHist`. `nsmooth` is
+used by the shared tree/smoothing setup; unlike the binary trees, the native
+octree has body leaves and it is not a packed-leaf tuning parameter here.
+`BALLS4SCANLEVON=1` retains the adaptive, deterministic body-pivot frontier.
+Compile-time `THETA` belongs to the legacy scan-level selection and is not a
+new angular error budget for this engine. None of these defaults was retuned
+as part of the hot-path optimization.
+
+
+### Hierarchical 3PCF reuse
+
+All three OpenMP spherical two-ball shear engines support `shear-pivot-reuse`.
+Partial multipole rings retain their original spherical acceptance frames.
+An unresolved neighbor marks only the radial bins that its enclosing distance
+interval can intersect. Once both legs of a radial pair are complete, that pair
+is accumulated at the current pivot cell. Descendants inherit a completion mask
+and never accumulate that pair again. Mixed resolved/unresolved pairs wait until
+both legs are complete; diagonal self-neighbor subtraction is retained.
+
+The option is off by default and requires `no-smooth-pivot`, positive `theta`,
+full pivot coverage, and `BALLS4SCANLEVON=1`. Exact controls and smoothing retain
+the body-pivot fallback. MPI shear methods continue to reject this experimental
+option. The independent 2PCF pass retains its own acceptance rules.
+
+- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `0.1`.
+- `CBALLS_SHEAR_BIN_THETA`: internal radial-bin assignment allowance, finite `[0,1]`
+  bin widths, default `0`. Zero requires complete containment inside a bin.
+  Positive values allow center-based assignment when the combined cap radius
+  fits within the selected fraction of the local bin width. The minimum and
+  maximum separation cuts remain strict. This is not an exact translation of
+  dual node's bin-slop rule.
+- `nsmooth=1`: exposes finer pivot groups in the KD and PCA ball trees. It increases
+  tree storage and can improve reuse; the octree already has individual-body leaves.
+
+For a performance/accuracy trial through the Python drivers, add
+`--nsmooth 1 --more-options shear-pivot-reuse` and explicitly set the two environment
+controls, for example `CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
+These are approximate trial settings, not an accuracy guarantee. Compare raw
+numerators, windows, and corrected complex multipoles against an exact reference
+for the actual catalog. Poorly conditioned windows can amplify small raw errors.
+
+Native provenance records `shear_hierarchical_reuse.enabled`,
+`phase_budget_radians`, and `radial_bin_slop` from the completed run. With
+`CBALLS_SHEAR_PROFILE=1`, `radial_pairs` counts actual radial-pair combinations,
+`represented_pairs` counts the equivalent individual-pivot combinations, and
+`partial_reductions` identifies completion above unresolved descendants. The
+64 MiB per-worker scratch limit includes completion masks. Reuse walk timers
+include reductions and must not be added to the reduction timer.

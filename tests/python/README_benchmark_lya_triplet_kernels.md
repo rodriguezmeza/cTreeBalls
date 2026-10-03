@@ -86,8 +86,10 @@ T_l(a,b) = w_p delta_p sum_(f != g) sum_m A_lm(f,a) A_lm(g,b).
 ```
 
 The denominator uses weight-only moments and pivot factor `w_p`. The implementation
-processes a forest against the prefix of other forests and deposits both leg
-orders. This is algebraically the total moment product minus same-forest
+uses an occupancy-selected forest-block hierarchy or optimized prefix,
+and deposits both leg orders. `--multipole-kernel 0` is automatic (default),
+`1` retains the original prefix reference, and `2` forces four-forest groups.
+See [the reuse guide](../../docs/LYA_MULTIPOLE_HIERARCHICAL_REUSE.md). This is algebraically the total moment product minus same-forest
 products, without subtracting two nearly equal, large auto products. It removes
 both coincident neighbors and distinct pixels in the same forest. No pairwise
 mu binning is performed in this kernel. Selected multipole moments themselves
@@ -140,9 +142,9 @@ Run native regressions with:
 
 ```bash
 CBALLS="$PWD/cballs" python -m pytest -q \
-  tests/make_tests/test_lya_triplet_acceleration.py \
-  tests/make_tests/test_lya_forest_los_tree.py
-python tests/make_tests/test_lya_forest_omp.py
+  tests/python/test_lya_triplet_acceleration.py \
+  tests/python/test_lya_forest_los_tree.py
+python tests/python/test_lya_forest_omp.py
 python scripts/generate_capabilities.py --check
 ```
 
@@ -158,3 +160,37 @@ Rebuild both cballs and cyballs after updating native command fields.
 ## Explicit cell-geometry calibration
 
 See [the cell calibration guide](README_benchmark_lya_cell_approximation.md) for mu-only slop, persistent forest nodes, pivot-cell aggregation, and retained accuracy/timing/memory evidence. All slops default to zero.
+
+## Hierarchical radial moments
+
+`lya2Kernel=1` and `lya3Kernel=5` select certified pair-range sums and adaptive
+radial/polar moment combinations for the original 3D OpenMP/MPI methods.
+Combined runs share the forest tree; zero slop preserves the histogram estimator.
+Persistent kernels 3/4/5 also support MPI. The all-engines driver accepts
+`--lya2-kernel 1 --lya3-kernel 5 --lya3-pivot-cell-max 8`; these controls apply
+only to eligible 3D Ly-alpha statistics. Default kernels remain 0.
+See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.md).
+
+
+## Exact mu output alongside raw moments
+
+`--mu-mode exact` sets `lya3MuMode=1` on the anisotropic multipole runs. They
+reuse discovery/sorting and additionally calculate exact hard angular bins.
+The driver compares `_lya5d.txt` against the direct reference, checks raw sums,
+and records the selected `mu_product` and `filename` with every comparison.
+The original finite-L `_lya5d_multipole.txt` is also evaluated separately under
+`reconstruction_comparisons`; its accuracy can still fail.
+
+```sh
+python tests/python/benchmark_lya_triplet_kernels.py \
+  --synthetic --mu-mode exact --lmax 4 8 16 32 --threads 2 \
+  --warmups 1 --repeats 3 --require-accepted-multipole \
+  --outdir results/lya-exact-mu-calibration
+```
+
+Default `--mu-mode finite-multipole` preserves the previous approximate-only
+test. `--require-accepted-multipole` refers to the **selected** mu product of a
+multipole run, and exact-mode timing includes both multipoles and exact bins.
+It must not be quoted as moment-only performance or a successful finite-L
+reconstruction. See [the detailed guide](../../docs/LYA_MULTIPOLE_RECONSTRUCTION.md)
+for the finite-moment limitation, output metadata, memory and API contracts.

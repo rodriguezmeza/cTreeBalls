@@ -109,3 +109,13 @@ dual-node-style estimator contract.
 
 The traversal is adapted from dual-node by Mike Jarvis under its BSD license;
 the full notice is in `addons/balltree_2balls_omp/DUAL_NODE_LICENSE`.
+
+## Optional hierarchical scalar 3PCF
+
+`options=scalar-pivot-reuse,no-smooth-pivot` enables shared neighbor moments
+and completion of resolved radial-bin pairs at parent pivots. It supports
+both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
+2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
+and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
+depend on the observable, controls, and geometry. See the
+[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

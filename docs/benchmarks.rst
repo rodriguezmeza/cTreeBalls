@@ -116,13 +116,3 @@ Three-point plots include per-mode matrices and flattened radial-bin views.
 Report hardware, affinity, compile flags, smoothing, approximation controls,
 warmups, repeats, and timing scope with any performance claim. A faster result
 with a different normalization or triplet policy is not a valid speedup.
-
-External dual-node compatibility
---------------------------------
-
-The optional ``tests/python/dual_node_compat.py`` adapter constructs external
-reference catalogs and correlations using ``bin_theta`` and ``angle_theta``.
-Only this adapter translates dependency-specific names. It does not change
-tolerance values, binning, metrics, weights or spin conventions. These settings
-are geometric tolerances, not promised relative errors. Native all-engines
-drivers do not require the optional dependency.

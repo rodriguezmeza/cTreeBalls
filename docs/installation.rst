@@ -92,7 +92,10 @@ The intended public profile uses ``USEGSL=1``, ``GSLINTERNAL=0`` and external
 GSL, plus ``CFITSIOON=1`` and external CFITSIO. ``USEGSL=1`` is required by
 the current wrapper. The public source distribution excludes vendored GSL and
 CFITSIO trees; ``GSLINTERNAL=1`` is only for development checkouts containing
-those optional sources.
+those optional sources. Source archive creation sets the staged
+``GSLINTERNAL=0`` and ``CFITSIOLIBON=0`` defaults without changing checkout
+settings. Make and Cython consume the same resolved dependency discovery flags.
+See ``docs/SOURCE_DISTRIBUTION.md`` for the archive-to-wheel verification command.
 
 For external GSL use ``GSLINTERNAL=0`` and ``gsl-config``, or explicit
 ``GSL_INCLUDE``/``GSL_LIB``. CFITSIO uses ``pkg-config cfitsio``. Set

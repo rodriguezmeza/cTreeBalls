@@ -16,12 +16,26 @@ static real shear_reuse_error(shear_reuse_ref q)
 { return Type(q) == CELL ? ShearTransportError(q) : 0.0; }
 #endif
 
+/* A one-member binary leaf is already an exact body, including its frame.
+ * Avoid a redundant node acceptance test and recursion through that leaf. */
+static shear_reuse_ref shear_reuse_canonical(shear_reuse_ref q)
+{
+#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
+    if (q.kind == KD_SHEAR_NODE) {
+        const fcfc_ballnode *node = kd_shear_node(q);
+        if (node->first == node->last)
+            return kd_shear_body_ref(q.tree, q.tree->bptr[node->first]);
+    }
+#endif
+    return q;
+}
+
 typedef struct shear_reuse_level {
     struct shear_reuse_level *parent, *child;
     shear_pivot_workspace work;
     shear_complex *storage;
     real *diagonal;
-    unsigned char *active;
+    unsigned char *active, *pending_bins, *completed, *selected;
     shear_reuse_ref *unresolved[2];
     size_t count[2], capacity[2];
     real radius;
@@ -31,12 +45,13 @@ typedef struct shear_reuse_level {
 
 typedef struct {
     shear_reuse_level *root;
-    real tolerance;
+    real tolerance, bin_slop;
     int nmax;
     size_t ring_count, weight_ring_count, bytes;
     bool failed;
     uint64_t nodes, aggregated, bodies, accepted_cells, accepted_bodies;
     uint64_t inherited, ancestor_merges, pruned, peak_unresolved, max_depth;
+    uint64_t radial_pairs, represented_pairs, partial_reductions;
 } shear_reuse_context;
 
 static int shear_reuse_tolerance(struct cmdline_data *cmd, real *result)
@@ -51,6 +66,24 @@ static int shear_reuse_tolerance(struct cmdline_data *cmd, real *result)
             || value < 0.0 || value > 3.0) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "CBALLS_SHEAR_PIVOT_TOL must be finite in [0,3] radians");
+            return FAILURE;
+        }
+    }
+    *result = (real)value;
+    return SUCCESS;
+}
+
+static int shear_reuse_bin_slop(struct cmdline_data *cmd, real *result)
+{
+    const char *text = getenv("CBALLS_SHEAR_BIN_THETA");
+    char *end;
+    double value = 0.0;
+    if (text != NULL) {
+        value = strtod(text, &end);
+        if (end == text || *end != '\0' || !isfinite(value)
+            || value < 0.0 || value > 1.0) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "CBALLS_SHEAR_BIN_THETA must be finite in [0,1]");
             return FAILURE;
         }
     }
@@ -94,8 +127,13 @@ static int shear_reuse_allocate_level(shear_reuse_context *context,
     if (shear_size_mul(count, sizeof(*cursor), &bytes) == FAILURE
         || bytes > SHEAR_REUSE_MEMORY_LIMIT)
         return FAILURE;
+    size_t pair_count;
+    if (shear_size_mul((size_t)base->bins, (size_t)base->bins, &pair_count)
+            == FAILURE || pair_count > SHEAR_REUSE_MEMORY_LIMIT/2)
+        return FAILURE;
+    const size_t flag_bytes = 2*(size_t)base->bins + 2*pair_count;
     const size_t total_bytes = bytes + sizeof(*level)
-        + (size_t)base->bins*(sizeof(real) + 1);
+        + (size_t)base->bins*sizeof(real) + flag_bytes;
     if (total_bytes > SHEAR_REUSE_MEMORY_LIMIT
         || context->bytes > SHEAR_REUSE_MEMORY_LIMIT - total_bytes)
         return FAILURE;
@@ -106,7 +144,12 @@ static int shear_reuse_allocate_level(shear_reuse_context *context,
     level->work = *base;
     level->storage = malloc(bytes);
     level->diagonal = malloc((size_t)base->bins*sizeof(real));
-    level->active = malloc((size_t)base->bins);
+    level->active = malloc(flag_bytes);
+    if (level->active != NULL) {
+        level->pending_bins = level->active + base->bins;
+        level->completed = level->pending_bins + base->bins;
+        level->selected = level->completed + pair_count;
+    }
     if (level->storage == NULL || level->diagonal == NULL
         || level->active == NULL) return FAILURE;
     context->bytes += total_bytes;
@@ -159,33 +202,58 @@ static int shear_reuse_retain(shear_reuse_context *context,
 static bool shear_reuse_phase_bound(shear_reuse_context *context,
         shear_reuse_level *level, shear_reuse_ref q, real distance, real radius)
 {
-    const real a = 2.0*rasin(MIN(1.0, 0.5*level->radius));
-    const real b = 2.0*rasin(MIN(1.0, 0.5*radius));
-    const real d = 2.0*rasin(MIN(1.0, 0.5*distance));
-    const real lower = d - a - b, upper = d + a + b;
     const real qerror = shear_reuse_error(q);
     const real perror = level->pivot_error;
-    real sine, triangle, bearing, holonomy;
-
-    if (!(lower > 0.0 && upper < PI)
-        || !isfinite(qerror) || !isfinite(perror)
-        || perror > context->tolerance/3.0)
+    /* tan(angle/2) follows directly from the chord. Bound x by tan(x)
+     * and asin(x) by x/sqrt(1-x*x), avoiding six transcendental calls per
+     * candidate while enclosing the former geodesic/holonomy bound. */
+    if (!isfinite(qerror) || !isfinite(perror)
+        || perror > context->tolerance/3.0
+        || !(level->radius < 2.0 && radius < 2.0 && distance < 2.0))
         return FALSE;
-    sine = MIN(rsin(lower), rsin(upper));
-    bearing = (a + b)/sine;
-    triangle = rtan(0.5*(a + b))*rtan(0.5*upper);
-    if (!(triangle >= 0.0 && triangle < 1.0)) return FALSE;
-    holonomy = 8.0*rasin(triangle);
+    const real ta = level->radius/rsqrt(4.0-level->radius*level->radius);
+    const real tb = radius/rsqrt(4.0-radius*radius);
+    const real td = distance/rsqrt(4.0-distance*distance);
+    if (!(ta*tb < 1.0)) return FALSE;
+    const real tab = (ta+tb)/(1.0-ta*tb);
+    if (!(td > tab && td*tab < 1.0)) return FALSE;
+    const real lo = (td-tab)/(1.0+td*tab);
+    const real hi = (td+tab)/(1.0-td*tab);
+    const real sine = MIN(2.0*lo/(1.0+lo*lo), 2.0*hi/(1.0+hi*hi));
+    const real triangle = tab*hi;
+    if (!(sine > 0.0 && triangle < 1.0)) return FALSE;
+    const real bearing = 2.0*tab/sine;
+    const real holonomy = 8.0*triangle/rsqrt(1.0-triangle*triangle);
     return level->work.ring_max*bearing + holonomy + qerror
         <= context->tolerance/3.0;
+}
+
+/* Radial slop is a fraction of one bin width. The catalog range limits
+ * remain strict; only internal bin assignment can be approximated. */
+static bool shear_reuse_radial_accept(shear_reuse_context *context,
+        shear_pivot_workspace *work, real distance, real size, int bin)
+{
+    if (shear_interval_within_radial_bin(work->cmd, work->gd,
+                                       distance-size, distance+size, bin))
+        return TRUE;
+    if (!(context->bin_slop > 0.0)
+        || distance-size <= work->cmd->rminHist
+        || distance+size >= work->cmd->rangeN)
+        return FALSE;
+    real width = work->cmd->useLogHist
+        ? distance*rlog(10.0)*(work->cmd->rminHist > 0.0
+            ? work->gd->deltaR : 1.0/(real)work->cmd->logHistBinsPD)
+        : (work->cmd->rangeN-work->cmd->rminHist)/work->bins;
+    return size <= context->bin_slop*width;
 }
 
 static int shear_reuse_neighbor(shear_reuse_context *context,
         shear_reuse_level *level, shear_reuse_ref q, int leg)
 {
+    q = shear_reuse_canonical(q);
     shear_pivot_workspace *work = &level->work;
     compute_vector unit, difference;
-    real radius = INFINITY, distance2, distance, size;
+    real radius = INFINITY, distance2, distance = INFINITY, size = INFINITY;
     int bin = -1;
     bool accept = FALSE;
     bool geometry_valid = FALSE;
@@ -235,8 +303,8 @@ static int shear_reuse_neighbor(shear_reuse_context *context,
             } else if (size*work->ring_max <= context->tolerance/3.0
                        *distance*rsqrt(MAX(0.0, 1.0 - distance2/4.0))) {
                 bin = shear_radial_bin_profiled(work, distance);
-                accept = bin >= 0 && shear_interval_within_radial_bin(
-                    work->cmd, work->gd, distance - size, distance + size, bin)
+                accept = bin >= 0 && shear_reuse_radial_accept(
+                    context, work, distance, size, bin)
                     && shear_reuse_phase_bound(context, level, q, distance, radius);
             }
         }
@@ -280,6 +348,21 @@ static int shear_reuse_neighbor(shear_reuse_context *context,
         return SUCCESS;
     }
     if (!work->aggregate_pivot) return SUCCESS;
+    /* Only bins intersecting an unresolved distance interval must wait for
+     * descendants. A boundary at the outer cutoff must not stall inner bins.
+     * Pad the interval outward to keep roundoff from completing a bin early. */
+    int begin = 0, end = work->bins;
+    const real pad = 64.0*DBL_EPSILON*(1.0 + distance + size);
+    const real lower = distance - size - pad, upper = distance + size + pad;
+    if (isfinite(lower) && lower > work->cmd->rminHist) {
+        int bin = shear_radial_bin(work->cmd, work->gd, lower);
+        if (bin >= 0) begin = bin;
+    }
+    if (isfinite(upper) && upper < work->cmd->rangeN) {
+        int bin = shear_radial_bin(work->cmd, work->gd, upper);
+        if (bin >= 0) end = bin + 1;
+    }
+    memset(level->pending_bins + begin, 1, (size_t)(end - begin));
     return shear_reuse_retain(context, level, leg, q);
 }
 
@@ -353,6 +436,7 @@ static int shear_reuse_visit(shear_reuse_context *context,
 {
     shear_pivot_workspace *work = &level->work;
     INTEGER represented;
+    pivot = shear_reuse_canonical(pivot);
     level->pivot_error = shear_reuse_error(pivot);
     work->aggregate_pivot = shear_reuse_cell(pivot);
 #ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
@@ -390,7 +474,13 @@ static int shear_reuse_visit(shear_reuse_context *context,
 #endif
     level->has_rings = FALSE;
     level->count[0] = level->count[1] = 0;
-    memset(level->active, 0, (size_t)work->bins);
+    memset(level->active, 0, 2*(size_t)work->bins);
+    const size_t pair_count = (size_t)work->bins*work->bins;
+    if (level->parent != NULL)
+        memcpy(level->completed, level->parent->completed, pair_count);
+    else
+        memset(level->completed, 0, pair_count);
+    memset(level->selected, 0, pair_count);
     shear_clear_pivot_workspace(work, context->ring_count,
         context->weight_ring_count, work->bins, TRUE, FALSE,
         !work->same_neighbor_catalog);
@@ -408,7 +498,53 @@ static int shear_reuse_visit(shear_reuse_context *context,
     }
     context->peak_unresolved = MAX(context->peak_unresolved,
                                    level->count[0] + level->count[1]);
-    if (work->aggregate_pivot && (level->count[0] || level->count[1])) {
+    uint64_t pairs = 0;
+    bool complete = TRUE;
+    const bool can_reduce = level->frame_valid && (!work->aggregate_pivot
+        || (isfinite(level->pivot_error)
+            && level->pivot_error <= context->tolerance/3.0));
+    for (int i = 0; i < work->bins; i++)
+        for (int j = 0; j < work->bins; j++) {
+            const size_t index = (size_t)i*work->bins+j;
+            if (!level->completed[index] && can_reduce
+                && !level->pending_bins[i] && !level->pending_bins[j]) {
+                level->selected[index] = level->completed[index] = 1;
+                pairs++;
+            }
+            complete = complete && level->completed[index];
+        }
+    if (pairs > 0) {
+        target->pivot = work->pivot;
+        target->aggregate_pivot = work->aggregate_pivot;
+        target->reuse_anchor = work->reuse_anchor;
+#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
+        if (work->aggregate_pivot) {
+            target->aggregate_gamma = work->aggregate_gamma;
+            target->aggregate_weight = work->aggregate_weight;
+        }
+#endif
+        memcpy(target->pivot_unit, work->pivot_unit, sizeof(compute_vector));
+        memcpy(target->pivot_east, work->pivot_east, sizeof(compute_vector));
+        memcpy(target->pivot_north, work->pivot_north, sizeof(compute_vector));
+        shear_clear_pivot_workspace(target, context->ring_count,
+            context->weight_ring_count, work->bins, TRUE, FALSE,
+            !work->same_neighbor_catalog);
+        for (shear_reuse_level *ancestor = level; ancestor; ancestor = ancestor->parent)
+            if (shear_reuse_merge_level(context, target, ancestor) == FAILURE)
+                return FAILURE;
+        const double reduction_started = target->profile
+            ? shear_profile_wall_time() : 0.0;
+        shear_reduce_pivot_selected(result, target, context->nmax, FALSE, TRUE,
+                                 level->selected);
+        if (target->profile)
+            target->profile->reduce_seconds += shear_profile_wall_time() - reduction_started;
+        context->radial_pairs += pairs;
+        context->represented_pairs += pairs*(uint64_t)represented;
+        context->partial_reductions += !complete;
+        context->aggregated += work->aggregate_pivot;
+        target->aggregate_pivot = FALSE;
+    }
+    if (!complete && work->aggregate_pivot) {
         if (shear_reuse_allocate_level(context, target,
                                        &level->child, level) == FAILURE)
             return FAILURE;
@@ -423,33 +559,10 @@ static int shear_reuse_visit(shear_reuse_context *context,
                     level->unresolved[1], level->count[1], depth + 1) == FAILURE)
                 return FAILURE;
         }
-        return SUCCESS;
+    } else {
+        context->bodies += represented;
+        if (target->profile != NULL) target->profile->pivots += represented;
     }
-    if (!level->frame_valid) return SUCCESS;
-    target->pivot = work->pivot;
-    target->aggregate_pivot = work->aggregate_pivot;
-    target->reuse_anchor = work->reuse_anchor;
-#ifdef SHEAR_SPHERE_BINARY_PIVOT_REUSE
-    if (work->aggregate_pivot) {
-        target->aggregate_gamma = work->aggregate_gamma;
-        target->aggregate_weight = work->aggregate_weight;
-    }
-#endif
-    memcpy(target->pivot_unit, work->pivot_unit, sizeof(compute_vector));
-    memcpy(target->pivot_east, work->pivot_east, sizeof(compute_vector));
-    memcpy(target->pivot_north, work->pivot_north, sizeof(compute_vector));
-    shear_clear_pivot_workspace(target, context->ring_count,
-        context->weight_ring_count, work->bins, TRUE, FALSE,
-        !work->same_neighbor_catalog);
-    for (shear_reuse_level *ancestor = level; ancestor; ancestor = ancestor->parent)
-        if (shear_reuse_merge_level(context, target, ancestor) == FAILURE)
-            return FAILURE;
-    shear_reduce_pivot_profiled(result, target, context->nmax, FALSE, TRUE);
-    context->aggregated += work->aggregate_pivot;
-    context->bodies += represented;
-    if (target->profile != NULL)
-        target->profile->pivots += represented;
-    target->aggregate_pivot = FALSE;
     return SUCCESS;
 }
 
@@ -508,12 +621,16 @@ static void shear_reuse_print_profile(const shear_reuse_context *context, int th
             " ring_merges=%" PRIu64 " pruned=%" PRIu64
             " ancestor_merges=%" PRIu64
             " peak_unresolved=%" PRIu64 " max_depth=%" PRIu64
-            " scratch_bytes=%zu phase_budget=%.6g\n", thread, context->nodes,
+            " radial_pairs=%" PRIu64 " represented_pairs=%" PRIu64
+            " partial_reductions=%" PRIu64
+            " scratch_bytes=%zu phase_budget=%.6g bin_slop=%.6g\n", thread, context->nodes,
             context->aggregated, context->bodies, context->accepted_cells,
             context->accepted_bodies, context->inherited, context->pruned,
             context->ancestor_merges,
             context->peak_unresolved, context->max_depth,
-            context->bytes, context->tolerance);
+            context->radial_pairs, context->represented_pairs,
+            context->partial_reductions, context->bytes, context->tolerance,
+            context->bin_slop);
 }
 
 #endif

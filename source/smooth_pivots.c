@@ -150,6 +150,7 @@ local int smooth_claim_cell(struct cmdline_data* cmd,
                 return FAILURE;
             Update(q) = FALSE;
             NbRmin(p) += 1;
+            ScalarPivotSum(p) += Kappa(q);
 #ifndef NOWKAvg
             KappaRmin(p) += Weight(q)*Kappa(q);
 #else
@@ -226,6 +227,7 @@ global int prepare_smooth_pivots_with_accumulator(
                 Update(p) = TRUE;
         DO_BODY(p, btable[cat1] + first, btable[cat1] + last) {
             NbRmin(p) = 1;
+            ScalarPivotSum(p) = Kappa(p);
             NbRminOverlap(p) = 0;
             #ifndef NOWKAvg
             KappaRmin(p) = Weight(p)*Kappa(p);
@@ -326,6 +328,7 @@ global int prepare_smooth_pivots_with_accumulator(
 
     DO_BODY(p, btable[cat1] + first, btable[cat1] + last) {
         NbRmin(p) = 1;
+            ScalarPivotSum(p) = Kappa(p);
         NbRminOverlap(p) = 0;
         #ifndef NOWKAvg
             KappaRmin(p) = Weight(p)*Kappa(p);

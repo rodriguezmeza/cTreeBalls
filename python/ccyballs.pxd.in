@@ -21,6 +21,12 @@ cdef extern from "cballs.h":
     const char *cballs_build_id()
     const char *cballs_build_json()
     int cballs_run_metadata(cmdline_data *, global_data *, char **)
+    int cballs_mpi_bootstrap(cmdline_data *, global_data *, const char *)
+    int cballs_mpi_context_consensus(cmdline_data *, int, const char *)
+    int cballs_mpi_agree_text(cmdline_data *, const char *, const char *)
+    void cballs_mpi_test_boundary(const char *)
+    const char *cballs_mpi_boundary_trace()
+
 
     size_t sizeof_cmdline_data()
     size_t sizeof_global_data()
@@ -376,6 +382,8 @@ cdef extern from "cballs.h":
         unsigned char gd_allocated
         unsigned char gd_allocated_2
         unsigned char histograms_allocated
+        unsigned char histogram_results_ready
+        unsigned int histogram_products
         unsigned char tree_allocated
         unsigned char bodytable_allocated
         #E
@@ -480,6 +488,7 @@ cdef extern from "cballs.h":
     int cballs_end_run_free_memory_guarded(void*, void*)
     int cballs_compiled_ndim()
     int cballs_max_memory_catalogs()
+    int cballs_catalog_identity_chunk(void*, void*, int, size_t, size_t, double*, int64_t*)
     int cballs_search_method_id(const char*)
     int cballs_set_memory_forest_ids(void*, void*, int, const int64_t*, size_t)
     int cballs_load_memory_catalog(

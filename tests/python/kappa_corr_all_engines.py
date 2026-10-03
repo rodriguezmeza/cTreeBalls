@@ -42,6 +42,7 @@ import time
 from typing import Any, Dict, Iterable, Optional, Sequence
 
 import numpy as np
+from benchmark_timing import timing_metadata as _timing_metadata, aggregate_rank_timings
 
 
 # healpy imports matplotlib. Keep a persistent writable cache when the home
@@ -254,6 +255,9 @@ class RunConfig:
     theta_scale: str = "degree"
     bins: int = 20
     multipoles: int = 7
+    qualification_reference: Optional[Path] = None
+    qualification_rtol: float = .02
+    qualification_atol: float = 1e-10
     threads: int = max(1, (os.cpu_count() or 2) - 1)
     use_log_bins: bool = True
     tree_theta: float = 1.0
@@ -1328,44 +1332,6 @@ def solve_scalar_mode_coupling(
     return corrected, diagnostics
 
 
-def _timing_metadata(
-    setup_wall: float, setup_cpu: float, compute_wall: float,
-    compute_cpu: float, scope: str,
-) -> dict[str, Any]:
-    return {
-        "setup_wall_time": float(setup_wall),
-        "setup_cpu_time": float(setup_cpu),
-        "compute_wall_time": float(compute_wall),
-        "compute_cpu_time": float(compute_cpu),
-        "total_wall_time": float(setup_wall + compute_wall),
-        "total_cpu_time": float(setup_cpu + compute_cpu),
-        "timing_scope": scope,
-    }
-
-
-def aggregate_rank_timings(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """Use critical-path wall time and consumed CPU time, never rank-zero alone."""
-    if not rows:
-        raise ValueError("at least one participating rank is required")
-    result = {
-        name: (max if "wall" in name else sum)(float(row[name]) for row in rows)
-        for name in ("setup_wall_time", "setup_cpu_time", "compute_wall_time",
-                     "compute_cpu_time", "total_wall_time", "total_cpu_time",
-                     "native_reported_cpu_time")
-    }
-    for name, reduce in (("native_mainloop_wall_time", max),
-                         ("native_mainloop_cpu_time", sum)):
-        if any(name in row for row in rows):
-            if not all(name in row for row in rows):
-                raise ValueError(f"missing {name} on a participating rank")
-            result[name] = reduce(float(row[name]) for row in rows)
-    result.update(ranks=len(rows), rank_timings=list(rows),
-                  timing_scope=rows[0]["timing_scope"] +
-                  "; wall=max(participating ranks), CPU=sum(participating ranks)")
-    return result
-
-
-
 def flatten_radial_matrix(values: np.ndarray) -> np.ndarray:
     """Flatten (radial-bin 1, radial-bin 2) in stable row-major order."""
     matrix = np.asarray(values)
@@ -1748,7 +1714,13 @@ def run_engine_suite(
                     rank_timing.update(native_mainloop_wall_time=float(native["wall_seconds"]),
                                        native_mainloop_cpu_time=float(native["process_cpu_seconds"]))
                     if comm.rank == 0:
+                        from cyballs import publish_result_packet
+                        qualification_path = publish_result_packet(balls,engine_root/'qualification',
+                            Path(config.qualification_reference)/engine/'qualification' if config.qualification_reference else None,
+                            rtol=config.qualification_rtol,atol=config.qualification_atol)
                         result = copy_engine_results(balls, engine, config)
+                        result['qualification_packet'] = qualification_path
+                        result['qualification'] = balls.getRunMetadata()['qualification']
                 except Exception as exc:
                     local_error = f"{type(exc).__name__}: {exc}"
                 finally:
@@ -1861,6 +1833,9 @@ def spawn_mpi(args: argparse.Namespace) -> int:
 
 def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--qualification-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
+    parser.add_argument('--qualification-rtol',type=float,default=.02)
+    parser.add_argument('--qualification-atol',type=float,default=1e-10)
     sources = parser.add_mutually_exclusive_group()
     sources.add_argument("--fits", type=Path, help="HEALPix convergence FITS map")
     sources.add_argument("--catalog-npz", type=Path, help="positions/kappa NPZ catalog")
@@ -2013,6 +1988,9 @@ def main() -> int:
             bins=args.nbins,
             multipoles=args.multipoles,
             threads=args.threads,
+            qualification_reference=args.qualification_reference,
+            qualification_rtol=args.qualification_rtol,
+            qualification_atol=args.qualification_atol,
             use_log_bins=not args.linear_bins,
             tree_theta=args.tree_theta,
             nsmooth=args.nsmooth,

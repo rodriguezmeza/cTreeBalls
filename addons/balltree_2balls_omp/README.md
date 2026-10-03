@@ -39,7 +39,7 @@ disable it; `make test-sleef-vector-log` checks both SIMD and scalar-tail
 results against libm and rejects a build that selected only one-wide lanes.
 
 The OpenMP auto-2PCF and LogMultipole auto-3PCF paths keep a two-entry,
-runtime-object-owned cache of compact
+process-local cache of compact
 trees.  Cache keys include catalog contents and all tree-shaping field,
 weight, mask, smoothing, and leaf settings, so modifying a catalog causes a
 rebuild. Cached trees own packed positions, scalar values, weights, and moments;
@@ -137,5 +137,14 @@ the default LogMultipole path is the production algorithm.
 The node recursion follows dual-node by Mike Jarvis, distributed under its
 BSD-style license. The PCA ball-tree construction is adapted from FCFC by
 Cheng Zhao under the MIT license; see the notices in
-`addons/balltree_shared/fcfc_balltree.c`. dual-node's redistribution terms are in
-`dual-node_LICENSE`.
+`support/pca_tree/fcfc_balltree.c`.
+
+## Optional hierarchical scalar 3PCF
+
+`options=scalar-pivot-reuse,no-smooth-pivot` enables shared neighbor moments
+and completion of resolved radial-bin pairs at parent pivots. It supports
+both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
+2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
+and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
+depend on the observable, controls, and geometry. See the
+[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

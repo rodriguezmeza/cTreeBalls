@@ -74,8 +74,8 @@ Regression checks
 
 From the source root, with matching C and Cython builds::
 
-   python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
-   CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/make_tests/test_scalar_numerical_contract.py
+   python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
+   CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/python/test_scalar_numerical_contract.py
 
 The tests compare independent ordered-triplet sums, dual-node and exact limits, full/partial-sky
 rotations, nonuniform weights, degenerate bearings, inactive smoothing,

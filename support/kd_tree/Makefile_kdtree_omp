@@ -1,0 +1,22 @@
+# ----- MAKE FILE machine definitions (kdtree_omp) -----
+# Mario A. Rodriguez-Meza, Ciudad de Mexico, 5.05.2023
+#
+#
+
+#B Set of settings
+#
+ifneq ($(filter 1,$(KDTREEOMPON) $(KDTREEMPION)),)
+ifeq ($(KDTREEOMPON),1)
+OPT2 += -DKDTREEOMP
+endif
+#KDTREEOMP = ../support/kd_tree/
+KDTREEOMP = $(MDIR)/support/kd_tree/
+#vpath %.c ./support/kd_tree/
+vpath %.c $(MDIR)/support/kd_tree/
+INCLUDES += -I$(KDTREEOMP)
+HEADERFILES += $(wildcard $(KDTREEOMP)/*.h)
+HEADERFILES += $(MDIR)/addons/balltree_2balls_omp/dual_node_edge_correction.h
+EXTERNAL += kdtree.o search_kdtree_omp.o kdtree_edge.o
+endif
+#
+#E

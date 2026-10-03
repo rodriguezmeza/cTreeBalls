@@ -6,5 +6,5 @@ cd "$(dirname "$0")/../.."
 CBALLS=${CBALLS:-./cballs}
 PYTHON=${PYTHON:-python3}
 
-"$PYTHON" tests/make_tests/test_octree_3pcf_3d_omp.py --cballs "$CBALLS"
-"$PYTHON" tests/make_tests/test_octree_3pcf_3d_survey.py --cballs "$CBALLS"
+"$PYTHON" tests/python/test_octree_3pcf_3d_omp.py --cballs "$CBALLS"
+"$PYTHON" tests/python/test_octree_3pcf_3d_survey.py --cballs "$CBALLS"

@@ -3,4 +3,4 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT"
-PYTHONDONTWRITEBYTECODE=1 python3 tests/make_tests/test_shear_corr_all_engines.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/python/test_shear_corr_all_engines.py

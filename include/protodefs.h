@@ -50,6 +50,10 @@ int cballs_end_run_free_memory_guarded(struct cmdline_data *cmd,
                                        struct global_data *gd);
 int cballs_compiled_ndim(void);
 int cballs_max_memory_catalogs(void);
+int cballs_catalog_identity_chunk(struct cmdline_data *cmd,
+                                  struct global_data *gd, int catalog,
+                                  size_t offset, size_t count,
+                                  double *values, int64_t *ids);
 int cballs_search_method_id(const char *method);
 int cballs_set_memory_forest_ids(struct cmdline_data *cmd,
                                 struct global_data *gd, int ifile,
@@ -103,6 +107,8 @@ global int setFilesDirs(struct cmdline_data*, struct  global_data* gd);
 //B routine to compute edge corrections using two saved histZetaM histograms
 global int computeEdgeCorrections(struct cmdline_data* cmd,
                                   struct  global_data* gd);
+int cballs_scalar_edge_manifest(struct cmdline_data *cmd,
+                                struct global_data *gd, bool publish);
 global int matrixClm(struct cmdline_data* cmd, struct  global_data* gd,
                      double ***mat3, double ***mat4,
                      int n1, int n2, double ***mat5);

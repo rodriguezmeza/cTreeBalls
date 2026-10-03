@@ -45,19 +45,20 @@ active_methods=(
     kdtree-2balls-omp kdtree-2balls-mpi
     balltree-2balls-omp balltree-2balls-mpi
     octree-2balls-omp octree-2balls-mpi
-    octree-shear-sphere-2balls-omp
-    kdtree-shear-sphere-2balls-omp
-    balltree-shear-sphere-2balls-omp
+    octree-shear-sphere-2balls-omp octree-shear-sphere-2balls-mpi
+    kdtree-shear-sphere-2balls-omp kdtree-shear-sphere-2balls-mpi
+    balltree-shear-sphere-2balls-omp balltree-shear-sphere-2balls-mpi
     kdtree-box-omp neighbor-boxes-omp
     octree-3pcf-3d-omp octree-3pcf-3d-mpi
     lya-2pcf-omp lya-3pcf-omp lya-2pcf-3pcf-omp
     lya-los-tree-2pcf-omp lya-los-tree-3pcf-omp lya-los-tree-2pcf-3pcf-omp
     lya-1d-2pcf-omp lya-1d-3pcf-omp lya-1d-2pcf-3pcf-omp
     lya-1d-tree-2pcf-omp lya-1d-tree-same-los-2pcf-omp
-    lya-1d-tree-3pcf-omp
+    lya-1d-tree-3pcf-omp lya-anisotropic-multipole-3pcf-omp
     lya-2pcf-mpi lya-3pcf-mpi lya-2pcf-3pcf-mpi
     lya-1d-2pcf-mpi lya-1d-3pcf-mpi lya-1d-2pcf-3pcf-mpi
     lya-1d-tree-2pcf-mpi lya-1d-tree-3pcf-mpi
+    lya-los-tree-2pcf-mpi lya-los-tree-3pcf-mpi lya-los-tree-2pcf-3pcf-mpi
 )
 
 for method in "${active_methods[@]}"; do
@@ -121,13 +122,17 @@ for option in print-search-methods make-info smooth-pivot no-smooth-pivot \
     }
 done
 
-for option in behavior-tree-omp compute-j-no-eq-i pivot-loop default-rsmooth \
-    fix-rsmooth edge-effects no-two-ball set-default-param set-Nb-noSel \
-    smooth smooth-min-cell; do
+for option in behavior-tree-omp compute-j-no-eq-i default-rsmooth fix-rsmooth no-two-ball; do
     grep -Fq -- "- ${option} [" "${options_output}" || {
-        printf 'FAIL: cached legacy option is missing: %s\n' "${option}" >&2
+        printf 'FAIL: active compatibility option is missing: %s\n' "${option}" >&2
         exit 1
     }
+done
+for option in pivot-loop edge-effects set-default-param set-Nb-noSel smooth smooth-min-cell; do
+    if grep -Fq -- "- ${option} [" "${options_output}"; then
+        printf 'FAIL: inactive option was advertised: %s\n' "${option}" >&2
+        exit 1
+    fi
 done
 
 for expected in \
@@ -150,6 +155,7 @@ for setting in KDTREE2BALLSOMPON KDTREE2BALLSMPION BALLTREE2BALLSOMPON \
     BALLTREE2BALLSMPION OCTREE2BALLSOMPON OCTREE2BALLSMPION LYAFORESTOMPON \
     LYAFORESTMPION OCTREESHEARSPHERE2BALLSOMPON \
     KDTREESHEARSPHERE2BALLSOMPON BALLTREESHEARSPHERE2BALLSOMPON \
+    OCTREESHEARSPHERE2BALLSMPION KDTREESHEARSPHERE2BALLSMPION BALLTREESHEARSPHERE2BALLSMPION \
     KDTREEBOXOMPON NEIGHBORBOXESOMPON OCTREE3PCF3DOMPON OCTREE3PCF3DMPION; do
     grep -Eq "^[[:space:]]+${setting}[[:space:]]+= 1$" "${make_output}" || {
         printf 'FAIL: make-info is missing active setting: %s\n' "${setting}" >&2
@@ -159,11 +165,30 @@ done
 
 for setting in KDTREEOMPON KDTREEMPION BALLTREEOMPON BALLTREEMPION \
     OCTREEGGGOMPON OCTREEGGGMPION OCTREEBALLS4OMPON OCTREEBALLS4MPION; do
-    if grep -Eq "^[[:space:]]+${setting}[[:space:]]+= 1$" "${make_output}"; then
-        printf 'FAIL: make-info published an inactive addon as enabled: %s\n' \
+    if grep -Eq "^[[:space:]]+${setting}[[:space:]]+=" "${make_output}"; then
+        printf 'FAIL: make-info advertised an unshipped addon: %s\n' \
             "${setting}" >&2
         exit 1
     fi
+done
+
+for expected in 'DES/Takahashi' 'G2CONV' 'UNMEASURED'; do
+    grep -Fq -- "${expected}" "${methods_output}" || {
+        printf 'FAIL: shear search help is missing %s\n' "${expected}" >&2
+        exit 1
+    }
+done
+for expected in 'Python shear input controls' '--fits-format' 'no-one-ball,no-smooth-pivot'; do
+    grep -Fq -- "${expected}" "${options_output}" || {
+        printf 'FAIL: shear option help is missing %s\n' "${expected}" >&2
+        exit 1
+    }
+done
+for expected in 'spherical shear input policy:' 'spherical shear accuracy policy:' 'spherical shear MPI policy:'; do
+    grep -Fq -- "${expected}" "${make_output}" || {
+        printf 'FAIL: make-info is missing %s\n' "${expected}" >&2
+        exit 1
+    }
 done
 
 printf 'PASS: runtime help matches the active addon profile.\n'

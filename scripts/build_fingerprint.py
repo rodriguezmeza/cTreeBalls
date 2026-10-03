@@ -23,7 +23,7 @@ def digest(data):
 
 def source_files(root):
     for directory in ("source", "main", "include", "general_libs", "getparam",
-                      "addons", "python", "scripts", "tests", "capabilities"):
+                      "addons", "support", "python", "scripts", "tests", "capabilities"):
         for parent, dirs, files in os.walk(root / directory):
             dirs[:] = sorted(d for d in dirs if not d.startswith((".", "backup"))
                              and d not in {"build", "python_env", "__pycache__"})

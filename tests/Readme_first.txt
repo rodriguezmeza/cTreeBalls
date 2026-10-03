@@ -1,12 +1,12 @@
 
 Current regression entry points
 
-Use tests/make_tests/README.md and docs/development.rst. The maintained
+Use tests/python/README_regression_tests.md and docs/development.rst. The maintained
 launchers and associated Python tests are in tests/make_tests.
 With matching C and Cython binaries, run from the repository root:
 
     make test-make-info test-search-methods
-    python3 -m pytest -q tests/make_tests/test_scalar_numerical_contract.py
+    python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
 
 Repeat scalar numerical tests with both SMOOTHPIVOTON build settings.
 The enabled build smooths supported engines by default; include

@@ -41,4 +41,8 @@ global int searchcalc_lya_forest_1d_tree_3pcf_omp(struct cmdline_data *cmd,
                                                   bodyptr table,
                                                   INTEGER nbody);
 
+#define LYAFORESTLOSTREE2PCFMPIMETHOD 210
+#define LYAFORESTLOSTREE3PCFMPIMETHOD 211
+#define LYAFORESTLOSTREE2PCF3PCFMPIMETHOD 212
+
 #endif

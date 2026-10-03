@@ -1,4 +1,4 @@
-.TH CBALLS 1 "September 2026" "cTreeBalls 1.1.0" "User Commands"
+.TH CBALLS 1 "October 3, 2026" "cTreeBalls 1.1.0" "User Commands"
 .SH NAME
 cballs \- compute two- and three-point correlation functions
 .SH SYNOPSIS
@@ -12,7 +12,8 @@ spin-2 shear, Lyman-alpha forests, and physical three-dimensional catalogs.
 Available search methods are selected at compile time.
 .PP
 Command-line assignments must not contain spaces around the equals sign.
-Parameter files use one name/value assignment per line and may contain comments.
+Parameter files use one name/value assignment per line and may contain
+comments.
 .SH DISCOVERY
 .TP
 .B options=make-info
@@ -30,43 +31,170 @@ statistics, build switch, and usage notes.
 Print the source/profile/toolchain JSON identity. The Python extension exposes
 the corresponding identity through cyballs.build_info().
 .SH ACTIVE SEARCH METHODS
-The maintained profile enables these families:
+The maintained Makefile profile enables exactly these 41 methods.
 .TP
 .B octree-sincos-omp
-Core OpenMP octree method for scalar 2PCF and sine/cosine 3PCF multipoles.
+2D/3D scalar; octree; OpenMP. standard 2PCF and sine/cosine 3PCF multipoles.
 .TP
-.B kdtree-2balls-omp, kdtree-2balls-mpi
-Median KD-tree dual-node 2PCF and LogMultipole 3PCF.
+.B kdtree-2balls-omp
+scalar; median k-d tree; dual-node OpenMP scan. 2PCF and LogMultipole angular
+3PCF, masks, and complex edge correction.
 .TP
-.B balltree-2balls-omp, balltree-2balls-mpi
-PCA ball-tree dual-node 2PCF and LogMultipole 3PCF.
+.B kdtree-2balls-mpi
+scalar; median k-d tree; deterministic MPI+OpenMP dual-node scan. distributed
+2PCF and LogMultipole angular 3PCF, masks, and complex edge correction.
 .TP
-.B octree-2balls-omp, octree-2balls-mpi
-Native-octree dual-node 2PCF and LogMultipole 3PCF.
+.B balltree-2balls-omp
+scalar; FCFC PCA ball tree; dual-node dual/triple-node OpenMP scan. 2PCF and
+angular-multipole 3PCF with auto- and cross-catalog support.
+.TP
+.B balltree-2balls-mpi
+scalar; FCFC PCA ball tree; deterministic MPI+OpenMP dual/triple-node scan.
+distributed 2PCF and angular-multipole 3PCF with auto- and cross-catalog
+support.
+.TP
+.B octree-2balls-omp
+scalar; native octree; dual-node 2PCF and LogMultipole 3PCF. 2PCF and
+angular-multipole 3PCF with auto- and cross-catalog support.
+.TP
+.B octree-2balls-mpi
+scalar; native octree; deterministic MPI+OpenMP frontier. distributed 2PCF and
+LogMultipole angular-multipole 3PCF.
 .TP
 .B octree-shear-sphere-2balls-omp
-Full-sky spin-2 correlation functions over the native octree.
+full-sky spin-2 shear; dual-node dual-node octree; OpenMP. xi+/xi- and four
+Gamma-x shear 3PCF components.
+.TP
+.B octree-shear-sphere-2balls-mpi
+full-sky spin-2 shear; native octree; adaptive MPI+OpenMP frontier.
+distributed xi+/xi- and four Gamma-x shear 3PCF components.
 .TP
 .B kdtree-shear-sphere-2balls-omp
-Full-sky spin-2 correlation functions over a median KD tree.
+full-sky spin-2 shear; dual-node median KD tree; OpenMP. xi+/xi- and four
+Gamma-x shear 3PCF components.
+.TP
+.B kdtree-shear-sphere-2balls-mpi
+full-sky spin-2 shear; median KD tree; adaptive MPI+OpenMP frontier.
+distributed xi+/xi- and four Gamma-x shear 3PCF components.
 .TP
 .B balltree-shear-sphere-2balls-omp
-Full-sky spin-2 correlation functions over a PCA ball tree.
+full-sky spin-2 shear; dual-node FCFC PCA ball tree; OpenMP. xi+/xi- and four
+Gamma-x shear 3PCF components.
 .TP
-.B lya-*-omp, lya-*-mpi
-Anisotropic, radial, and radial interval-tree forest estimators. Run
-options=print-search-methods for the complete names.
+.B balltree-shear-sphere-2balls-mpi
+full-sky spin-2 shear; FCFC PCA ball tree; adaptive MPI+OpenMP frontier.
+distributed xi+/xi- and four Gamma-x shear 3PCF components.
 .TP
-.B lya-los-tree-2pcf-omp, lya-los-tree-3pcf-omp, lya-los-tree-2pcf-3pcf-omp
-Exact anisotropic 3D forest estimators using octree forest discovery and
-per-LOS radial trees. Transverse distance is retained. These methods have no
-MPI counterpart and are enabled by LYAFORESTOMPON=1.
+.B kdtree-box-omp
+periodic Cartesian box; k-d tree; OpenMP. box 2PCF.
 .TP
-.B octree-3pcf-3d-omp, octree-3pcf-3d-mpi
-Physical-3D Legendre multipoles and data/random survey-window estimation.
+.B neighbor-boxes-omp
+periodic Cartesian box; linked boxes; OpenMP. periodic pair counts and
+unweighted density correlation function.
 .TP
-.B kdtree-box-omp, neighbor-boxes-omp
-Periodic Cartesian 2PCF methods.
+.B octree-3pcf-3d-omp
+3D scalar; exact octree leaves; OpenMP. spherical-harmonic 2PCF/3PCF
+multipoles.
+.TP
+.B octree-3pcf-3d-mpi
+3D scalar; exact octree leaves; MPI+OpenMP pivot blocks. spherical-harmonic
+2PCF/3PCF; data/random survey estimator and edge correction.
+.TP
+.B lya-2pcf-omp
+3D observer-centered forest pixels; exact default, opt-in forest cell pairs;
+OpenMP. weighted anisotropic 2PCF.
+.TP
+.B lya-3pcf-omp
+3D observer-centered forest pixels; exact default, opt-in bounded cell-bin
+approximation; OpenMP. weighted five-dimensional 3PCF.
+.TP
+.B lya-2pcf-3pcf-omp
+3D observer-centered forest pixels; exact default, opt-in forest cell pairs;
+OpenMP. weighted 2PCF and 3PCF; shared discovery or independently optimized
+passes.
+.TP
+.B lya-los-tree-2pcf-omp
+3D observer-centered forest pixels; exact default, opt-in forest cell pairs;
+OpenMP. exact weighted anisotropic 2PCF.
+.TP
+.B lya-los-tree-3pcf-omp
+3D observer-centered forest pixels; exact default, opt-in bounded cell-bin
+approximation; OpenMP. exact weighted five-dimensional 3PCF.
+.TP
+.B lya-los-tree-2pcf-3pcf-omp
+3D observer-centered forest pixels; exact default, opt-in forest cell pairs;
+OpenMP. weighted 2PCF and 3PCF; shared discovery or independently optimized
+passes.
+.TP
+.B lya-1d-2pcf-omp
+radial Lyman-alpha pixels; sorted 1D range scan; OpenMP. weighted radial-only
+2PCF.
+.TP
+.B lya-1d-3pcf-omp
+radial Lyman-alpha pixels; sorted 1D range scan; OpenMP. weighted radial-only
+3PCF.
+.TP
+.B lya-1d-2pcf-3pcf-omp
+radial Lyman-alpha pixels; sorted 1D range scan; OpenMP. weighted radial-only
+2PCF and 3PCF.
+.TP
+.B lya-1d-tree-2pcf-omp
+radial Lyman-alpha pixels; exact 1D interval tree; OpenMP. weighted
+radial-only 2PCF.
+.TP
+.B lya-1d-tree-3pcf-omp
+radial Lyman-alpha pixels; exact 1D interval tree; OpenMP. weighted
+radial-only 3PCF.
+.TP
+.B lya-1d-tree-same-los-2pcf-omp
+per-LOS radial Lyman-alpha pixels; exact 1D interval trees; OpenMP. equal-LOS
+mean of weighted within-forest radial 2PCFs.
+.TP
+.B lya-2pcf-mpi
+Lyman-alpha pixels; 3D octree; MPI+OpenMP. weighted anisotropic 2PCF.
+.TP
+.B lya-3pcf-mpi
+Lyman-alpha pixels; 3D octree; MPI+OpenMP. weighted five-dimensional 3PCF.
+.TP
+.B lya-2pcf-3pcf-mpi
+Lyman-alpha pixels; 3D octree; MPI+OpenMP. weighted 2PCF and 3PCF.
+.TP
+.B lya-1d-2pcf-mpi
+Lyman-alpha pixels; radial range scan; MPI+OpenMP. weighted radial-only 2PCF.
+.TP
+.B lya-1d-3pcf-mpi
+Lyman-alpha pixels; radial range scan; MPI+OpenMP. weighted radial-only 3PCF.
+.TP
+.B lya-1d-2pcf-3pcf-mpi
+Lyman-alpha pixels; radial range scan; MPI+OpenMP. weighted radial-only 2PCF
+and 3PCF.
+.TP
+.B lya-1d-tree-2pcf-mpi
+Lyman-alpha pixels; radial interval tree; MPI+OpenMP. weighted radial-only
+2PCF with same-forest subtraction.
+.TP
+.B lya-1d-tree-3pcf-mpi
+Lyman-alpha pixels; radial interval tree; MPI+OpenMP. weighted radial-only
+3PCF with exact three-forest exclusion.
+.TP
+.B lya-anisotropic-multipole-3pcf-omp
+3D observer-centered forest pixels; exact radial and LOS polar bins; LOS-tree
+discovery; OpenMP. anisotropic Legendre raw moments; approximate mu
+reconstruction; optional exact five-dimensional bins.
+.TP
+.B lya-los-tree-2pcf-mpi
+3D observer-centered forest pixels; exact default, opt-in forest cell pairs;
+replicated catalog MPI + OpenMP. exact weighted anisotropic 2PCF.
+.TP
+.B lya-los-tree-3pcf-mpi
+3D observer-centered forest pixels; exact default, opt-in bounded cell-bin
+approximation; replicated catalog MPI + OpenMP. exact weighted
+five-dimensional 3PCF.
+.TP
+.B lya-los-tree-2pcf-3pcf-mpi
+3D observer-centered forest pixels; exact default, opt-in forest cell pairs;
+replicated catalog MPI + OpenMP. weighted 2PCF and 3PCF; shared discovery or
+independently optimized passes.
 .SH COMMON PARAMETERS
 .TP
 .BI searchMethod= name
@@ -138,10 +266,11 @@ Compute complex scalar or shear 3PCF window correction. This requires 3PCF.
 Use catalog weights in signal and normalization moments.
 .TP
 .B shear-pivot-reuse
-Opt-in native octree or ball-tree OpenMP 3PCF aggregate-pivot reuse with
+Opt-in native octree, KD-tree or ball-tree OpenMP 3PCF aggregate-pivot reuse
+with
 inherited unresolved neighbors and bounded spherical transport. Requires
 BALLS4SCANLEVON=1, no-smooth-pivot, positive theta and full pivot coverage.
-KD-tree and compatibility mode reject this option. The independent 2PCF path
+MPI and compatibility mode reject this option. The independent 2PCF path
 is unchanged. Validate against exact output before production use.
 .TP
 .B no-balltree-shear-member-cache
@@ -157,6 +286,13 @@ octree, KD-tree and ball-tree OpenMP two-ball 3PCF scans.
 Finite phase budget in radians from 0 to 3, default 0.1. Not a relative-error
 guarantee. With reuse enabled, this budget controls 3PCF acceptance; theta's
 magnitude does not. Zero disables reuse, not ordinary neighbor approximation.
+.TP
+.B CBALLS_SHEAR_BIN_THETA
+Internal radial-bin assignment slop in [0,1] bin widths, default 0.
+Used only with shear-pivot-reuse. Radial range cutoffs remain strict.
+Resolved radial pairs complete at parent cells; descendants inherit completion
+masks. Use nsmooth=1 for a finer binary pivot hierarchy. Qualify raw and
+window-corrected multipoles on the actual catalog.
 .TP
 .B CBALLS_SHEAR_PROFILE
 Set to 1 for per-thread phase timers and SHEAR_REUSE counters.
@@ -185,7 +321,6 @@ it; builds reject stale generated registration files. print-search-methods
 reports only entries enabled in the current executable. Inactive addons
 and addons/python_env are not part of the public distribution.
 .SH EXAMPLES
-.PP
 Inspect the executable:
 .PP
 .nf
@@ -229,4 +364,33 @@ Sphinx documentation.
 The project README and Sphinx guide document input schemas, normalization,
 scientific conventions, and validation tests.
 .SH COPYRIGHT
-Copyright 2023-2026 Mario A. Rodriguez-Meza. Distributed under the MIT license.
+Copyright 2023-2026 Mario A. Rodriguez-Meza. Distributed under the MIT
+license.
+
+.SH SCALAR HIERARCHICAL REUSE
+The scalar octree-2balls, kdtree-2balls and balltree-2balls OpenMP and MPI
+engines accept options=scalar-pivot-reuse,no-smooth-pivot for 3PCF.
+CBALLS_SCALAR_PIVOT_TOL is a runtime phase budget in [0,3] radians (default
+0.1).
+CBALLS_SCALAR_BIN_THETA is a runtime internal-bin allowance in [0,1] bin
+widths
+(default 0). Both must be finite and agree on all MPI ranks. Outer radial
+cuts remain strict. Positive theta is required. Zero phase budget, exact
+controls, smoothing, periodic runs and only-2pcf retain the original path.
+The phase budget is not a relative coefficient-error guarantee.
+See docs/SCALAR_HIERARCHICAL_REUSE.md for qualification and benchmark
+commands.
+
+.SH LYMAN-ALPHA HIERARCHICAL REUSE
+lya2Kernel=1 enables certified forest pairs and radial range moments.
+lya3Kernel=5 selects adaptive radial/polar moment reuse for the
+five-dimensional
+histogram, with exact segment fallback for sparse pivot cells. The original
+3D OpenMP/MPI names support these controls; kernels 3/4 also support MPI.
+Zero slop preserves the estimator. See docs/LYA_HIERARCHICAL_REUSE.md.
+
+.SH SOURCE LAYOUT
+Python benchmark, analysis and regression scripts are under tests/python.
+The python directory contains only Cython binding sources. Shared builders and
+compatibility kernels required by enabled addons are in support. The branch
+excludes inactive standalone addons and addons/python_env.

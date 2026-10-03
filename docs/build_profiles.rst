@@ -16,8 +16,8 @@ Profile Layers
     precision, and external GSL/CFITSIO discovery.
 
 ``addons/Makefile_addons_settings``
-    Optional search methods, I/O formats, Cython/PXD support, and experimental
-    features.
+    Enabled search methods, I/O formats, and Cython/PXD support.
+    Inactive standalone addons are excluded from this branch.
 
 Typical Source Profile
 ----------------------
@@ -39,8 +39,8 @@ from this table:
      - ``1``
      - Enable GSL-backed paths.
    * - ``GSLINTERNAL``
-     - ``0``
-     - Discover an external GSL installation.
+     - ``1`` in the checkout; ``0`` in a public source archive
+     - Bundled development GSL or external release dependency.
    * - ``CFITSIOON``
      - ``1``
      - Enable FITS/HEALPix I/O support.
@@ -71,7 +71,7 @@ Native Libraries
 When ``GSLINTERNAL = 0``, GSL is discovered with ``gsl-config`` unless
 ``GSL_INCLUDE`` and ``GSL_LIB`` are provided manually.
 
-When ``CFITSIOON = 1``, CFITSIO is discovered with
+When ``CFITSIOON = 1`` and ``CFITSIOLIBON = 0``, CFITSIO is discovered with
 ``pkg-config cfitsio`` unless ``CFITSIO_INCLUDE`` and ``CFITSIO_LIB`` are
 provided manually.
 

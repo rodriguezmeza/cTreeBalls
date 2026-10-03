@@ -98,6 +98,7 @@ add-ons remains available under Tutorials and Reference.
    user/outputs
    user/python
    search_methods
+   active_profile
    shear
    lyman_alpha
    scalar_3d

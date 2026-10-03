@@ -80,7 +80,53 @@ local int cfitsio_column_error(struct cmdline_data *cmd, int status,
     return FAILURE;
 }
 
+local int cfitsio_finite_column(struct cmdline_data *cmd, const char *filename,
+                                  int column, const double *values, size_t count)
+{
+    char field[48];
+    snprintf(field, sizeof(field), "FITS column %d", column);
+    return cballs_input_finite_array(cmd, filename, values, count,
+                                     sizeof(double), field);
+}
+
 // input in: addons/source/cballsio/cballsio_include_11a.h
+
+/* Validate selected table shapes before allocating or indexing converted
+ * columns. RA/DEC/radius supports vector samples, with one angle per row. */
+local int cfitsio_validate_table_shape(struct cmdline_data *cmd,
+        struct global_data *gd, fitsfile *fptr, string filename, int radial)
+{
+    const int weighted = scanopt(cmd->options, "with-weight");
+    const int count = radial == 1 ? (weighted ? 5 : 4)
+        : (radial == -1 ? (weighted ? 4 : 3)
+                                                        : (weighted ? 5 : 4));
+    long repeats[5] = {0};
+    for (int i = 0; i < count; ++i) {
+        int status = 0, type;
+        long width;
+        fits_get_coltype(fptr, gd->columns[i], &type, &repeats[i], &width, &status);
+        if (status) return cfitsio_column_error(cmd, status, gd->columns[i], filename);
+        if (type < 0 || repeats[i] < 1 || (radial != 1 && repeats[i] != 1)
+            || (radial == 1 && i < 2 && repeats[i] != 1)) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "FITS input '%s': unsupported column shape at column %d", filename, gd->columns[i]);
+            return FAILURE;
+        }
+    }
+    if (radial == 1 && (repeats[2] != repeats[3] || (weighted && repeats[4] != repeats[3]))) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "FITS input '%s': radius, field and weight repeats must match", filename);
+        return FAILURE;
+    }
+    const uintmax_t repeat = radial == 1 ? (uintmax_t)repeats[3] : 1;
+    if ((uintmax_t)cmd->nbody > (uintmax_t)LONG_MAX / sizeof(body) / repeat
+        || (uintmax_t)cmd->nbody > SIZE_MAX / sizeof(body) / repeat) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "FITS input '%s': catalog byte size is not representable", filename);
+        return FAILURE;
+    }
+    return SUCCESS;
+}
 
 local int inputdata_cfitsio(struct cmdline_data* cmd,
                                struct global_data* gd, string filename, int ifile)
@@ -97,7 +143,8 @@ local int inputdata_cfitsio(struct cmdline_data* cmd,
         gd->stopflag = TRUE;
         return SUCCESS;
     }
-    rc = inputdata_cfitsio_xyz(cmd, gd, filename, ifile, fptr);
+    rc = cfitsio_validate_table_shape(cmd, gd, fptr, filename, 0);
+    if (rc == SUCCESS) rc = inputdata_cfitsio_xyz(cmd, gd, filename, ifile, fptr);
     return cfitsio_close_input(cmd, fptr, rc);
 }
 
@@ -118,7 +165,8 @@ local int inputdata_cfitsio_radec_field(struct cmdline_data* cmd,
         gd->stopflag = TRUE;
         return SUCCESS;
     }
-    rc = inputdata_cfitsio_ra_dec(cmd, gd, filename, ifile, fptr);
+    rc = cfitsio_validate_table_shape(cmd, gd, fptr, filename, -1);
+    if (rc == SUCCESS) rc = inputdata_cfitsio_ra_dec(cmd, gd, filename, ifile, fptr);
     return cfitsio_close_input(cmd, fptr, rc);
 }
 
@@ -146,7 +194,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     LONGLONG firstrow;
     LONGLONG firstelem;
     LONGLONG nelements;
-    double nulval = 0.0;
+    double nulval = NAN;
     int anynul;
     int status = 0;
 
@@ -160,11 +208,18 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     firstrow = 1;
     firstelem = 1;
     nelements = cmd->nbody;
-    arrayKappa = (double*) allocate(cmd->nbody * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayKappa, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
     if (status) goto fits_read_fail;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayKappa,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "FITS catalog", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     gd->bodytable_allocated = TRUE;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Kappa(p) = arrayKappa[p-bodytable[ifile]];
@@ -181,26 +236,41 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
 
 #if NDIM == 3
     real ra, dec;
-    arrayRA = (double*) allocate(cmd->nbody * sizeof(double));
-    arrayDEC = (double*) allocate(cmd->nbody * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayRA, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
+    if (cballs_malloc_checked((void **)&arrayDEC, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
 
     //E
     colnum = gd->columns[1];
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayRA, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayRA,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
     colnum = gd->columns[2];
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayDEC, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayDEC,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
     if (scanopt(cmd->options, "with-weight")) {
-        arrayWEIGHT = (double*) allocate(cmd->nbody * sizeof(double));
+        if (cballs_malloc_checked((void **)&arrayWEIGHT, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
         colnum = gd->columns[3];
         fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                       nelements, &nulval, arrayWEIGHT, &anynul, &status);
         if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayWEIGHT,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
     }
 
     if (scanopt(cmd->options, "no-arfken")) {
@@ -243,6 +313,7 @@ local int inputdata_cfitsio_ra_dec(struct cmdline_data* cmd,
     real kavg=0.0;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+gd->nbodyTable[ifile]) {
         Type(p) = BODY;
+        Mask(p) = MASK_NODE_VALID;
         Mass(p) = mass;
         Id(p) = p-bodytable[ifile]+1;
         kavg += Kappa(p);
@@ -296,7 +367,7 @@ fits_read_fail:
     free(arrayRA);
     free(arrayDEC);
     free(arrayWEIGHT);
-    return cfitsio_column_error(cmd, status, colnum, filename);
+    return status ? cfitsio_column_error(cmd, status, colnum, filename) : FAILURE;
 }
 
 //B RADECR_FIELD
@@ -317,7 +388,8 @@ local int inputdata_cfitsio_radecr_field(struct cmdline_data* cmd,
         gd->stopflag = TRUE;
         return SUCCESS;
     }
-    rc = inputdata_cfitsio_ra_dec_r(cmd, gd, filename, ifile, fptr);
+    rc = cfitsio_validate_table_shape(cmd, gd, fptr, filename, 1);
+    if (rc == SUCCESS) rc = inputdata_cfitsio_ra_dec_r(cmd, gd, filename, ifile, fptr);
     return cfitsio_close_input(cmd, fptr, rc);
 }
 
@@ -349,7 +421,7 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     LONGLONG firstrow;
     LONGLONG firstelem;
     LONGLONG nelements;
-    double nulval = 0.0;
+    double nulval = NAN;
     int anynul;
     int status = 0;
     INTEGER nrows;
@@ -395,12 +467,20 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     verb_print_debug(1, "\n%s: rows, nelements: %ld %ld\n",
                      routineName, cmd->nbody, nelements);
     cmd->nbody = nelements;
-    bodytabtmp = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)cmd->nbody, sizeof(body),
+                               "FITS catalog", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
 
-    arrayKappa = (double*) allocate(nelements * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayKappa, (size_t)nelements,
+                               sizeof(double), "FITS column", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayKappa,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
     INTEGER nonvalid=0;
     INTEGER valid=0;
@@ -450,7 +530,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     if (status) goto fits_read_fail;
     nelements = nrows*repeat;
-    arrayRA = (double*) allocate(nelements * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayRA, (size_t)nelements,
+                               sizeof(double), "FITS column", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     switch(typecode) {
         case TLONG:
             verb_print(cmd->verbose,
@@ -471,6 +554,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayRA, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayRA,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
     //E
 
@@ -480,7 +566,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     if (status) goto fits_read_fail;
     nelements = nrows*repeat;
-    arrayDEC = (double*) allocate(nelements * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayDEC, (size_t)nelements,
+                               sizeof(double), "FITS column", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     switch(typecode) {
         case TLONG:
             verb_print(cmd->verbose,
@@ -501,6 +590,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayDEC, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayDEC,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
     //E
 
@@ -510,7 +602,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
     if (status) goto fits_read_fail;
     nelements = nrows*repeat;
-    arrayR = (double*) allocate(nelements * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayR, (size_t)nelements,
+                               sizeof(double), "FITS column", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     switch(typecode) {
         case TLONG:
             verb_print(cmd->verbose,
@@ -531,6 +626,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayR, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayR,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
 
     INTEGER nonvalidR=0;
@@ -566,7 +664,10 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         fits_get_coltype(fptr, colnum, &typecode, &repeat, &width, &status);
         if (status) goto fits_read_fail;
         nelements = nrows*repeat;
-        arrayWEIGHT = (double*) allocate(nelements * sizeof(double));
+        if (cballs_malloc_checked((void **)&arrayWEIGHT, (size_t)nelements,
+                               sizeof(double), "FITS column", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
         switch(typecode) {
             case TLONG:
                 verb_print(cmd->verbose,
@@ -587,6 +688,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                       nelements, &nulval, arrayWEIGHT, &anynul, &status);
         if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayWEIGHT,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
     }
 
     int repeatWeight = repeat;
@@ -603,15 +707,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     rmin=BIGGESTDOUBLE, rmax=0.;
     if (scanopt(cmd->options, "no-arfken")) {
         DO_BODY(p, bodytabtmp, bodytabtmp+cmd->nbody) {
-            if (ij%repeatKappa == 0) {
-                ra = arrayRA[ip-1] * 60.0/RADTOARCMIN;
-                dec = arrayDEC[ip-1] * 60.0/RADTOARCMIN;
-                ramin = MIN(ramin,ra);
-                decmin = MIN(decmin,dec);
-                ramax = MAX(ramax,ra);
-                decmax = MAX(decmax,dec);
-                ip++;
-            }
+            ip = (INTEGER)(p - bodytabtmp)/repeatKappa + 1;
+            ra = arrayRA[ip-1] * 60.0/RADTOARCMIN;
+            dec = arrayDEC[ip-1] * 60.0/RADTOARCMIN;
             r = arrayR[p-bodytabtmp];
             if(Update(p)) {
                 rmax = MAX(rmax,r);
@@ -629,15 +727,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
         }
     } else {
         DO_BODY(p, bodytabtmp, bodytabtmp+cmd->nbody) {
-            if (ij%repeatKappa == 0) {
-                ra = arrayRA[ip-1] * 60.0/RADTOARCMIN;
-                dec = arrayDEC[ip-1] * 60.0/RADTOARCMIN;
-                ramin = MIN(ramin,ra);
-                decmin = MIN(decmin,dec);
-                ramax = MAX(ramax,ra);
-                decmax = MAX(decmax,dec);
-                ip++;
-            }
+            ip = (INTEGER)(p - bodytabtmp)/repeatKappa + 1;
+            ra = arrayRA[ip-1] * 60.0/RADTOARCMIN;
+            dec = arrayDEC[ip-1] * 60.0/RADTOARCMIN;
             Id(p) = ip-1;
             r = arrayR[p-bodytabtmp];
             //B this segment will give too much bodies with equal positions...
@@ -682,7 +774,9 @@ local int inputdata_cfitsio_ra_dec_r(struct cmdline_data* cmd,
     cmd->nbody = valid;
     gd->nbodyTable[ifile] = cmd->nbody;
     bodyptr q;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "FITS catalog", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     gd->bodytable_allocated = TRUE;
     verb_print(cmd->verbose_log, "\n%s: Created bodies = %ld",
                routineName, cmd->nbody);
@@ -791,7 +885,7 @@ fits_read_fail:
     free(arrayR);
     free(arrayWEIGHT);
     free(bodytabtmp);
-    return cfitsio_column_error(cmd, status, colnum, filename);
+    return status ? cfitsio_column_error(cmd, status, colnum, filename) : FAILURE;
 }
 //E RADECR_FIELD
 
@@ -842,12 +936,13 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     LONGLONG firstrow;
     LONGLONG firstelem;
     LONGLONG nelements;
-    double nulval = 0.0;
+    double nulval = NAN;
     int anynul;
     int status = 0;
 #if (defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)) && NDIM == 3
     double *arrayWeight = NULL;
     LONGLONG *arrayLosId = NULL;
+    double *arrayLosFloat = NULL;
     int read_weight = scanopt(cmd->options, "with-weight");
     int read_los_id = cb3d_cfitsio_count_columns_tokens(cmd->columns) >= 6;
     int invalid_los_id = FALSE;
@@ -861,7 +956,9 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     firstrow = 1;
     firstelem = 1;
     nelements = cmd->nbody;
-    arrayKappa = (double*) allocate(cmd->nbody * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayKappa, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
 
     colnum = gd->columns[3];                        // kappa
     verb_print(cmd->verbose,
@@ -870,8 +967,13 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayKappa, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayKappa,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "FITS catalog", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
     gd->bodytable_allocated = TRUE;
     DO_BODY(p, bodytable[ifile], bodytable[ifile]+cmd->nbody) {
         Kappa(p) = arrayKappa[p-bodytable[ifile]];
@@ -886,9 +988,15 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     arrayKappa = NULL;
 
 #if NDIM == 3
-    arrayX = (double*) allocate(cmd->nbody * sizeof(double));
-    arrayY = (double*) allocate(cmd->nbody * sizeof(double));
-    arrayZ = (double*) allocate(cmd->nbody * sizeof(double));
+    if (cballs_malloc_checked((void **)&arrayX, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
+    if (cballs_malloc_checked((void **)&arrayY, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
+    if (cballs_malloc_checked((void **)&arrayZ, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
 
     colnum = gd->columns[0];
     verb_print(cmd->verbose,
@@ -897,6 +1005,9 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayX, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayX,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
     
     colnum = gd->columns[1];
@@ -906,6 +1017,9 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayY, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayY,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
 
     colnum = gd->columns[2];
@@ -915,23 +1029,85 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
     fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                   nelements, &nulval, arrayZ, &anynul, &status);
     if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayZ,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
 
 
 #if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     if (read_weight) {
         colnum = gd->columns[4];
-        arrayWeight = (double*) allocate(cmd->nbody * sizeof(double));
+        if (cballs_malloc_checked((void **)&arrayWeight, (size_t)cmd->nbody, sizeof(double),
+                               "FITS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+        goto fits_read_fail;
         fits_read_col(fptr, datatype, colnum, firstrow, firstelem,
                       nelements, &nulval, arrayWeight, &anynul, &status);
         if (status) goto fits_read_fail;
+    if (cfitsio_finite_column(cmd, filename, colnum, arrayWeight,
+                               (size_t)nelements) == FAILURE)
+        goto fits_read_fail;
     }
     if (read_los_id) {
-        LONGLONG nulval_los = 0;
+        LONGLONG nulval_los = LLONG_MIN;
+        int los_type;
+        long los_repeat, los_width;
         colnum = gd->columns[5];
-        arrayLosId = (LONGLONG*) allocate(cmd->nbody * sizeof(LONGLONG));
-        fits_read_col(fptr, TLONGLONG, colnum, firstrow, firstelem,
-                      nelements, &nulval_los, arrayLosId, &anynul, &status);
+        fits_get_coltype(fptr, colnum, &los_type, &los_repeat, &los_width, &status);
         if (status) goto fits_read_fail;
+        /* Integer storage preserves all 64 bits. Floating storage is accepted
+         * only when every value is finite, integral and representable. */
+        if (los_repeat != 1 || (los_type != TBYTE && los_type != TSBYTE
+            && los_type != TSHORT && los_type != TUSHORT && los_type != TINT
+            && los_type != TUINT && los_type != TLONG && los_type != TULONG
+            && los_type != TLONGLONG && los_type != TFLOAT && los_type != TDOUBLE)) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "FITS input '%s': LOS IDs require a scalar numeric column", filename);
+            goto fits_read_fail;
+        }
+        for (int scale_kind=0; scale_kind<2; ++scale_kind) {
+            char keyword[32];
+            double scale_value = scale_kind ? 0. : 1.;
+            snprintf(keyword,sizeof(keyword),"%s%d",scale_kind ? "TZERO" : "TSCAL",colnum);
+            fits_read_key(fptr,TDOUBLE,keyword,&scale_value,NULL,&status);
+            if (status == KEY_NO_EXIST) status=0;
+            if (status) goto fits_read_fail;
+            if (!isfinite(scale_value) || floor(scale_value) != scale_value) {
+                snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                         "FITS input '%s': LOS scaling must preserve exact integers",filename);
+                goto fits_read_fail;
+            }
+        }
+        if (cballs_malloc_checked((void **)&arrayLosId, (size_t)cmd->nbody, sizeof(LONGLONG),
+                                   "FITS LOS column", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+            goto fits_read_fail;
+        if (los_type == TFLOAT || los_type == TDOUBLE) {
+            if (cballs_malloc_checked((void **)&arrayLosFloat,(size_t)cmd->nbody,sizeof(double),
+                                     "FITS floating LOS column",cmd->error_message,_ERRORMSGSIZE_) == FAILURE)
+                goto fits_read_fail;
+            fits_read_col(fptr,TDOUBLE,colnum,firstrow,firstelem,nelements,
+                          &nulval,arrayLosFloat,&anynul,&status);
+            if (status) goto fits_read_fail;
+            for (size_t i=0;i<(size_t)nelements;i++) {
+                double value=arrayLosFloat[i];
+                if (!isfinite(value) || floor(value) != value
+                    || value < (double)LLONG_MIN || value >= -(double)LLONG_MIN) {
+                    snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                             "FITS input '%s': LOS IDs must be finite representable integers",filename);
+                    goto fits_read_fail;
+                }
+                arrayLosId[i]=(LONGLONG)value;
+            }
+            free(arrayLosFloat);arrayLosFloat=NULL;
+        } else {
+            fits_read_col(fptr, TLONGLONG, colnum, firstrow, firstelem,
+                          nelements, &nulval_los, arrayLosId, &anynul, &status);
+            if (status) goto fits_read_fail;
+        }
+        if (anynul) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "FITS input '%s': null LOS ID", filename);
+            goto fits_read_fail;
+        }
     }
 
 #endif
@@ -963,6 +1139,7 @@ local int inputdata_cfitsio_xyz(struct cmdline_data* cmd,
 #if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
     free(arrayWeight);
     free(arrayLosId);
+    free(arrayLosFloat);
     if (invalid_los_id)
         cBALLS_FAIL(cmd,
                     "inputdata_cfitsio_xyz: LOS_ID cannot be represented by INTEGER");
@@ -1031,8 +1208,9 @@ fits_read_fail:
 #if (defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)) && NDIM == 3
     free(arrayWeight);
     free(arrayLosId);
+    free(arrayLosFloat);
 #endif
-    return cfitsio_column_error(cmd, status, colnum, filename);
+    return status ? cfitsio_column_error(cmd, status, colnum, filename) : FAILURE;
 }
 
 // Routine to read fits-healpix files
@@ -1124,7 +1302,9 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     double thetamin, thetamax;
     double phimin, phimax;
 
-    float *map;
+    float *map = NULL;
+    bodyptr bodytabtmp = NULL;
+    stream outstr = NULL;
     long npixel, nside;
     char order1[10];
     char order2[10];
@@ -1144,7 +1324,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: get_fits_size failed for '%s' status=%d",
                  routineName, filename, hp_status);
-        return FAILURE;
+        { rc = FAILURE; goto cleanup; }
     }
     
     verb_print(cmd->verbose,
@@ -1157,12 +1337,17 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: read_healpix_map failed for '%s' status=%d",
                  routineName, filename, hp_status);
-        return FAILURE;
+        { rc = FAILURE; goto cleanup; }
+    }
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(float), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        { rc = FAILURE; goto cleanup; }
     }
     if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
                                     order1, order2, &map) == FAILURE) {
-        free(map);
-        return FAILURE;
+        free(map); map = NULL;
+        { rc = FAILURE; goto cleanup; }
     }
     
     verb_print(cmd->verbose,
@@ -1178,10 +1363,12 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                "%s: nbody = %ld...\n",
                routineName, npixel);
     if (npixel < 1)
-        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
+        { snprintf(cmd->error_message, _ERRORMSGSIZE_, "%s: npixel = %ld is absurd", routineName, npixel); rc = FAILURE; goto cleanup; }
 
-    bodyptr bodytabtmp;
-    bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
+
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)npixel, sizeof(body),
+                               "HEALPix temporary catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; { rc = FAILURE; goto cleanup; } }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)/(1024.0*1024.0),
@@ -1189,7 +1376,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 
     //B save optional RA-DEC to a file... 3-columns: RA, DEC, Kappa
     char namebuf[256];
-    stream outstr;
+
     if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)) {
         OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnameOutputFileName, "w!");
     }
@@ -1227,20 +1414,20 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                         if (out_real_mar_checked(outstr, phi, routineName,
                                                  gd->fpfnameOutputFileName,
                                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                            if (outstr != NULL) fclose(outstr);
-                            return FAILURE;
+                            if (outstr != NULL) fclose(outstr); outstr = NULL;
+                            { rc = FAILURE; goto cleanup; }
                         }
                         if (out_real_mar_checked(outstr, theta, routineName,
                                                  gd->fpfnameOutputFileName,
                                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                            if (outstr != NULL) fclose(outstr);
-                            return FAILURE;
+                            if (outstr != NULL) fclose(outstr); outstr = NULL;
+                            { rc = FAILURE; goto cleanup; }
                         }
                         if (out_real_checked(outstr, Kappa(p), routineName,
                                              gd->fpfnameOutputFileName,
                                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                            if (outstr != NULL) fclose(outstr);
-                            return FAILURE;
+                            if (outstr != NULL) fclose(outstr); outstr = NULL;
+                            { rc = FAILURE; goto cleanup; }
                         }
                     }
                     //E
@@ -1273,18 +1460,18 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                 //B
                 if (out_real_mar_checked(outstr, phi, routineName, gd->fpfnameOutputFileName,
                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                    if (outstr != NULL) fclose(outstr);
-                        return FAILURE;
+                    if (outstr != NULL) fclose(outstr); outstr = NULL;
+                        { rc = FAILURE; goto cleanup; }
                 }
                 if (out_real_mar_checked(outstr, theta, routineName, gd->fpfnameOutputFileName,
                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                    if (outstr != NULL) fclose(outstr);
-                        return FAILURE;
+                    if (outstr != NULL) fclose(outstr); outstr = NULL;
+                        { rc = FAILURE; goto cleanup; }
                 }
                 if (out_real_checked(outstr, Kappa(p), routineName, gd->fpfnameOutputFileName,
                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                    if (outstr != NULL) fclose(outstr);
-                        return FAILURE;
+                    if (outstr != NULL) fclose(outstr); outstr = NULL;
+                        { rc = FAILURE; goto cleanup; }
                 }
                 //E
             }
@@ -1357,7 +1544,13 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "HEALPix input '%s': no pixels selected", filename);
+        free(map); map = NULL; free(bodytabtmp); bodytabtmp = NULL; { rc = FAILURE; goto cleanup; }
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "HEALPix catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; free(bodytabtmp); bodytabtmp = NULL; { rc = FAILURE; goto cleanup; } }
     gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
@@ -1397,12 +1590,14 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         // leading ! to allow overwrite
         if (format_checked(fileforce, sizeof(fileforce),
             "fileforce", "!%s/%s", cmd->rootDir, file) != 0)
-            return FAILURE;
+            { rc = FAILURE; goto cleanup; }
         //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
-        map = (float *)malloc(npixel*sizeof(float));
+        if (cballs_malloc_checked((void **)&map, (size_t)npixel, sizeof(float),
+                                   "HEALPix export", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+            { rc = FAILURE; goto cleanup; }
         for(ipix=0;ipix<npixel;ipix++){             // all pixels in
                                                     //  the sphere are filled
             q = bodytabtmp+ipix;
@@ -1422,7 +1617,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "%s: write_healpix_map failed for '%s' status=%d",
                      routineName, fileforce, hp_status);
-            return FAILURE;
+            { rc = FAILURE; goto cleanup; }
         }
         
         fprintf(stdout,"\t\tfile written\n");
@@ -1461,8 +1656,9 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     rc = SUCCESS;
 
 cleanup:
-    if (map != NULL) free(map);
-    if (bodytabtmp != NULL) free(bodytabtmp);
+    if (outstr != NULL) fclose(outstr);
+    if (map != NULL) free(map); map = NULL;
+    if (bodytabtmp != NULL) free(bodytabtmp); bodytabtmp = NULL;
 
     return rc;
 
@@ -1485,13 +1681,16 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
     double thetamin, thetamax;
     double phimin, phimax;
 
-    float *map;
+    float *map = NULL;
+    bodyptr bodytabtmp = NULL;
+    stream outstr = NULL;
     long npixel, nside;
     char order1[10];
     char order2[10];
     char coord[10];
 
     int hp_status;
+    int rc = FAILURE;
 
     verb_print(cmd->verbose, "\nWorking 2D map...\n");
 
@@ -1500,7 +1699,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: get_fits_size failed for '%s' status=%d",
                  routineName, filename, hp_status);
-        return FAILURE;
+        { rc = FAILURE; goto cleanup; }
     }
     
     verb_print(cmd->verbose,
@@ -1512,12 +1711,17 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: read_healpix_map failed for '%s' status=%d",
                  routineName, filename, hp_status);
-        return FAILURE;
+        { rc = FAILURE; goto cleanup; }
+    }
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(float), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        { rc = FAILURE; goto cleanup; }
     }
     if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
                                     order1, order2, &map) == FAILURE) {
-        free(map);
-        return FAILURE;
+        free(map); map = NULL;
+        { rc = FAILURE; goto cleanup; }
     }
 
     verb_print(cmd->verbose,
@@ -1528,17 +1732,19 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                "%s: nbody = %ld...\n",
                routineName, npixel);
     if (npixel < 1)
-        cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
+        { snprintf(cmd->error_message, _ERRORMSGSIZE_, "%s: npixel = %ld is absurd", routineName, npixel); rc = FAILURE; goto cleanup; }
 
-    bodyptr bodytabtmp;
-    bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
+
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)npixel, sizeof(body),
+                               "HEALPix temporary catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; { rc = FAILURE; goto cleanup; } }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)*INMB, npixel);
 
     //B save optional RA-DEC to a file... 3-columns: RA, DEC, Kappa
     char namebuf[256];
-    stream outstr;
+
     if (scanopt(cmd->options, "save-ra-dec")&&!strnull(cmd->outfile)) {
         OPEN_OUTPUT_OR_FAIL(outstr, gd->fpfnameOutputFileName, "w!");
     }
@@ -1579,19 +1785,19 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                         //B
                         if (out_real_mar_checked(outstr, Pos(p)[0], routineName, gd->fpfnameOutputFileName,
                             cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                            if (outstr != NULL) fclose(outstr);
-                                return FAILURE;
+                            if (outstr != NULL) fclose(outstr); outstr = NULL;
+                                { rc = FAILURE; goto cleanup; }
                         }
                         if (out_real_mar_checked(outstr, Pos(p)[1], routineName, gd->fpfnameOutputFileName,
                             cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                            if (outstr != NULL) fclose(outstr);
-                                return FAILURE;
+                            if (outstr != NULL) fclose(outstr); outstr = NULL;
+                                { rc = FAILURE; goto cleanup; }
                         }
                         if (out_real_checked(outstr, Kappa(p), routineName,
                                              gd->fpfnameOutputFileName,
                             cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                            if (outstr != NULL) fclose(outstr);
-                                return FAILURE;
+                            if (outstr != NULL) fclose(outstr); outstr = NULL;
+                                { rc = FAILURE; goto cleanup; }
                         }
                         //E
                     }
@@ -1627,18 +1833,18 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                 if (out_real_mar_checked(outstr, Pos(p)[0], routineName,
                                          gd->fpfnameOutputFileName,
                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                    if (outstr != NULL) fclose(outstr);
-                        return FAILURE;
+                    if (outstr != NULL) fclose(outstr); outstr = NULL;
+                        { rc = FAILURE; goto cleanup; }
                 }
                 if (out_real_mar_checked(outstr, Pos(p)[1], routineName, gd->fpfnameOutputFileName,
                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                    if (outstr != NULL) fclose(outstr);
-                        return FAILURE;
+                    if (outstr != NULL) fclose(outstr); outstr = NULL;
+                        { rc = FAILURE; goto cleanup; }
                 }
                 if (out_real_checked(outstr, Kappa(p), routineName, gd->fpfnameOutputFileName,
                     cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
-                    if (outstr != NULL) fclose(outstr);
-                        return FAILURE;
+                    if (outstr != NULL) fclose(outstr); outstr = NULL;
+                        { rc = FAILURE; goto cleanup; }
                 }
                 //E
             }
@@ -1693,7 +1899,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
 #endif
     //E
 
-    free(map);
+    free(map); map = NULL;
     verb_print(cmd->verbose,
                "\nFreed %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)*INMB, npixel);
@@ -1703,7 +1909,13 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "HEALPix input '%s': no pixels selected", filename);
+        free(map); map = NULL; free(bodytabtmp); bodytabtmp = NULL; { rc = FAILURE; goto cleanup; }
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "HEALPix catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; free(bodytabtmp); bodytabtmp = NULL; { rc = FAILURE; goto cleanup; } }
     gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
@@ -1736,12 +1948,14 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         // leading ! to allow overwrite
         if (format_checked(fileforce, sizeof(fileforce),
             "fileforce", "!%s/%s", cmd->rootDir, file) != 0)
-            return FAILURE;
+            { rc = FAILURE; goto cleanup; }
         //E
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
-        map = (float *)malloc(npixel*sizeof(float));
+        if (cballs_malloc_checked((void **)&map, (size_t)npixel, sizeof(float),
+                                   "HEALPix export", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+            { rc = FAILURE; goto cleanup; }
         for(ipix=0;ipix<npixel;ipix++){             // all pixels in
                                                     //  the sphere are filled
             q = bodytabtmp+ipix;
@@ -1756,7 +1970,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
         hp_status = write_healpix_map_status(map, nside, fileforce, 0, "C");
         fprintf(stdout,"\t\tfile written\n");
-        free(map);
+        free(map); map = NULL;
     }
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -1766,7 +1980,7 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
                           "\t%s: min and max of y = %f %f\n",
                           routineName, ymin, ymax);
 
-    free(bodytabtmp);
+    free(bodytabtmp); bodytabtmp = NULL;
     verb_print(cmd->verbose,
             "\nFreed %g MByte for temporal particle (%ld) storage.\n",
             npixel*sizeof(body)*INMB,npixel);
@@ -1783,9 +1997,13 @@ local int inputdata_cfitsio_healpix_map(struct cmdline_data* cmd,
             "%s: average of kappa (%ld particles) = %le\n",
                routineName, cmd->nbody, kavg/((real)cmd->nbody) );
 
-//    free(map);
+//    free(map); map = NULL;
 
     return SUCCESS;
+cleanup:
+    if (outstr != NULL) fclose(outstr);
+    free(map); free(bodytabtmp);
+    return rc;
 }
 
 #endif // !  THREEDIMCODE
@@ -1840,9 +2058,14 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
                  routineName, filename, hp_status);
         return FAILURE;
     }
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(float), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        return FAILURE;
+    }
     if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
                                     order1, order2, &map) == FAILURE) {
-        free(map);
+        free(map); map = NULL;
         return FAILURE;
     }
     verb_print(cmd->verbose,
@@ -1855,12 +2078,12 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
 
     //B
     if (npixel < 1) {
-        free(map);
+        free(map); map = NULL;
         cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
     }
 
     if (npixel != gd->nbodyTable[gd->iCatalogs[0]]) {
-        free(map);
+        free(map); map = NULL;
         cBALLS_FAIL(cmd,
             "%s: npixel = %ld is not equal to npixel in cat 0: %ld\n",
             routineName, npixel, gd->nbodyTable[gd->iCatalogs[0]]);
@@ -1874,13 +2097,18 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
         coordinate_transformation(cmd, gd, theta, phi, q);
         DO_COORD(k) {
             if (Pos(p)[k] != q[k]) {
-                free(map);
+                free(map); map = NULL;
                 cBALLS_FAIL(cmd, "%s: mask position is not equal: %g %g\n",
                             routineName, Pos(p)[k], q[k]);
             }
         }
 
-        Mask(p) = map[ipix];
+        if (map[ipix] != 0.0f && map[ipix] != 1.0f) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "HEALPix mask '%s': pixel %ld must be 0 or 1", filename, ipix + 1);
+            free(map); map = NULL; return FAILURE;
+        }
+        Mask(p) = (short)map[ipix];
         if (Mask(p) == 0) {
             iselect++;
         }
@@ -1893,7 +2121,7 @@ local int inputdata_cfitsio_healpix_map_mask(struct cmdline_data* cmd,
         "\t%s: unmasked pixels = %ld\n",
                routineName, gd->nbodyTable[gd->iCatalogs[0]]-iselect);
     
-    free(map);
+    free(map); map = NULL;
 
     return SUCCESS;
 }
@@ -1957,6 +2185,11 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
                  routineName, filename, hp_status);
         goto fail;
     }
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(float), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        return FAILURE;
+    }
     if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
                                     order1, order2, &map) == FAILURE)
         goto fail;
@@ -1976,7 +2209,9 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
                "%s: nbody = %ld...\n",
                routineName, npixel);
 
-    bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)npixel, sizeof(body),
+                               "HEALPix temporary catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; return FAILURE; }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)*INMB,
@@ -2102,7 +2337,13 @@ local int inputdata_cfitsio_healpix_map_mask_inside(struct cmdline_data* cmd,
         goto fail;
     }
     //E
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "HEALPix input '%s': no pixels selected", filename);
+        free(map); map = NULL; free(bodytabtmp); return FAILURE;
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "HEALPix catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; free(bodytabtmp); return FAILURE; }
     gd->bodytable_allocated = TRUE;
     bodytable_owned = TRUE;
 
@@ -2213,7 +2454,7 @@ fail:
     if (plot_map != NULL)
         free(plot_map);
     if (map != NULL)
-        free(map);
+        free(map); map = NULL;
     if (bodytabtmp != NULL)
         free(bodytabtmp);
     if (bodytable_owned && bodytable[ifile] != NULL) {
@@ -2314,10 +2555,12 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     double thetamin, thetamax;
     double phimin, phimax;
 
-    double *map;
+    double *map = NULL;
+    float *mapout = NULL;
+    bodyptr bodytabtmp = NULL;
     long npixel, nside;
     string order = "RING";
-    FILE *fp;
+    FILE *fp = NULL;
     
     int hp_status;
 
@@ -2335,16 +2578,42 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     verb_print(cmd->verbose,
         "%s %d %ld %ld %s\n", filename, ifile, nside, npixel, order);
 
-    fp = stropen(filename, "rb");       // open numpy file
-    map=(double *)malloc(sizeof(double)*npixel);
+    if (npixel < 1 || nside < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: invalid HEALPix pixel count in '%s'", routineName, filename);
+        goto cleanup_failure;
+    }
+    if (stropen_checked(filename, "rb", &fp, cmd->error_message,
+                         _ERRORMSGSIZE_) == FAILURE)
+        goto cleanup_failure;
+    if (cballs_malloc_checked((void **)&map, (size_t)npixel, sizeof(double),
+                              "NumPy HEALPix map", cmd->error_message, _ERRORMSGSIZE_) == FAILURE) {
+        fclose(fp); fp = NULL;
+        goto cleanup_failure;
+    }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(double)*INMB,
                npixel);
-    for(j=0;j<npixel;j++){
-        fread(&map[j], sizeof(double), 1, fp);
+    if (fread(map, sizeof(double), (size_t)npixel, fp) != (size_t)npixel) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: truncated or unreadable map '%s'", routineName, filename);
+        fclose(fp); fp = NULL; free(map); map = NULL;
+        goto cleanup_failure;
     }
-    fclose(fp);             // close numpy file.
+    if (fclose(fp) != 0) {
+        fp = NULL;
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "%s: close error for '%s'", routineName, filename);
+        free(map); map = NULL;
+        goto cleanup_failure;
+    }
+    fp = NULL;
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(double), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        goto cleanup_failure;
+    }
 
     verb_print(cmd->verbose,
                "%s: nbody = %ld...\n",
@@ -2352,8 +2621,10 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     if (npixel < 1)
         cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
 
-    bodyptr bodytabtmp;
-    bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
+
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)npixel, sizeof(body),
+                               "HEALPix temporary catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; goto cleanup_failure; }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)*INMB,
@@ -2451,7 +2722,7 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
 #endif
     //E
 
-    free(map);
+    free(map); map = NULL;
     verb_print(cmd->verbose,
                "\nFreed %g MByte for temporal map pixel (%ld) storage.\n",
                npixel*sizeof(float)/(1024.0*1024.0),
@@ -2462,7 +2733,13 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
     cmd->nbody = iselect;
 
     gd->nbodyTable[ifile] = cmd->nbody;
-    bodytable[ifile] = (bodyptr) allocate(cmd->nbody * sizeof(body));
+    if (cmd->nbody < 1) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_, "HEALPix input '%s': no pixels selected", filename);
+        free(map); map = NULL; free(bodytabtmp); bodytabtmp = NULL; goto cleanup_failure;
+    }
+    if (cballs_calloc_checked((void **)&bodytable[ifile], (size_t)cmd->nbody, sizeof(body),
+                               "HEALPix catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; free(bodytabtmp); bodytabtmp = NULL; goto cleanup_failure; }
     gd->bodytable_allocated = TRUE;
 
     real kavg = 0;
@@ -2494,18 +2771,20 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
         }
     }
 
-    float *mapout;
+
     char file[180] = "outputmap.fits" ;
     char fileforce[180] ;
     if (scanopt(cmd->options, "plot-map-gif")) {
         // leading ! to allow overwrite
         if (format_checked(fileforce, sizeof(fileforce),
             "fileforce", "!%s/%s",cmd->rootDir, file) != 0)
-            return FAILURE;
+            goto cleanup_failure;
         verb_print(cmd->verbose,
                    "\t%s: %s %s...\n",
                    routineName, "\n\t\tsaving map to a fits file:", fileforce);
-        mapout = (float *)malloc(npixel*sizeof(float));
+        if (cballs_malloc_checked((void **)&mapout, (size_t)npixel, sizeof(float),
+                                   "HEALPix export", cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
+            goto cleanup_failure;
         for(ipix=0;ipix<npixel;ipix++){
             q = bodytabtmp+ipix;
             if(Update(q)) {
@@ -2519,15 +2798,15 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
         //      "G = Galactic, E = ecliptic, C = celestial = equatorial"
         hp_status = write_healpix_map_status(mapout, nside, fileforce, 0, "C");
         if (hp_status != 0) {
-            free(mapout);
+            free(mapout); mapout = NULL;
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "%s: write_healpix_map failed for '%s' status=%d",
                      routineName, fileforce, hp_status);
-            return FAILURE;
+            goto cleanup_failure;
         }
         
         fprintf(stdout,"\t\tfile written\n");
-        free(mapout);
+        free(mapout); mapout = NULL;
     }
 
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
@@ -2540,7 +2819,7 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
                           "\t%s: min and max of z = %f %f\n",
                           routineName, zmin, zmax);
 
-    free(bodytabtmp);
+    free(bodytabtmp); bodytabtmp = NULL;
     verb_print(cmd->verbose,
             "\nFreed %g MByte for temporal particle (%ld) storage.\n",
             npixel*sizeof(body)*INMB,npixel);
@@ -2558,6 +2837,10 @@ local int inputdata_numpy_healpix_map(struct cmdline_data* cmd,
                routineName, cmd->nbody, kavg/((real)cmd->nbody) );
 
     return SUCCESS;
+cleanup_failure:
+    if (fp != NULL) fclose(fp);
+    free(map); free(mapout); free(bodytabtmp);
+    return FAILURE;
 }
 
 // reading numpy-healpix mask map
@@ -2611,9 +2894,14 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
                  routineName, filename, hp_status);
         return FAILURE;
     }
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(float), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        return FAILURE;
+    }
     if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
                                     order1, order2, &map) == FAILURE) {
-        free(map);
+        free(map); map = NULL;
         return FAILURE;
     }
     verb_print(cmd->verbose,
@@ -2624,12 +2912,12 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
     verb_print(cmd->verbose, "%s: nbody = %ld...\n",
                routineName, npixel);
     if (npixel < 1) {
-        free(map);
+        free(map); map = NULL;
         cBALLS_FAIL(cmd, "%s: npixel = %ld is absurd\n", routineName, npixel);
     }
 
     if (npixel != gd->nbodyTable[gd->iCatalogs[0]]) {
-        free(map);
+        free(map); map = NULL;
         cBALLS_FAIL(cmd,
             "%s: npixel = %ld is not equal to npixel in cat 0: %ld\n",
             routineName, npixel, gd->nbodyTable[gd->iCatalogs[0]]);
@@ -2642,13 +2930,18 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
         coordinate_transformation(cmd, gd, theta, phi, q);
         DO_COORD(k) {
             if (Pos(p)[k] != q[k]) {
-                free(map);
+                free(map); map = NULL;
                 cBALLS_FAIL(cmd, "%s: mask position is not equal: %g %g\n",
                             routineName, Pos(p)[k], q[k]);
             }
         }
 
-        Mask(p) = map[ipix];
+        if (map[ipix] != 0.0f && map[ipix] != 1.0f) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "HEALPix mask '%s': pixel %ld must be 0 or 1", filename, ipix + 1);
+            free(map); map = NULL; return FAILURE;
+        }
+        Mask(p) = (short)map[ipix];
         if (Mask(p) == 0) {
             iselect++;
         }
@@ -2661,7 +2954,7 @@ local int inputdata_numpy_healpix_map_mask(struct cmdline_data* cmd,
         "\t%s: unmasked pixels = %ld\n",
                routineName, gd->nbodyTable[gd->iCatalogs[0]]-iselect);
     
-    free(map);
+    free(map); map = NULL;
 
     return SUCCESS;
 }
@@ -2722,6 +3015,11 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
                  routineName, filename, hp_status);
         goto cleanup;
     }
+    if (cballs_input_finite_array(cmd, filename, map, (size_t)npixel,
+                                  sizeof(float), "HEALPix pixel") == FAILURE) {
+        free(map); map = NULL;
+        return FAILURE;
+    }
     if (cfitsio_healpix_map_to_ring(cmd, routineName, nside,
                                     order1, order2, &map) == FAILURE)
         goto cleanup;
@@ -2739,7 +3037,9 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
         goto cleanup;
     }
 
-    bodytabtmp = (bodyptr) allocate(npixel * sizeof(body));
+    if (cballs_calloc_checked((void **)&bodytabtmp, (size_t)npixel, sizeof(body),
+                               "HEALPix temporary catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) { free(map); map = NULL; return FAILURE; }
     verb_print(cmd->verbose,
                "\nAllocated %g MByte for temporal particle (%ld) storage.\n",
                npixel*sizeof(body)*INMB,
@@ -2855,7 +3155,9 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
                  "%s: no pixels selected from '%s'", routineName, filename);
         goto cleanup;
     }
-    selected_bodies = (bodyptr) allocate(iselect * sizeof(body));
+    if (cballs_calloc_checked((void **)&selected_bodies, (size_t)iselect, sizeof(body),
+                               "HEALPix selected catalog", cmd->error_message,
+                               _ERRORMSGSIZE_) == FAILURE) goto cleanup;
 
     real kavg = 0;
     INTEGER ij=0;
@@ -2958,7 +3260,7 @@ local int inputdata_numpy_healpix_map_mask_inside(struct cmdline_data* cmd,
 
 cleanup:
     free(plot_map);
-    free(map);
+    free(map); map = NULL;
     free(bodytabtmp);
     free(selected_bodies);
     return status;

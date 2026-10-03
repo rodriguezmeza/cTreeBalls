@@ -1,0 +1,28 @@
+/* MPI specialization of the full-sky shear two-ball estimator. */
+#define OCTREE_SHEAR_SPHERICAL 1
+#define SHEAR_SPHERE_FAST_KERNEL 1
+#define SHEAR_SPHERE_BINARY_TWO_BALLS 1
+#define SHEAR_SPHERE_BINARY_GEODESIC_PAIRS 1
+#define SHEAR_SPHERE_BINARY_POSITIONS_UNIT 1
+#ifdef BALLS4SCANLEV
+#define SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER 1
+#endif
+#define SHEAR_SPHERE_BINARY_TREE_HEADER "fcfc_balltree.h"
+#define SHEAR_SPHERE_BINARY_TREE_BUILD fcfc_balltree_build_shear_sphere
+#define SHEAR_SPHERE_BINARY_TREE_FRONTIER fcfc_balltree_frontier
+#define SHEAR_SPHERE_BINARY_TREE_FREE fcfc_balltree_free
+#define SHEAR_MPI_ENABLED 1
+#define SHEAR_MPI_HELPER_HEADER "fcfc_balltree_shear_sphere_2balls_mpi.h"
+#define SHEAR_MPI_REDUCE_REALS fcfc_balltree_shear_sphere_2balls_mpi_reduce_reals
+#define SHEAR_MPI_REDUCE_INTEGERS fcfc_balltree_shear_sphere_2balls_mpi_reduce_integers
+#define SHEAR_MPI_TASK_OWNED fcfc_balltree_shear_sphere_2balls_mpi_task_owned
+#define SHEAR_MPI_IS_ROOT fcfc_balltree_shear_sphere_2balls_mpi_is_root
+#define SHEAR_MPI_CONSENSUS fcfc_balltree_shear_sphere_2balls_mpi_consensus
+#define SHEAR_MPI_RANK fcfc_balltree_shear_sphere_2balls_mpi_rank
+#define SHEAR_MPI_SIZE fcfc_balltree_shear_sphere_2balls_mpi_size
+#define SHEAR_ENGINE_NAME "balltree-shear-sphere-2balls-mpi"
+#define prepare_octree_shear_catalogs \
+    prepare_balltree_shear_sphere_2balls_mpi_catalogs
+#define searchcalc_octree_shear_omp \
+    searchcalc_balltree_shear_sphere_2balls_mpi
+#include "../../support/shear_kernel/search_octree_shear_omp.c"

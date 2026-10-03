@@ -1,7 +1,7 @@
 Capabilities and Validation
 ===========================
 
-The public catalogue, ``capabilities/engines.json``, declares the 35 active
+The public catalogue, ``capabilities/engines.json``, declares the 34 active
 search names, stable IDs, compile conditions, aliases, estimator descriptions
 and regression ownership. Inactive addon declarations are not distributed.
 Required shared internal kernels do not register extra search methods.
