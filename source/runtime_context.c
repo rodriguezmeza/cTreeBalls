@@ -17,8 +17,8 @@
 //
 
 #include "globaldefs.h"
-#include "tree_contracts.h"
-#include "resource_contracts.h"
+#include "tree_checks.h"
+#include "resource_checks.h"
 #include "../support/pca_tree/fcfc_balltree.h"
 
 #include <limits.h>
@@ -333,11 +333,11 @@ void cballs_runtime_clear_caches(cballs_runtime_state *state)
 }
 void cballs_runtime_clear_results(cballs_runtime_state *state)
 {
-    for (int i=0;i<8;i++) { free(state->results[i].data); memset(&state->results[i],0,sizeof(state->results[i])); }
+    for (int i=0;i<32;i++) { free(state->results[i].data); memset(&state->results[i],0,sizeof(state->results[i])); }
 }
 size_t cballs_runtime_result_bytes(const cballs_runtime_state *state)
 {
-    size_t total=0; for(int i=0;i<8;i++) total+=state->results[i].bytes; return total;
+    size_t total=0; for(int i=0;i<32;i++) total+=state->results[i].bytes; return total;
 }
 void cballs_runtime_retain_results(cballs_runtime_state *state,int enabled) {state->retain_results=enabled;}
 void cballs_result_adopt(const char *name,void **data,int kind,int rank,const size_t *shape)
@@ -345,7 +345,7 @@ void cballs_result_adopt(const char *name,void **data,int kind,int rank,const si
     cballs_runtime_state *state=cballs_runtime_current();
     if (!state->retain_results || !*data) return;
     cballs_result_array *a=NULL;
-    for(int i=0;i<8;i++) if(!state->results[i].data) {a=&state->results[i];break;}
+    for(int i=0;i<32;i++) if(!state->results[i].data) {a=&state->results[i];break;}
     if(!a || rank<1 || rank>5 || kind<0 || kind>2)
         cballs_resource_failure("invalid native result ownership request");
     size_t count=1,bytes;
@@ -357,7 +357,7 @@ void cballs_result_adopt(const char *name,void **data,int kind,int rank,const si
     memcpy(a->shape,shape,rank*sizeof(size_t));a->data=*data;*data=NULL;
 }
 const cballs_result_array *cballs_result_at(const cballs_runtime_state *state,int index)
-{return index>=0 && index<8 && state->results[index].data ? &state->results[index] : NULL;}
+{return index>=0 && index<32 && state->results[index].data ? &state->results[index] : NULL;}
 double cballs_result_value(const cballs_result_array *a,size_t i)
 {return a->kind==1?(double)((long double*)a->data)[i]:a->kind==2?(double)((uint64_t*)a->data)[i]:(double)((REAL*)a->data)[i];}
 uint64_t cballs_result_count_value(const cballs_result_array *a,size_t i) {return ((uint64_t*)a->data)[i];}

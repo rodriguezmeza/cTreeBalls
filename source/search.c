@@ -391,7 +391,9 @@ local void normal_walktree_sincos(struct  cmdline_data* cmd,
                     && Mask(q) == MASK_NODE_MASKED)
                     return;
                 if (!reject_cell(cmd, gd, (nodeptr)p, q, qsize)) {
-                    if (!cballs_opt_no_one_ball(cmd)) {
+                    /* Pruning recomputes finite cell bounds even at theta=0.
+                     * Enforce the exact limit explicitly before phase aggregation. */
+                    if (cmd->theta > 0.0 && !cballs_opt_no_one_ball(cmd)) {
                         accept_body(cmd, gd, p, (nodeptr)q, &dr1, dr);
                         if (cmd->useLogHist) {
                             if (cballs_opt_behavior_ball(cmd)) {

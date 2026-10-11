@@ -4,7 +4,7 @@ This independent addon computes full-sky spin-2 `xi+`, `xi-`, and Gamma-x
 multipole estimators. Neighbor shears are
 parallel transported along great circles into the pivot tangent frame.
 
-Its 2PCF uses a dual-node-style dual-node traversal over the native
+Its 2PCF uses a dual-node traversal over the native
 cTreeBalls octree. For nodes of radii `s1` and `s2` at chord distance `d`, the
 production path accepts their aggregate shear when their combined angular
 extent is within the radial-bin and spin-phase tolerance. Otherwise it splits
@@ -13,7 +13,7 @@ the larger node; comparable nodes may both split using dual-node's empirical
 body-pair fallback.
 
 The 3PCF retains the spherical LogMultipole tree scan. This preserves the
-existing cTreeBalls radial-multipole result contract rather than changing to
+existing cTreeBalls radial-multipole result definition rather than changing to
 the paper's `(r,u,v)` triangle histogram. Approximate combined 2PCF+3PCF runs
 retain a separate dual-node pair pass because pair and ring acceptance differ.
 When `no-one-ball` is set or `theta=0`, the combined run instead accumulates
@@ -27,8 +27,7 @@ histogram in spatial order under a 256 MiB memory cap.
 
 `options=shear-pivot-reuse,no-smooth-pivot,only-3pcf` enables an experimental
 3PCF traversal in this OpenMP addon with `BALLS4SCANLEVON=1`. It is off by
-default. The ball-tree OpenMP addon also implements this option; the KD-tree
-and MPI addons do not. Calibrate each tree implementation separately.
+default. The octree, KD-tree and ball-tree OpenMP and MPI addons implement this option. Calibrate each tree implementation separately.
 
 Each pivot cell resolves neighbors that are safe for every member pivot and
 passes only the unresolved nodes to its children. Accepted partial multipoles
@@ -39,10 +38,12 @@ uses the cell's weighted pivot shear and weight instead of visiting its bodies.
 Distinct-neighbor second moments and window multipoles follow the same reuse.
 The separate 2PCF path is unchanged, including in a combined run.
 
-Set `CBALLS_SHEAR_PIVOT_TOL` to a finite value in `[0,3]` (default `0.1`). This
+Set `CBALLS_SHEAR_PIVOT_TOL` to a finite value in `[0,3]` (default `3`). This
 is a **phase budget in radians**, not a percentage tolerance on the result.
-Zero disables the new traversal. Acceptance requires full radial-bin
-containment for the combined pivot/neighbor extent. The phase budget includes
+Zero disables the new traversal. With `CBALLS_SHEAR_BIN_THETA=0`, acceptance
+requires full radial-bin containment for the combined pivot/neighbor extent.
+The shipped value 0.5 permits internal bin slop while keeping the minimum
+and maximum separation cutoffs strict. The phase budget includes
 the highest stored ring order, the spherical bearing derivative, a holonomy
 allowance for changing the transport path, and the stored cell transport
 errors. Caps touching zero or antipodal separation are subdivided. Accepted
@@ -117,8 +118,8 @@ two-ball-only build.
 
 Build with `OCTREESHEARSPHERE2BALLSOMPON=1`. The addon supports `only-2pcf`,
 `only-3pcf`, masks, shear edge correction, `SMOOTHPIVOTON`, and
-`BALLS4SCANLEVON`. Smoothing is enabled by default when compiled; use
-`options=no-smooth-pivot` to enable the dual-node 2PCF path. A smoothed run
+`BALLS4SCANLEVON`. Smoothing is off by default; enable it with `options=smooth-pivot`.
+Use `options=no-smooth-pivot` explicitly to select the unsmoothed dual-node 2PCF path. A smoothed run
 uses representative body pivots because dual-node traversal has no unique
 pivot ownership. Its literal radius must satisfy `2*rsmooth <= rminHist`; an
 automatically selected radius is capped at this bound so smooth groups cannot
@@ -131,11 +132,45 @@ rotation, and merges tasks deterministically.
 The split heuristic is adapted from dual-node, copyright Mike Jarvis, under
 dual-node's BSD-style license.
 
+## Parallel tree preparation
+
+For spherical shear catalogues with at least 16384 objects, spatial construction
+partitions body pointers by octant and builds independent branches with OpenMP
+tasks. Branches of at most 8192 objects use direct local insertion. The original
+catalogue order, octant topology, cell positions, and child summation order are
+preserved. Two temporary pointer arrays require `2*N*sizeof(bodyptr)` bytes;
+small catalogues and random duplicate-position perturbation retain the original
+serial insertion path. Worker allocation failures are reported after tasks join,
+so partial trees remain available to ordinary cleanup.
+
+Spherical cell geometry and transported spin moments also use branch tasks,
+then combine children in the original order. This applies within each MPI rank.
+Generic cell diagnostics, threading, scan preparation and pruning remain serial.
+`CBALLS_SHEAR_PROFILE=1` reports `SHEAR_TREE_BUILD` spatial and total native-tree
+wall times and `spherical_moments` wall time separately from the search profile.
+`nsmooth` does not change the octree's single-body leaves.
+
+On a one-million-object DES-Y3 Takahashi sample (r002/bin1/region1,
+seed 8675309, unit weights, signal order 7, window order 14 and 16 threads),
+four interleaved runs per version did not establish an overall speedup:
+median correlation time was 25.79 s before and 25.75 s after; the means were
+25.37 s and 25.76 s. All output arrays were bitwise identical. Most time is
+spent in neighbor traversal and ring contraction, so parallel construction
+has a limited effect on this sample. Full-catalogue scaling was not measured.
+
+With phase tolerance 3 and radial allowance 0.5, errors against exact sums
+were 2.61% for raw multipoles and 1.63% after edge correction; corrected order
++/-7 reached 6.20%. A radial-0.2 trial took 35.52 s and reduced corrected
+global error to 0.435%, with 1.81% at the worst order. These sample relative
+L2 errors do not guarantee a bound for every coefficient or another catalogue.
+
 ## Performance and accuracy checks
 
-Run `make test-shear-sphere-2balls` for the numerical oracle, deterministic
+Run `make test-shear-sphere-2balls` for the numerical reference calculation, deterministic
 threads, masked cross-catalog/order checks, bin-boundary differential test,
-and experimental reuse regressions. The bin test compiles the actual radial
+and experimental reuse regressions. The construction tests also cover large
+masked and unbalanced catalogues, split planes, repeated cross-catalog roles,
+one/four-thread identity, duplicate rejection and allocation-failure recovery. The bin test compiles the actual radial
 helper with and without the optimization and compares millions of ordinary,
 edge-ULP, guard-transition, and fallback classifications.
 
@@ -181,27 +216,30 @@ both legs are complete; diagonal self-neighbor subtraction is retained.
 
 The option is off by default and requires `no-smooth-pivot`, positive `theta`,
 full pivot coverage, and `BALLS4SCANLEVON=1`. Exact controls and smoothing retain
-the body-pivot fallback. MPI shear methods continue to reject this experimental
-option. The independent 2PCF pass retains its own acceptance rules.
+the body-pivot fallback. The octree, KD-tree and ball-tree MPI shear methods also support this
+option; controls must agree across ranks. The independent 2PCF pass retains its own acceptance rules.
 
-- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `0.1`.
+- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `3`.
 - `CBALLS_SHEAR_BIN_THETA`: internal radial-bin assignment allowance, finite `[0,1]`
-  bin widths, default `0`. Zero requires complete containment inside a bin.
+  bin widths, default `0.5`. Zero requires complete containment inside a bin.
   Positive values allow center-based assignment when the combined cap radius
   fits within the selected fraction of the local bin width. The minimum and
   maximum separation cuts remain strict. This is not an exact translation of
   dual node's bin-slop rule.
-- `nsmooth=1`: exposes finer pivot groups in the KD and PCA ball trees. It increases
+- `nsmooth` defaults to `8` in native cballs and the active Python drivers.
+  `nsmooth=1` exposes finer pivot groups in the KD and PCA ball trees. It increases
   tree storage and can improve reuse; the octree already has individual-body leaves.
 
 For a performance/accuracy trial through the Python drivers, add
-`--nsmooth 1 --more-options shear-pivot-reuse` and explicitly set the two environment
-controls, for example `CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
+`--more-options shear-pivot-reuse` with the shipped defaults
+`CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
+A tighter radial allowance such as `0.05` remains an explicit choice. Both defaults can be changed with `?=` assignments in
+`addons/Makefile_addons_settings` or overridden by the runtime environment.
 These are approximate trial settings, not an accuracy guarantee. Compare raw
 numerators, windows, and corrected complex multipoles against an exact reference
 for the actual catalog. Poorly conditioned windows can amplify small raw errors.
 
-Native provenance records `shear_hierarchical_reuse.enabled`,
+Native run information records `shear_hierarchical_reuse.enabled`,
 `phase_budget_radians`, and `radial_bin_slop` from the completed run. With
 `CBALLS_SHEAR_PROFILE=1`, `radial_pairs` counts actual radial-pair combinations,
 `represented_pairs` counts the equivalent individual-pivot combinations, and

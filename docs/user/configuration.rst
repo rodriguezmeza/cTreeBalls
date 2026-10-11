@@ -25,8 +25,8 @@ Important Controls
     This is not a blanket float32 histogram build. Validate numerical errors.
 
 ``SMOOTHPIVOTON``
-    Compile and enable pivot smoothing by default on supported engines. Use
-    ``options=no-smooth-pivot`` to disable it. Unsupported engines remain
+    Compile pivot smoothing support without enabling it. Use
+    ``options=smooth-pivot`` to select the smoothed estimator. Unsupported engines remain
     unsmoothed and reject an explicit ``options=smooth-pivot`` request.
 
 ``CLASSLIBON`` / ``PXDON``
@@ -39,7 +39,7 @@ Important Controls
 
 ``OPTFLAG``
     The source profile uses ``-O3 -fno-fast-math``. Do not assume historical
-    ``-ffast-math`` instructions preserve the numerical contract.
+    ``-ffast-math`` instructions preserve the numerical definition.
 
 ``PYTHON``
     Interpreter used by Make's Python targets. Select the same environment

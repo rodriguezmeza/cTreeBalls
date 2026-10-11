@@ -13,6 +13,7 @@
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
 #include "lya_forest_parallel.h"
+#include "lya_progress.h"
 #include "lya_forest_los_tree.h"
 
 #include <errno.h>
@@ -860,6 +861,12 @@ setup_done:
             (double)cmd->lyaPivotRadius,(double)frontier.max_radius,CPUTIME-start);
     }
 
+    lya_progress progress;
+    lya_progress_init(&progress, cmd, gd,
+        legacy2 && compute_3pcf ? "2PCF+3PCF pivot blocks" :
+        (compute_3pcf ? "3PCF pivot blocks" : "2PCF pivot blocks"),
+        lya_progress_local_tasks((size_t)blocks, (size_t)first_task, (size_t)task_stride));
+
 #pragma omp parallel shared(allocation_failed,worker_error,num2,den2,num3,den3,accepted_visits,pair_count,ordered_triplet_count)
     {
         lya_worker_hist worker;
@@ -981,6 +988,7 @@ setup_done:
                     accepted_visits += worker.accepted_visits;
                     pair_count += worker.pair_count;
                     ordered_triplet_count += worker.ordered_triplet_count;
+                    lya_progress_step(&progress);
                 }
             }
         }
@@ -1003,6 +1011,8 @@ setup_done:
             lya_los_workspace_free(&los_workspace);
         }
     }
+
+    lya_progress_finish(&progress, !allocation_failed);
 
 workers_done:
     if (allocation_failed) {

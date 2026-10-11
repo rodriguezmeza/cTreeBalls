@@ -9,8 +9,36 @@ import tarfile
 from release_profile import EXTERNAL_DEFAULTS, check_external_defaults
 
 REQUIRED = {
+    'scripts/acceptance_metadata.py','scripts/platform_support.py','scripts/run_support_row.py',
+    'scripts/benchmark_dedicated.py','capabilities/support_matrix.json',
+    'docs/engineering_contracts.rst','tests/test_configuration_readers.c',
+    'tests/python/test_engineering_contracts.py','tests/slurm_scripts/benchmark_dedicated.slurm',
+    'support/scalar_octree/scalar_harmonic_accumulation.h',
+    'support/scalar_octree/scalar_edge_correction.h','support/shear_kernel/shear_complex_arithmetic.h',
+    "include/legendre_window_solver.h", "include/physical_survey_config.h",
+    "python/physical_survey_api.pxi", "tests/python/test_physical_survey_semantics.py",
+    "scripts/survey_science_acceptance.py", "docs/physical_survey_semantics.rst",
+    'include/distinct_products.h', 'addons/balltree_2balls_omp/dual_node_range_safe_pairs.h',
+    'tests/python/test_exact_numerical_robustness.py', 'tests/python/test_exact_numerical_cli.py',
+    'docs/exact_numerical_robustness.rst',
+    'scripts/release_readiness.py', 'scripts/accuracy_cases.py', 'scripts/generate_accuracy_docs.py',
+    'docs/accuracy_acceptance.rst', 'tests/python/test_configuration_contracts.py',
+    'tests/python/test_release_readiness.py', 'tests/python/test_accuracy_docs.py',
+    'tests/python/test_incremental_build.py',
+    'tests/python/run_job.py', 'tests/slurm_scripts/README.md',
+    'tests/slurm_scripts/engine_jobs.json', 'tests/slurm_scripts/validate_mpi.slurm',
+    'tests/slurm_scripts/build_perlmutter.sh', 'tests/python/build_perlmutter.py',
+    'tests/python/submit_scaling.py',
+    'tests/python/check_mpi_environment.py',
+    'tests/python/test_perlmutter_jobs.py',
+    'scripts/ia_tutor.py', 'include/ia_tutor_cli.h', 'docs/ia_tutor.rst',
+    'tutor/__init__.py', 'tutor/cli.py', 'tutor/knowledge.py', 'tutor/session.py',
+    'tutor/catalog.py', 'tutor/local_model.py', 'tutor/README.md',
+    'tutor/knowledge/questions.json', 'tutor/notes/discussion_measurements.md',
+    'docs/APPROXIMATION_DEFAULTS.md', 'tests/python/test_ia_tutor.py',
     'capabilities/build_profile.json', 'scripts/generate_profile_docs.py',
-    'tests/python/benchmark_timing.py', 'tests/python/dual_node_compat.py',
+    'tests/python/benchmark_timing.py', 'tests/python/used_parameters.py',
+    'tests/python/test_used_parameters.py', 'tests/python/dual_node_compat.py',
     'support/pca_tree/Makefile_balltree_omp', 'support/kd_tree/Makefile_kdtree_omp',
     'docs/ACTIVE_PROFILE.md', 'docs/active_profile.rst',
     'scripts/release_profile.py', 'scripts/verify_sdist_install.py',
@@ -21,11 +49,11 @@ REQUIRED = {
     'tests/python/shear_fits_catalog.py', 'tests/python/shear_products.py',
     'tests/python/run_desy3_shear_catalogs.py',
     'tests/python/test_shear_fits_catalog.py',
-    'include/cli_contracts.h','python/qualification_api.pxi',
+    'include/cli_validation.h','python/qualification_api.pxi',
     'scripts/qualify_results.py','scripts/benchmark_representative.py',
-    'tests/python/test_clustered_contracts.py','tests/python/test_mpi_boundary_contracts.py','ENGINEERING_COMPLETION.md',
-    'include/input_contracts.h',
-    'tests/python/test_input_failure_contracts.py',
+    'tests/python/test_clustered_catalogs.py','tests/python/test_mpi_boundary_checks.py','ENGINEERING_COMPLETION.md',
+    'include/input_validation.h',
+    'tests/python/test_invalid_input.py',
     'RELEASE_WORK_SEQUENCE.md', 'python/resource_api.pxi', 'scripts/resource_plan.py',
     'scripts/workload_acceptance.py','scripts/benchmark_scaling.py',
     'tests/python/test_scientific_qualification.py',
@@ -50,7 +78,7 @@ REQUIRED = {
     'addons/lya_forest_omp/lya_los_moments.h',
     'tests/python/test_lya_los_hierarchy.py',
     'addons/balltree_2balls_omp/dual_node_search_policy.h',
-    'tests/python/test_release_verification_contracts.py',
+    'tests/python/test_release_verification.py',
     'tests/python/test_owned_results_resources.py',
     'tests/python/test_lya_pair_cells.py',
 
@@ -58,15 +86,15 @@ REQUIRED = {
     'source/engine_registry.c','source/runtime_context.c','source/memory_catalog.c',
     'source/common_histogram.c','source/smooth_pivots.c','source/mpi_runtime.c',
     'scripts/generate_capabilities.py','scripts/capabilities_generated.py',
-    'scripts/affected_regressions.py','scripts/benchmark_contracts.py',
+    'scripts/affected_regressions.py','scripts/benchmark_accuracy_and_timing.py',
     'tests/test_runtime_context.c','tests/test_mpi_runtime.c',
-    'tests/python/test_capability_contracts.py','ENGINE_CAPABILITIES.md','MAINTAINABILITY_CONTRACTS.md',
+    'tests/python/test_engine_capabilities.py','ENGINE_CAPABILITIES.md','DEVELOPMENT_GUIDELINES.md',
 
-    'include/resource_contracts.h', 'scripts/accuracy_acceptance.py',
-    'tests/test_resource_contracts.c', 'tests/python/test_resource_scientific_contracts.py',
-    'RESOURCE_SCIENTIFIC_CONTRACTS.md', 'PKG-INFO', 'setup.py', 'pyproject.toml', 'MANIFEST.in', 'Makefile',
+    'include/resource_checks.h', 'scripts/accuracy_acceptance.py',
+    'tests/test_resource_checks.c', 'tests/python/test_resources_and_numerical_results.py',
+    'RESOURCE_AND_NUMERICAL_CHECKS.md', 'PKG-INFO', 'setup.py', 'pyproject.toml', 'MANIFEST.in', 'Makefile', 'Makefile_tests',
     'Makefile_machine', 'Makefile_settings', 'requirements/build.txt',
-    'requirements/release.txt', 'include/tree_contracts.h',
+    'requirements/release.txt', 'include/tree_checks.h',
     'python/cyballs.pyx', 'python/ccyballs.pxd.in',
     'scripts/build_fingerprint.py', 'scripts/active_release_gate.py',
     'scripts/release_gate_case.py', 'scripts/check_installed_package.py',
@@ -86,6 +114,11 @@ REQUIRED = {
     'docs/RESULT_AVAILABILITY_AND_IDENTITY.md',
     'tests/python/test_release_packaging.py',
 }
+
+# Every registered engine has a packaged batch entry point.
+REQUIRED.update('tests/slurm_scripts/'+engine['name']+'.slurm'
+                for engine in json.loads((Path(__file__).resolve().parents[1]
+                    / 'capabilities/engines.json').read_text())['engines'])
 
 
 def inspect_archive(path):

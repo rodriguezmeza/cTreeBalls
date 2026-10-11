@@ -4,6 +4,7 @@
 No feature switches are enabled by this runner. Unknown registered methods,
 missing required MPI execution, failed commands, and missing products fail it.
 """
+from acceptance_metadata import acceptance_policy
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -75,7 +76,7 @@ class Gate:
         # Recursive make jobserver/overrides belong to the parent, not this fresh build.
         self.env.pop('MAKEFLAGS', None); self.env.pop('MFLAGS', None)
         self.env['MPLCONFIGDIR'] = str(self.scratch/'matplotlib')
-        self.report = dict(schema_version=1, status='RUNNING', source_root=str(ROOT),
+        self.report = dict(schema_version=1, acceptance_policy=acceptance_policy(), status='RUNNING', source_root=str(ROOT),
                            started_utc=datetime.now(timezone.utc).isoformat(),
                            commands=[], cases=[], comparisons=[], failures=[])
         self.save()
@@ -266,7 +267,7 @@ class Gate:
         self.check('workload-acceptance', lambda: self.command('workload-acceptance',
             [py,ROOT/'scripts/workload_acceptance.py','--output',self.out/'workload-acceptance']))
         self.check('phase-memory-accuracy-benchmark', lambda: self.command('phase-memory-accuracy-benchmark',
-            [py,ROOT/'scripts/benchmark_contracts.py','--output',self.out/'benchmarks','--repeats','2']))
+            [py,ROOT/'scripts/benchmark_accuracy_and_timing.py','--output',self.out/'benchmarks','--repeats','2']))
         binary = str(ROOT/'cballs')
         active = self.registry
         mpi = shlex.join(shlex.split(self.args.mpi_command)+['-n','2'])
@@ -274,21 +275,37 @@ class Gate:
             self.check(name + (env or {}).get('CBALLS_SHEAR_SPHERE_ENGINE',''),
                        lambda: self.command(name.replace('.py',''), [py, TESTS/name, *args], env=env))
         self.check('native-unit-contracts', lambda: self.command('native-unit-contracts',
-            ['make', 'test-parameter-parser', 'test-option-cache', 'test-healpix-ordering',
-             'test-runtime-stabilization-native', 'test-provenance-window-native', 'test-resource-contracts', 'test-runtime-context', f'PYTHON={py}'], cwd=ROOT))
+            ['make', 'test-parameter-parser', 'test-configuration-readers', 'test-parameter-file-parser', 'test-option-cache', 'test-healpix-ordering',
+             'test-runtime-stabilization-native', 'test-run-information-window-native', 'test-resource-checks', 'test-runtime-context', f'PYTHON={py}'], cwd=ROOT))
+        self.check('incremental-build', lambda: self.command('incremental-build',
+            [py, TESTS/'test_incremental_build.py']))
+        self.check('accuracy-documentation', lambda: self.command('accuracy-documentation',
+            [py, ROOT/'scripts/generate_accuracy_docs.py', '--check']))
         self.check('python-unit-contracts', lambda: self.command('python-unit-contracts', [py,'-m','pytest','-q',
             *[TESTS/name for name in ('test_p0_cython_instances.py','test_p2_cython.py',
-              'test_provenance_window.py','test_two_ball_edge_cython.py','test_kappa_corr_all_engines.py',
+              'test_run_information_and_window.py','test_two_ball_edge_cython.py','test_kappa_corr_all_engines.py',
               'test_shear_corr_all_engines.py','test_lya_corr_all_engines.py','test_release_gate.py',
               'test_cython_in_memory_catalog.py','test_p3_cython_startup.py',
-              'test_scalar_numerical_contract.py','test_clustered_contracts.py',
+              'test_physical_survey_semantics.py','test_scalar_numerical_definitions.py','test_exact_numerical_robustness.py','test_clustered_catalogs.py',
               'test_histogram_availability.py','test_effective_catalog_identity.py',
               'test_saved_scalar_edge.py','test_benchmark_timing.py',
               'test_public_profile.py','test_runtime_help_registry.py','test_dual_node_compat.py',
-              'test_release_packaging.py','test_release_verification_contracts.py','test_owned_results_resources.py','test_scientific_qualification.py','test_resource_scientific_contracts.py','test_capability_contracts.py')], '-ra', '-k','not mpi']))
+              'test_release_packaging.py','test_release_verification.py','test_configuration_contracts.py',
+              'test_release_readiness.py','test_engineering_contracts.py','test_accuracy_docs.py','test_owned_results_resources.py','test_scientific_qualification.py','test_resources_and_numerical_results.py','test_engine_capabilities.py')], '-ra', '-k','not mpi']))
         if 'lya-los-tree-2pcf-omp' in active:
             self.check('los-tree-contracts', lambda: self.command('los-tree-contracts',
                 [py, '-m', 'pytest', '-q', '-ra', TESTS/'test_lya_forest_los_tree.py', TESTS/'test_lya_triplet_acceleration.py', TESTS/'test_lya_multipole_hierarchy.py', TESTS/'test_lya_multipole_reconstruction.py', TESTS/'test_lya_cell_approximation.py', TESTS/'test_lya_pivot_frontier.py', TESTS/'test_lya_pair_cells.py']))
+        script('test_exact_numerical_cli.py','--cballs',binary)
+        if 'octree-3pcf-3d-mpi' in active:
+            for ranks in (1,2,4):
+                name=f'exact-numerics-mpi-{ranks}'
+                self.check(name,lambda n=name,r=ranks:self.command(n,
+                    shlex.split(self.args.mpi_command)+['-n',str(r),py,
+                        TESTS/'test_exact_numerical_robustness.py','--mpi']))
+                name=f'physical-survey-mpi-{ranks}'
+                self.check(name,lambda n=name,r=ranks:self.command(n,
+                    shlex.split(self.args.mpi_command)+['-n',str(r),py,
+                        TESTS/'test_physical_survey_semantics.py','--mpi']))
         scalar = [e for e in active if e in ('kdtree-2balls-omp','balltree-2balls-omp','octree-2balls-omp')]
         for engine in scalar:
             name = 'run_test_'+engine.replace('-','_')
@@ -312,6 +329,11 @@ class Gate:
         if any('shear' in e and e.endswith('-mpi') for e in active):
             script('test_shear_sphere_mpi.py', '--output', str(self.out/'shear-mpi'),
                    '--mpi-command', self.args.mpi_command)
+            for ranks in (2, 4):
+                name = f'shear-mpi-pivot-reuse-{ranks}'
+                self.check(name, lambda n=name, r=ranks: self.command(n,
+                    shlex.split(self.args.mpi_command)+['-n',str(r),py,
+                        TESTS/'test_shear_pivot_reuse_mpi.py']))
         if 'balltree-shear-sphere-2balls-omp' in active:
             script('test_balltree_shear_build.py')
             script('test_balltree_shear_pivot_reuse.py')
@@ -331,14 +353,19 @@ class Gate:
         if 'octree-3pcf-3d-mpi' in active:
             script('test_octree_3pcf_3d_mpi.py','--cballs',binary,'--mpi-command',mpi,'--cython','--fits')
         script('test_io_stabilization.py','--cballs',binary,'--cython')
-        script('test_input_failure_contracts.py', '--output', str(self.out/'input-contracts'),
+        script('test_invalid_input.py', '--output', str(self.out/'input-contracts'),
                *(['--mpi-command', mpi] if mpi_scalar else []))
+        if 'octree-2balls-mpi' in active:
+            script('test_configuration_contracts.py', '--output', str(self.out/'configuration-mpi'),
+                   '--mpi-command', self.args.mpi_command)
         if any(e.endswith('-mpi') for e in active):
-            script('test_mpi_boundary_contracts.py', '--output', str(self.out/'mpi-boundaries'), '--mpi-command', mpi)
+            script('test_mpi_boundary_checks.py', '--output', str(self.out/'mpi-boundaries'), '--mpi-command', mpi)
         script('test_runtime_stabilization.py','--cballs',binary,'--cython')
         script('test_release_io_routes.py','--cballs',binary,'--output',str(self.out/'io'))
         self.check('accuracy-acceptance', lambda: self.command('accuracy-acceptance',
             [py, ROOT/'scripts/accuracy_acceptance.py', '--output', self.out/'accuracy']))
+        self.check('survey-science-campaign', lambda: self.command('survey-science-campaign',
+            [py, ROOT/'scripts/survey_science_acceptance.py', '--output', self.out/'survey-science']))
         self.drivers()
 
     def drivers(self):

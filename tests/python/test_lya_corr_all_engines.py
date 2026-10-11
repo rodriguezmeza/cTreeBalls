@@ -1,11 +1,16 @@
 """DESI conversion, forest memory API, and multi-engine driver regressions."""
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import json
 import os
 import shlex
 import signal
-from pathlib import Path
 import subprocess
-import sys
 
 import numpy as np
 import pytest
@@ -398,3 +403,12 @@ def test_hierarchy_driver_selection(tmp_path):
         else:
             assert params["lya2Kernel"]==(1 if not spec.radial and 2 in spec.orders else 0)
             assert params["lya3Kernel"]==(5 if not spec.radial and 3 in spec.orders else 0)
+
+
+def test_forest_controls_reset_multipole_order_between_engines(tmp_path):
+    # set() merges parameter dictionaries. Rank zero can run a multipole OMP
+    # engine before all ranks enter MPI, so every path must set this control.
+    cfg = driver.RunConfig(engines=(), output_dir=tmp_path, multipole_lmax=5)
+    for engine in ('octree-3pcf-3d-omp', 'lya-2pcf-omp',
+                   'lya-los-tree-2pcf-3pcf-mpi'):
+        assert driver.engine_parameters(cfg, engine, tmp_path)['mChebyshev'] == 5

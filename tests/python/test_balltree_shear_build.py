@@ -1,4 +1,5 @@
 """Ball-tree construction determinism and great-circle pair regressions."""
+import os
 from unittest.mock import patch
 
 import numpy as np
@@ -35,11 +36,63 @@ def test_parallel_layout_and_moments():
                     for name in serial:
                         np.testing.assert_array_equal(single[name], serial[name],
                                                        err_msg=name)
-                    uncached = reference.run_native_catalogs([catalog], 4,
-                        options=options+",no-balltree-shear-member-cache", **kwargs)
-                    for name in serial:
-                        np.testing.assert_array_equal(uncached[name], serial[name],
-                                                       err_msg=name)
+                    for control in ("no-balltree-shear-member-cache",
+                                    "no-balltree-shear-projection-cache"):
+                        uncached = reference.run_native_catalogs([catalog], 4,
+                            options=options+","+control, **kwargs)
+                        for name in serial:
+                            np.testing.assert_array_equal(uncached[name], serial[name],
+                                                           err_msg=name)
+
+
+def test_parallel_selection_cross_catalogs():
+    first = reference.fixture(32773)
+    second = reference.fixture(20003)
+    second[0][:] = np.roll(second[0], 1, axis=1)
+    first[2][::17] = 0.
+    catalogs = [first, second, reference.fixture(35)]
+    masks = [(np.arange(len(c[0])) % 11 != 0).astype(np.int32) for c in catalogs]
+    # Empty source chunks exercise the prefix offsets in stable compaction.
+    masks[0][4096:8192] = 0
+    masks[1][:2048] = 0
+    with patch.dict(os.environ, CBALLS_SHEAR_TASKS='128',
+                    CBALLS_SHEAR_PIVOT_TOL='3', CBALLS_SHEAR_BIN_THETA='.5'), \
+         patch.object(reference, 'RMIN', .003), patch.object(reference, 'RMAX', .04):
+        for extra in ('', ',no-one-ball', ',shear-pivot-reuse'):
+            kwargs = dict(engine=ENGINE, use_log=True, nsmooth=8, masks=masks,
+                          catalog_order='1,2,1')
+            serial = reference.run_native_catalogs(catalogs, 1,
+                options=OPTIONS+',read-mask,no-balltree-shear-projection-cache'+extra,
+                **kwargs)
+            parallel = reference.run_native_catalogs(catalogs, 4,
+                options=OPTIONS+',read-mask'+extra, **kwargs)
+            for name in serial:
+                np.testing.assert_array_equal(parallel[name], serial[name], err_msg=name)
+                if not np.isfinite(parallel[name]).all():
+                    raise AssertionError(name)
+
+
+def test_projection_ties_and_small_selection():
+    catalog = reference.fixture(16385)
+    # A ring gives repeated projections along its principal axes, including
+    # points on the split planes. The address tie break must stay unchanged.
+    angles = np.linspace(0., 2.*np.pi, len(catalog[0]), endpoint=False)
+    catalog[0][:] = np.column_stack((np.cos(angles), np.sin(angles),
+                                    np.zeros(len(angles))))
+    mask = np.zeros(len(angles), dtype=np.int32)
+    mask[::127] = 1  # 130 selected: just above the projection-cache threshold.
+    with patch.object(reference, 'RMIN', .003), patch.object(reference, 'RMAX', .015):
+        for masks in (None, [mask]):
+            options = OPTIONS + (',read-mask' if masks else '')
+            kwargs = dict(engine=ENGINE, use_log=False, nsmooth=8, masks=masks)
+            serial = reference.run_native_catalogs([catalog], 1,
+                options=options+',no-balltree-shear-projection-cache', **kwargs)
+            parallel = reference.run_native_catalogs([catalog], 4,
+                options=options, **kwargs)
+            for name in serial:
+                np.testing.assert_array_equal(parallel[name], serial[name], err_msg=name)
+                if not np.isfinite(parallel[name]).all():
+                    raise AssertionError(name)
 
 
 def test_geodesic_small_separation():
@@ -80,6 +133,7 @@ def test_geodesic_small_separation():
 
 
 if __name__ == "__main__":
-    for test in [test_parallel_layout_and_moments, test_geodesic_small_separation]:
+    for test in [test_parallel_layout_and_moments, test_parallel_selection_cross_catalogs,
+                 test_projection_ties_and_small_selection, test_geodesic_small_separation]:
         test()
         print("PASS", test.__name__, flush=True)

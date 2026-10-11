@@ -29,3 +29,14 @@ venv/
 
 /addons/python_env/
 /Output*/
+
+# Generated dependency metadata and local Makefile backups
+*.Po
+*.Plo
+/addons/gsl/*.log
+/addons/gsl/config.status
+/addons/gsl/libtool
+/addons/cfitsiolib/cfitsio
+/addons/Makefile*_bak*
+
+/addons/**/backup*/

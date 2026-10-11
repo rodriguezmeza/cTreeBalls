@@ -68,8 +68,8 @@ def main():
     ap.add_argument("--label-b", default="cBalls_b")
     ap.add_argument("--ref", choices=["a","b"], default="a",
         help="Reference curve for errors/residuals")
-    ap.add_argument("--theta-min", type=float, default=None)
-    ap.add_argument("--theta-max", type=float, default=None)
+    ap.add_argument("--theta-min", "--min-sep", dest="theta_min", type=float, default=None)
+    ap.add_argument("--theta-max", "--max-sep", dest="theta_max", type=float, default=None)
     ap.add_argument("--scale", choices=["loglog","linear","semilogx","semilogy"], default="loglog")
     ap.add_argument("--outdir", default=None)
     ap.add_argument("--out", default=None,
@@ -81,9 +81,14 @@ def main():
     ap.add_argument("--plot-mul-theta", action="store_true",
                     help="Multiply Y by θ (only for main figure; do not affect metrics if already are in θ*w)")
     ap.add_argument("--xscale", choices=["radian","arcmin","degree"],
-                    default="radians",
-                    help="x units: arcmin (default), radian or degree.")
+                    default="radian",
+                    help="units already used by input x columns and limits; no conversion (default: radian).")
     args = ap.parse_args()
+    for limit in (args.theta_min, args.theta_max):
+        if limit is not None and (not np.isfinite(limit) or limit <= 0):
+            ap.error("separation limits must be finite and positive in the input units")
+    if args.theta_min is not None and args.theta_max is not None and args.theta_min >= args.theta_max:
+        ap.error("require theta-min < theta-max")
 
     if args.file_b == None:
         file_b = args.file-a if False else args.file_a
@@ -99,6 +104,8 @@ def main():
     thA, yA = crop_theta(thA, yA, args.theta_min, args.theta_max)
     thB, yB = crop_theta(thB, yB, args.theta_min, args.theta_max)
 
+    if not all(len(x) for x in (thA, thB)):
+        raise ValueError("empty angular selection in an input curve")
     if args.y_is_thetax_a:
         yA = np.where(thA != 0, yA / thA, np.nan)
     if args.y_is_thetax_b:
@@ -175,6 +182,10 @@ def main():
     axr.grid(alpha=0.25, ls=":")
     if args.scale in ("loglog","semilogx"):
         axr.set_xscale("log")
+
+    # Explicit display limits are edges, even when no sample lies on them.
+    if args.theta_min is not None or args.theta_max is not None:
+        axr.set_xlim(left=args.theta_min, right=args.theta_max)
 
     #B Output:
     outdir = args.outdir or os.path.dirname(os.path.abspath(args.file_a))

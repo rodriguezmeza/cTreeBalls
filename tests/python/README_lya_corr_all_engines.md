@@ -9,7 +9,7 @@ Native `MainLoop`, complete Python `Run`, and launcher times stay separate.
 
 
 The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
-`MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
+`MainLoop`, excluding the collection of run information in Python) from `compute_*` (the complete
 Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
 `native_mainloop_cpu_time`. MPI uses maximum rank wall time and summed rank CPU
 for both scopes; use the same scope, output settings and accuracy for comparisons.
@@ -36,6 +36,18 @@ List the methods compiled into the current extension:
 ```sh
 python3 tests/python/lya_corr_all_engines.py --list-engines
 ```
+
+## Live progress
+
+The native `lya-*` engines show completed counting tasks by default with
+`--verbose 1`. Use `--verbose 0` for quiet native execution, or `--verbose-log 1`
+to also record progress in `cballs.log`. Each line includes the counting phase,
+completed/total tasks, percentage, and elapsed wall seconds. Updates arrive
+about every 1%, or after five seconds at the next completed task boundary.
+Tasks have unequal costs, so this is not an estimate of remaining runtime.
+Combined engines can report separate pair and triple phases; reductions and
+output can continue after a counting phase reaches 100%. MPI logs rank zero's
+local task count. No profiling environment variable is needed.
 
 ## Input
 
@@ -78,12 +90,12 @@ Use repeated `--mpi-extra-arg` arguments, for example
 used by cyballs and mpi4py. OpenMP-only methods run on rank zero, MPI methods
 on every rank, and external references/analysis once on rank zero.
 
-## Scientific contracts
+## Numerical definitions
 
 The three `lya-los-tree-*` names use a 3D octree to discover neighboring
 forests and then query each forest's 1D radial tree. They preserve the
 **anisotropic 3D** estimator, unlike `lya-1d-tree-*`. `all-3d` and `all-tree`
-include these new methods; `all-1d` does not. They are OpenMP-only at present.
+include these new methods; `all-1d` does not. Both OpenMP (`-omp`) and MPI+OpenMP (`-mpi`) versions are available.
 Rebuild the Cython extension before using newly registered names.
 
 For a like-for-like 3D comparison on the same retained catalog:
@@ -105,7 +117,7 @@ Three-point forest methods require three distinct forest IDs. The physical-3D
 multipole methods use `exclude-all-same-los`; they are not interchangeable with
 the anisotropic five-dimensional estimator.
 
-`summary.json` records catalog provenance, timings, products, comparisons, and
+`summary.json` records catalog information, timings, products, comparisons, and
 plot paths. Empty denominator bins publish finite zero in native output and
 appear as missing data in plots.
 
@@ -347,7 +359,7 @@ are handled by the stated tolerances.
 For repeated timing, use the separate private `benchmark_lya_corr.py` and its
 `README_benchmark_lya_corr.md`. Its DESI reader is this same public loader. The
 kappa/count/shear frontend remains `benchmark_kappa_corr.py`. Both native
-histograms and provenance are retained per repeat, and CPU and wall time are
+histograms and run information are retained per repeat, and CPU and wall time are
 reported separately. Native process CPU seconds are never divided by the
 thread count; MPI uses maximum rank wall and summed rank CPU. A combined
 2PCF+3PCF timing is the complete combined workload.
@@ -391,3 +403,52 @@ OpenMP LOS variants. Select `--lya2-kernel 1 --lya3-kernel 5` for certified
 range/cell moments and the adaptive LOS radial hierarchy. MPI ranks retain
 replicated catalogs and reduce raw sums before rank-0 publication. See
 [implementation and validation](../../docs/LYA_LOS_HIERARCHICAL_REUSE.md).
+
+Benchmark controls and timing (October 2026)
+
+The shared benchmark_timing.py records explicit CBALLS_SHEAR_*,
+CBALLS_SCALAR_*, CBALLS_LYA_* and thread-placement environment overrides.
+An omitted environment variable is not assumed to be a compiled default;
+read native run information for the effective settings and build identity.
+
+compute_wall_time/compute_cpu_time cover the complete Python Run call.
+native_mainloop_wall_time/native_mainloop_cpu_time cover the native C loop.
+MPI CPU sums participating ranks; wall takes their maximum, including the
+maximum of each rank's setup+compute total rather than the sum of separate
+phase maxima. CPU is never divided by thread or rank count. The CPU/wall
+ratio estimates average CPU use, not elapsed-time speedup. Read timing_scope
+for setup, output, cleanup and external-adapter boundaries.
+
+--tree-theta defaults to 1 (approximate traversal) in angular drivers. Make THETA
+is a distinct legacy compile-time criterion, also defaulting to 1. Opt-in
+shear-pivot-reuse uses CBALLS_SHEAR_PIVOT_TOL=3 and CBALLS_SHEAR_BIN_THETA=0.5.
+Scalar reuse uses phase tolerance 0.1 and bin tolerance 0. Environment values
+override these compiled reuse controls, not theta. These are speed/accuracy
+choices, not a universal percentage-error bound. Lyα keeps certified cell
+aggregation with zero bin slops; positive slops remain explicit choices.
+CBALLS_SHEAR_TASKS and CBALLS_SHEAR_TASK_MEMORY_MB also apply to MPI frontiers.
+--verbose 1 enables available live work counters. CBALLS_SHEAR_PROFILE adds
+instrumentation whenever present, including value 0; unset it to disable.
+
+Shear retains full count/window modes by default. --more-options
+no-count-multipoles selects N0 normalization; edge-corrections takes
+precedence and restores higher window modes. Scalar dual-node runs already
+skip higher count modes without edge correction; ggg-full-window is the
+octree compatibility diagnostic override. NMultipolesON is a legacy build
+switch, not a substitute for these runtime controls.
+
+See [the approximation defaults and 5% L2 criterion](../../docs/APPROXIMATION_DEFAULTS.md) for fast defaults, measured penalties, exact references, and the limits of finite-multipole reconstruction.
+
+Measured approximation penalties
+
+Pass --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only to compare
+against saved exact results for the identical input, bins and multipoles. The
+reference root must contain ENGINE/qualification for each native engine.
+Each native run writes ENGINE/qualification/approximation-penalty.json and
+prints raw, normalized and corrected relative L2 percentages where available,
+including each shear component. Without a reference the penalty is UNMEASURED.
+The default comparison target is 5% (--qualification-rtol 0.05); it does not
+change traversal controls. Report-only retains results above the target;
+without it a failed requested numerical qualification raises an error.
+Relative L2 uses no denominator floor: zero reference norms are undefined and
+absolute errors are retained. A small pooled L2 does not bound every bin.

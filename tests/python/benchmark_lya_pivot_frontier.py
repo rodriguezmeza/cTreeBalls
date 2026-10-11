@@ -7,14 +7,21 @@ required; input readers and native process accounting are shared with the other
 public Ly-alpha benchmarks.
 """
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
 import re
 import numpy as np
+from benchmark_timing import runtime_environment
 from benchmark_lya_triplet_kernels import ROOT,run_process
 from lya_corr_all_engines import read_npz,read_ascii,synthetic_catalog,save_catalog
 
@@ -110,7 +117,7 @@ def main(argv=None):
             stream.write(' '.join(format(v,'.17g') for v in (*xyz,delta,weight))+f' {int(fid)}\n')
     binary=args.cballs.resolve();baseline=(args.baseline_cballs or binary).resolve()
     methods=list(dict.fromkeys(args.methods))
-    report=dict(platform=platform.platform(),methods=methods,pixels=catalog.nbody,forests=len(np.unique(catalog.forest_ids)),
+    report=dict(runtime_environment=runtime_environment(),platform=platform.platform(),methods=methods,pixels=catalog.nbody,forests=len(np.unique(catalog.forest_ids)),
         openmp_environment={key:os.environ.get(key) for key in ('OMP_NUM_THREADS','OMP_DYNAMIC','OMP_WAIT_POLICY','OMP_PROC_BIND','OMP_PLACES','GOMP_CPU_AFFINITY','KMP_AFFINITY')},
         catalog_sha256=hashlib.sha256(cat.read_bytes()).hexdigest(),selection=catalog.metadata,settings=vars(args),
         binaries={str(b):hashlib.sha256(b.read_bytes()).hexdigest() for b in (binary,baseline)},

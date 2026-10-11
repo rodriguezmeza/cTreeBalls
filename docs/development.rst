@@ -40,7 +40,7 @@ Before proposing a code or documentation change:
    ./cballs nbody=4096 sizeHistN=12 mChebyshev=3 \
       rootDir=Output_check numberThreads=1 verbose=0 verbose_log=0
    python3 -c "from cyballs import cballs; print(cballs)"
-   python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
+   python3 -m pytest -q tests/python/test_scalar_numerical_definitions.py
    python3 -m sphinx -E -a -n -W --keep-going -b html docs docs/_build/html
 
 Use the same build profile in both commands. Documentation-only edits require
@@ -49,7 +49,7 @@ importing a compiled extension.
 
 The maintained launchers and their Python programs are in ``tests/make_tests``.
 ``tests/scripts`` retains older catalog-specific workflows. See
-:doc:`benchmarks` and ``tests/python/README_regression_tests.md`` for numerical contracts.
+:doc:`benchmarks` and ``tests/python/README_regression_tests.md`` for numerical definitions.
 Scalar CI checks both smoothing profiles, MPI ranks, and exact dual-node
 limits; the main test workflow also covers C/Cython, packaging, and sanitizer jobs.
 The documentation workflow builds HTML with warnings treated as errors.
@@ -89,7 +89,7 @@ Documentation Style
 Shared Numerical Helpers
 ------------------------
 
-``include/angular_contracts.h`` owns observer-frame selection, tangent phases,
+``include/angular_checks.h`` owns observer-frame selection, tangent phases,
 and projected angular acceptance. Readers, startup, trees, and searches must
 agree on this frame. Two-ball inherited moments must be transported when the
 pivot tangent basis changes.

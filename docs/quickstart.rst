@@ -133,7 +133,7 @@ Next Steps
 
 * :doc:`user/inputs` explains catalog formats and multiple-catalog runs.
 * :doc:`user/command-line` describes parameter files and common controls.
-* :doc:`user/outputs` identifies histogram and provenance outputs.
+* :doc:`user/outputs` identifies histogram and run information outputs.
 * :doc:`performance` explains search methods, bins, and OpenMP settings.
 * :doc:`search_methods` separates scalar, shear, forest, and physical-3D estimators.
 * :doc:`user/python` shows catalog reuse without file input.

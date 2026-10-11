@@ -1,9 +1,15 @@
 """DES table conventions, deterministic selection and public driver contracts."""
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import contextlib
 import io
 import json
-from pathlib import Path
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -145,7 +151,7 @@ class ShearFitsCatalogTests(unittest.TestCase):
 
     def test_binning_presets_match_centers_and_edges(self):
         for name in ('sofia-fig1', 'paper-8-200-edges'):
-            lo, hi, count, units = fits_catalog.apply_binning_preset(name, 1, 2, 4, 'degree')
+            lo, hi, count, units = fits_catalog.apply_binning_preset(name)
             config = driver.RunConfig(min_sep=lo, max_sep=hi, bins=count, sep_units=units)
             edges = np.geomspace(*config.native_limits('sphere'), count+1)
             chosen = np.sqrt(edges[:-1]*edges[1:])[[0, -1]] if name == 'sofia-fig1' else edges[[0, -1]]

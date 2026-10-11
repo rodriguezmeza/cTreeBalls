@@ -6,17 +6,17 @@ launchers and associated Python tests are in tests/make_tests.
 With matching C and Cython binaries, run from the repository root:
 
     make test-make-info test-search-methods
-    python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
+    python3 -m pytest -q tests/python/test_scalar_numerical_definitions.py
 
 Repeat scalar numerical tests with both SMOOTHPIVOTON build settings.
 The enabled build smooths supported engines by default; include
-options=no-smooth-pivot when testing the unsmoothed contract. Preserve your own
+options=no-smooth-pivot when testing the unsmoothed definition. Preserve your own
 build setting after testing.
 
 Historical catalog/plot workflow
 
 The following notes require external catalogs and reference outputs.
-Older multipoles may predate the corrected angular/normalization contract;
+Older multipoles may predate the corrected angular/normalization convention;
 regenerate affected references before interpreting their differences.
 
 1. To test cBalls:

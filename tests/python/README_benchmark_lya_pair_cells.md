@@ -7,7 +7,7 @@ Radial-only 1D methods do not accept these controls. The original 3D MPI
 methods now support pair cells; existing 1D
 methods remain available with their original settings.
 
-## Scientific contract
+## Numerical definitions
 
 For pixel distances chi_i, chi_j and observer directions n_i, n_j, write
 c = clamp(n_i dot n_j, -1, 1). The estimator uses

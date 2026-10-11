@@ -2,9 +2,7 @@
 #define CTREEBALLS_SHEAR_SPHERE_FRONTIER_SCHEDULER_H
 
 /* Adaptive exact-pivot scheduling for the native spherical octree. */
-#define SHEAR_NATIVE_PIVOT_TASK_TARGET ((INTEGER)256)
 #define SHEAR_NATIVE_NEIGHBOR_FRONTIER_TARGET ((INTEGER)256)
-#define SHEAR_NATIVE_TASK_HISTOGRAM_MEMORY ((size_t)256 << 20)
 
 typedef struct {
     nodeptr pivot_node;
@@ -175,41 +173,28 @@ static shear_native_pivot_task shear_native_make_task(
 
 static int shear_native_assign_tasks(
         struct cmdline_data *cmd, shear_native_pivot_task *tasks,
-        INTEGER count, int rank_count)
+        INTEGER count, int rank_count, size_t rank_limit)
 {
-    long double *rank_work;
-    INTEGER *rank_tasks;
-
-    rank_count = MAX(1, rank_count);
-    rank_work = calloc((size_t)rank_count, sizeof(*rank_work));
-    rank_tasks = calloc((size_t)rank_count, sizeof(*rank_tasks));
-    if (rank_work == NULL || rank_tasks == NULL) {
+    shear_frontier_priority *order = NULL;
+    if ((size_t)count > SIZE_MAX/sizeof(*order)
+        || (count && (order = malloc((size_t)count*sizeof(*order))) == NULL)) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 SHEAR_ENGINE_NAME ": rank-work allocation failed");
-        free(rank_tasks);
-        free(rank_work);
+                 SHEAR_ENGINE_NAME ": task-priority allocation failed");
         return FAILURE;
     }
-    for (INTEGER task = 0; task < count; task++) tasks[task].owner = -1;
-    for (INTEGER assigned = 0; assigned < count; assigned++) {
-        INTEGER largest = -1;
-        int owner = 0;
-
-        for (INTEGER task = 0; task < count; task++)
-            if (tasks[task].owner < 0
-                && (largest < 0
-                    || tasks[task].estimated_work
-                       > tasks[largest].estimated_work))
-                largest = task;
-        for (int rank = 1; rank < rank_count; rank++)
-            if (rank_work[rank] < rank_work[owner]) owner = rank;
-        tasks[largest].owner = owner;
-        tasks[largest].local_index = rank_tasks[owner]++;
-        rank_work[owner] += tasks[largest].estimated_work;
+    if (!count) return SUCCESS;
+    for (INTEGER i = 0; i < count; i++) {
+        order[i].task = i;
+        order[i].cost = tasks[i].estimated_work;
     }
-    free(rank_tasks);
-    free(rank_work);
-    return SUCCESS;
+    int status = shear_frontier_assign(cmd, order, count, rank_count, rank_limit);
+    if (status == SUCCESS)
+        for (INTEGER i = 0; i < count; i++) {
+            tasks[order[i].task].owner = order[i].owner;
+            tasks[order[i].task].local_index = order[i].local_index;
+        }
+    free(order);
+    return status;
 }
 
 static size_t shear_native_count_neighbors(
@@ -252,7 +237,8 @@ static int shear_native_build_frontier_schedule(
         struct cmdline_data *cmd, struct global_data *gd,
         nodeptr pivot_root, bodyptr pivot_first, bodyptr pivot_finish,
         nodeptr first_root, nodeptr second_root, INTEGER target,
-        int rank_count, shear_native_frontier_schedule *schedule)
+        int rank_count, size_t rank_limit,
+        shear_native_frontier_schedule *schedule)
 {
     shear_sphere_pair_context context;
     nodeptr *first_frontier = NULL;
@@ -311,6 +297,8 @@ static int shear_native_build_frontier_schedule(
                 &context, schedule->tasks[task].pivot_node, children);
 
             if (child_count >= 2
+                && ((size_t)count + child_count - 1 + (size_t)rank_count - 1)
+                     /(size_t)rank_count <= rank_limit
                 && schedule->tasks[task].estimated_work > largest_work) {
                 best = task;
                 largest_work = schedule->tasks[task].estimated_work;
@@ -415,7 +403,7 @@ static int shear_native_build_frontier_schedule(
         }
     }
     if (shear_native_assign_tasks(
-            cmd, schedule->tasks, count, rank_count) == FAILURE)
+            cmd, schedule->tasks, count, rank_count, rank_limit) == FAILURE)
         goto cleanup;
 
     for (INTEGER task = 0; task < count; task++) {
@@ -494,25 +482,6 @@ cleanup:
     return status;
 }
 
-static INTEGER shear_native_pivot_task_target(
-        int threads, int ranks, size_t accumulator_stride)
-{
-    size_t target = (size_t)SHEAR_NATIVE_PIVOT_TASK_TARGET;
-    size_t bytes_per_task;
-    size_t memory_target;
 
-    (void)threads;
-    (void)ranks;
-    if (accumulator_stride == 0
-        || accumulator_stride > SIZE_MAX/sizeof(real))
-        return 1;
-    bytes_per_task = accumulator_stride*sizeof(real);
-    memory_target = SHEAR_NATIVE_TASK_HISTOGRAM_MEMORY/bytes_per_task;
-    target = MIN(target, MAX((size_t)1, memory_target));
-    return (INTEGER)MAX((size_t)1, target);
-}
-
-#undef SHEAR_NATIVE_PIVOT_TASK_TARGET
 #undef SHEAR_NATIVE_NEIGHBOR_FRONTIER_TARGET
-#undef SHEAR_NATIVE_TASK_HISTOGRAM_MEMORY
 #endif

@@ -153,7 +153,7 @@ def worker(directory):
                     errors=comm.allgather(error)
                     if any(errors):raise RuntimeError('\n'.join(e for e in errors if e))
             if rank==0: print('MPI_SHEAR_CASE_OK',engine,case['name'],flush=True)
-        for unsupported in ('legacy-one-ball','shear-pivot-reuse'):
+        for unsupported in ('legacy-one-ball',):
             model=cballs();configure(model,engine,scenarios[0],'both',1)
             model.set(options='no-out-Hist,no-smooth-pivot,'+unsupported)
             try:
@@ -228,7 +228,7 @@ def main():
     p.add_argument('--mpi-command',default='mpiexec',help='launcher without rank count')
     a=p.parse_args()
     if a.worker:return worker(a.output)
-    from test_input_failure_contracts import run_child
+    from test_invalid_input import run_child
     a.output.mkdir(parents=True,exist_ok=True)
     records=[]
     for ranks in (1,2,4):

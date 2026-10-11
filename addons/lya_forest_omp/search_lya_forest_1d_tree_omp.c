@@ -12,6 +12,7 @@
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
 #include "lya_forest_parallel.h"
+#include "lya_progress.h"
 
 #include <errno.h>
 #include <float.h>
@@ -916,6 +917,11 @@ setup_done:
         cmd->searchMethod, active_count, forest_count, nodes_used,
         tree_task_count, forest_task_count);
 
+    lya_progress progress;
+    lya_progress_init(&progress,cmd,gd,"1D 2PCF tree/correction blocks",
+        lya_progress_local_tasks(tree_block_count,first_task,task_stride)
+        + lya_progress_local_tasks(forest_block_count,first_task,task_stride));
+
 #pragma omp parallel shared(allocation_failed,runtime_failed,worker_error,all_num,all_den,all_pairs,same_num,same_den,same_pairs,node_visits,bulk_pairs)
     {
         lya1d_tree_worker worker;
@@ -979,6 +985,7 @@ setup_done:
                                              all_pairs);
                     node_visits += block_visits;
                     bulk_pairs += block_bulk_pairs;
+                    lya_progress_step(&progress);
                 }
             }
         }
@@ -1014,13 +1021,17 @@ setup_done:
 
 #pragma omp ordered
             {
-                if (worker_ready && !allocation_failed && !worker.failed)
+                if (worker_ready && !allocation_failed && !worker.failed) {
                     lya1d_tree_worker_commit(&worker, same_num, same_den,
                                              same_pairs);
+                    lya_progress_step(&progress);
+                }
             }
         }
         if (worker_ready) lya1d_tree_worker_free(&worker);
     }
+
+    lya_progress_finish(&progress, !allocation_failed && !runtime_failed);
 
 postprocess:
     if (allocation_failed || runtime_failed) {
@@ -1281,6 +1292,9 @@ setup_done:
         "nodes=%zu\n", cmd->searchMethod, active_count, forest_count,
         nodes_used);
 
+    lya_progress progress;
+    lya_progress_init(&progress,cmd,gd,"1D same-LOS forests",forest_count);
+
 #pragma omp parallel shared(allocation_failed,runtime_failed,worker_error,correlation_sum,contributing_los,pairs,node_visits,bulk_pairs)
     {
         lya1d_tree_worker worker;
@@ -1335,7 +1349,7 @@ setup_done:
                             snprintf(worker_error, sizeof(worker_error),
                                      "same-LOS output counter overflow");
                         runtime_failed = TRUE;
-                    }
+                    } else lya_progress_step(&progress);
                     node_visits += forest_visits;
                     bulk_pairs += forest_bulk_pairs;
                 }
@@ -1343,6 +1357,8 @@ setup_done:
         }
         if (worker_ready) lya1d_tree_worker_free(&worker);
     }
+
+    lya_progress_finish(&progress, !allocation_failed && !runtime_failed);
 
 postprocess:
     if (allocation_failed || runtime_failed) {

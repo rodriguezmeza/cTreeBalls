@@ -11,6 +11,7 @@
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
 #include "lya_forest_parallel.h"
+#include "lya_progress.h"
 
 #include <errno.h>
 #include <float.h>
@@ -909,6 +910,10 @@ setup_done:
         "bins=%zu pivot_blocks=%zu\n",
         cmd->searchMethod, active_count, nodes_used, bins, block_count);
 
+    lya_progress progress;
+    lya_progress_init(&progress,cmd,gd,"1D 3PCF tree pivot blocks",
+        lya_progress_local_tasks(block_count,first_task,task_stride));
+
 #pragma omp parallel shared(allocation_failed,runtime_failed,worker_error,num,den,counters)
     {
         lya1d_tree3_worker worker;
@@ -961,8 +966,8 @@ setup_done:
 
 #pragma omp ordered
             {
-                if (worker_ready && !allocation_failed && !worker.failed
-                    && lya1d_tree3_commit(&worker, num, den, matrix_bins,
+                int committed = worker_ready && !allocation_failed && !worker.failed;
+                if (committed && lya1d_tree3_commit(&worker, num, den, matrix_bins,
                                           counters) == FAILURE) {
 #pragma omp critical(lya1d_tree3_runtime_failure)
                     {
@@ -971,11 +976,13 @@ setup_done:
                                      "radial tree 3PCF global counter overflow");
                         runtime_failed = TRUE;
                     }
-                }
+                } else if (committed) lya_progress_step(&progress);
             }
         }
         if (worker_ready) lya1d_tree3_worker_free(&worker);
     }
+
+    lya_progress_finish(&progress, !allocation_failed && !runtime_failed);
 
 postprocess:
     if (allocation_failed || runtime_failed) {

@@ -360,6 +360,9 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
     double start=CPUTIME;
     REAL cutoff=hypot(cmd->lya2RpMax,cmd->lya2RtMax);
     const size_t first_row=lya_parallel_first(cmd),row_stride=lya_parallel_stride(cmd);
+    lya_progress progress;
+    lya_progress_init(&progress,cmd,gd,"2PCF forest rows",
+        lya_progress_local_tasks(t->roots_count,first_row,row_stride));
 #pragma omp parallel
     {
         lya_worker_hist w;lya_pair_work work={0};ErrorMsg local_error="";
@@ -378,7 +381,7 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
                 if(!failed && !worker_failed) {
                     if((uintmax_t)w.pair_count>lya_pair_count_max()-(uintmax_t)*pairs) {
                         worker_failed=1;snprintf(local_error,sizeof(local_error),"Ly-alpha global pair count overflow");
-                    } else {lya_commit_worker(&w,num,den,NULL,NULL,1,0);*pairs+=w.pair_count;}
+                    } else {lya_commit_worker(&w,num,den,NULL,NULL,1,0);*pairs+=w.pair_count;lya_progress_step(&progress);}
                 }
                 if(worker_failed && !failed) {failed=1;snprintf(error,sizeof(error),"%s",local_error);}
             }
@@ -394,6 +397,7 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
         }
         if(ready) lya_worker_free(&w);
     }
+    lya_progress_finish(&progress,!failed);
     gd->lyaHierarchyCounts[4]+=total.range_aggregates;gd->lyaHierarchyCounts[5]+=total.range_pairs;
     /* Work count: direct candidate pairs, excluding aggregated products. */
     if(total.leaf_pairs<=lya_pair_count_max()-(uintmax_t)*visits) *visits+=(INTEGER)total.leaf_pairs;

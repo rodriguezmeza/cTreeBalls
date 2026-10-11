@@ -17,6 +17,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tests" / "python"))
+from benchmark_timing import runtime_environment
 METHODS = [
     f"lya-{prefix}{stat}-{parallel}"
     for prefix in ("", "los-tree-")
@@ -225,7 +227,7 @@ def main():
         )
     cat = out / "catalog.npz"
     np.savez_compressed(cat, **data)
-    report = dict(
+    report = dict(runtime_environment=runtime_environment(dict(os.environ, OMP_DYNAMIC="FALSE", OMP_WAIT_POLICY="PASSIVE")),
         arguments=vars(a),
         pixels=len(data["delta"]),
         forest_count=int(len(np.unique(data["forest_ids"]))),

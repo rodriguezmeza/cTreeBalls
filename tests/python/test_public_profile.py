@@ -19,7 +19,14 @@ def test_addon_directories_match_the_selected_profile():
 
 def test_python_tests_and_binding_sources_are_separated():
     assert not list((ROOT/'python').glob('*.py'))
-    assert all(p.is_relative_to(ROOT/'tests/python') for p in (ROOT/'tests').rglob('*.py'))
+    programs = list((ROOT/'tests').rglob('*.py'))
+    assert programs
+    assert all(path.parent == ROOT/'tests/python' for path in programs)
+    assert list((ROOT/'tests/python').glob('test_*.py'))
+    assert list((ROOT/'tests/python').glob('benchmark_*.py'))
+    assert (ROOT/'tests/python/test_benchmark_timing.py').is_file()
+    assert (ROOT/'tests/python/kappa_corr_all_engines.py').is_file()
+    assert (ROOT/'tests/python/shear_fits_catalog.py').is_file()
     for name in ('cyballs.pyx','ccyballs.pxd.in','resource_api.pxi','qualification_api.pxi'):
         assert (ROOT/'python'/name).is_file()
 

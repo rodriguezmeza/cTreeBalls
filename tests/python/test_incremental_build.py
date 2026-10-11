@@ -57,9 +57,9 @@ class MetadataTests(unittest.TestCase):
             self.assertNotEqual(build_support.command_signature("link", env),
                                 build_support.command_signature("link", dict(env, CBALLS_OBJECTS="b.o")))
         mpi = dict(env, BUILD_MPI="mpi", MPICC="mpicc")
-        with patch.object(subprocess, "check_output", side_effect=["compiler 1", "cc -DMPI_ABI=1"]):
+        with patch.object(subprocess, "check_output", side_effect=["compiler 1", "-DMPI_ABI=1", "-lmpi"]):
             before = build_support.command_signature("compile", mpi)
-        with patch.object(subprocess, "check_output", side_effect=["compiler 1", "cc -DMPI_ABI=2"]):
+        with patch.object(subprocess, "check_output", side_effect=["compiler 1", "-DMPI_ABI=2", "-lmpi"]):
             self.assertNotEqual(before, build_support.command_signature("compile", mpi))
 
     def test_installation_stamp_checks_artifacts_and_environment(self):
@@ -100,7 +100,7 @@ class MakeGraphTests(unittest.TestCase):
         compiler = os.environ.get("TEST_CC", "cc")
         with tempfile.TemporaryDirectory(prefix="cballs-make-test-") as directory:
             root = Path(directory)
-            for name in ("Makefile", "Makefile_machine", "Makefile_settings",
+            for name in ("Makefile", "Makefile_tests", "Makefile_machine", "Makefile_settings",
                          "setup.py", "pyproject.toml", "MANIFEST.in"):
                 shutil.copy2(ROOT / name, root / name)
             (root / "scripts").mkdir()
@@ -109,6 +109,8 @@ class MakeGraphTests(unittest.TestCase):
                 shutil.copy2(ROOT / "scripts" / name, root / "scripts" / name)
             (root / "source").mkdir()
             (root / "include").mkdir()
+            for name in ("cli_validation.h", "ia_tutor_cli.h"):
+                shutil.copy2(ROOT / "include" / name, root / "include" / name)
             (root / "capabilities").mkdir()
             (root / "capabilities" / "engines.json").write_text(json.dumps({
                 "schema_version": 1, "engines": [], "regression_groups": {},
@@ -120,7 +122,7 @@ class MakeGraphTests(unittest.TestCase):
             names = ("main", "cballsio", "cballs", "startrun", "testdata", "treeload",
                      "cballsutils", "search", "abi_check", "run_metadata",
                      "engine_registry", "runtime_context", "memory_catalog",
-                     "common_histogram", "smooth_pivots", "mpi_runtime",
+                     "common_histogram", "smooth_pivots", "mpi_runtime", "scalar_window_io",
                      "clib", "mathfns", "inout", "mathutil", "numrec", "getparam")
             for name in names:
                 source = "int " + name + "_fixture(void) { return 0; }\n"

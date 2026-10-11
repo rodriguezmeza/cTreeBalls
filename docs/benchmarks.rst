@@ -35,7 +35,7 @@ plots and final cleanup are excluded. Forest ``wall_seconds`` retains its older
 cleanup-inclusive scope. Compare the explicitly labeled compute columns only
 after checking that requested outputs and statistics also match.
 
-The ``mainloop_wall_s`` / ``mainloop_cpu_s`` columns exclude Python provenance
+The ``mainloop_wall_s`` / ``mainloop_cpu_s`` columns exclude Python run information
 capture. The older ``compute_*`` columns time the complete Python ``Run`` call,
 including that capture. JSON stores the native scope as
 ``native_mainloop_wall_time`` and ``native_mainloop_cpu_time``. Both scopes use

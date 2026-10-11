@@ -3,6 +3,13 @@
  * descendant pivot's own native basis. No successive transport errors accrue.
  * A radial pair is published once, when both bins have no unresolved source.
  * Included after dual_node_multipole.h. */
+#ifndef CBALLS_SCALAR_PIVOT_TOL_DEFAULT
+#define CBALLS_SCALAR_PIVOT_TOL_DEFAULT 0.1
+#endif
+#ifndef CBALLS_SCALAR_BIN_THETA_DEFAULT
+#define CBALLS_SCALAR_BIN_THETA_DEFAULT 0.0
+#endif
+
 static int dual_node_reuse_control(struct cmdline_data *cmd, const char *name,
                                    real fallback, real maximum, real *value)
 {
@@ -28,14 +35,15 @@ static int dual_node_reuse_prepare(dual_node_search_context *context,
 {
     const bool requested = run_3pcf && scanopt(cmd->options, "scalar-pivot-reuse");
     int status = SUCCESS;
-    real phase = 0.1, bin = 0.0;
+    real phase = CBALLS_SCALAR_PIVOT_TOL_DEFAULT;
+    real bin = CBALLS_SCALAR_BIN_THETA_DEFAULT;
     char controls[160];
     if (requested) {
         status = dual_node_reuse_control(cmd, "CBALLS_SCALAR_PIVOT_TOL",
-                                         0.1, 3.0, &phase);
+                                         CBALLS_SCALAR_PIVOT_TOL_DEFAULT, 3.0, &phase);
         if (status == SUCCESS)
             status = dual_node_reuse_control(cmd, "CBALLS_SCALAR_BIN_THETA",
-                                             0.0, 1.0, &bin);
+                                             CBALLS_SCALAR_BIN_THETA_DEFAULT, 1.0, &bin);
     }
     if (dual_node_distributed_consensus(cmd, status,
             "scalar pivot-reuse controls") == FAILURE) return FAILURE;
@@ -178,8 +186,8 @@ static int dual_node_reuse_scan(dual_node_reuse_work *work,
             || !dual_node_multipole_angular_phase(pivot, dr, &c, &s)) return SUCCESS;
         const real field = dual_node_point_weighted_field(context, point);
         const real norm = dual_node_point_normalization(context, point);
-        dual_node_multipole_add(&level->moments, bin, field, field*field,
-                                norm, norm*norm, 1, c, s);
+        dual_node_multipole_add(&level->moments, bin, field, 0.0,
+                                norm, 0.0, 1, c, s);
         work->statistics->body_visits++;
         return SUCCESS;
     }
@@ -233,8 +241,8 @@ static int dual_node_reuse_scan(dual_node_reuse_work *work,
         const real norm = body ? dual_node_point_normalization(context, point)
                                : dual_node_node_normalization_sum(context, node);
         dual_node_multipole_add(&level->moments, bin, field,
-            body ? field*field : dual_node_node_field_sq_sum(context,node), norm,
-            body ? norm*norm : dual_node_node_normalization_sq_sum(context,node),
+            body ? 0.0 : dual_node_node_field_distinct_sum(context,node), norm,
+            body ? 0.0 : dual_node_node_normalization_distinct_sum(context,node),
             body ? 1 : dual_node_node_count(node), c,s);
         work->statistics->accepted_nodes++;
         return SUCCESS;

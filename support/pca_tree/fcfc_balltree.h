@@ -22,6 +22,9 @@ typedef struct {
     real field_weight_sq_sum;      /* sum of squared point weights */
     real weighted_kappa_sum;       /* sum of Weight(point) * Kappa(point) */
     real weighted_kappa_sq_sum;    /* sum of (Weight(point) * Kappa(point))^2 */
+    real kappa_distinct; /* ordered distinct scalar products */
+    real field_weight_distinct; /* ordered distinct scalar products */
+    real weighted_kappa_distinct; /* ordered distinct scalar products */
     /* Spin-2 moments expressed in the tangent frame at center. Scalar tree
      * builders leave these zero; spherical shear tree builders own them. */
     real shear_gamma_re;           /* sum of Weight * transported gamma */

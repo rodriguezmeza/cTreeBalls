@@ -94,7 +94,7 @@ def has_tangent_bearing(pivot, neighbor):
 def angular_fixtures():
     # Four unit directions give 16 bearing-valid ordered triples, versus 24
     # ordinary triples. Adding the origin adds ordinary pairs but no bearings.
-    path = Path(__file__).resolve().parents[1] / "fixtures/provenance_window/recorded_cases.json"
+    path = Path(__file__).resolve().parents[1] / "fixtures/run_information_and_window/recorded_cases.json"
     recorded = json.loads(path.read_text())
     degenerate = np.asarray(recorded["degenerate_positions"], dtype=float)
     ordinary = np.asarray(recorded["ordinary_positions"], dtype=float)

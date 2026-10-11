@@ -4,6 +4,7 @@
 These are regression acceptance tolerances, not guarantees for arbitrary data.
 No tolerance is inferred from the measured errors during this run.
 """
+from acceptance_metadata import ACCURACY_ATOL, EXACT_RTOL, acceptance_policy
 import argparse
 import json
 from pathlib import Path
@@ -12,17 +13,7 @@ from contextlib import nullcontext
 import numpy as np
 from cyballs import cballs, build_info, search_method_id
 
-# Max complex Frobenius error, measured separately for 2PCF and 3PCF.
-# The octree uses a much smaller opening angle than the binary trees.
-SCALAR = [
-    dict(engine='kdtree-2balls-omp',theta=.5,rtol=.02,smoothing=True),
-    dict(engine='balltree-2balls-omp',theta=.2,rtol=.02,smoothing=True),
-    dict(engine='octree-2balls-omp',theta=.025,rtol=.02,smoothing=False),
-    dict(engine='octree-sincos-omp',theta=.025,rtol=.02,smoothing=True,estimator_family='core'),
-    dict(engine='octree-2balls-omp',theta=.025,rtol=.02,smoothing=True,compatibility=True),
-]
-SHEAR = [dict(engine=f'{tree}-shear-sphere-2balls-omp',theta=.05,rtol=.02,smoothing=True)
-         for tree in ('octree','kdtree','balltree')]
+from accuracy_cases import SCALAR, SHEAR
 
 
 def fixture(kind):
@@ -84,9 +75,9 @@ def run(case,data,mode,root,*,phase=None,threads=2):
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',required=True,type=Path)
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
-    report=dict(schema_version=1,status='RUNNING',build=build_info(),cases=[],
+    report=dict(schema_version=1,acceptance_policy=acceptance_policy(),status='RUNNING',build=build_info(),cases=[],
                 metric='complex Frobenius norm(error)/norm(exact), separately for pair and triple products',
-                absolute_l2_floor=1e-10,
+                absolute_l2_floor=ACCURACY_ATOL,
                 scope='512-point signed full-sky and clustered smooth-field weighted exact subsamples; 6 log bins .02..1.8; modes 0..5; 2 threads; no edge correction; requested scalar rsmooth .0003 (arcmin in core/native-octree compatibility; Cartesian elsewhere), 1 arcmin for shear, only on clustered fixture; raw shear Upsilon multipoles',
                 exclusions=['arbitrary larger theta or rsmooth','survey window conditioning','experimental shear-pivot-reuse','experimental scalar-pivot-reuse','general accuracy guarantee outside these fixtures'])
     products={}; exact_families={}; report['exact_cross_engine']=[]
@@ -105,15 +96,15 @@ def main():
                         for name,target in exact_families[family].items():
                             error=float(np.linalg.norm(exact[name]-target));norm=float(np.linalg.norm(target))
                             report['exact_cross_engine'].append(dict(engine=case['engine'],fixture=kind,product=name,
-                                relative_l2=error/max(norm,1e-10),passed=bool(error<=1e-11*norm+1e-10)))
+                                relative_l2=error/max(norm,ACCURACY_ATOL),passed=bool(error<=EXACT_RTOL*norm+ACCURACY_ATOL)))
                     modes=['approx']+(['smooth'] if case['smoothing'] and kind=='clustered_smooth' else [])
                     for mode in modes:
                         value,metadata,timing=run(case,data,mode,Path(tmp)/mode)
                         record=dict(case,fixture=kind,mode=mode,metrics={},metadata=metadata,timings=timing)
                         for name,target in exact.items():
                             error=float(np.linalg.norm(value[name]-target));norm=float(np.linalg.norm(target))
-                            record['metrics'][name]=dict(relative_l2=error/max(norm,1e-10),absolute_l2=error,reference_l2=norm,
-                                passed=bool(np.isfinite(error) and error<=case['rtol']*norm+1e-10))
+                            record['metrics'][name]=dict(relative_l2=error/max(norm,ACCURACY_ATOL),absolute_l2=error,reference_l2=norm,
+                                passed=bool(np.isfinite(error) and error<=case['rtol']*norm+ACCURACY_ATOL))
                             products[tag+'-'+mode+'-'+name]=value[name]
                         passed=all(v['passed'] for v in record['metrics'].values())
                         record['acceptance_status']=('DIAGNOSTIC_ONLY' if case.get('diagnostic') else ('PASS' if passed else 'FAIL'))

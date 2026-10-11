@@ -129,6 +129,9 @@ typedef struct {
     bodyptr pivot;
     int bins;
     int ring_max;
+    int signal_ring_max; /* Storage/acceptance keep ring_max; signal needs only nmax+3. */
+    int weight_ring_max;
+    int window_max;
     real angular_tolerance;
     real max_cell_ratio;
     shear_complex *g_ring_first;
@@ -191,96 +194,7 @@ typedef struct {
  * the representative moment never contains a resolved self/pair term. */
 #define SHEAR_SMOOTH_MAX_RMIN_FRACTION 0.5
 
-static shear_complex shear_make(real re, real im)
-{
-    shear_complex value;
-    value.re = re;
-    value.im = im;
-    return value;
-}
-
-static shear_complex shear_add(shear_complex a, shear_complex b)
-{
-    return shear_make(a.re + b.re, a.im + b.im);
-}
-
-static shear_complex shear_mul(shear_complex a, shear_complex b);
-static shear_complex shear_scale(shear_complex value, real scale);
-
-static void shear_accumulate_complex(shear_complex *target,
-                                     shear_complex increment)
-{
-#ifdef SHEAR_HAVE_VECTOR2
-    shear_vector2 value;
-    const shear_vector2 addend = {increment.re, increment.im};
-
-    memcpy(&value, target, sizeof(value));
-    value += addend;
-    memcpy(target, &value, sizeof(value));
-#else
-    target->re += increment.re;
-    target->im += increment.im;
-#endif
-}
-
-static void shear_accumulate_complex_product(shear_complex *target,
-                                             shear_complex left,
-                                             shear_complex right)
-{
-#ifdef SHEAR_HAVE_VECTOR2
-    shear_vector2 value;
-    const shear_vector2 right_vector = {right.re, right.im};
-    const shear_vector2 rotated_right = {-right.im, right.re};
-
-    memcpy(&value, target, sizeof(value));
-    value += right_vector*left.re + rotated_right*left.im;
-    memcpy(target, &value, sizeof(value));
-#else
-    shear_accumulate_complex(target, shear_mul(left, right));
-#endif
-}
-
-static void shear_accumulate_complex_scaled(shear_complex *target,
-                                            shear_complex value,
-                                            real scale)
-{
-#ifdef SHEAR_HAVE_VECTOR2
-    shear_vector2 total;
-    const shear_vector2 increment = {value.re, value.im};
-
-    memcpy(&total, target, sizeof(total));
-    total += increment*scale;
-    memcpy(target, &total, sizeof(total));
-#else
-    shear_accumulate_complex(target, shear_scale(value, scale));
-#endif
-}
-
-static shear_complex shear_sub(shear_complex a, shear_complex b)
-{
-    return shear_make(a.re - b.re, a.im - b.im);
-}
-
-static shear_complex shear_mul(shear_complex a, shear_complex b)
-{
-    return shear_make(a.re*b.re - a.im*b.im,
-                      a.re*b.im + a.im*b.re);
-}
-
-static shear_complex shear_conj(shear_complex value)
-{
-    return shear_make(value.re, -value.im);
-}
-
-static shear_complex shear_scale(shear_complex value, real scale)
-{
-    return shear_make(value.re*scale, value.im*scale);
-}
-
-static real shear_abs2(shear_complex value)
-{
-    return value.re*value.re + value.im*value.im;
-}
+#include "shear_complex_arithmetic.h"
 
 static double shear_profile_wall_time(void)
 {
@@ -792,6 +706,15 @@ static bool shear_transport_rotation_to_pivot_node(
         return shear_transport_rotation_between_units(
             pivot_unit, pivot_east, pivot_north, Pos(neighbor), rotation);
 #endif
+#ifdef SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY
+    if (Type(neighbor) == CELL) {
+        if (!isfinite(ShearSphereRadius(neighbor)))
+            return FALSE;
+        return shear_transport_rotation_between_units(
+            pivot_unit, pivot_east, pivot_north,
+            ShearSphereCenter(neighbor), rotation);
+    }
+#endif
     return shear_transport_rotation_to_pivot(
         pivot_unit, pivot_east, pivot_north, Pos(neighbor), rotation);
 }
@@ -987,7 +910,7 @@ static real shear_physical_cell_radius(const shear_pivot_workspace *work,
 }
 
 #ifdef OCTREE_SHEAR_SPHERICAL
-static bool shear_spherical_node_geometry(
+static bool shear_spherical_node_geometry_uncached(
         struct cmdline_data *cmd, nodeptr q, real qsize,
         compute_vector unit, real *effective_radius)
 {
@@ -1012,6 +935,25 @@ static bool shear_spherical_node_geometry(
     return TRUE;
 }
 
+/* Native spherical searches prepare this bound once, before any walkers run. */
+static bool shear_spherical_node_geometry(
+        struct cmdline_data *cmd, nodeptr q, real qsize,
+        compute_vector unit, real *effective_radius)
+{
+#ifdef SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY
+    if (q != NULL && Type(q) == CELL) {
+        *effective_radius = ShearSphereRadius(q);
+        if (!isfinite(*effective_radius) || *effective_radius < 0.0)
+            return FALSE;
+        for (int axis = 0; axis < NDIM; axis++)
+            unit[axis] = ShearSphereCenter(q)[axis];
+        return TRUE;
+    }
+#endif
+    return shear_spherical_node_geometry_uncached(
+        cmd, q, qsize, unit, effective_radius);
+}
+
 static bool shear_spherical_node_frame(
         struct cmdline_data *cmd, nodeptr q, real qsize,
         compute_vector unit, compute_vector east, compute_vector north,
@@ -1034,7 +976,7 @@ static bool shear_spherical_node_frame(
  * ShearTransportError records a conservative spin-phase bound for the
  * hierarchical transport path and is enforced by accepted-node searches. */
 static int shear_prepare_spherical_cell_moments(
-        struct cmdline_data *cmd, nodeptr q, real qsize)
+        struct cmdline_data *cmd, nodeptr q, real qsize, bool parallel)
 {
     compute_vector parent_unit;
     compute_vector parent_east;
@@ -1045,6 +987,9 @@ static int shear_prepare_spherical_cell_moments(
     real weight2_sum = 0.0;
     real gamma_abs2_sum = 0.0;
     real worst_error = 0.0;
+#ifdef SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY
+    real enclosing_radius = 0.0;
+#endif
     int child_index;
 
     if (q == NULL)
@@ -1053,14 +998,37 @@ static int shear_prepare_spherical_cell_moments(
         ShearTransportError(q) = 0.0;
         return SUCCESS;
     }
+#ifdef SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY
+    /* Start with the existing cube bound. Retain it if geometry or moments
+     * cannot be prepared, so failure paths still force conservative descent. */
+    ShearSphereRadius(q) = INFINITY;
+    shear_spherical_node_geometry_uncached(
+        cmd, q, qsize, ShearSphereCenter(q), &ShearSphereRadius(q));
+#endif
+    int child_status[NSUB];
     for (child_index = 0; child_index < NSUB; child_index++) {
         nodeptr child = Subp(q)[child_index];
-
-        if (child != NULL && Type(child) == CELL
-            && shear_prepare_spherical_cell_moments(
-                   cmd, child, 0.5*qsize) == FAILURE)
-            return FAILURE;
+        child_status[child_index] = SUCCESS;
+        if (child == NULL || Type(child) != CELL) continue;
+#ifdef OPENMPCODE
+        if (parallel && Nb(child) >= 8192) {
+#pragma omp task shared(child_status) firstprivate(child, child_index, qsize, cmd)
+            child_status[child_index] = shear_prepare_spherical_cell_moments(
+                cmd, child, 0.5*qsize, TRUE);
+        } else
+#endif
+        {
+            child_status[child_index] = shear_prepare_spherical_cell_moments(
+                cmd, child, 0.5*qsize, FALSE);
+        }
     }
+#ifdef OPENMPCODE
+    if (parallel) {
+#pragma omp taskwait
+    }
+#endif
+    for (child_index = 0; child_index < NSUB; child_index++)
+        if (child_status[child_index] == FAILURE) return FAILURE;
     if (!shear_spherical_node_frame(
             cmd, q, qsize, parent_unit, parent_east, parent_north,
             NULL, NULL)) {
@@ -1102,7 +1070,19 @@ static int shear_prepare_spherical_cell_moments(
         }
         (void)child_east;
         (void)child_north;
+#ifdef SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY
+        {
+            compute_vector offset;
+            real offset2;
+            /* The triangle inequality encloses every live descendant, even
+             * for a mixed-mask cell or a center far from the unit sphere. */
+            DOTPSUBV(offset2, offset, parent_unit, child_unit);
+            enclosing_radius = MAX(enclosing_radius,
+                                   rsqrt(offset2) + child_radius);
+        }
+#else
         (void)child_radius;
+#endif
         if (Type(child) == CELL) {
             if (!isfinite(ShearTransportError(child))) {
                 ShearTransportError(q) = INFINITY;
@@ -1156,6 +1136,13 @@ static int shear_prepare_spherical_cell_moments(
     ShearWeight2(q) = weight2_sum;
     ShearGammaAbs2(q) = gamma_abs2_sum;
     ShearTransportError(q) = worst_error;
+#ifdef SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY
+    /* Round outward at every level. A sparse spherical octant is usually
+     * much smaller than its enclosing Cartesian cube. Both bounds enclose
+     * the same objects and neither changes theta or the phase/bin limits. */
+    enclosing_radius += 64.0*DBL_EPSILON*(1.0 + enclosing_radius);
+    ShearSphereRadius(q) = MIN(ShearSphereRadius(q), enclosing_radius);
+#endif
     return SUCCESS;
 }
 #endif
@@ -1280,13 +1267,13 @@ static void shear_accumulate_3pcf_sample_core(
         + (size_t)bin*(size_t)(2*work->ring_max + 1)
         + (size_t)work->ring_max;
     shear_complex *w_ring = work->w_ring_active
-        + (size_t)bin*(size_t)(work->ring_max + 1);
+        + (size_t)bin*(size_t)(work->weight_ring_max + 1);
     shear_complex phase_power = shear_make(1.0, 0.0);
     int order;
 
     shear_accumulate_complex(&g_ring[0], weighted_gamma);
     w_ring[0].re += weight;
-    for (order = 1; order <= work->ring_max; order++) {
+    for (order = 1; order <= work->signal_ring_max; order++) {
         phase_power = shear_mul(phase_power, phase);
 #ifdef SHEAR_SPHERE_FAST_KERNEL
         /* The two complex products share all four real products. */
@@ -1318,6 +1305,14 @@ static void shear_accumulate_3pcf_sample_core(
         shear_accumulate_complex_product(
             &g_ring[-order], weighted_gamma, shear_conj(phase_power));
 #endif
+        if (order <= work->weight_ring_max)
+            shear_accumulate_complex_scaled(&w_ring[order], phase_power, weight);
+    }
+    /* Higher count modes are required by the finite-window solve, but
+     * no shear product reads spin rings beyond nmax+3. Keep the original
+     * phase recurrence and acceptance order; omit only unused products. */
+    for (; order <= work->weight_ring_max; order++) {
+        phase_power = shear_mul(phase_power, phase);
         shear_accumulate_complex_scaled(&w_ring[order], phase_power, weight);
     }
 
@@ -2094,7 +2089,7 @@ static void shear_reduce_pivot_selected(shear_result_accumulator *result,
     int bin2;
     int order;
     int multipoles = 2*nmax + 1;
-    int denominator_offset = 2*nmax;
+    int denominator_offset = work->window_max;
     shear_complex pivot_weighted_gamma = shear_pivot_weighted_gamma(work);
     real pivot_weight = shear_pivot_weight(work);
 
@@ -2115,12 +2110,12 @@ static void shear_reduce_pivot_selected(shear_result_accumulator *result,
         for (bin2 = 0; bin2 < work->bins; bin2++) {
             if (selected != NULL && !selected[(size_t)bin1*work->bins + bin2])
                 continue;
-            for (order = -2*nmax; order <= 2*nmax; order++) {
+            for (order = -work->window_max; order <= work->window_max; order++) {
                 shear_complex value = shear_mul(
                     shear_weight_ring_value(
-                        work->w_ring_first, order, bin1, work->ring_max),
+                        work->w_ring_first, order, bin1, work->weight_ring_max),
                     shear_conj(shear_weight_ring_value(
-                        work->w_ring_second, order, bin2, work->ring_max)));
+                        work->w_ring_second, order, bin2, work->weight_ring_max)));
                 size_t index = shear_denominator_index(
                     order + denominator_offset, bin1, bin2, work->bins);
                 if (work->same_neighbor_catalog && bin1 == bin2)
@@ -2281,6 +2276,28 @@ static void shear_print_profiles(const shear_profile_counters *profiles,
             SHEAR_ENGINE_NAME, rank, threads, max_elapsed,
             total_clear, total_walk,
             total_reduce, total_radial, total_transport, total_ring);
+}
+
+/* N0-only output is window-convolved: no higher window modes or solve. */
+static void shear_normalize_monopole(struct global_data *gd, int bins, int nmax)
+{
+    const int modes = 2*nmax + 1;
+    for (int i = 0; i < bins; i++)
+        for (int j = 0; j < bins; j++) {
+            const size_t ni = shear_denominator_index(0, i, j, bins);
+            const shear_complex n0 = shear_make(gd->histShearDenominatorRe[ni],
+                                                 gd->histShearDenominatorIm[ni]);
+            if (shear_abs2(n0) <= DBL_MIN) continue;
+            for (int c = 0; c < 4; c++)
+                for (int m = 0; m < modes; m++) {
+                    const size_t index = shear_gamma_index(c, m, i, j, modes, bins);
+                    const shear_complex value = shear_div(shear_make(
+                        gd->histShearGammaNumeratorRe[index],
+                        gd->histShearGammaNumeratorIm[index]), n0);
+                    gd->histShearGammaMultipoleRe[index] = value.re;
+                    gd->histShearGammaMultipoleIm[index] = value.im;
+                }
+        }
 }
 
 static int shear_solve_mode_coupling(struct cmdline_data *cmd,
@@ -2566,6 +2583,9 @@ static int shear_write_outputs(struct cmdline_data *cmd,
     if (stream == NULL)
         goto open_error;
     fprintf(stream, "# projection: Porth x-projection (Gamma^x)\n");
+    fprintf(stream, "# normalization: %s\n", gd->shearWindowMultipoleMax > 0
+        ? "finite-window mode-coupling solution"
+        : "Upsilon/N0; window-convolved; no edge correction");
     fprintf(stream, "# catalogs: Z1=pivot Z2=radial_bin_1 Z3=radial_bin_2\n");
     fprintf(stream, "# component n radial_bin_1 radial_bin_2 gamma_re gamma_im upsilon_re upsilon_im\n");
     for (component = 0; component < 4; component++)
@@ -2594,6 +2614,9 @@ static int shear_write_outputs(struct cmdline_data *cmd,
     if (stream == NULL)
         goto open_error;
     fprintf(stream, "# projection: Porth x-projection (Gamma^x)\n");
+    fprintf(stream, "# normalization: %s\n", gd->shearWindowMultipoleMax > 0
+        ? "finite-window mode-coupling solution"
+        : "Upsilon/N0; window-convolved; no edge correction");
     fprintf(stream, "# catalogs: Z1=pivot Z2=radial_bin_1 Z3=radial_bin_2\n");
     fprintf(stream, "# component phi_bin phi radial_bin_1 radial_bin_2 gamma_re gamma_im\n");
     for (component = 0; component < 4; component++)
@@ -2776,6 +2799,10 @@ static int shear_mpi_reduce_results(struct cmdline_data *cmd,
 #ifdef OCTREE_SHEAR_SPHERICAL
 #include "../spherical_shear/shear_sphere_dual_tree.h"
 #endif
+#if defined(SHEAR_SPHERE_NATIVE_FRONTIER_SCHEDULER) \
+    || defined(SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER)
+#include "shear_frontier_policy.h"
+#endif
 #ifdef SHEAR_SPHERE_NATIVE_FRONTIER_SCHEDULER
 #include "../spherical_shear/shear_sphere_frontier_scheduler.h"
 #endif
@@ -2789,6 +2816,7 @@ static int shear_mpi_reduce_results(struct cmdline_data *cmd,
 #if defined(SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER) \
     || defined(SHEAR_SPHERE_NATIVE_FRONTIER_SCHEDULER)
 #define SHEAR_SPHERE_FRONTIER_SCHEDULER 1
+#include "shear_progress.h"
 #endif
 
 /* Every local preparation stage must finish collectively before any rank
@@ -2812,6 +2840,8 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     int multipoles;
     int denominator_multipoles;
     int ring_max;
+    int weight_ring_max;
+    bool full_window;
     int threads = 1;
     bool run_2pcf;
     bool run_3pcf;
@@ -2865,8 +2895,11 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
 #endif
     int frontier_rank = 0;
     int frontier_ranks = 1;
+    INTEGER frontier_target = 1;
+    size_t frontier_rank_limit = 1;
     INTEGER frontier_local_task_count = 0;
     INTEGER *frontier_local_tasks = NULL;
+    shear_task_progress progress = {0};
 #else
     bodyptr *pivot_order = NULL;
     INTEGER pivot_count = 0;
@@ -2879,6 +2912,9 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     cmd->error_message[0] = '\0';
     if (gd != NULL) {
         gd->shearReuseEnabled = FALSE;
+        gd->shearFrontierTarget = gd->shearFrontierTasks = 0;
+        gd->shearFrontierLocalTasks = 0;
+        gd->shearTaskHistogramBytes = 0;
         gd->shearReusePhaseBudget = gd->shearReuseBinSlop = 0.0;
     }
 #ifdef SHEAR_MPI_ENABLED
@@ -2892,8 +2928,8 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     if (scanopt(cmd->options, "shear-pivot-reuse")) {
 #ifndef SHEAR_SPHERE_PIVOT_REUSE
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "shear-pivot-reuse requires octree-shear-sphere-2balls-omp "
-                 "or kdtree/balltree-shear-sphere-2balls-omp "
+                 "shear-pivot-reuse requires octree/kdtree/balltree "
+                 "shear-sphere-2balls-omp or -mpi "
                  "with BALLS4SCANLEVON=1");
         return FAILURE;
 #else
@@ -2902,11 +2938,29 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
                      "shear-pivot-reuse is unavailable in legacy-one-ball mode");
             return FAILURE;
         }
-        if (shear_reuse_tolerance(cmd, &reuse_tolerance) == FAILURE
-            || shear_reuse_bin_slop(cmd, &reuse_bin_slop) == FAILURE)
+#endif
+    }
+#ifdef SHEAR_SPHERE_PIVOT_REUSE
+    {
+        int status = SUCCESS;
+        const bool requested = scanopt(cmd->options, "shear-pivot-reuse");
+        if (requested) {
+            status = shear_reuse_tolerance(cmd, &reuse_tolerance);
+            if (status == SUCCESS)
+                status = shear_reuse_bin_slop(cmd, &reuse_bin_slop);
+        }
+        if (SHEAR_STAGE(status, "MPI shear pivot-reuse controls") == FAILURE)
+            return FAILURE;
+#ifdef SHEAR_MPI_ENABLED
+        char controls[160];
+        snprintf(controls, sizeof(controls), "%d:%a:%a", requested,
+                 (double)reuse_tolerance, (double)reuse_bin_slop);
+        if (cballs_mpi_agree_text(cmd, controls,
+                "MPI shear pivot-reuse controls") == FAILURE)
             return FAILURE;
 #endif
     }
+#endif
 #ifdef OCTREE_SHEAR_SPHERICAL_TWO_BALLS
     if (cballs_opt_legacy_one_ball(cmd)) {
         verb_print(cmd->verbose,
@@ -2941,6 +2995,15 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
             }
         }
     }
+#ifdef SHEAR_MPI_ENABLED
+    {
+        char controls[32];
+        snprintf(controls, sizeof(controls), "%d", reuse_enabled);
+        if (cballs_mpi_agree_text(cmd, controls,
+                "MPI shear pivot-reuse eligibility") == FAILURE)
+            return FAILURE;
+    }
+#endif
     if (scanopt(cmd->options, "shear-pivot-reuse"))
         verb_print(cmd->verbose, SHEAR_ENGINE_NAME
                    ": pivot reuse %s, phase budget %.6g rad\n",
@@ -2966,10 +3029,34 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
             if (SHEAR_STAGE(roottable[catalog] ? SUCCESS : FAILURE,
                             "MPI shear native tree presence") == FAILURE)
                 return FAILURE;
-            if (SHEAR_STAGE(shear_prepare_spherical_cell_moments(
-                    cmd, (nodeptr)roottable[catalog],
-                    gd->rSizeTable[catalog]), "MPI shear cell moments") == FAILURE)
+            const double moments_started = profile_enabled ? shear_profile_wall_time() : 0.0;
+            int moments_status = FAILURE;
+#ifdef OPENMPCODE
+            if (cmd->numthreads > 1 && Nb(roottable[catalog]) >= 16384
+                && !omp_in_parallel()) {
+#pragma omp parallel num_threads(cmd->numthreads)
+                {
+#pragma omp single nowait
+                    moments_status = shear_prepare_spherical_cell_moments(
+                        cmd, (nodeptr)roottable[catalog], gd->rSizeTable[catalog], TRUE);
+                }
+            } else
+#endif
+            {
+                moments_status = shear_prepare_spherical_cell_moments(
+                    cmd, (nodeptr)roottable[catalog], gd->rSizeTable[catalog], FALSE);
+            }
+            if (SHEAR_STAGE(moments_status, "MPI shear cell moments") == FAILURE)
                 return FAILURE;
+            if (profile_enabled) {
+                int rank = 0;
+#ifdef SHEAR_MPI_ENABLED
+                rank = SHEAR_MPI_RANK();
+#endif
+                fprintf(stderr, "SHEAR_PROFILE engine=%s rank=%d catalog=%d "
+                        "spherical_moments=%.6f\n", SHEAR_ENGINE_NAME,
+                        rank, catalog, shear_profile_wall_time() - moments_started);
+            }
             prepared[catalog] = TRUE;
         }
     }
@@ -3196,10 +3283,20 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
     bins = cmd->sizeHistN;
     nmax = cmd->mChebyshev;
     multipoles = 2*nmax + 1;
-    denominator_multipoles = 4*nmax + 1;
+    /* Preserve corrected output by default. Explicit correction wins over
+       the optimization so its required window can never be silently omitted. */
+    full_window = cballs_opt_edge_corrections(cmd)
+        || !cballs_opt_no_count_multipoles(cmd);
+    gd->shearWindowMultipoleMax = run_3pcf && full_window ? 2*nmax : 0;
+    denominator_multipoles = 2*gd->shearWindowMultipoleMax + 1;
     ring_max = run_3pcf
-        ? (2*nmax > nmax + 3 ? 2*nmax : nmax + 3)
-        : 4;
+        ? MAX(gd->shearWindowMultipoleMax, nmax + 3) : 4;
+    weight_ring_max = full_window ? ring_max : 0;
+    if (run_3pcf)
+        verb_print(cmd->verbose, SHEAR_ENGINE_NAME
+            ": count window orders -%d..%d; %s\n",
+            gd->shearWindowMultipoleMax, gd->shearWindowMultipoleMax,
+            full_window ? "window correction enabled" : "N0 normalization only");
 #ifdef OPENMPCODE
     threads = omp_get_max_threads();
 #endif
@@ -3224,7 +3321,7 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
                                   &angular_count) == FAILURE
                 || shear_size_mul((size_t)(2*ring_max + 1), (size_t)bins,
                                   &ring_count) == FAILURE
-                || shear_size_mul((size_t)(ring_max + 1), (size_t)bins,
+                || shear_size_mul((size_t)(weight_ring_max + 1), (size_t)bins,
                                   &weight_ring_count) == FAILURE
                 || shear_size_mul((size_t)threads, ring_count,
                                   &threaded_ring_count) == FAILURE
@@ -3259,6 +3356,28 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
 #endif
         return FAILURE;
     }
+#ifdef SHEAR_SPHERE_FRONTIER_SCHEDULER
+    {
+#ifdef SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER
+        const size_t serial_target = MAX(64, 8*MIN(32, threads));
+#else
+        const size_t serial_target = 256;
+#endif
+        if (SHEAR_STAGE(shear_frontier_policy(cmd, threads, frontier_ranks,
+                        accumulator_stride, serial_target,
+                        &frontier_target, &frontier_rank_limit),
+                        "MPI shear frontier controls") == FAILURE)
+            goto fail;
+#ifdef SHEAR_MPI_ENABLED
+        char controls[160];
+        snprintf(controls, sizeof(controls), "%d:%" INTEGER_FMT ":%zu:%zu",
+                 threads, frontier_target, frontier_rank_limit, accumulator_stride);
+        if (cballs_mpi_agree_text(cmd, controls,
+                "MPI shear frontier controls") == FAILURE)
+            goto fail;
+#endif
+    }
+#endif
     if (SHEAR_STAGE(shear_allocate_results(cmd, gd, bins, gamma_count,
                                denominator_count, angular_count,
                                run_2pcf, run_3pcf),
@@ -3364,13 +3483,11 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
 #ifdef SHEAR_SPHERE_FRONTIER_SCHEDULER
     {
 #ifdef SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER
-        const INTEGER target = kd_shear_pivot_task_target(
-            threads, frontier_ranks, accumulator_stride);
+        const INTEGER target = frontier_target;
         fcfc_balltreeptr second_frontier_tree =
             run_3pcf && cat3 != cat2 ? kd_second_tree : NULL;
 #else
-        const INTEGER target = shear_native_pivot_task_target(
-            threads, frontier_ranks, accumulator_stride);
+        const INTEGER target = frontier_target;
         nodeptr second_frontier_root = run_3pcf && cat3 != cat2
             ? (nodeptr)roottable[cat3] : NULL;
 #endif
@@ -3380,7 +3497,7 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
 #ifdef SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER
         if (kd_shear_build_frontier_schedule(
                 cmd, kd_pivot_tree, kd_first_tree, second_frontier_tree,
-                target, frontier_ranks, &frontier_schedule) == FAILURE) {
+                target, frontier_ranks, frontier_rank_limit, &frontier_schedule) == FAILURE) {
             goto workspace_ready;
         }
 #else
@@ -3389,20 +3506,29 @@ global int searchcalc_octree_shear_omp(struct cmdline_data *cmd,
                 btable[cat1] + ipmin - 1,
                 btable[cat1] + ipmax[cat1],
                 (nodeptr)roottable[cat2], second_frontier_root,
-                target, frontier_ranks, &frontier_schedule) == FAILURE) {
+                target, frontier_ranks, frontier_rank_limit, &frontier_schedule) == FAILURE) {
             goto workspace_ready;
         }
 #endif
         for (INTEGER task = 0; task < frontier_schedule.task_count; task++)
             if (frontier_schedule.tasks[task].owner == frontier_rank)
                 frontier_local_task_count++;
+        gd->shearFrontierTarget = target;
+        gd->shearFrontierTasks = frontier_schedule.task_count;
+        gd->shearFrontierLocalTasks = frontier_local_task_count;
+        gd->shearTaskHistogramBytes =
+            (size_t)MAX((INTEGER)1, frontier_local_task_count)
+                *accumulator_stride*sizeof(real);
         if (profile_enabled)
             fprintf(stderr,
                     "SHEAR_PROFILE engine=%s rank=%d frontier_target=%"
                     INTEGER_FMT " frontier_tasks=%" INTEGER_FMT
-                    " local_tasks=%" INTEGER_FMT "\n",
+                    " local_tasks=%" INTEGER_FMT
+                    " histogram_bytes=%zu rank_task_limit=%zu\n",
                     SHEAR_ENGINE_NAME, frontier_rank, target,
-                    frontier_schedule.task_count, frontier_local_task_count);
+                    frontier_schedule.task_count, frontier_local_task_count,
+                    (size_t)MAX((INTEGER)1, frontier_local_task_count)
+                        *accumulator_stride*sizeof(real), frontier_rank_limit);
         if (profile_enabled)
             fprintf(stderr,
                     "SHEAR_PROFILE engine=%s rank=%d frontier_schedule=%.6f"
@@ -3462,6 +3588,20 @@ workspace_ready:
                     "MPI shear traversal workspace") == FAILURE)
         goto fail;
 
+#if defined(BALLS4SCANLEV) && defined(SHEAR_SPHERE_FRONTIER_SCHEDULER)
+    progress.cmd = cmd;
+    progress.gd = gd;
+    progress.rank = frontier_rank;
+    progress.total = frontier_local_task_count;
+    progress.enabled = run_3pcf && progress.total > 0
+        && (cmd->verbose >= VERBOSEMININFO
+            || (cmd->verbose_log >= VERBOSEMININFO && gd->outlog != NULL));
+    if (progress.enabled) {
+        progress.started = shear_profile_wall_time();
+        shear_print_task_progress(&progress);
+    }
+#endif
+
 #ifdef BALLS4SCANLEV
 #ifdef SHEAR_SPHERE_FRONTIER_SCHEDULER
 #define SHEAR_SCAN_SHARED shared(frontier_schedule,block_accumulator_all,    \
@@ -3499,6 +3639,9 @@ workspace_ready:
         work.gd = gd;
         work.bins = bins;
         work.ring_max = ring_max;
+        work.signal_ring_max = nmax + 3;
+        work.weight_ring_max = weight_ring_max;
+        work.window_max = gd->shearWindowMultipoleMax;
         work.angular_tolerance = MIN(0.5*PI,
             cmd->theta*PI/(2.0*(real)ring_max + 1.0));
         work.max_cell_ratio = work.angular_tolerance >= 0.5*PI
@@ -3577,6 +3720,8 @@ workspace_ready:
 #pragma omp atomic write
                     reuse_failed = 1;
                 }
+                if (!reuse.failed)
+                    shear_complete_progress_task(&progress);
                 continue;
             }
 #endif
@@ -3733,6 +3878,9 @@ workspace_ready:
                 shear_reduce_pivot_profiled(&accumulator, &work, nmax,
                                             scan_2pcf, run_3pcf);
             }
+#ifdef SHEAR_SPHERE_FRONTIER_SCHEDULER
+            shear_complete_progress_task(&progress);
+#endif
 #ifndef SHEAR_SPHERE_FRONTIER_SCHEDULER
 #pragma omp ordered
             shear_merge_accumulator(&global_accumulator, &accumulator,
@@ -3757,18 +3905,25 @@ workspace_ready:
 #undef SHEAR_SCAN_SHARED
 
 #ifdef SHEAR_SPHERE_PIVOT_REUSE
-    if (reuse_failed) {
+    if (reuse_failed)
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  SHEAR_ENGINE_NAME ": pivot-reuse workspace allocation "
                  "or spherical frame transport failed");
+    /* Every rank must finish traversal before any rank enters the reductions,
+     * including idle ranks and ranks where no reuse task was executed. */
+    if (SHEAR_STAGE(reuse_failed ? FAILURE : SUCCESS,
+                    "MPI shear pivot-reuse traversal") == FAILURE)
         goto fail;
-    }
 #endif
 
     shear_print_profiles(profile_all, threads);
 
 #if defined(BALLS4SCANLEV) \
     && defined(SHEAR_SPHERE_FRONTIER_SCHEDULER)
+    if (progress.enabled)
+        verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
+            SHEAR_ENGINE_NAME ": 3PCF tasks complete on rank %d; "
+            "reducing histograms and finalizing outputs\n", frontier_rank);
     for (INTEGER task_index = 0;
          task_index < frontier_schedule.task_count; task_index++) {
 #ifdef SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER
@@ -3834,8 +3989,12 @@ workspace_ready:
     if (run_2pcf)
         shear_normalize_2pcf(gd, bins);
     if (run_3pcf) {
-        if (shear_solve_mode_coupling(cmd, gd, bins, nmax) == FAILURE)
-            goto fail;
+        if (full_window) {
+            if (shear_solve_mode_coupling(cmd, gd, bins, nmax) == FAILURE)
+                goto fail;
+        } else {
+            shear_normalize_monopole(gd, bins, nmax);
+        }
         shear_reconstruct_angular(cmd, gd, bins, nmax);
         gd->shearMultipoleMax = nmax;
         gd->shearAngularBins = cmd->sizeHistPhi;

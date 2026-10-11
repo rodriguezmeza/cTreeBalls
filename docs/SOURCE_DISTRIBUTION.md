@@ -1,4 +1,4 @@
-# Source distribution contract
+# Contents and checks for the source distribution
 
 The public `cyballs` source archive uses external GSL and CFITSIO. Its staged
 `Makefile_settings` contains `GSLINTERNAL = 0` and its staged
@@ -50,11 +50,11 @@ source copies, with user-site and checkout `PYTHONPATH` imports disabled. No
 
 Verification checks the resolved/native profile, external dependency settings,
 installed source identity and complete engine registry, and C/Cython ABI through
-object construction. It runs independent scalar complex-window oracles and known
+object construction. It runs independent scalar complex-window reference calculations and known
 weighted LOS pair/triplet totals. Logs, commands, exit codes, archive/wheel hashes,
 build identity and numerical results are retained in `verification.json` and
 adjacent files. A failing subprocess makes verification fail. Checks remain
-active under optimized Python; numerical-oracle workers run with assertions on.
+active under optimized Python; workers that evaluate numerical references run with assertions on.
 
 Use the build prerequisites selected by `pyproject.toml`; build isolation can
 select a different NumPy/Cython version from the development environment. The
@@ -67,3 +67,13 @@ Developer builds with bundled libraries remain supported when those source trees
 are present. Public source archives cannot enable those missing trees without
 first supplying them. Use the archive profile as the expected profile for an
 installed-artifact check, rather than a developer checkout's bundled defaults.
+
+## Release approval
+
+Clean installation is required but is only one release component. Use
+`scripts/release_readiness.py run --component package --output NEW_DIRECTORY`
+to retain a component receipt, then combine it with the active and sanitizer
+receipts as described in [Active release checks](../ACTIVE_RELEASE_GATE.md).
+Missing or mismatched evidence cannot produce a passing release decision.
+Build helpers load relative to `setup.py`, so isolated PEP 517 execution does
+not depend on the caller putting the checkout on Python's import path.

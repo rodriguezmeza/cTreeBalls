@@ -1,12 +1,18 @@
 """Input, estimator, reference-kernel, and forward-model regression tests."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+
 from itertools import combinations
 import importlib.util
 import json
 import os
-from pathlib import Path
-import sys
 
 import numpy as np
 import pytest

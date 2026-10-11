@@ -1,7 +1,7 @@
 Active Source Profile
 =====================
 
-This testing branch contains the enabled Makefile addon set. The core octree method is always available. Shared implementation dependencies live in support/ and do not register standalone methods. The Cython binding sources stay in python/; Python analysis, benchmark and regression scripts live in tests/python/. Inactive addons and addons/python_env are excluded from the branch.
+This testing branch contains the enabled Makefile addon set. The core octree method is always available. Shared implementation dependencies live in support/ and do not register standalone methods. The Cython binding sources stay in python/; analysis utilities live in tests/python/, together with benchmarks and regression scripts. Test targets are included from Makefile_tests. Inactive addons and addons/python_env are excluded from the branch.
 
 Runtime discovery
 -----------------
@@ -39,7 +39,7 @@ Enabled methods
     scalar; native octree; deterministic MPI+OpenMP frontier. distributed 2PCF and LogMultipole angular-multipole 3PCF.
 
 ``octree-shear-sphere-2balls-omp`` (ID 200)
-    full-sky spin-2 shear; dual-node dual-node octree; OpenMP. xi+/xi- and four Gamma-x shear 3PCF components.
+    full-sky spin-2 shear; dual-node octree; OpenMP. xi+/xi- and four Gamma-x shear 3PCF components.
 
 ``octree-shear-sphere-2balls-mpi`` (ID 203)
     full-sky spin-2 shear; native octree; adaptive MPI+OpenMP frontier. distributed xi+/xi- and four Gamma-x shear 3PCF components.
@@ -145,6 +145,7 @@ Source organization
 
 * ``addons/`` contains enabled engines and their I/O/binding dependencies.
 * ``support/`` contains shared builders and compatibility kernels.
-* ``tests/python/`` contains all Python testing and benchmark scripts.
+* ``tests/python/`` contains analysis, benchmarks, regression programs and their README files.
+* ``Makefile_tests`` contains targets included by the main Makefile.
 * ``tests/make_tests/`` contains shell/native-test launchers.
 * ``python/`` contains Cython source and declaration files only.

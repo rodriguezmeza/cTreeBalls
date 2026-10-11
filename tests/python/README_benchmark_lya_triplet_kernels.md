@@ -127,7 +127,7 @@ sparse neighborhoods can make this slower than the exact segment method.
 
 The benchmark checks all exact products against kernel 1, including raw sums,
 with `rtol=1e-9, atol=3e-11` for large accumulated catalogs. Small independent
-oracle tests use tighter tolerances. Every repeated output must be identical.
+tests against reference calculations use tighter tolerances. Every repeated output must be identical.
 
 For approximate reconstruction, `summary.json` reports raw-sum relative L2,
 maximum and 95th-percentile correlation relative errors, invalid denominators,
@@ -149,7 +149,7 @@ python scripts/generate_capabilities.py --check
 ```
 
 The capability manifest declares the new engine, shared-file ownership and
-oracle tests. The active release gate retains independent multipole oracle cases
+tests against reference calculations. The active release checks retain independent multipole reference calculation cases
 and compares one versus multiple threads. The standard all-engines script keeps
 its exact-estimator comparisons separate; use this calibration script for the
 new anisotropic multipole engine. Cython accepts its name and parameters through
@@ -193,4 +193,4 @@ test. `--require-accepted-multipole` refers to the **selected** mu product of a
 multipole run, and exact-mode timing includes both multipoles and exact bins.
 It must not be quoted as moment-only performance or a successful finite-L
 reconstruction. See [the detailed guide](../../docs/LYA_MULTIPOLE_RECONSTRUCTION.md)
-for the finite-moment limitation, output metadata, memory and API contracts.
+for the finite-moment limitation, output metadata, memory and API requirements.

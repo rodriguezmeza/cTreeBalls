@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "globaldefs.h"
-#include "tree_contracts.h"
+#include "tree_checks.h"
 
 int main(void)
 {

@@ -105,7 +105,7 @@ pivot counter.
 For 3D catalogs the angular error bound is on projected tangent bearings.
 Catalogs retain the observer origin and radial bins are chord distances.
 `no-normalize-HistZeta,weights-norm` selects raw weighted distinct triplets;
-do not subtract repeated neighbors again. See [the scalar contract](../../docs/3pcf.rst).
+do not subtract repeated neighbors again. See [the scalar definition](../../docs/3pcf.rst).
 
 `TWOPCFON=1` and `TPCFON=1` enable the two correlation orders at build time.
 When both are active, `only-2pcf` and `only-3pcf` select one at runtime.
@@ -136,7 +136,7 @@ path when `pkg-config sleef` is available. Use
 otherwise Linux retains the scalar logarithm path.
 
 `options=dual-node-direct-triples` retains the cubic triple-node traversal as a
-validation oracle for moderate catalogs. The traversal is adapted from
+reference calculation for moderate catalogs. The traversal is adapted from
 dual-node by Mike Jarvis under its BSD license.
 
 ## Octree-GGG compatibility
@@ -165,4 +165,4 @@ both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
 2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
 and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
 depend on the observable, controls, and geometry. See the
-[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+[hierarchy definition, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

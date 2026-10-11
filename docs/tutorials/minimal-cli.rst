@@ -26,8 +26,8 @@ From the repository root:
 The generated catalog avoids external downloads.  The low body count and
 histogram resolution keep this tutorial compact.
 
-3. Inspect Provenance
----------------------
+3. Inspect Run Information
+--------------------------
 
 .. code-block:: bash
 

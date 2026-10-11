@@ -28,14 +28,29 @@ def attach_products(result, config, catalog):
                 raise ValueError(f'malformed native {key}')
         if not np.array_equal(result['orders'],np.arange(-n,n+1)):
             raise ValueError('unexpected native shear multipole axis')
-        if result['window'].shape!=(config.bins,config.bins,4*n+1) or not np.all(np.isfinite(result['window'])):
+        corrected=result.get('window_correction_applied', True)
+        window_max=2*n if corrected else 0
+        if (result['window'].shape!=(config.bins,config.bins,2*window_max+1)
+                or not np.all(np.isfinite(result['window']))):
             raise ValueError('malformed native window')
-        result.update(window_diagnostics(result['upsilon'],result['window'],result['gamma'],n))
+        if not np.array_equal(result['window_orders'],np.arange(-window_max,window_max+1)):
+            raise ValueError('unexpected native window multipole axis')
+        if corrected:
+            result.update(window_diagnostics(result['upsilon'],result['window'],result['gamma'],n))
+        else:
+            n0=result['window'][:,:,0]
+            valid=(n0.real>0)&(np.abs(n0.imag)<=1e-10*np.maximum(n0.real,1.))
+            normalized=np.full_like(result['upsilon'],np.nan+1j*np.nan)
+            np.divide(result['upsilon'],n0[None,:,:,None],out=normalized,where=valid[None,:,:,None])
+            result.update(normalized=normalized,window_monopole=n0,
+                          window_valid=valid,gamma_valid=valid)
         result['normalizations']={
             'upsilon':'raw distinct-triplet spin-2 sums',
             'normalized':'upsilon / window monopole; window-convolved',
-            'gamma':'native finite-window mode-coupling solution',
-            'gamma_valid_policy':f'positive window monopole; cond(C)<={CONDITION_LIMIT:g}; relative solve residual<={RESIDUAL_LIMIT:g}',
+            'gamma':('native finite-window mode-coupling solution' if corrected
+                     else 'upsilon / window monopole; window-convolved; no edge correction'),
+            'gamma_valid_policy':(f'positive window monopole; cond(C)<={CONDITION_LIMIT:g}; relative solve residual<={RESIDUAL_LIMIT:g}'
+                                  if corrected else 'positive window monopole; no correction solve performed'),
             'orders':'all signed orders -nmax..+nmax; no inferred symmetry or factor-of-two rescaling',
         }
     return result

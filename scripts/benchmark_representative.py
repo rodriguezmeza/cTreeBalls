@@ -35,7 +35,7 @@ def fixture(n,geometry):
 
 def worker(a):
     import numpy as np
-    from benchmark_contracts import peak_bytes
+    from benchmark_accuracy_and_timing import peak_bytes
     from cyballs import cballs,save_result_packet,build_info
     comm=None
     if a.engine.endswith('-mpi'):

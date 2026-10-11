@@ -20,14 +20,15 @@ locations, so they may also be invoked from the repository root:
 tests/make_tests/run_test_make_info
 ```
 
-The root Makefile remains the preferred way to build the required profile and
+The root Makefile includes `Makefile_tests`, which owns the test and benchmark
+targets. The root Makefile remains the preferred way to build the required profile and
 run a test together:
 
 ```sh
 make test-make-info
 make test-search-methods
 make test-openmp-determinism
-make test-scalar-numerical-contract
+make test-scalar-numerical-definitions
 make test-shear-sphere-2balls
 make test-shear-sphere-kdtree-2balls
 make test-shear-sphere-balltree-2balls
@@ -39,10 +40,10 @@ make test-octree-3pcf-3d-mpi
 MPI launchers require an MPI-enabled build and `mpiexec`. Runtime registry
 tests verify that disabled standalone methods are not exposed.
 
-`test_scalar_numerical_contract.py` checks raw weighted scalar multipoles
-against an independent oracle, rotations, inactive smoothing, degenerate
+`test_scalar_numerical_definitions.py` checks raw weighted scalar multipoles
+against an independent reference calculation, rotations, inactive smoothing, degenerate
 bearings, and C file input. Run it through pytest with matching C/Cython
 binaries. Set `CBALLS_TEST_MPI=1`
 and launch it with `mpiexec -n 2` to check the MPI sibling engines. The active
-release gate tests the selected profile; targeted CI also exercises builds
+release checks tests the selected profile; targeted CI also exercises builds
 with pivot smoothing disabled.

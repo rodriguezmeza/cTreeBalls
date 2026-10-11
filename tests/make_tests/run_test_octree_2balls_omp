@@ -252,7 +252,18 @@ if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
     fi
 
     if grep -q -- '-DSMOOTHPIVOT\([[:space:]]\|$\)' <<<"$build_env"; then
-        compat_smooth=KKKCorrelation,compute-HistN,no-normalize-HistZeta,out-m-HistZeta
+        compat_default=KKKCorrelation,compute-HistN,no-normalize-HistZeta,out-m-HistZeta
+        run_case compat-default octree-2balls-omp 1 256 1 \
+                 "$compat_default,legacy-one-ball" true
+        run_case compat-disabled octree-2balls-omp 1 256 1 \
+                 "$compat_default,legacy-one-ball,no-smooth-pivot" true
+        compare_outputs "$TMP_ROOT/compat-default" \
+                        "$TMP_ROOT/compat-disabled" 'hist*.txt'
+        if grep -q 'with option smooth-pivot' "$TMP_ROOT/compat-default/run.log"; then
+            fail_with_log "GGG compatibility enabled smoothing without opt-in" \
+                          "$TMP_ROOT/compat-default/run.log"
+        fi
+        compat_smooth=$compat_default,smooth-pivot
         run_case compat-smooth-one octree-2balls-omp 1 256 1 \
                  "$compat_smooth,legacy-one-ball" true
         run_case compat-smooth-many octree-2balls-omp "$MULTI_THREADS" \
@@ -261,7 +272,7 @@ if grep -q -- '-DTHREEPCFCONVERGENCE\([[:space:]]\|$\)' <<<"$build_env"; then
                         "$TMP_ROOT/compat-smooth-many" 'hist*.txt'
         grep -q 'with option smooth-pivot' \
             "$TMP_ROOT/compat-smooth-one/run.log" \
-            || fail_with_log "GGG compatibility did not enable default smoothing" \
+            || fail_with_log "GGG compatibility did not enable explicitly requested smoothing" \
                              "$TMP_ROOT/compat-smooth-one/run.log"
         if $has_ggg_reference; then
             run_case compat-smooth-reference octree-ggg-omp 1 256 1 \

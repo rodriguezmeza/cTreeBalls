@@ -43,6 +43,9 @@
  =============================================================================*/
 
 #include "globaldefs.h"
+#include "distinct_products.h"
+#include "legendre_window_solver.h"
+#include "physical_survey_config.h"
 
 #include <limits.h>
 #ifdef BALLS4SCANLEV
@@ -78,15 +81,15 @@ typedef struct {
     int nlm;
     REAL *alm_re;
     REAL *alm_im;
+    REAL *alm_distinct;
     REAL *ylm_norm;
     REAL *ylm_a;
     REAL *ylm_b;
     REAL *ylm_diag;
     REAL *shell_w;
-    REAL *shell_w2;
-    REAL *shell_f2;
-    REAL *same_los_power;
-    REAL *same_los_weight;
+    REAL *shell_weight_distinct;
+    REAL *distinct_los_power;
+    REAL *distinct_los_weight;
     REAL *group_alm_re;
     REAL *group_alm_im;
     REAL *group_shell_w;
@@ -126,6 +129,7 @@ typedef struct {
 } cb3d_hist, *cb3d_histptr;
 
 typedef struct {
+    int lmax;
     REAL *num;
     REAL *den;
     REAL *xi_num;
@@ -134,10 +138,18 @@ typedef struct {
     INTEGER npivots;
 } cb3d_result, *cb3d_resultptr;
 
+typedef struct {
+    REAL *zeta, *encore, *valid, *status, *rcond, *residual;
+    REAL *xi, *xi_valid, *xi_status;
+} cb3d_correction;
+local int cb3d_correct_survey(struct cmdline_data *, const cb3d_resultptr,
+    const cb3d_resultptr, cb3d_correction *);
+local void cb3d_free_correction(cb3d_correction *);
+
 local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
                          cb3d_histptr h,
                          int compute_xi, int compute_zeta,
-                         int exclude_same_los, int exclude_all_same_los,
+                         int exclude_same_los, int exclude_all_same_los, int lmax,
                          ErrorMsg allocation_error);
 local void cb3d_free_hist(cb3d_histptr h);
 local void cb3d_clear_pivot(cb3d_histptr h);
@@ -176,7 +188,7 @@ local REAL cb3d_bin_center(struct cmdline_data* cmd, struct global_data* gd,
 local void cb3d_add_arrays(REAL *dst, const REAL *src, size_t n);
 local void cb3d_zero_array(REAL *dst, size_t n);
 local int cb3d_init_result(struct cmdline_data* cmd, cb3d_resultptr result,
-                           int compute_xi, int compute_zeta);
+                           int compute_xi, int compute_zeta, int lmax);
 local void cb3d_free_result(cb3d_resultptr result);
 local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                        bodyptr *btable, INTEGER *nbody,
@@ -191,16 +203,12 @@ local int cb3d_print_survey_zeta(struct cmdline_data* cmd,
                                  struct global_data* gd,
                                  const cb3d_resultptr numerator,
                                  const cb3d_resultptr randoms,
-                                 REAL random_scale);
+                                 REAL random_scale, const cb3d_correction *corrected);
 local int cb3d_print_survey_xi(struct cmdline_data* cmd,
                                struct global_data* gd,
                                const cb3d_resultptr numerator,
                                const cb3d_resultptr randoms,
-                               REAL random_scale);
-local double cb3d_wigner_3j_zero_squared(int l1, int l2, int l3);
-local int cb3d_solve_real_system(double *matrix, double *rhs, int n,
-                                  double *condition_proxy);
-
+                               REAL random_scale, const cb3d_correction *corrected);
 /* ------------------------------------------------------------------------- */
 
 global int cb3d_prepare_common_frame(struct cmdline_data* cmd,
@@ -465,7 +473,7 @@ global int searchcalc_octree_3pcf_3d_omp(struct cmdline_data* cmd,
     }
     if (cb3d_validate(cmd, &compute_xi, &compute_zeta, FALSE) == FAILURE)
         goto setup_done;
-    if (cb3d_init_result(cmd, &result, compute_xi, compute_zeta) == FAILURE)
+    if (cb3d_init_result(cmd, &result, compute_xi, compute_zeta, cmd->mChebyshev) == FAILURE)
         goto setup_done;
     status = SUCCESS;
 
@@ -514,15 +522,16 @@ global int searchcalc_octree_3pcf_3d_omp_survey(
     double cpustart = CPUTIME;
     cb3d_result numerator = {0};
     cb3d_result randoms = {0};
+    cb3d_correction corrected = {0};
     int compute_xi = FALSE;
     int compute_zeta = FALSE;
     int status = FAILURE;
 
     if (cb3d_validate(cmd, &compute_xi, &compute_zeta, TRUE) == FAILURE)
         goto setup_done;
-    if (cb3d_init_result(cmd, &numerator, compute_xi, compute_zeta) == FAILURE)
+    if (cb3d_init_result(cmd, &numerator, compute_xi, compute_zeta, cb_survey_solve_lmax(cmd)) == FAILURE)
         goto setup_done;
-    if (cb3d_init_result(cmd, &randoms, compute_xi, compute_zeta) == FAILURE)
+    if (cb3d_init_result(cmd, &randoms, compute_xi, compute_zeta, cb_survey_window_lmax(cmd)) == FAILURE)
         goto setup_done;
     status = SUCCESS;
 
@@ -531,7 +540,7 @@ setup_done:
     if (status == FAILURE) goto cleanup;
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
         "\n%s: ENCORE-style survey estimator; measuring D-R and random "
-        "multipoles through ell=%d\n", cmd->searchMethod, cmd->mChebyshev);
+        "signal solve through ell=%d, window through ell=%d\n", cmd->searchMethod, numerator.lmax, randoms.lmax);
     status = cb3d_measure(cmd, gd, btable, nbody, 1, nbody[dmr_cat], dmr_cat,
                           compute_xi, compute_zeta, FALSE, FALSE, &numerator);
     if (status == FAILURE) goto cleanup;
@@ -540,14 +549,19 @@ setup_done:
                           compute_xi, compute_zeta, FALSE, FALSE, &randoms);
     if (status == FAILURE) goto cleanup;
 
-    /* Solve the window system only after both globally summed measurements. */
+    /* Correction is computation: retain it even when serialization is disabled. */
+    if (cb3d_parallel_publish(cmd))
+        status=cb3d_correct_survey(cmd,&numerator,&randoms,&corrected);
+    status=cb3d_parallel_consensus(cmd,status,"3D survey correction");
+    if(status==FAILURE) goto cleanup;
+    /* Serialize only already computed products. */
     if (cb3d_parallel_publish(cmd) && !cballs_opt_no_out_hist(cmd)) {
         if (compute_zeta)
             status = cb3d_print_survey_zeta(cmd, gd, &numerator, &randoms,
-                                            random_scale);
+                                            random_scale, &corrected);
         if (status == SUCCESS && compute_xi)
             status = cb3d_print_survey_xi(cmd, gd, &numerator, &randoms,
-                                          random_scale);
+                                          random_scale, &corrected);
     }
     status = cb3d_parallel_consensus(cmd, status, "3D survey edge correction/output");
 
@@ -555,16 +569,31 @@ cleanup:
     gd->cpusearch = CPUTIME - cpustart;
     if(status==SUCCESS && cb3d_parallel_publish(cmd)) {
         size_t pair_shape[1]={(size_t)cmd->sizeHistN};
-        size_t triple_shape[3]={(size_t)cmd->mChebyshev+1,(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
+        size_t triple_shape[3]={(size_t)numerator.lmax+1,(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
+        size_t random_shape[3]={(size_t)randoms.lmax+1,(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
+        size_t corrected_shape[3]={(size_t)cb_survey_signal_lmax(cmd)+1,(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
+        size_t shell_shape[2]={(size_t)cmd->sizeHistN,(size_t)cmd->sizeHistN};
         cballs_result_adopt("data_pair_numerator",(void **)&numerator.xi_num,0,1,pair_shape);
         cballs_result_adopt("data_pair_denominator",(void **)&numerator.xi_den,0,1,pair_shape);
         cballs_result_adopt("data_triple_numerator",(void **)&numerator.num,0,3,triple_shape);
         cballs_result_adopt("data_triple_denominator",(void **)&numerator.den,0,3,triple_shape);
         cballs_result_adopt("random_pair_numerator",(void **)&randoms.xi_num,0,1,pair_shape);
         cballs_result_adopt("random_pair_denominator",(void **)&randoms.xi_den,0,1,pair_shape);
-        cballs_result_adopt("random_triple_numerator",(void **)&randoms.num,0,3,triple_shape);
-        cballs_result_adopt("random_triple_denominator",(void **)&randoms.den,0,3,triple_shape);
+        cballs_result_adopt("random_triple_numerator",(void **)&randoms.num,0,3,random_shape);
+        cballs_result_adopt("random_triple_denominator",(void **)&randoms.den,0,3,random_shape);
+#define CB3D_ADOPT(name,field,rank,shape) cballs_result_adopt(name,(void **)&corrected.field,0,rank,shape)
+        CB3D_ADOPT("zeta_corrected_legendre",zeta,3,corrected_shape);
+        CB3D_ADOPT("zeta_corrected_encore",encore,3,corrected_shape);
+        CB3D_ADOPT("zeta_valid",valid,2,shell_shape);
+        CB3D_ADOPT("zeta_status",status,2,shell_shape);
+        CB3D_ADOPT("zeta_rcond",rcond,2,shell_shape);
+        CB3D_ADOPT("zeta_relative_residual",residual,2,shell_shape);
+        CB3D_ADOPT("xi_corrected",xi,1,pair_shape);
+        CB3D_ADOPT("xi_valid",xi_valid,1,pair_shape);
+        CB3D_ADOPT("xi_status",xi_status,1,pair_shape);
+#undef CB3D_ADOPT
     }
+    cb3d_free_correction(&corrected);
     cb3d_free_result(&numerator);
     cb3d_free_result(&randoms);
     return status;
@@ -600,11 +629,19 @@ local int cb3d_validate(struct cmdline_data* cmd,
                  routine_name, cmd->mChebyshev, OCTREE3PCF3D_MAX_LMAX);
         return FAILURE;
     }
-    if (survey_mode && *compute_zeta && cmd->mChebyshev < 1) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "%s: survey 3PCF requires mChebyshev>=1 so one extra "
-                 "window-coupling multipole can be measured", routine_name);
-        return FAILURE;
+    if (survey_mode) {
+        /* Bound each input before addition/multiplication in the order helpers. */
+        if(cmd->surveySignalLmax < -1 || cmd->surveySignalLmax > CB_SURVEY_MAX_SOLVE
+            || cmd->surveySolvePadding < 0 || cmd->surveySolvePadding > CB_SURVEY_MAX_SOLVE
+            || cmd->surveyWindowLmax < -1 || cmd->surveyWindowLmax > CB_SURVEY_MAX_WINDOW
+            || cb_survey_signal_lmax(cmd)<0 || cb_survey_solve_lmax(cmd)>CB_SURVEY_MAX_SOLVE
+            || cb_survey_window_lmax(cmd)<2*cb_survey_solve_lmax(cmd)
+            || !isfinite(cmd->surveyRcondMin) || cmd->surveyRcondMin<=0. || cmd->surveyRcondMin>1.) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                "physical survey requires signal>=0, padding>=0, signal+padding<=32, "
+                "2*(signal+padding)<=window<=64 and 0<surveyRcondMin<=1; -1 selects automatic orders");
+            return FAILURE;
+        }
     }
     if (!isfinite((double)cmd->rangeN) || cmd->rangeN <= 0.0
         || !isfinite((double)cmd->rminHist) || cmd->rminHist < 0.0
@@ -615,7 +652,7 @@ local int cb3d_validate(struct cmdline_data* cmd,
     }
 
     nb = (size_t)cmd->sizeHistN;
-    lcount = (size_t)cmd->mChebyshev + 1;
+    lcount = (size_t)(survey_mode ? cb_survey_window_lmax(cmd) : cmd->mChebyshev) + 1;
     if (nb > SIZE_MAX/nb || lcount > SIZE_MAX/(nb*nb)) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: histogram dimensions overflow size_t", routine_name);
@@ -630,12 +667,13 @@ local int cb3d_validate(struct cmdline_data* cmd,
 }
 
 local int cb3d_init_result(struct cmdline_data* cmd, cb3d_resultptr result,
-                           int compute_xi, int compute_zeta)
+                           int compute_xi, int compute_zeta, int lmax)
 {
     size_t nb = (size_t)cmd->sizeHistN;
-    size_t nacc = ((size_t)cmd->mChebyshev + 1)*nb*nb;
+    size_t nacc = ((size_t)lmax + 1)*nb*nb;
 
     memset(result, 0, sizeof(*result));
+    result->lmax=lmax;
     if (compute_zeta) {
         if (cballs_calloc_checked((void **)&result->num, nacc,
                                   sizeof(*result->num), "3D 3PCF numerator",
@@ -685,7 +723,7 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                        cb3d_resultptr result)
 {
     const size_t nb = (size_t)cmd->sizeHistN;
-    const size_t nacc = ((size_t)cmd->mChebyshev + 1)*nb*nb;
+    const size_t nacc = ((size_t)result->lmax + 1)*nb*nb;
     const INTEGER first_block = cb3d_parallel_first(cmd);
     const INTEGER block_stride = cb3d_parallel_stride(cmd);
     int allocation_failed = FALSE;
@@ -749,7 +787,7 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
         cb3d_hist hist;
         ErrorMsg thread_error = "";
         int hist_ready = cb3d_init_hist(cmd, gd, &hist, compute_xi, compute_zeta,
-                                        exclude_same_los, exclude_all_same_los,
+                                        exclude_same_los, exclude_all_same_los, result->lmax,
                                         thread_error) == SUCCESS;
         if (!hist_ready) {
 #pragma omp critical(cb3d_allocation_failure)
@@ -791,7 +829,7 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                     if (hist.read_mask && Mask(p) == FALSE) continue;
                     cb3d_clear_pivot(&hist);
                     hist.pivot_weight = Weight(p);
-                    hist.pivot_field = Weight(p)*Kappa(p);
+                    hist.pivot_field = cballs_product(Weight(p),Kappa(p));
                     if (hist.exclude_same_los)
                         hist.pivot_los = Octree3pcf3dLosId(p);
                     if (cb3d_walktree(gd, p, (nodeptr)roottable[cat], &hist,
@@ -849,6 +887,19 @@ local int cb3d_measure(struct cmdline_data* cmd, struct global_data* gd,
                 || cb3d_parallel_reduce_reals(cmd, result->xi_den, nb) == FAILURE))
         || cb3d_parallel_reduce_integers(cmd, counters, 2) == FAILURE)
         return FAILURE;
+    status=SUCCESS;
+    if (cb3d_parallel_publish(cmd)) {
+        if (compute_zeta) for(size_t k=0;k<nacc;k++)
+            if (!isfinite(result->num[k]) || !isfinite(result->den[k])
+                || !isfinite(cballs_checked_ratio(result->num[k],result->den[k]))) status=FAILURE;
+        if (compute_xi) for(size_t k=0;k<nb;k++)
+            if (!isfinite(result->xi_num[k]) || !isfinite(result->xi_den[k])
+                || !isfinite(cballs_checked_ratio(result->xi_num[k],result->xi_den[k]))) status=FAILURE;
+        if (status==FAILURE) snprintf(cmd->error_message,_ERRORMSGSIZE_,
+            "numerical range: raw physical numerator/denominator or normalized result is not representable (overflow or underflow)");
+    }
+    status=cb3d_parallel_consensus(cmd,status,"physical raw arithmetic");
+    if (status==FAILURE) return FAILURE;
     result->nbb = counters[0];
     result->npivots = counters[1];
     return SUCCESS;
@@ -902,11 +953,10 @@ local int cb3d_exclude_all_same_los_option(struct cmdline_data* cmd)
 local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
                          cb3d_histptr h,
                          int compute_xi, int compute_zeta,
-                         int exclude_same_los, int exclude_all_same_los,
+                         int exclude_same_los, int exclude_all_same_los, int lmax,
                          ErrorMsg allocation_error)
 {
     int nb = cmd->sizeHistN;
-    int lmax = cmd->mChebyshev;
     int nlm = (lmax + 1)*(lmax + 2)/2;
     size_t nalm = (size_t)nb * (size_t)nlm;
     size_t nacc = (size_t)(lmax + 1) * (size_t)nb * (size_t)nb;
@@ -944,17 +994,17 @@ local int cb3d_init_hist(struct cmdline_data* cmd, struct global_data* gd,
 
     if (compute_zeta) {
         CB3D_ALLOC(alm_re, nalm);
+        CB3D_ALLOC(alm_distinct, nalm);
         CB3D_ALLOC(alm_im, nalm);
         CB3D_ALLOC(ylm_norm, (size_t)nlm);
         CB3D_ALLOC(ylm_a, (size_t)nlm);
         CB3D_ALLOC(ylm_b, (size_t)nlm);
         CB3D_ALLOC(ylm_diag, (size_t)lmax + 1);
         CB3D_ALLOC(shell_w, (size_t)nb);
-        CB3D_ALLOC(shell_w2, (size_t)nb);
-        CB3D_ALLOC(shell_f2, (size_t)nb);
+        CB3D_ALLOC(shell_weight_distinct, (size_t)nb);
         if (exclude_all_same_los) {
-            CB3D_ALLOC(same_los_power, nacc);
-            CB3D_ALLOC(same_los_weight, (size_t)nb*(size_t)nb);
+            CB3D_ALLOC(distinct_los_power, nacc);
+            CB3D_ALLOC(distinct_los_weight, (size_t)nb*(size_t)nb);
             CB3D_ALLOC(group_alm_re, nalm);
             CB3D_ALLOC(group_alm_im, nalm);
             CB3D_ALLOC(group_shell_w, (size_t)nb);
@@ -994,16 +1044,16 @@ fail:
 local void cb3d_free_hist(cb3d_histptr h)
 {
     free(h->alm_re);
+    free(h->alm_distinct);
     free(h->alm_im);
     free(h->ylm_norm);
     free(h->ylm_a);
     free(h->ylm_b);
     free(h->ylm_diag);
     free(h->shell_w);
-    free(h->shell_w2);
-    free(h->shell_f2);
-    free(h->same_los_power);
-    free(h->same_los_weight);
+    free(h->shell_weight_distinct);
+    free(h->distinct_los_power);
+    free(h->distinct_los_weight);
     free(h->group_alm_re);
     free(h->group_alm_im);
     free(h->group_shell_w);
@@ -1040,8 +1090,8 @@ local void cb3d_activate_bin(cb3d_histptr h, int b)
     memset(h->alm_re + offset, 0, (size_t)h->nlm * sizeof(*h->alm_re));
     memset(h->alm_im + offset, 0, (size_t)h->nlm * sizeof(*h->alm_im));
     h->shell_w[b] = 0.0;
-    h->shell_w2[b] = 0.0;
-    h->shell_f2[b] = 0.0;
+    memset(h->alm_distinct + offset, 0, (size_t)h->nlm * sizeof(*h->alm_distinct));
+    h->shell_weight_distinct[b] = 0.0;
 }
 
 local int cb3d_bin_index(cb3d_histptr h, REAL r)
@@ -1131,11 +1181,11 @@ local int cb3d_add_body(struct global_data* gd,
     if (b < 0) return SUCCESS;
 
     w = Weight(q);
-    f = w * Kappa(q);
+    f = cballs_product(w,Kappa(q));
 
     if (h->compute_xi) {
-        h->xi_num[b] += h->pivot_field * f;
-        h->xi_den[b] += h->pivot_weight * w;
+        h->xi_num[b] += cballs_product(h->pivot_field,f);
+        h->xi_den[b] += cballs_product(h->pivot_weight,w);
     }
 
     if (h->compute_zeta) {
@@ -1146,9 +1196,8 @@ local int cb3d_add_body(struct global_data* gd,
 
         cb3d_activate_bin(h, b);
         cb3d_accumulate_ylm_cartesian(h, b, f, xhat, yhat, zhat);
-        h->shell_w[b]  += w;
-        h->shell_w2[b] += w*w;
-        h->shell_f2[b] += f*f;
+        h->shell_weight_distinct[b] = cballs_distinct_merge(h->shell_weight_distinct[b],0.0,h->shell_w[b],w);
+        h->shell_w[b] += w;
         if (h->exclude_all_same_los) {
             if (h->neighbor_count == h->neighbor_capacity) {
                 size_t capacity = h->neighbor_capacity == 0
@@ -1205,13 +1254,17 @@ local int cb3d_prepare_same_los_correction(struct global_data* gd,
         int b1 = h->active_bins[i1_active];
         for (i2_active = 0; i2_active < h->nactive; i2_active++) {
             int b2 = h->active_bins[i2_active];
-            h->same_los_weight[(size_t)b1*(size_t)h->nbins + (size_t)b2] = 0.0;
+            h->distinct_los_weight[(size_t)b1*(size_t)h->nbins + (size_t)b2] = 0.0;
             for (ell = 0; ell <= h->lmax; ell++)
-                h->same_los_power[CB3D_ACC_INDEX(ell, b1, b2, h->nbins)] = 0.0;
+                h->distinct_los_power[CB3D_ACC_INDEX(ell, b1, b2, h->nbins)] = 0.0;
         }
     }
     if (h->neighbor_count < 2) return SUCCESS;
 
+    /* Reuse the main moments as a prefix of completed LOS groups. */
+    memset(h->alm_re,0,(size_t)h->nbins*h->nlm*sizeof(*h->alm_re));
+    memset(h->alm_im,0,(size_t)h->nbins*h->nlm*sizeof(*h->alm_im));
+    memset(h->shell_w,0,(size_t)h->nbins*sizeof(*h->shell_w));
     qsort(h->neighbors, h->neighbor_count, sizeof(*h->neighbors),
           cb3d_compare_neighbor_los);
     begin = 0;
@@ -1224,11 +1277,14 @@ local int cb3d_prepare_same_los_correction(struct global_data* gd,
                   == Octree3pcf3dLosId(h->neighbors[begin].body))
             end++;
         h->group_nactive = 0;
+        memset(h->group_alm_re,0,(size_t)h->nbins*h->nlm*sizeof(*h->group_alm_re));
+        memset(h->group_alm_im,0,(size_t)h->nbins*h->nlm*sizeof(*h->group_alm_im));
+        memset(h->group_shell_w,0,(size_t)h->nbins*sizeof(*h->group_shell_w));
         for (item = begin; item < end; item++) {
             bodyptr q = h->neighbors[item].body;
             int b = h->neighbors[item].bin;
             REAL dr2, radius;
-            REAL field = Weight(q)*Kappa(q);
+            REAL field = cballs_product(Weight(q),Kappa(q));
             compute_vector dr;
 
             if (!h->group_bin_active[b]) {
@@ -1255,17 +1311,18 @@ local int cb3d_prepare_same_los_correction(struct global_data* gd,
             h->group_shell_w[b] += Weight(q);
         }
 
-        for (i1_active = 0; i1_active < h->group_nactive; i1_active++) {
-            int b1 = h->group_active_bins[i1_active];
+        for (i1_active = 0; i1_active < h->nactive; i1_active++) {
+            int b1 = h->active_bins[i1_active];
             for (i2_active = i1_active;
-                 i2_active < h->group_nactive; i2_active++) {
-                int b2 = h->group_active_bins[i2_active];
-                REAL group_weight = h->group_shell_w[b1]*h->group_shell_w[b2];
+                 i2_active < h->nactive; i2_active++) {
+                int b2 = h->active_bins[i2_active];
+                REAL group_weight = cballs_product(h->shell_w[b1],h->group_shell_w[b2])
+                                  + cballs_product(h->group_shell_w[b1],h->shell_w[b2]);
 
-                h->same_los_weight[(size_t)b1*(size_t)h->nbins + (size_t)b2]
+                h->distinct_los_weight[(size_t)b1*(size_t)h->nbins + (size_t)b2]
                     += group_weight;
                 if (b1 != b2)
-                    h->same_los_weight[(size_t)b2*(size_t)h->nbins + (size_t)b1]
+                    h->distinct_los_weight[(size_t)b2*(size_t)h->nbins + (size_t)b1]
                         += group_weight;
                 for (ell = 0; ell <= h->lmax; ell++) {
                     REAL power = 0.0;
@@ -1273,20 +1330,29 @@ local int cb3d_prepare_same_los_correction(struct global_data* gd,
                         int n = CB3D_LM_INDEX(ell, m);
                         size_t i1 = CB3D_ALM_INDEX(b1, h->nlm, n);
                         size_t i2 = CB3D_ALM_INDEX(b2, h->nlm, n);
-                        REAL product = h->group_alm_re[i1]*h->group_alm_re[i2]
-                                     + h->group_alm_im[i1]*h->group_alm_im[i2];
+                        REAL product = cballs_product(h->alm_re[i1],h->group_alm_re[i2])
+                                     + cballs_product(h->alm_im[i1],h->group_alm_im[i2])
+                                     + cballs_product(h->group_alm_re[i1],h->alm_re[i2])
+                                     + cballs_product(h->group_alm_im[i1],h->alm_im[i2]);
                         power += m == 0 ? product : 2.0*product;
                     }
-                    h->same_los_power[
+                    h->distinct_los_power[
                         CB3D_ACC_INDEX(ell, b1, b2, h->nbins)] += power;
                     if (b1 != b2)
-                        h->same_los_power[
+                        h->distinct_los_power[
                             CB3D_ACC_INDEX(ell, b2, b1, h->nbins)] += power;
                 }
             }
         }
-        for (i1_active = 0; i1_active < h->group_nactive; i1_active++)
-            h->group_bin_active[h->group_active_bins[i1_active]] = 0;
+        for (i1_active = 0; i1_active < h->group_nactive; i1_active++) {
+            int b=h->group_active_bins[i1_active];
+            h->shell_w[b]+=h->group_shell_w[b];
+            for (int n=0;n<h->nlm;n++) {
+                size_t i=CB3D_ALM_INDEX(b,h->nlm,n);
+                h->alm_re[i]+=h->group_alm_re[i]; h->alm_im[i]+=h->group_alm_im[i];
+            }
+            h->group_bin_active[b]=0;
+        }
         begin = end;
     }
     return SUCCESS;
@@ -1310,8 +1376,7 @@ local void cb3d_accumulate_pivot(cb3d_histptr h)
                 int b2 = h->active_bins[i2_active];
                 REAL power = 0.0;
                 REAL d;
-                REAL diag_f = 0.0;
-                REAL diag_w = 0.0;
+
                 size_t idx = CB3D_ACC_INDEX(ell, b1, b2, h->nbins);
                 REAL num_increment;
                 REAL den_increment;
@@ -1320,24 +1385,25 @@ local void cb3d_accumulate_pivot(cb3d_histptr h)
                     int n = CB3D_LM_INDEX(ell, m);
                     size_t i1 = CB3D_ALM_INDEX(b1, h->nlm, n);
                     size_t i2 = CB3D_ALM_INDEX(b2, h->nlm, n);
-                    REAL reprod = h->alm_re[i1]*h->alm_re[i2]
-                                + h->alm_im[i1]*h->alm_im[i2];
+                    REAL reprod = b1==b2 ? 0.0 : cballs_product(h->alm_re[i1],h->alm_re[i2])
+                                + cballs_product(h->alm_im[i1],h->alm_im[i2]);
+                    if (b1 == b2 && !h->exclude_all_same_los)
+                        reprod = h->alm_distinct[i1];
                     power += (m == 0) ? reprod : 2.0*reprod;
                 }
 
-                d = h->shell_w[b1] * h->shell_w[b2];
+                d = b1==b2 ? 0.0 : cballs_product(h->shell_w[b1],h->shell_w[b2]);
                 if (h->exclude_all_same_los) {
-                    diag_f = h->same_los_power[idx];
-                    diag_w = h->same_los_weight[
+                    power = h->distinct_los_power[idx];
+                    d = h->distinct_los_weight[
                         (size_t)b1*(size_t)h->nbins + (size_t)b2];
                 } else if (b1 == b2) {
-                    diag_f = ((REAL)(2*ell + 1) / (REAL)CB3D_FOURPI) * h->shell_f2[b1];
-                    diag_w = h->shell_w2[b1];
+                    d = h->shell_weight_distinct[b1];
                 }
 
-                num_increment = wp_delta
-                              * ((REAL)CB3D_FOURPI * (power - diag_f));
-                den_increment = wp_count * (d - diag_w);
+                num_increment = cballs_product(wp_delta,
+                              (REAL)CB3D_FOURPI * power);
+                den_increment = cballs_product(wp_count, d);
                 h->num[idx] += num_increment;
                 h->den[idx] += den_increment;
                 if (b1 != b2) {
@@ -1414,6 +1480,18 @@ local void cb3d_accumulate_ylm_cartesian(cb3d_histptr h, int radial_bin,
                            xhat, yhat, zhat);
 }
 
+local inline void cb3d_accumulate_mode(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
+                                        size_t index, double field, double yr, double yi)
+{
+    const REAL re = cballs_product(field,yr);
+    const REAL im = -cballs_product(field,yi);
+    if (alm_re == h->alm_re)
+        h->alm_distinct[index] += cballs_distinct_complex_cross(
+            alm_re[index],alm_im[index],re,im);
+    alm_re[index] += re;
+    alm_im[index] += im;
+}
+
 local void cb3d_accumulate_ylm_to(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
                                   int radial_bin, REAL field, double xhat,
                                   double yhat, double zhat)
@@ -1427,8 +1505,8 @@ local void cb3d_accumulate_ylm_to(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
     for (m = 0; m <= h->lmax; m++) {
         int n = CB3D_LM_INDEX(m, m);
         size_t index = offset + (size_t)n;
-        alm_re[index] += (REAL)(weighted_field * ymm_re);
-        alm_im[index] -= (REAL)(weighted_field * ymm_im);
+        cb3d_accumulate_mode(h,alm_re,alm_im,index,weighted_field,
+                                ymm_re,ymm_im);
 
         if (m < h->lmax) {
             double y_lm2_re = ymm_re;
@@ -1442,8 +1520,8 @@ local void cb3d_accumulate_ylm_to(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
             y_lm1_re = (double)h->ylm_a[n] * zhat * ymm_re;
             y_lm1_im = (double)h->ylm_a[n] * zhat * ymm_im;
             index = offset + (size_t)n;
-            alm_re[index] += (REAL)(weighted_field * y_lm1_re);
-            alm_im[index] -= (REAL)(weighted_field * y_lm1_im);
+            cb3d_accumulate_mode(h,alm_re,alm_im,index,weighted_field,
+                                y_lm1_re,y_lm1_im);
 
             for (ell = m + 2; ell <= h->lmax; ell++) {
                 double ylm_re;
@@ -1455,8 +1533,8 @@ local void cb3d_accumulate_ylm_to(cb3d_histptr h, REAL *alm_re, REAL *alm_im,
                 ylm_im = (double)h->ylm_a[n] * zhat * y_lm1_im
                        - (double)h->ylm_b[n] * y_lm2_im;
                 index = offset + (size_t)n;
-                alm_re[index] += (REAL)(weighted_field * ylm_re);
-                alm_im[index] -= (REAL)(weighted_field * ylm_im);
+                cb3d_accumulate_mode(h,alm_re,alm_im,index,weighted_field,
+                                ylm_re,ylm_im);
                 y_lm2_re = y_lm1_re;
                 y_lm2_im = y_lm1_im;
                 y_lm1_re = ylm_re;
@@ -1602,336 +1680,126 @@ local int cb3d_print_xi(struct cmdline_data* cmd, struct global_data* gd,
     return SUCCESS;
 }
 
-local double cb3d_wigner_3j_zero_squared(int l1, int l2, int l3)
+local void cb3d_free_correction(cb3d_correction *c)
 {
-    int sum = l1 + l2 + l3;
-    int g;
-    double log_value;
-
-    if (l1 < 0 || l2 < 0 || l3 < 0 || (sum & 1)
-        || l1 + l2 < l3 || l1 + l3 < l2 || l2 + l3 < l1)
-        return 0.0;
-    g = sum/2;
-    log_value =
-          2.0*lgamma((double)g + 1.0)
-        - 2.0*lgamma((double)(g-l1) + 1.0)
-        - 2.0*lgamma((double)(g-l2) + 1.0)
-        - 2.0*lgamma((double)(g-l3) + 1.0)
-        + lgamma((double)(sum-2*l1) + 1.0)
-        + lgamma((double)(sum-2*l2) + 1.0)
-        + lgamma((double)(sum-2*l3) + 1.0)
-        - lgamma((double)sum + 2.0);
-    return exp(log_value);
+    free(c->zeta);free(c->encore);free(c->valid);free(c->status);
+    free(c->rcond);free(c->residual);free(c->xi);free(c->xi_valid);free(c->xi_status);
+    memset(c,0,sizeof(*c));
 }
 
-local int cb3d_solve_real_system(double *matrix, double *rhs, int n,
-                                  double *condition_proxy)
+local int cb3d_correct_survey(struct cmdline_data *cmd,
+    const cb3d_resultptr numerator,const cb3d_resultptr randoms,cb3d_correction *c)
 {
-    int i, j, k;
-    double matrix_scale = 0.0;
-    double largest_pivot = 0.0;
-    double smallest_pivot = DBL_MAX;
-    double tolerance;
-
-    if (matrix == NULL || rhs == NULL || n <= 0)
-        return FAILURE;
-    for (i = 0; i < n*n; i++) {
-        double value = fabs(matrix[i]);
-        if (!isfinite(value)) return FAILURE;
-        if (value > matrix_scale) matrix_scale = value;
-    }
-    for (i = 0; i < n; i++)
-        if (!isfinite(rhs[i])) return FAILURE;
-    tolerance = 128.0*DBL_EPSILON*(double)n
-              * (matrix_scale > 1.0 ? matrix_scale : 1.0);
-
-    for (k = 0; k < n; k++) {
-        int pivot_row = k;
-        double pivot_size = fabs(matrix[k*n+k]);
-
-        for (i = k + 1; i < n; i++) {
-            double candidate = fabs(matrix[i*n+k]);
-            if (candidate > pivot_size) {
-                pivot_size = candidate;
-                pivot_row = i;
+    const int nb=cmd->sizeHistN, signal=cb_survey_signal_lmax(cmd);
+    const size_t shells=(size_t)nb*nb;
+#define CB3D_CORR_ALLOC(field,count) \
+    if(cballs_calloc_checked((void **)&c->field,count,sizeof(REAL), \
+        "physical survey " #field,cmd->error_message,_ERRORMSGSIZE_)==FAILURE) goto fail
+    if(numerator->num) {
+        CB3D_CORR_ALLOC(zeta,((size_t)signal+1)*shells);
+        CB3D_CORR_ALLOC(encore,((size_t)signal+1)*shells);
+        CB3D_CORR_ALLOC(valid,shells);CB3D_CORR_ALLOC(status,shells);
+        CB3D_CORR_ALLOC(rcond,shells);CB3D_CORR_ALLOC(residual,shells);
+        for(int b1=0;b1<nb;b1++) for(int b2=b1;b2<nb;b2++) {
+            double num[CB_SURVEY_MAX_SOLVE+1],ran[CB_SURVEY_MAX_WINDOW+1];
+            double x[CB_SURVEY_MAX_SOLVE+1],rcond,residual;
+            for(int ell=0;ell<=numerator->lmax;ell++)
+                num[ell]=numerator->num[CB3D_ACC_INDEX(ell,b1,b2,nb)];
+            for(int ell=0;ell<=randoms->lmax;ell++)
+                ran[ell]=randoms->num[CB3D_ACC_INDEX(ell,b1,b2,nb)];
+            int status=cb_survey_solve(num,ran,numerator->lmax,randoms->lmax,
+                                      cmd->surveyRcondMin,x,&rcond,&residual);
+            for(int order=0;order<2;order++) {
+                int left=order?b2:b1,right=order?b1:b2;
+                size_t pair=(size_t)left*nb+right;
+                c->valid[pair]=status==CB_SURVEY_VALID;
+                c->status[pair]=status;c->rcond[pair]=rcond;c->residual[pair]=residual;
+                for(int ell=0;ell<=signal;ell++) {
+                    size_t i=CB3D_ACC_INDEX(ell,left,right,nb);
+                    c->zeta[i]=status==CB_SURVEY_VALID ? x[ell] : NAN;
+                    c->encore[i]=c->zeta[i]*CB3D_FOURPI*((ell&1)?-1.:1.)/sqrt(2.*ell+1.);
+                    if(status==CB_SURVEY_VALID && (!isfinite(c->encore[i])
+                        || (c->zeta[i]!=0. && c->encore[i]==0.))) {
+                        snprintf(cmd->error_message,_ERRORMSGSIZE_,"physical survey ENCORE conversion is not representable");
+                        goto fail;
+                    }
+                }
             }
         }
-        if (!isfinite(pivot_size) || pivot_size <= tolerance)
-            return FAILURE;
-        if (pivot_row != k) {
-            for (j = k; j < n; j++) {
-                double temporary = matrix[k*n+j];
-                matrix[k*n+j] = matrix[pivot_row*n+j];
-                matrix[pivot_row*n+j] = temporary;
-            }
-            {
-                double temporary = rhs[k];
-                rhs[k] = rhs[pivot_row];
-                rhs[pivot_row] = temporary;
-            }
-        }
-
-        pivot_size = fabs(matrix[k*n+k]);
-        if (pivot_size > largest_pivot) largest_pivot = pivot_size;
-        if (pivot_size < smallest_pivot) smallest_pivot = pivot_size;
-        for (i = k + 1; i < n; i++) {
-            double factor = matrix[i*n+k]/matrix[k*n+k];
-            matrix[i*n+k] = 0.0;
-            for (j = k + 1; j < n; j++)
-                matrix[i*n+j] -= factor*matrix[k*n+j];
-            rhs[i] -= factor*rhs[k];
+    }
+    if(numerator->xi_num) {
+        CB3D_CORR_ALLOC(xi,(size_t)nb);CB3D_CORR_ALLOC(xi_valid,(size_t)nb);
+        CB3D_CORR_ALLOC(xi_status,(size_t)nb);
+        for(int b=0;b<nb;b++) {
+            double den=randoms->xi_num[b], value=den>0. ? cballs_checked_ratio(numerator->xi_num[b],den) : NAN;
+            int status=den==0. ? CB_SURVEY_EMPTY : isfinite(value) ? CB_SURVEY_VALID : CB_SURVEY_NONFINITE;
+            c->xi[b]=status==CB_SURVEY_VALID ? value : NAN;
+            c->xi_valid[b]=status==CB_SURVEY_VALID;c->xi_status[b]=status;
         }
     }
-
-    for (i = n - 1; i >= 0; i--) {
-        double value = rhs[i];
-        for (j = i + 1; j < n; j++)
-            value -= matrix[i*n+j]*rhs[j];
-        if (fabs(matrix[i*n+i]) <= tolerance)
-            return FAILURE;
-        rhs[i] = value/matrix[i*n+i];
-        if (!isfinite(rhs[i])) return FAILURE;
-    }
-    if (condition_proxy != NULL)
-        *condition_proxy = smallest_pivot > 0.0
-            ? largest_pivot/smallest_pivot : HUGE_VAL;
+#undef CB3D_CORR_ALLOC
     return SUCCESS;
+fail:
+    cb3d_free_correction(c);return FAILURE;
 }
 
 local int cb3d_print_survey_zeta(struct cmdline_data* cmd,
-                                 struct global_data* gd,
-                                 const cb3d_resultptr numerator,
-                                 const cb3d_resultptr randoms,
-                                 REAL random_scale)
+    struct global_data* gd,const cb3d_resultptr numerator,
+    const cb3d_resultptr randoms,REAL random_scale,const cb3d_correction *c)
 {
     char namebuf[MAXLENGTHOFFILES];
-    stream outstr = NULL;
-    double *matrix = NULL;
-    double *rhs = NULL;
-    double *n_encore = NULL;
-    double *r_encore = NULL;
-    double *window = NULL;
-    int nb = cmd->sizeHistN;
-    int measured_lmax = cmd->mChebyshev;
-    int nmode = measured_lmax + 1;
-    int output_lmax = scanopt(cmd->options, "survey-keep-top-multipole")
-                    ? measured_lmax : measured_lmax - 1;
-    int b1, b2, ell, ell_window, ell_signal;
-    int invalid_pairs = 0;
-    int write_failed = FALSE;
-    int status = FAILURE;
-
-    if (format_checked(namebuf, sizeof(namebuf), "3D survey 3PCF output path",
-                       "%s_3d_survey%s", gd->fpfnamehistZetaMFileName,
-                       EXTFILES) != 0) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "3D survey 3PCF output path is too long");
-        return FAILURE;
+    if(format_checked(namebuf,sizeof(namebuf),"3D survey 3PCF output path",
+        "%s_3d_survey%s",gd->fpfnamehistZetaMFileName,EXTFILES)!=0) {
+        snprintf(cmd->error_message,_ERRORMSGSIZE_,"3D survey 3PCF output path is too long");return FAILURE;
     }
-    if (cballs_malloc_checked((void **)&matrix, (size_t)nmode*(size_t)nmode,
-                              sizeof(*matrix), "3D survey coupling matrix",
-                              cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
-        goto cleanup;
-    if (cballs_malloc_checked((void **)&rhs, (size_t)nmode, sizeof(*rhs),
-                              "3D survey coupling right-hand side",
-                              cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
-        goto cleanup;
-    if (cballs_malloc_checked((void **)&n_encore, (size_t)nmode,
-                              sizeof(*n_encore), "3D survey D-R multipoles",
-                              cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
-        goto cleanup;
-    if (cballs_malloc_checked((void **)&r_encore, (size_t)nmode,
-                              sizeof(*r_encore), "3D survey random multipoles",
-                              cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
-        goto cleanup;
-    if (cballs_malloc_checked((void **)&window, (size_t)nmode,
-                              sizeof(*window), "3D survey window multipoles",
-                              cmd->error_message, _ERRORMSGSIZE_) == FAILURE)
-        goto cleanup;
-
-    outstr = fopen(namebuf, "w");
-    if (outstr == NULL) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "cannot open 3D survey 3PCF output '%s': %s",
-                 namebuf, strerror(errno));
-        goto cleanup;
-    }
-    fprintf(outstr, "# cBalls ENCORE-style survey 3PCF edge correction\n");
-    fprintf(outstr, "# estimator: N=(D-alpha*R)^3; window=R^3; "
-                    "M zeta_ENCORE=N_ENCORE/R0_ENCORE\n");
-    fprintf(outstr, "# alpha %.17e  measured_lmax %d  output_lmax %d\n",
-            (double)random_scale, measured_lmax, output_lmax);
-    fprintf(outstr, "# only distinct radial shells bin1<bin2 are emitted\n");
-    fprintf(outstr, "# standard coefficient multiplies P_ell(mu); "
-                    "ENCORE coefficient multiplies "
-                    "(-1)^ell*sqrt(2ell+1)*P_ell(mu)/(4*pi)\n");
-    fprintf(outstr, "# D-R pivots %" INTEGER_FMT
-                    " visits %" INTEGER_FMT
-                    "  R pivots %" INTEGER_FMT
-                    " visits %" INTEGER_FMT "\n",
-            numerator->npivots, numerator->nbb,
-            randoms->npivots, randoms->nbb);
-    fprintf(outstr, "# zero policy: corrected multipoles are 0 and valid=0 "
-                    "when R0 is zero/non-finite or M is singular\n");
-    fprintf(outstr, "# columns: ell bin1 bin2 r1_center r2_center "
-                    "zeta_legendre zeta_encore N_legendre R_legendre "
-                    "N_encore R_encore R0_encore pivot_condition valid\n");
-
-    for (b1 = 0; b1 < nb; b1++) {
-        for (b2 = b1 + 1; b2 < nb; b2++) {
-            double r0_encore;
-            double condition_proxy = HUGE_VAL;
-            int valid = TRUE;
-
-            for (ell = 0; ell <= measured_lmax; ell++) {
-                size_t index = CB3D_ACC_INDEX(ell, b1, b2, nb);
-                double sign = (ell & 1) ? -1.0 : 1.0;
-                double conversion =
-                    CB3D_FOURPI*sign*sqrt(2.0*(double)ell + 1.0);
-                n_encore[ell] = (double)numerator->num[index]/conversion;
-                r_encore[ell] = (double)randoms->num[index]/conversion;
-            }
-            r0_encore = r_encore[0];
-            if (!isfinite(r0_encore) || r0_encore == 0.0) {
-                valid = FALSE;
-            } else {
-                for (ell = 0; ell <= measured_lmax; ell++)
-                    window[ell] = r_encore[ell]/r0_encore;
-                for (ell_signal = 0; ell_signal <= measured_lmax;
-                     ell_signal++) {
-                    rhs[ell_signal] = n_encore[ell_signal]/r0_encore;
-                    for (ell = 0; ell <= measured_lmax; ell++) {
-                        double coupling = 0.0;
-                        for (ell_window = 0;
-                             ell_window <= measured_lmax; ell_window++) {
-                            double wigner2 = cb3d_wigner_3j_zero_squared(
-                                ell_signal, ell_window, ell);
-                            if (wigner2 == 0.0) continue;
-                            coupling += window[ell_window]
-                                * wigner2
-                                * sqrt((2.0*(double)ell_signal + 1.0)
-                                     *(2.0*(double)ell_window + 1.0)
-                                     *(2.0*(double)ell + 1.0))
-                                / CB3D_FOURPI;
-                        }
-                        matrix[ell_signal*nmode + ell] = coupling;
-                    }
-                }
-                if (cb3d_solve_real_system(matrix, rhs, nmode,
-                                           &condition_proxy) == FAILURE)
-                    valid = FALSE;
-            }
-
-            if (!valid) {
-                invalid_pairs++;
-                for (ell = 0; ell <= measured_lmax; ell++) rhs[ell] = 0.0;
-            }
-            for (ell = 0; ell <= output_lmax; ell++) {
-                size_t index = CB3D_ACC_INDEX(ell, b1, b2, nb);
-                double sign = (ell & 1) ? -1.0 : 1.0;
-                double encore_to_legendre =
-                    sign*sqrt(2.0*(double)ell + 1.0)/CB3D_FOURPI;
-                fprintf(outstr,
-                        "%d %d %d %.12e %.12e %.12e %.12e "
-                        "%.12e %.12e %.12e %.12e %.12e %.12e %d\n",
-                        ell, b1 + 1, b2 + 1,
-                        cb3d_bin_center(cmd, gd, b1),
-                        cb3d_bin_center(cmd, gd, b2),
-                        rhs[ell]*encore_to_legendre, rhs[ell],
-                        (double)numerator->num[index],
-                        (double)randoms->num[index],
-                        n_encore[ell], r_encore[ell], r0_encore,
-                        condition_proxy, valid);
-            }
+    stream out=fopen(namebuf,"w");
+    if(!out) {snprintf(cmd->error_message,_ERRORMSGSIZE_,"cannot open 3D survey output '%s': %s",namebuf,strerror(errno));return FAILURE;}
+    fprintf(out,"# cBalls survey 3PCF; computed before serialization\n");
+    fprintf(out,"# alpha %.17e signal_lmax %d solve_lmax %d window_lmax %d rcond_min %.17e\n",
+        (double)random_scale,cb_survey_signal_lmax(cmd),numerator->lmax,randoms->lmax,(double)cmd->surveyRcondMin);
+    fprintf(out,"# N=(D-alpha*R)^3; R=(alpha*R)^3; only bin1<bin2 emitted (API includes diagonal and transpose)\n");
+    fprintf(out,"# zeta_legendre multiplies P_ell; zeta_encore multiplies (-1)^ell*sqrt(2ell+1)*P_ell/(4*pi)\n");
+    fprintf(out,"# invalid coefficients are NaN; status 0=empty 1=valid 2=singular 3=ill-conditioned 4=residual 5=nonfinite\n");
+    fprintf(out,"# condition is infinity-norm condition in standard Legendre basis; relative_residual is backward error\n");
+    fprintf(out,"# columns: ell bin1 bin2 r1_center r2_center zeta_legendre zeta_encore N_legendre R_legendre N_encore R_encore R0_encore condition valid rcond relative_residual status\n");
+    int nb=cmd->sizeHistN;
+    for(int b1=0;b1<nb;b1++) for(int b2=b1+1;b2<nb;b2++) {
+        size_t pair=(size_t)b1*nb+b2;
+        for(int ell=0;ell<=cb_survey_signal_lmax(cmd);ell++) {
+            size_t i=CB3D_ACC_INDEX(ell,b1,b2,nb);
+            double conversion=CB3D_FOURPI*((ell&1)?-1.:1.)*sqrt(2.*ell+1.);
+            fprintf(out,"%d %d %d %.17e %.17e %.17e %.17e %.17e %.17e %.17e %.17e %.17e %.17e %d %.17e %.17e %d\n",
+                ell,b1+1,b2+1,(double)cb3d_bin_center(cmd,gd,b1),(double)cb3d_bin_center(cmd,gd,b2),
+                (double)c->zeta[i],(double)c->encore[i],(double)numerator->num[i],(double)randoms->num[i],
+                numerator->num[i]/conversion,randoms->num[i]/conversion,randoms->num[pair]/CB3D_FOURPI,
+                c->rcond[pair]>0. ? 1./c->rcond[pair] : HUGE_VAL,(int)c->valid[pair],
+                (double)c->rcond[pair],(double)c->residual[pair],(int)c->status[pair]);
         }
     }
-
-    write_failed = ferror(outstr);
-    if (fclose(outstr) != 0) write_failed = TRUE;
-    outstr = NULL;
-    if (write_failed) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "failed writing 3D survey 3PCF output '%s'", namebuf);
-        goto cleanup;
-    }
-    if (invalid_pairs > 0)
-        verb_print_warning(cmd->verbose,
-            "octree-3pcf-3d-omp: %d radial-bin pairs had an empty or "
-            "singular random-window correction and were written as invalid",
-            invalid_pairs);
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nPrinted edge-corrected 3D survey 3PCF to %s\n",
-                        namebuf);
-    status = SUCCESS;
-
-cleanup:
-    if (outstr != NULL) fclose(outstr);
-    free(matrix);
-    free(rhs);
-    free(n_encore);
-    free(r_encore);
-    free(window);
-    return status;
+    int failed=ferror(out);if(fclose(out)) failed=1;
+    if(failed) {snprintf(cmd->error_message,_ERRORMSGSIZE_,"failed writing 3D survey output '%s'",namebuf);return FAILURE;}
+    return SUCCESS;
 }
 
 local int cb3d_print_survey_xi(struct cmdline_data* cmd,
-                               struct global_data* gd,
-                               const cb3d_resultptr numerator,
-                               const cb3d_resultptr randoms,
-                               REAL random_scale)
+    struct global_data* gd,const cb3d_resultptr numerator,
+    const cb3d_resultptr randoms,REAL random_scale,const cb3d_correction *c)
 {
     char namebuf[MAXLENGTHOFFILES];
-    stream outstr = NULL;
-    int b;
-    int write_failed;
-
-    if (format_checked(namebuf, sizeof(namebuf), "3D survey 2PCF output path",
-                       "%s_3d_survey%s", gd->fpfnamehistXi2pcfFileName,
-                       EXTFILES) != 0) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "3D survey 2PCF output path is too long");
-        return FAILURE;
+    if(format_checked(namebuf,sizeof(namebuf),"3D survey 2PCF output path",
+        "%s_3d_survey%s",gd->fpfnamehistXi2pcfFileName,EXTFILES)!=0) {
+        snprintf(cmd->error_message,_ERRORMSGSIZE_,"3D survey 2PCF output path is too long");return FAILURE;
     }
-    outstr = fopen(namebuf, "w");
-    if (outstr == NULL) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "cannot open 3D survey 2PCF output '%s': %s",
-                 namebuf, strerror(errno));
-        return FAILURE;
-    }
-    fprintf(outstr, "# cBalls ENCORE/Landy-Szalay survey 2PCF\n");
-    fprintf(outstr, "# estimator: xi=(D-alpha*R)^2/RR\n");
-    fprintf(outstr, "# alpha %.17e\n", (double)random_scale);
-    fprintf(outstr, "# D-R pivots %" INTEGER_FMT
-                    " visits %" INTEGER_FMT
-                    "  R pivots %" INTEGER_FMT
-                    " visits %" INTEGER_FMT "\n",
-            numerator->npivots, numerator->nbb,
-            randoms->npivots, randoms->nbb);
-    fprintf(outstr, "# zero policy: xi=0 and valid=0 when RR is zero or "
-                    "non-finite\n");
-    fprintf(outstr, "# columns: bin r_center xi N_DminusR_squared RR valid\n");
-    for (b = 0; b < cmd->sizeHistN; b++) {
-        double nvalue = (double)numerator->xi_num[b];
-        double rvalue = (double)randoms->xi_num[b];
-        int valid = isfinite(nvalue) && isfinite(rvalue)
-                 && rvalue != 0.0;
-        double xi = valid ? nvalue/rvalue : 0.0;
-        fprintf(outstr, "%d %.12e %.12e %.12e %.12e %d\n",
-                b + 1, cb3d_bin_center(cmd, gd, b),
-                xi, nvalue, rvalue, valid);
-    }
-
-    write_failed = ferror(outstr);
-    if (fclose(outstr) != 0) write_failed = TRUE;
-    if (write_failed) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "failed writing 3D survey 2PCF output '%s'", namebuf);
-        return FAILURE;
-    }
-    verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
-                        "\nPrinted edge-corrected 3D survey 2PCF to %s\n",
-                        namebuf);
+    stream out=fopen(namebuf,"w");
+    if(!out) {snprintf(cmd->error_message,_ERRORMSGSIZE_,"cannot open 3D survey output '%s': %s",namebuf,strerror(errno));return FAILURE;}
+    fprintf(out,"# cBalls survey 2PCF; xi=(D-alpha*R)^2/(alpha*R)^2; alpha %.17e\n",(double)random_scale);
+    fprintf(out,"# invalid coefficients are NaN; status 0=empty 1=valid 5=nonfinite\n");
+    fprintf(out,"# columns: bin r_center xi N_DminusR_squared RR valid status\n");
+    for(int b=0;b<cmd->sizeHistN;b++)
+        fprintf(out,"%d %.17e %.17e %.17e %.17e %d %d\n",b+1,(double)cb3d_bin_center(cmd,gd,b),
+            (double)c->xi[b],(double)numerator->xi_num[b],(double)randoms->xi_num[b],(int)c->xi_valid[b],(int)c->xi_status[b]);
+    int failed=ferror(out);if(fclose(out)) failed=1;
+    if(failed) {snprintf(cmd->error_message,_ERRORMSGSIZE_,"failed writing 3D survey output '%s'",namebuf);return FAILURE;}
     return SUCCESS;
 }
 

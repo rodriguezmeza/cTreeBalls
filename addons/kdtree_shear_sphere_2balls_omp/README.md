@@ -33,6 +33,13 @@ correlation call. Smoothed pivot and neighbor roles keep separate trees;
 nothing is cached across calls or retained after model cleanup. Profiling also
 reports `binary_tree_build` and the number of `unique_trees` actually built.
 
+Tree construction uses OpenMP tasks for independent median-split branches
+containing at least 8192 bodies each. Subtrees reserve their exact node ranges
+before tasks start, preserving the serial depth-first layout and each node's
+moment summation order. Smaller branches are built serially. This also applies
+within each MPI rank and does not change approximation controls. Node storage
+is allocated for the actual leaf capacity rather than always for body leaves.
+
 The binary traversal rejects cells before logarithmic bin lookup or bearing
 calculation when cheaper range and angular-extent tests suffice. The 2PCF
 reuses pair distance for its split decision and prepares its fixed acceptance
@@ -48,7 +55,8 @@ can have identical cell centers while containing valid nonzero-distance pairs.
 `no-one-ball` forces body-level results; `dual-node-bin-theta` enables the looser
 dual-node radial criterion. Masks and the shared shear mode-coupling edge solve
 are supported. With `SMOOTHPIVOTON=1`, deterministic transport-aware smoothing
-is on by default and `no-smooth-pivot` disables it. The safety requirement
+is available through `smooth-pivot`; it is off by default and
+`no-smooth-pivot` disables it explicitly. The safety requirement
 `2*rsmooth <= rminHist` is inherited from the spherical shear estimator.
 
 The two-node split strategy is adapted from dual-node by Mike Jarvis under its
@@ -76,18 +84,19 @@ and node second moments. Approximate unsmoothed combined runs keep a separate
 symmetric pair traversal because pair and ring acceptance differ. Smoothed
 combined runs already use pivot traversal and now share its arithmetic too.
 
-These specializations are enabled only by this KD OpenMP wrapper and the
-previously optimized octree wrapper where applicable. They do not enable new
-paths in the KD MPI wrapper or change opening criteria, smoothing defaults,
-normalization, or the estimator. Roundoff and summation order can differ from
+The KD OpenMP and MPI wrappers enable these specializations. They do not change
+opening criteria, smoothing defaults, normalization, or the estimator.
+Roundoff and summation order can differ from
 older binaries. Thread reductions retain their deterministic order.
 
 ## Reproducible performance and qualification
 
-Run `make test-shear-sphere-kdtree-2balls` for the independent spin oracle,
+Run `make test-shear-sphere-kdtree-2balls` for the independent spin reference calculation,
 linear/logarithmic bins, poles, leaf capacities, masks, one/two/three catalog
 roles, all three exact controls, order selection, smoothing, accepted cells,
-and thread determinism. The radial helper also receives over two million
+and thread determinism. Parallel construction is tested on odd populations
+with leaf capacities 1, 8 and 31, masks, zero weights and repeated cross-catalog
+roles. The radial helper also receives over two million
 classifications against its original expression, including edge ULPs and
 fallback domains.
 
@@ -107,10 +116,26 @@ python scripts/benchmark_shear_sphere.py \
 Use `--module` to measure a preserved extension in a separate process. Keep
 fixture, bins, modes, weights, mask, threads, and parameters matched for A/B
 implementation comparisons. Match the reference catalog and observable
-settings before using `--reference`; the NPZ alone does not certify provenance.
+settings before using `--reference`; the NPZ alone does not identify the catalog and settings used for the calculation.
 The driver reports each observable's finite mask, scaled relative L2 error,
 and absolute/bin errors. Its 2% L2 plus `1e-12` absolute criterion is an example
 qualification policy, not a guarantee from the tree opening bound.
+
+A DES-Y3 Takahashi calibration (r002/bin1/region1, one million sampled objects,
+seed 8675309, unit weights, local east/north shear, 20 Sofia figure-1 bins,
+signal order 7, window order 14, 16 threads) measured parallel construction
+at 0.64 s versus 3.24 s for the serial builder. Four interleaved timings per
+implementation averaged 22.70 s versus 24.00 s for the complete correlation
+with leaf capacity 1, phase tolerance 3 and radial allowance 0.5. Mean CPU
+seconds increased by 4.7%; all output arrays remained bitwise identical.
+
+Against exact sums on that sample, leaf capacity 1 gave 2.62% raw and 2.19%
+corrected global relative L2 error, while corrected order +/-7 reached 8.82%.
+Leaf capacity 8 with the same tolerances took 23.99 s in one trial and gave
+2.46% raw and 0.166% corrected global error; its largest corrected order error
+was 0.621%. Changing leaf capacity changes approximate accepted interactions.
+These are sample measurements, not full-catalogue timing or error guarantees.
+The source change does not loosen any approximation controls.
 
 `theta` controls runtime opening/phase accuracy; `nsmooth` is KD leaf capacity
 (default 8 in the active unit-sphere profile). Smaller leaves can change the
@@ -135,27 +160,30 @@ both legs are complete; diagonal self-neighbor subtraction is retained.
 
 The option is off by default and requires `no-smooth-pivot`, positive `theta`,
 full pivot coverage, and `BALLS4SCANLEVON=1`. Exact controls and smoothing retain
-the body-pivot fallback. MPI shear methods continue to reject this experimental
-option. The independent 2PCF pass retains its own acceptance rules.
+the body-pivot fallback. The octree, KD-tree and ball-tree MPI shear methods also support this
+option; controls must agree across ranks. The independent 2PCF pass retains its own acceptance rules.
 
-- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `0.1`.
+- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `3`.
 - `CBALLS_SHEAR_BIN_THETA`: internal radial-bin assignment allowance, finite `[0,1]`
-  bin widths, default `0`. Zero requires complete containment inside a bin.
+  bin widths, default `0.5`. Zero requires complete containment inside a bin.
   Positive values allow center-based assignment when the combined cap radius
   fits within the selected fraction of the local bin width. The minimum and
   maximum separation cuts remain strict. This is not an exact translation of
   dual node's bin-slop rule.
-- `nsmooth=1`: exposes finer pivot groups in the KD and PCA ball trees. It increases
+- `nsmooth` defaults to `8` in native cballs and the active Python drivers.
+  `nsmooth=1` exposes finer pivot groups in the KD and PCA ball trees. It increases
   tree storage and can improve reuse; the octree already has individual-body leaves.
 
 For a performance/accuracy trial through the Python drivers, add
-`--nsmooth 1 --more-options shear-pivot-reuse` and explicitly set the two environment
-controls, for example `CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
+`--more-options shear-pivot-reuse` with the shipped defaults
+`CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
+A tighter radial allowance such as `0.05` remains an explicit choice. Both defaults can be changed with `?=` assignments in
+`addons/Makefile_addons_settings` or overridden by the runtime environment.
 These are approximate trial settings, not an accuracy guarantee. Compare raw
 numerators, windows, and corrected complex multipoles against an exact reference
 for the actual catalog. Poorly conditioned windows can amplify small raw errors.
 
-Native provenance records `shear_hierarchical_reuse.enabled`,
+Native run information records `shear_hierarchical_reuse.enabled`,
 `phase_budget_radians`, and `radial_bin_slop` from the completed run. With
 `CBALLS_SHEAR_PROFILE=1`, `radial_pairs` counts actual radial-pair combinations,
 `represented_pairs` counts the equivalent individual-pivot combinations, and

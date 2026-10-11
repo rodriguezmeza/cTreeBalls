@@ -1,6 +1,7 @@
 /* Shared, checked JSON provenance for native products and Python snapshots. */
 #include "globaldefs.h"
 #include "cballs_build_fingerprint.h"
+#include "physical_survey_config.h"
 #include <stdarg.h>
 #include <errno.h>
 #ifdef CBALLS_MPI_ENABLED
@@ -105,7 +106,9 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
     named_string(&b, "product_kind", gd->stopflag ? "catalog-or-startup" : "correlation");
     append(&b, ",");
     named_string(&b, "estimator", forest ? (radial_forest ? (strstr(method, "same-los") ? "equal-forest mean of within-forest weighted radial 2PCF" : "weighted forest radial correlations") : "weighted anisotropic forest correlations")
-        : shear ? (spherical_shear ? "full-sky spin-2 pair correlations and window-corrected natural 3PCF components" : "flat-sky spin-2 pair correlations and natural 3PCF components")
+        : shear ? (spherical_shear ? (cballs_opt_no_count_multipoles(cmd) && !cballs_opt_edge_corrections(cmd)
+            ? "full-sky spin-2 pair correlations and N0-normalized natural 3PCF components"
+            : "full-sky spin-2 pair correlations and window-corrected natural 3PCF components") : "flat-sky spin-2 pair correlations and natural 3PCF components")
         : physical ? (survey ? "D-alpha*R survey Legendre 2PCF/3PCF with random-window correction" : "weighted Euclidean Legendre 2PCF/3PCF")
         : boxes ? (neighbor ? "periodic ordered pair counts" : "periodic unordered pair counts and optional N-squared shell density contrast")
         : !strcmp(method, "octree-sincos-omp") ? "core scalar pivot-averaged neighbor-mean Fourier products (includes neighbor self terms)"
@@ -210,6 +213,12 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         : boxes || cmd->usePeriodic ? "Cartesian periodic box; minimum-image separations"
         : NDIM == 2 ? "Cartesian plane; Euclidean separations and planar Fourier bearings"
         : "original observer frame; Cartesian chords and tangent bearings; undefined radial/antipodal bearings excluded from angular moments");
+    if(physical && (scanopt(cmd->options,"survey-estimator-3d") || scanopt(cmd->options,"encore-survey-estimator") || scanopt(cmd->options,"survey-edge-correction"))) {
+        append(&b,",\"physical_survey\":{\"signal_lmax\":%d,\"solve_padding\":%d,\"solve_lmax\":%d,\"window_lmax\":%d,\"rcond_min\":",
+            cb_survey_signal_lmax(cmd),cmd->surveySolvePadding,cb_survey_solve_lmax(cmd),cb_survey_window_lmax(cmd));
+        number(&b,cmd->surveyRcondMin);
+        append(&b,",\"basis\":\"standard Legendre\",\"invalid_coefficients\":\"NaN\",\"status_codes\":{\"0\":\"empty\",\"1\":\"valid\",\"2\":\"singular\",\"3\":\"ill-conditioned\",\"4\":\"residual\",\"5\":\"nonfinite\"},\"condition_norm\":\"infinity\",\"residual\":\"relative backward error\"}");
+    }
     append(&b, ",\"geometry\":{\"dimensions\":%d,\"spherical_shear\":%s,\"scalar_observer_frame\":%s},",
         NDIM,spherical_shear?"true":"false",!shear && cballs_observer_frame(cmd)?"true":"false");
     append(&b, "\"resources\":{\"common_histogram_bytes\":%zu,\"common_scalar_3pcf\":%s,\"memory_budget_bytes\":%zu,\"budget_scope\":\"per-rank active-run plans (catalog/common/cache/forest scratch) and individual common allocations; not total RSS\"}",
@@ -249,7 +258,19 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         append(&b,",\"radial_cutoffs\":\"strict\",\"accuracy\":\"requires observable-specific qualification\"},");
     }
 #ifdef THREEPCFSHEAR
+    if (shear && !cballs_opt_only_2pcf(cmd)) {
+        append(&b, "\"shear_window\":{\"max_order\":%d,\"edge_correction_applied\":%s,",
+            gd->shearWindowMultipoleMax, gd->shearWindowMultipoleMax > 0 ? "true" : "false");
+        named_string(&b, "normalization", gd->shearWindowMultipoleMax > 0
+            ? "finite-window mode-coupling solution" : "Upsilon/N0; window-convolved");
+        append(&b, "},");
+    }
     if (spherical_shear) {
+        append(&b, "\"shear_frontier\":{\"target\":%" INTEGER_FMT
+               ",\"global_tasks\":%" INTEGER_FMT
+               ",\"local_tasks\":%" INTEGER_FMT ",\"histogram_bytes\":%zu},",
+               gd->shearFrontierTarget, gd->shearFrontierTasks,
+               gd->shearFrontierLocalTasks, gd->shearTaskHistogramBytes);
         append(&b, "\"shear_hierarchical_reuse\":{\"enabled\":%s,\"phase_budget_radians\":",
                gd->shearReuseEnabled ? "true" : "false");
         number(&b, gd->shearReusePhaseBudget);

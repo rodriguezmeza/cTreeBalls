@@ -9,7 +9,11 @@ permissions:
   contents: read
 
 jobs:
+  support-coverage:
+    uses: ./.github/workflows/support-matrix.yml
+
   build:
+    needs: support-coverage
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -23,25 +27,37 @@ jobs:
       - name: Verify the complete public release profile
         run: |
           python -m pip install -r requirements/release.txt
-          python scripts/active_release_gate.py --output release-gate \
+          python scripts/release_readiness.py run --component active --output release-active \
             --mpi-command 'mpiexec --oversubscribe --bind-to none'
-      - name: Build and check the source distribution
+      - name: Build and verify the isolated installed package
         run: |
-          python -m pip install --upgrade build twine
-          python -m build --sdist
-          python -m twine check --strict dist/*
-          mkdir -p release-package
-          python scripts/check_sdist.py dist/*.tar.gz --output release-package/sdist.json
-      - name: Build native and isolated wheel from the archive, then test installation
+          python scripts/release_readiness.py run --component package \
+            --output release-package --jobs 2
+      - name: Run required sanitizer checks
         run: |
-          python scripts/verify_sdist_install.py dist/*.tar.gz \
-            --output release-package/artifact-check --jobs 2
+          python scripts/release_readiness.py run --component sanitizers \
+            --output release-sanitizers --jobs 2
+      - uses: actions/download-artifact@v4
+        with:
+          name: support-coverage-decision
+          path: support-coverage
+      - name: Require a complete release decision before uploading the distribution
+        if: always()
+        run: |
+          python scripts/release_readiness.py collect \
+            --active release-active/result.json \
+            --package release-package/result.json \
+            --sanitizers release-sanitizers/result.json \
+            --support support-coverage/support-coverage.json \
+            --output release-readiness.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: release-verification-evidence
           path: |
-            release-gate/
+            release-readiness.json
+            release-active/
+            release-sanitizers/
             release-package/
             !release-package/**/native-env/**
             !release-package/**/install-env/**
@@ -50,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: pypi-dist
-          path: dist/
+          path: release-package/dist/
 
   publish:
     needs: build

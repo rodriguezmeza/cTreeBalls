@@ -50,7 +50,7 @@ For the two pair-only methods, compare `'{"lya2Kernel":0}'` with
 cell aggregation, not just the latest source changes. Do not apply pair kernel
 1 to a 3PCF-only method. A larger kernel number is not necessarily faster.
 
-## Measurement and scientific contract
+## Measurement procedure and numerical definitions
 
 - Each sample is a fresh subprocess, running the requested warmups and one
   measured native `Run`. Baseline/candidate order alternates per repeat.
@@ -69,7 +69,7 @@ cell aggregation, not just the latest source changes. Do not apply pair kernel
   Selected NPZ fixtures, original row indices, raw products and logs remain
   beside it. A failed comparison stops the campaign and marks it failed.
 - This tests the supplied workload. Retain the independent release-gate
-  oracles as well. Neither this benchmark nor a successful slop calibration
+  reference calculations as well. Neither this benchmark nor a successful slop calibration
   supplies a universal correlation-error bound.
 
 For approximate geometry or pivot smoothing, use the existing

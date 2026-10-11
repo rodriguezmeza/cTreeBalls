@@ -1,6 +1,15 @@
 #ifndef CTREEBALLS_SHEAR_PIVOT_REUSE_H
 #define CTREEBALLS_SHEAR_PIVOT_REUSE_H
 
+/* Makefile defaults may be overridden before compilation; getenv below still
+ * wins at runtime. Keep fallbacks for builds outside the project Makefile. */
+#ifndef CBALLS_SHEAR_PIVOT_TOL_DEFAULT
+#define CBALLS_SHEAR_PIVOT_TOL_DEFAULT 3.0
+#endif
+#ifndef CBALLS_SHEAR_BIN_THETA_DEFAULT
+#define CBALLS_SHEAR_BIN_THETA_DEFAULT 0.5
+#endif
+
 /* Partial rings stay in their acceptance frame. Children inherit only sparse
  * unresolved lists; completed branches rotate each ancestor directly once. */
 #define SHEAR_REUSE_MEMORY_LIMIT ((size_t)64 << 20)
@@ -57,17 +66,14 @@ typedef struct {
 static int shear_reuse_tolerance(struct cmdline_data *cmd, real *result)
 {
     const char *text = getenv("CBALLS_SHEAR_PIVOT_TOL");
-    char *end;
-    double value = 0.1;
-
-    if (text != NULL) {
-        value = strtod(text, &end);
-        if (end == text || *end != '\0' || !isfinite(value)
-            || value < 0.0 || value > 3.0) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "CBALLS_SHEAR_PIVOT_TOL must be finite in [0,3] radians");
-            return FAILURE;
-        }
+    char *end = NULL;
+    double value = CBALLS_SHEAR_PIVOT_TOL_DEFAULT;
+    if (text != NULL) value = strtod(text, &end);
+    if ((text != NULL && (end == text || *end != '\0'))
+        || !isfinite(value) || value < 0.0 || value > 3.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "CBALLS_SHEAR_PIVOT_TOL must be finite in [0,3] radians");
+        return FAILURE;
     }
     *result = (real)value;
     return SUCCESS;
@@ -76,16 +82,14 @@ static int shear_reuse_tolerance(struct cmdline_data *cmd, real *result)
 static int shear_reuse_bin_slop(struct cmdline_data *cmd, real *result)
 {
     const char *text = getenv("CBALLS_SHEAR_BIN_THETA");
-    char *end;
-    double value = 0.0;
-    if (text != NULL) {
-        value = strtod(text, &end);
-        if (end == text || *end != '\0' || !isfinite(value)
-            || value < 0.0 || value > 1.0) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "CBALLS_SHEAR_BIN_THETA must be finite in [0,1]");
-            return FAILURE;
-        }
+    char *end = NULL;
+    double value = CBALLS_SHEAR_BIN_THETA_DEFAULT;
+    if (text != NULL) value = strtod(text, &end);
+    if ((text != NULL && (end == text || *end != '\0'))
+        || !isfinite(value) || value < 0.0 || value > 1.0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "CBALLS_SHEAR_BIN_THETA must be finite in [0,1]");
+        return FAILURE;
     }
     *result = (real)value;
     return SUCCESS;
@@ -391,32 +395,62 @@ static int shear_reuse_merge_level(shear_reuse_context *context,
     shear_complex u, spin;
     const int max = target->ring_max;
     if (!level->has_rings) return SUCCESS;
-    if (target->reuse_anchor == source->reuse_anchor) u = shear_make(1.0, 0.0);
-    else if (!shear_reuse_vector_rotation(target, source, &u)) return FAILURE;
-    spin = shear_mul(u, u);
     context->inherited++;
-    context->ancestor_merges += target->reuse_anchor != source->reuse_anchor;
-    for (int bin = 0; bin < target->bins; bin++) {
-        shear_complex power = shear_make(1.0, 0.0);
-        if (!level->active[bin]) continue;
-        for (int order = 0; order <= max; order++) {
+    if (target->reuse_anchor == source->reuse_anchor) {
+        /* The current level is merged first into a cleared target. Its
+         * tangent frame is already the target frame. Copy those rings once
+         * instead of multiplying every entry by the identity rotation. */
+        const size_t legs = target->same_neighbor_catalog ? 1 : 2;
+        for (size_t leg = 0; leg < legs; leg++) {
+            memcpy(leg ? target->g_ring_second : target->g_ring_first,
+                   leg ? source->g_ring_second : source->g_ring_first,
+                   context->ring_count*sizeof(shear_complex));
+            memcpy(leg ? target->w_ring_second : target->w_ring_first,
+                   leg ? source->w_ring_second : source->w_ring_first,
+                   context->weight_ring_count*sizeof(shear_complex));
+        }
+        memcpy(target->diag_g6, source->diag_g6,
+               (size_t)target->bins*sizeof(shear_complex));
+        memcpy(target->diag_g2, source->diag_g2,
+               (size_t)target->bins*sizeof(shear_complex));
+        memcpy(target->diag_abs2, source->diag_abs2,
+               (size_t)target->bins*sizeof(shear_complex));
+        memcpy(target->diag_w2, source->diag_w2,
+               (size_t)target->bins*sizeof(real));
+        return SUCCESS;
+    }
+    if (!shear_reuse_vector_rotation(target, source, &u)) return FAILURE;
+    spin = shear_mul(u, u);
+    context->ancestor_merges++;
+    shear_complex power = shear_make(1.0, 0.0);
+    /* The frame rotation is identical in every radial bin. Form each order's
+     * factors once, preserving the per-entry ancestor accumulation order. */
+    for (int order = 0; order <= max; order++) {
+        const shear_complex positive = shear_mul(spin, power);
+        const shear_complex negative = shear_mul(spin, shear_conj(power));
+        for (int bin = 0; bin < target->bins; bin++) {
+            if (!level->active[bin]) continue;
             const size_t plus = shear_ring_index(order, bin, max, target->bins);
             const size_t minus = shear_ring_index(-order, bin, max, target->bins);
-            const size_t weight = shear_weight_ring_index(order, bin, max);
-            const shear_complex positive = shear_mul(spin, power);
-            const shear_complex negative = shear_mul(spin, shear_conj(power));
+            const size_t weight = shear_weight_ring_index(order, bin, target->weight_ring_max);
             for (int leg = 0; leg < (target->same_neighbor_catalog ? 1 : 2); leg++) {
                 shear_complex *g = leg ? target->g_ring_second : target->g_ring_first;
                 shear_complex *w = leg ? target->w_ring_second : target->w_ring_first;
                 const shear_complex *sg = leg ? source->g_ring_second : source->g_ring_first;
                 const shear_complex *sw = leg ? source->w_ring_second : source->w_ring_first;
-                shear_accumulate_complex_product(&g[plus], sg[plus], positive);
-                if (order != 0)
-                    shear_accumulate_complex_product(&g[minus], sg[minus], negative);
-                shear_accumulate_complex_product(&w[weight], sw[weight], power);
+                if (order <= target->signal_ring_max) {
+                    shear_accumulate_complex_product(&g[plus], sg[plus], positive);
+                    if (order != 0)
+                        shear_accumulate_complex_product(&g[minus], sg[minus], negative);
+                }
+                if (order <= target->weight_ring_max)
+                    shear_accumulate_complex_product(&w[weight], sw[weight], power);
             }
-            power = shear_mul(power, u);
         }
+        power = shear_mul(power, u);
+    }
+    for (int bin = 0; bin < target->bins; bin++) {
+        if (!level->active[bin]) continue;
         shear_accumulate_complex_product(&target->diag_g6[bin],
                                           source->diag_g6[bin], shear_conj(spin));
         shear_accumulate_complex_product(&target->diag_g2[bin],
@@ -615,7 +649,7 @@ static int shear_reuse_task(shear_reuse_context *context,
 
 static void shear_reuse_print_profile(const shear_reuse_context *context, int thread)
 {
-    fprintf(stderr, "SHEAR_REUSE thread=%d nodes=%" PRIu64
+    fprintf(stderr, "SHEAR_REUSE rank=%d thread=%d nodes=%" PRIu64
             " aggregate_pivots=%" PRIu64 " represented_bodies=%" PRIu64
             " accepted_cells=%" PRIu64 " accepted_bodies=%" PRIu64
             " ring_merges=%" PRIu64 " pruned=%" PRIu64
@@ -623,7 +657,13 @@ static void shear_reuse_print_profile(const shear_reuse_context *context, int th
             " peak_unresolved=%" PRIu64 " max_depth=%" PRIu64
             " radial_pairs=%" PRIu64 " represented_pairs=%" PRIu64
             " partial_reductions=%" PRIu64
-            " scratch_bytes=%zu phase_budget=%.6g bin_slop=%.6g\n", thread, context->nodes,
+            " scratch_bytes=%zu phase_budget=%.6g bin_slop=%.6g\n",
+#ifdef SHEAR_MPI_ENABLED
+            SHEAR_MPI_RANK(),
+#else
+            0,
+#endif
+            thread, context->nodes,
             context->aggregated, context->bodies, context->accepted_cells,
             context->accepted_bodies, context->inherited, context->pruned,
             context->ancestor_merges,

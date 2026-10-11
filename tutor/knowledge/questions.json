@@ -1,0 +1,829 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-10-11",
+  "scope": "Reviewed synthesis of the visible cTreeBalls discussion and the current cited source documents; not a raw chat archive or access to other conversations.",
+  "questions": [
+    {
+      "id": "how-it-works",
+      "title": "How cTreeBalls computes correlations",
+      "questions": [
+        "How does cTreeBalls work?",
+        "What is a pivot?",
+        "How do tree and two-ball methods work?"
+      ],
+      "keywords": [
+        "algorithm",
+        "pivot",
+        "neighbor",
+        "ring",
+        "tree",
+        "correlation"
+      ],
+      "answer": "cTreeBalls organizes the catalogue into a spatial tree, then searches for pairs or neighbor configurations contributing to radial/angular bins. Tree bounds can reject whole regions outside the requested separations. Accepted cells can replace individual neighbors by aggregated moments when the selected approximation rules permit it.\n\nFor angular 3PCF, neighbor-ring multipoles around a pivot are combined into radial-bin pairs. This avoids explicitly enumerating every triplet. Spherical shear additionally transports the spin-2 field between local tangent frames. The scalar, shear, physical 3D and Lyα estimators have different geometry and normalization rules; sharing a tree name does not make them interchangeable.\n\nPivot reuse can inherit resolved moments between nearby pivot cells. An exact reference disables approximate acceptance while preserving the same catalogue, bins, estimator and retained harmonic orders.",
+      "sources": [
+        "docs/3pcf.rst",
+        "docs/shear.rst",
+        "docs/search_methods.rst"
+      ],
+      "source_sha256": {
+        "docs/3pcf.rst": "f305a703d374dd68698ef30b1303cc6049331bf6751dfb4ddb16928d2f226e6f",
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda"
+      }
+    },
+    {
+      "id": "engine-selection",
+      "title": "Choose an engine by field, geometry and measured accuracy",
+      "questions": [
+        "Which engine is best for my catalogue?",
+        "How do I choose a searching engine?",
+        "What engine should I use for DES or Lyalpha?"
+      ],
+      "keywords": [
+        "best engine",
+        "catalogue",
+        "catalog",
+        "appropriate",
+        "recommend"
+      ],
+      "answer": "First identify the field (counts, kappa, shear or forest delta), geometry (angular sphere, flat, physical 3D or radial-only 1D), and statistic (2PCF, 3PCF or both). Then compare only compatible engines at the same measured error and input selection.\n\nFor spherical DES shear, compare balltree-shear-sphere-2balls-omp, kdtree-shear-sphere-2balls-omp and octree-shear-sphere-2balls-omp. For angular kappa, compare the scalar *-2balls-omp family. Lyα needs a forest estimator preserving integer forest IDs and its intended exclusions; a 1D radial correlation is not the same observable as a 3D LOS correlation. Physical 3D multipoles use their separate estimator.\n\nThere is no universal fastest tree. Use /context field=shear geometry=sphere statistic=3pcf, then /recommend. /engines checks what the current executable actually contains.",
+      "sources": [
+        "docs/search_methods.rst",
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "capabilities/engines.json"
+      ],
+      "source_sha256": {
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "capabilities/engines.json": "35513f929df466900c81ebe5532049de4782808dd07f454ea87e32ca01edf3f6"
+      }
+    },
+    {
+      "id": "defaults",
+      "title": "Current fast approximation defaults",
+      "questions": [
+        "What are the default approximation parameters?",
+        "What are the best parameter values?",
+        "Give fast defaults for kappa shear and lya",
+        "How can I run faster?"
+      ],
+      "keywords": [
+        "defaults",
+        "fast",
+        "approximation",
+        "parameters",
+        "best values"
+      ],
+      "answer": "The shipped source defaults are runtime theta=1 and Make THETA ?= 1. These are distinct controls. Shear reuse uses CBALLS_SHEAR_PIVOT_TOL=3 radians and CBALLS_SHEAR_BIN_THETA=0.5 bin widths. Scalar reuse uses CBALLS_SCALAR_PIVOT_TOL=0.1 and CBALLS_SCALAR_BIN_THETA=0. Reuse remains explicit: shear-pivot-reuse or scalar-pivot-reuse. Smoothing remains opt-in.\n\nLyα keeps zero bin slops and zero approximate pivot radius while retaining certified cell aggregation. Positive slops are explicit choices.\n\nThese are useful starting settings, not proven optimal settings or a universal 5% error guarantee. Compile-time overrides and runtime environment variables can change them: /build reads the executable's compiled information. To measure the actual penalty, use --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only with the same catalogue, bins and multipoles.",
+      "sources": [
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "docs/shear.rst",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md"
+      ],
+      "source_sha256": {
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md": "53563d30c3043628076b79905575a514026c8ef4cce53fd1ee1ee478255ba9a5"
+      }
+    },
+    {
+      "id": "separate-controls",
+      "title": "Does CBALLS_SHEAR_BIN_THETA overwrite tree-theta?",
+      "questions": [
+        "Does CBALLS_SHEAR_BIN_THETA overwrite --tree-theta?",
+        "Does bin theta override theta 1?",
+        "What controls theta pivot phase and radial bin slop?"
+      ],
+      "keywords": [
+        "CBALLS_SHEAR_BIN_THETA",
+        "CBALLS_SHEAR_PIVOT_TOL",
+        "tree-theta",
+        "overwrite",
+        "override",
+        "independent"
+      ],
+      "answer": "No. --tree-theta sets the runtime tree-opening control. CBALLS_SHEAR_BIN_THETA sets the allowed internal radial-bin assignment slop for opt-in shear pivot reuse. CBALLS_SHEAR_PIVOT_TOL sets a separate spherical phase budget in radians. Environment values replace their corresponding compiled reuse defaults; they do not overwrite theta.\n\nFor shear reuse, theta must be positive to enable the path, but changing its magnitude does not replace the reuse phase budget. Minimum and maximum radial cutoffs remain strict even when internal bin slop is positive. The default reuse phase/bin values are 3 and 0.5 in the current source.\n\nThese numbers are geometric controls. Bin theta 0.1 does not mean 10% correlation error, and phase 3 does not mean 3% error. Kappa reuse reads CBALLS_SCALAR_* instead of CBALLS_SHEAR_* settings.",
+      "sources": [
+        "docs/shear.rst",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md",
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md": "53563d30c3043628076b79905575a514026c8ef4cce53fd1ee1ee478255ba9a5",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "zero-tolerance",
+      "title": "What zero tolerance means",
+      "questions": [
+        "What do you mean by zero tolerance?",
+        "Does zero tolerance mean zero numerical error?",
+        "What happens at theta zero?",
+        "How do I get an exact reference?"
+      ],
+      "keywords": [
+        "zero tolerance",
+        "exact reference",
+        "theta=0",
+        "disable reuse"
+      ],
+      "answer": "Zero applies to a specific approximation control. Runtime theta=0 disables approximate opening; a zero pivot phase budget disables approximate pivot reuse; zero bin slop requires full internal bin containment. Zero phase budget alone does not disable ordinary aggregation when theta is positive.\n\nFor an unsmoothed angular reference use --tree-theta 0 --no-smooth-pivot --more-options no-one-ball,no-two-balls. Keep the same input, estimator, bins and multipoles. This exact tree limit still has floating-point summation error and does not remove finite-multipole truncation, finite bin widths, sampling effects or statistical uncertainty.\n\nFast defaults remain available. You can retain fast results and report their measured error with --accuracy-report-only rather than making every production run exact.",
+      "sources": [
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "docs/search_methods.rst"
+      ],
+      "source_sha256": {
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda"
+      }
+    },
+    {
+      "id": "measured-penalty",
+      "title": "Measure the approximation penalty and a 5% L2 target",
+      "questions": [
+        "How much approximation error is produced?",
+        "Can you guarantee at most 5 percent relative L2 error?",
+        "How do I measure numerical errors?",
+        "How can I keep faster engines while reporting the penalty?",
+        "What error does theta 0.7 produce?"
+      ],
+      "keywords": [
+        "error",
+        "accuracy",
+        "relative L2",
+        "penalty",
+        "5%",
+        "guarantee",
+        "tolerance"
+      ],
+      "answer": "Use relative L2 = norm(fast - reference) / norm(reference), separately for each observable. Report raw moments, normalization/window quantities, corrected results, and every shear component. An aggregate L2 bound does not bound every individual bin. A zero reference norm has undefined relative error; retain the absolute error and validity masks.\n\nCreate an exact run with identical catalogue selection, weights, bins, estimator and multipoles. For angular kappa/shear use --tree-theta 0 --no-smooth-pivot --more-options no-one-ball,no-two-balls. Then add --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only to your fast comparison-driver run. The root must contain ENGINE/qualification for each engine. The default reporting target is 5%; results above it remain available in report-only mode. Each run saves ENGINE/qualification/approximation-penalty.json. Without a reference the penalty is UNMEASURED, not zero.\n\nA geometric tolerance cannot predict a catalogue-independent percentage error. No measured reference means no justified numerical percentage. A subsample comparison measures that subsample, not a different full-catalogue result.\n\nA software release gate and a scientific acceptance decision are separate. The current default-survey campaign remains rejected where its measured error exceeds the fixed threshold. Matching source and policy receipts are required; a timing result alone cannot qualify an approximation.",
+      "sources": [
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "tests/python/README_shear_corr_all_engines.md",
+        "tests/python/README_kappa_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+      }
+    },
+    {
+      "id": "shear-calibration",
+      "title": "Measured shear speed versus error",
+      "questions": [
+        "How much error do phase 3 and bin 0.5 produce?",
+        "What errors were measured for bin 0.05 0.1 and 0.5?",
+        "Is bin 0.5 faster and accurate?"
+      ],
+      "keywords": [
+        "shear",
+        "3/0.5",
+        "0.05",
+        "0.5",
+        "measured speedup",
+        "million"
+      ],
+      "answer": "On one million DES r002/bin1/region1 objects with the spherical ball-tree, 16 threads, m=7, nsmooth=1, no smoothing and Sofia-figure-1 bins, single measured MainLoop times were:\n  exact reference: 73.45 s\n  phase 3 / bin 0.05: 45.73 s, 1.61x speedup, 0.764% raw and 0.283% corrected L2 error\n  phase 3 / bin 0.1: 43.32 s, 1.70x speedup, 1.003% raw and 0.313% corrected error\n  phase 3 / bin 0.5: 23.98 s, 3.06x speedup, 2.816% raw and 2.172% corrected error.\n\nThese are X-projection shear multipoles on that specific sample, not universal errors or repeated timing medians. On 100,000 objects, phase 3 / bin 0.5 instead produced 17.4–19.3% raw and 5.1–10.7% corrected error across the three trees. Phase 3 / bin 0.05 had pooled raw errors 3.33–3.59% there, with no consistent small-sample speedup.\n\nAlways retain the catalogue, radial edges, multipoles, thread count and reference definition with a speed/error comparison.",
+      "sources": [
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "kappa-calibration",
+      "title": "Scalar reuse and corrected kappa errors",
+      "questions": [
+        "What about kappa approximation errors?",
+        "Are shear tolerances used by kappa?",
+        "Is scalar pivot reuse faster?",
+        "How accurate is theta 1 for kappa?"
+      ],
+      "keywords": [
+        "kappa",
+        "scalar",
+        "CBALLS_SCALAR_PIVOT_TOL",
+        "CBALLS_SCALAR_BIN_THETA",
+        "corrected"
+      ],
+      "answer": "Kappa reuse uses CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA, not the shear variables. The shipped reuse controls are phase 0.1 and bin allowance 0, selected with scalar-pivot-reuse and no-smooth-pivot. Runtime theta must be positive.\n\nOn an actual 100,000-object DES KAPPA sample with nsmooth=1, ordinary theta=1 traversal gave raw 3PCF L2 errors of 23.41%, 19.69% and 27.53% for octree, KD-tree and ball-tree; corrected errors were 19.18%, 15.39% and 10.81%. Shipped scalar reuse controls reduced raw errors below 0.014% and corrected errors below 0.00053%, but were slower than exact traversal on that sample.\n\nA poorly conditioned window can strongly amplify a small raw perturbation. Check corrected output and its finite-bin support independently. Reuse is an option to benchmark, not an unconditional acceleration.",
+      "sources": [
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md"
+      ],
+      "source_sha256": {
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md": "53563d30c3043628076b79905575a514026c8ef4cce53fd1ee1ee478255ba9a5"
+      }
+    },
+    {
+      "id": "cpu-time",
+      "title": "Why user CPU time is much larger than real time",
+      "questions": [
+        "Why does this run take so much CPU time?",
+        "What are real user and sys time?",
+        "Why user time exceeds wall time with 16 threads?",
+        "How do I interpret time python?"
+      ],
+      "keywords": [
+        "real",
+        "user",
+        "sys",
+        "CPU",
+        "wall",
+        "threads",
+        "120m",
+        "8m55"
+      ],
+      "answer": "Shell time reports real as elapsed wall time, user as accumulated CPU work in user space, and sys as CPU work in the operating system. Thread CPU times accumulate. A 16-thread job can consume roughly 16 CPU-seconds during one wall-second; high user time is not by itself evidence of a problem.\n\nFor the supplied run, real=8m55.365s, user=120m58.336s and sys=22.222s imply about 13.60 CPU cores active on average: (user+sys)/real. This includes the command's measured scope, not just native search. Compare real times to assess how soon a run finishes; compare summed CPU time for total processor cost.\n\nLarge 3PCFs also spend work on neighbor traversal, harmonic moments, radial-bin contractions and window solves. --max-points 0 retains all selected objects. Profiling and saved phase timings help identify the actual bottleneck.",
+      "sources": [
+        "tests/python/README_shear_corr_all_engines.md",
+        "docs/performance.rst",
+        "tutor/notes/discussion_measurements.md"
+      ],
+      "source_sha256": {
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "docs/performance.rst": "436d081aa8ec1132acb823461d88bbde657f1534b6574d75a478562ac160b72e",
+        "tutor/notes/discussion_measurements.md": "1b3cf31c51c393862612605c10f3c10ec2d55585ae1821a93007c0cee30960d7"
+      }
+    },
+    {
+      "id": "timing-comparison",
+      "title": "The bin-0.1 versus bin-0.2 timing comparison",
+      "questions": [
+        "Why is bin 0.2 twice as fast as 0.1?",
+        "Compare the 8m53 and 5m37 runs",
+        "Does increasing bin theta speed things up?"
+      ],
+      "keywords": [
+        "8m53",
+        "5m37",
+        "0.2",
+        "0.1",
+        "factor two",
+        "timing comparison"
+      ],
+      "answer": "For the supplied measurements, 8m53.647s / 5m37.904s = 1.579x elapsed-time speedup, about a 36.7% reduction in wall time; it is not a factor of two. The user-CPU ratio is about 1.59x, consistent with substantially less processor work.\n\nA larger internal bin allowance can let more node configurations be completed at parent cells, reducing descent and repeated moment work. The precise benefit depends on geometry, bin boundaries, occupancy, multipole order and task scheduling. Counts/profiling are needed to attribute the saved work precisely.\n\nThose timings alone do not provide numerical errors. Compare the saved observables from both runs with the same exact reference, separately for raw and corrected multipoles. A faster bin setting can have a materially larger approximation penalty.",
+      "sources": [
+        "docs/shear.rst",
+        "tutor/notes/discussion_measurements.md",
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "tutor/notes/discussion_measurements.md": "1b3cf31c51c393862612605c10f3c10ec2d55585ae1821a93007c0cee30960d7",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "profiling",
+      "title": "CBALLS_SHEAR_PROFILE versus verbose",
+      "questions": [
+        "What is the role of CBALLS_SHEAR_PROFILE=1?",
+        "Does it only print information?",
+        "Is it the same as verbose?",
+        "Does profiling slow the code?"
+      ],
+      "keywords": [
+        "CBALLS_SHEAR_PROFILE",
+        "profile",
+        "profiling",
+        "verbose"
+      ],
+      "answer": "CBALLS_SHEAR_PROFILE enables additional timing/counter instrumentation for the spherical shear engines. It reports internal phases and reuse activity; it does not choose an approximation tolerance. It is different from verbose, which controls normal messages and available progress counters.\n\nThe profiling environment variable is enabled by its presence, including CBALLS_SHEAR_PROFILE=0. Disable it with env -u CBALLS_SHEAR_PROFILE before the command. Instrumentation and printing can have overhead, so benchmark with profiling unset and use separate diagnostic runs when needed.\n\nIn the supplied approximately nine-minute run, removing profiling changed wall time only slightly (535.365 to 533.647 seconds in single measurements). That does not establish a repeatable speedup and suggests profiling was not the main bottleneck in that example.",
+      "sources": [
+        "tests/python/README_shear_corr_all_engines.md",
+        "docs/shear.rst",
+        "tutor/notes/discussion_measurements.md"
+      ],
+      "source_sha256": {
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "tutor/notes/discussion_measurements.md": "1b3cf31c51c393862612605c10f3c10ec2d55585ae1821a93007c0cee30960d7"
+      }
+    },
+    {
+      "id": "progress",
+      "title": "Live progress counting for kappa, shear and Lyα",
+      "questions": [
+        "Can I see counting steps advancing?",
+        "How do I enable live progress?",
+        "Does octree shear or kdtree shear show progress?",
+        "How to see lya counting?"
+      ],
+      "keywords": [
+        "progress",
+        "counting",
+        "steps",
+        "live",
+        "verbose 1"
+      ],
+      "answer": "Use --verbose 1 in the comparison drivers (native verbose=1) to enable available live work counters. --verbose-log 1 also records progress in the native log. For scalar OpenMP two-ball paths, positive stepState controls reporting cadence; individual engines have their own work units and update throttling.\n\nThe spherical octree, KD-tree and ball-tree shear paths and the Lyα engines report completed pivot/tasks or forest work. Read the label: task, pivot, forest and rank-local counts are not interchangeable. Under MPI, a rank-local completed count is not automatically a global fraction. Counting completion can still be followed by reductions, normalization, correction, output and plotting.\n\nUse CBALLS_SHEAR_PROFILE for detailed internal diagnostics, not as a replacement for normal progress verbosity.",
+      "sources": [
+        "docs/search_methods.rst",
+        "tests/python/README_shear_corr_all_engines.md",
+        "tests/python/README_lya_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "tests/python/README_lya_corr_all_engines.md": "c5b2fbb0e31e5d68f5d8e2a4fc8211fd76e6f6601bbd50336ae0ccbd36b2c9c6"
+      }
+    },
+    {
+      "id": "multipoles",
+      "title": "Signal multipoles versus count multipoles",
+      "questions": [
+        "Does NMultipoles play a role in kappa and shear?",
+        "What is mChebyshev or --multipoles?",
+        "Does reducing multipoles speed up the 3PCF?"
+      ],
+      "keywords": [
+        "NMultipoles",
+        "NMultipolesON",
+        "mChebyshev",
+        "multipoles",
+        "harmonics",
+        "phi-bins"
+      ],
+      "answer": "Distinguish the signal harmonic cutoff from count/window modes. mChebyshev and the drivers' --multipoles set the retained signal multipole order. Increasing it adds harmonic arithmetic, arrays and radial contractions, and can change approximation acceptance. Decreasing it can save work but changes the finite angular representation; test convergence of the final observable.\n\nNMultipolesON is a legacy compile-time switch. It is not a universal runtime switch for every scalar/shear window calculation. Normalization and edge correction have their own engine-specific count-mode rules. Shear keeps the full window by default; scalar production two-ball engines omit higher count modes without edge-corrections.\n\n--phi-bins controls sampled angular output/reconstruction; reducing it is not equivalent to reducing the harmonic cutoff. An exact tree calculation at finite multipole order can still have truncation error.",
+      "sources": [
+        "docs/shear.rst",
+        "docs/3pcf.rst",
+        "tests/python/README_kappa_corr_all_engines.md",
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/3pcf.rst": "f305a703d374dd68698ef30b1303cc6049331bf6751dfb4ddb16928d2f226e6f",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "normalization",
+      "title": "Does normalization require every N_n?",
+      "questions": [
+        "Does normalization always need N count multipoles?",
+        "Does it need every N_n?",
+        "Are count multipoles disabled without edge correction?",
+        "Is there still CPU cost for normalization?"
+      ],
+      "keywords": [
+        "normalization",
+        "N0",
+        "N_n",
+        "count",
+        "denominator",
+        "edge-corrections"
+      ],
+      "answer": "Normalization needs its count/weight denominator, but simple normalization does not require every higher N_n. For shear 3PCF, the N0 monopole supplies the triplet-weight normalization. Upsilon/N0 remains convolved with the survey window. A finite-window correction requires the higher window multipoles and a coupling solve.\n\nScalar production two-ball engines already skip higher count modes when edge-corrections is absent, while retaining the normalization denominator. Shear keeps full count/window modes and corrected output by default, even if you did not explicitly type edge-corrections.\n\nTherefore absence of an edge-corrections token does not mean the same work is disabled in every engine. Use the saved normalization/window metadata to identify what was actually computed. Computing the necessary denominator still costs work.",
+      "sources": [
+        "docs/shear.rst",
+        "tests/python/README_kappa_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+      }
+    },
+    {
+      "id": "optional-count-modes",
+      "title": "Make higher N_n optional",
+      "questions": [
+        "How can I disable higher count multipoles?",
+        "Can N_n for n greater than zero be optional?",
+        "What does no-count-multipoles do?"
+      ],
+      "keywords": [
+        "no-count-multipoles",
+        "optional N_n",
+        "skip higher",
+        "N0-only",
+        "ggg-full-window"
+      ],
+      "answer": "For shear, add --more-options no-count-multipoles. This keeps N0 normalization and omits higher weight-ring modes, their contractions and the finite-window solve. The result is gamma_normalized (Upsilon/N0), not gamma_corrected. Skipped orders are omitted rather than written as measured zeros.\n\nAn explicit edge-corrections option takes precedence and restores the full window and correction, even if no-count-multipoles is also present. Two-point statistics are unchanged. Scalar production two-ball engines already omit higher count modes without edge correction; the token adds no further scalar optimization. ggg-full-window is a scalar compatibility diagnostic override.\n\nApproximate shear traversal can also change because N0-only mode needs a lower phase order. Use exact bodies to isolate the effect of normalization alone.",
+      "sources": [
+        "docs/shear.rst",
+        "tests/python/README_kappa_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+      }
+    },
+    {
+      "id": "edge-correction",
+      "title": "Why corrected error can exceed raw error",
+      "questions": [
+        "Why do edge-corrected results have larger errors?",
+        "Why are there NaNs or singular window bins?",
+        "Can I trust raw accuracy for corrected results?"
+      ],
+      "keywords": [
+        "window",
+        "condition",
+        "singular",
+        "NaN",
+        "corrected",
+        "edge correction"
+      ],
+      "answer": "Finite-window correction solves a coupling system built from the measured window multipoles. If that system is poorly conditioned, a small perturbation to the raw signal or window can produce a large change in the corrected result. Small raw L2 error alone therefore does not establish corrected accuracy.\n\nInspect window monopoles, finite/valid-output masks, condition estimates and solve residuals where provided. Empty or singular bins are undefined; NaN is not a measured zero. Compare the same finite support against the exact reference and flag support changes.\n\nIn a clustered signed scalar test, an approximately 0.065% raw perturbation accompanied an approximately 104% corrected difference; reuse increased it further. This illustrates conditioning, not a universal error estimate.",
+      "sources": [
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "docs/saved_scalar_edge.md",
+        "tests/python/README_shear_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "docs/saved_scalar_edge.md": "033a6479a248114b1c131a50b2b462e7609494c48e63f75f26a1ef3019c62429",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0"
+      }
+    },
+    {
+      "id": "binning",
+      "title": "Separation limits and plotting 2PCF/3PCF",
+      "questions": [
+        "Do plots respect min-sep and max-sep?",
+        "How does sofia-fig1 binning work?",
+        "What about 3pcf bin limits?",
+        "Why do Sofia edges differ from 8 and 200?"
+      ],
+      "keywords": [
+        "min-sep",
+        "max-sep",
+        "sep-units",
+        "sofia-fig1",
+        "plots",
+        "edges",
+        "binning"
+      ],
+      "answer": "Explicit --min-sep, --max-sep, --nbins and --sep-units override binning-preset defaults in the current comparison workflows. Plotting should use the saved effective edges/centers from that run. Existing output files are not recomputed by changing a plotting command or a later run's arguments.\n\nThe sofia-fig1 preset describes nominal logarithmic centers from 8 to 200 arcmin: its outer edges are approximately 7.35028 and 217.68454 arcmin. If you require outer limits exactly 8 and 200, specify them explicitly or use the documented edge-based preset. Native spherical distances are chords, converted from angular separation.\n\nFor 2PCF, check the separation axis. For 3PCF, both radial axes must reflect the effective limits; angular reconstruction and multipole order are separate settings. Keep units and geometry with saved histogram metadata.",
+      "sources": [
+        "tests/python/README_shear_corr_all_engines.md",
+        "tests/python/README_kappa_corr_all_engines.md",
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "geometry",
+      "title": "Spherical angles, chord distances and shear convention",
+      "questions": [
+        "Which units does the spherical engine use?",
+        "What is local-east-north?",
+        "Can I recenter a sky catalogue?",
+        "Why do spherical shear fields need transport?"
+      ],
+      "keywords": [
+        "sphere",
+        "chord",
+        "units",
+        "local-east-north",
+        "parallel transport",
+        "spin-2"
+      ],
+      "answer": "Spherical angular engines use observer-centered directions and chord separation. For angular separation alpha in radians on the unit sphere, the chord is 2*sin(alpha/2). The Python drivers convert degree/arcmin/radian limits to the required native distance. Do not recenter a sky catalogue: that changes its angular geometry.\n\nA spherical shear is gamma1+i*gamma2 expressed in each point's local tangent basis. The engine uses spin-2 transport and projection along great circles. --des-shear-convention local-east-north is appropriate only when that matches the input definition; a sign or basis error is not an approximation tolerance error.\n\nA projected flat estimator, an angular spherical estimator and a physical 3D estimator measure different quantities. Select the estimator before selecting the tree.",
+      "sources": [
+        "docs/search_methods.rst",
+        "docs/shear.rst",
+        "tests/python/README_shear_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda",
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0"
+      }
+    },
+    {
+      "id": "smoothing",
+      "title": "nsmooth, smoothing and pivot reuse",
+      "questions": [
+        "What is the difference between nsmooth and smooth-pivot?",
+        "Should I use no-smooth-pivot?",
+        "Does nsmooth 1 improve speed?",
+        "Why is pivot reuse disabled?"
+      ],
+      "keywords": [
+        "nsmooth",
+        "smooth-pivot",
+        "no-smooth-pivot",
+        "leaf",
+        "smoothing"
+      ],
+      "answer": "Smoothing support is compiled with SMOOTHPIVOTON, but it is activated only by explicit smooth-pivot in the current source. nsmooth is also used as a tree leaf-capacity control on applicable paths; it does not silently enable smoothing.\n\nShear/scalar pivot reuse requires compatible unsmoothed traversal and positive runtime theta. The exact-control flags, zero phase budget, smoothing or unsupported engine modes can disable or reject reuse. nsmooth=1 exposes a finer hierarchy for binary shear trees and can affect work, but it is not universally the fastest leaf size.\n\nSmoothing changes the estimator by replacing pivot fields. A leaf-size change reorganizes search work. Compare them separately, and retain the effective smoothing metadata with the result.\n\nNative cballs and the active shear/kappa Python drivers default to nsmooth=8. The two CBALLS_SHEAR_* tolerance variables do not affect kappa. Leaf capacity can change speed and approximate errors; some scalar pair paths choose it adaptively. The shear octree retains individual-body leaves. Calibrate the effective controls together, since no leaf size guarantees a fixed relative error.",
+      "sources": [
+        "docs/shear.rst",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md",
+        "docs/search_methods.rst"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/SCALAR_HIERARCHICAL_REUSE.md": "53563d30c3043628076b79905575a514026c8ef4cce53fd1ee1ee478255ba9a5",
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda"
+      }
+    },
+    {
+      "id": "octree-speed",
+      "title": "Why an octree can be slower than KD-tree or ball-tree",
+      "questions": [
+        "Why is octree shear the slowest?",
+        "Can the octree be faster than the balltree?",
+        "Why do the three trees have different speed?"
+      ],
+      "keywords": [
+        "octree",
+        "slowest",
+        "kdtree",
+        "balltree",
+        "partition",
+        "speed"
+      ],
+      "answer": "An octree partitions Cartesian space into cubes; KD-trees split coordinates, and the PCA ball-tree adapts its splits and bounding balls to the distribution. On a sparse spherical survey footprint, these choices create different node occupancies, angular bounds, accepted cells and task imbalance. A tree with tighter useful bounds can avoid more descent and repeated moment work.\n\nThe current native octree shear code caches normalized cell centers and tightens spherical bounds, reducing unnecessary descent without loosening the tolerance. Nevertheless, histogram contraction, window solves, leaf size and scheduling can dominate at different catalogue sizes.\n\nOctree is not inherently always slowest. Benchmark all compatible trees with identical estimator settings and measured approximation errors. Identical theta values alone do not establish equal accuracy or equal work.",
+      "sources": [
+        "docs/shear.rst",
+        "docs/search_methods.rst",
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "mpi",
+      "title": "MPI, OpenMP and pivot reuse in the current source",
+      "questions": [
+        "Can MPI improve speed?",
+        "Do MPI shear engines support pivot reuse?",
+        "Is MPI faster than OpenMP?",
+        "Does the 256 task cap limit MPI?",
+        "What about multiple nodes?",
+        "And MPI?"
+      ],
+      "keywords": [
+        "MPI",
+        "OpenMP",
+        "ranks",
+        "nodes",
+        "256",
+        "pivot task",
+        "reuse MPI"
+      ],
+      "answer": "The current octree, KD-tree and ball-tree spherical shear MPI specializations support hierarchical shear-pivot-reuse. The earlier report saying MPI rejected it describes an older state. Current MPI controls must agree across ranks, and the task frontier scales with workers subject to the per-rank histogram memory budget. CBALLS_SHEAR_TASKS and CBALLS_SHEAR_TASK_MEMORY_MB control that frontier.\n\nMPI replicates catalogues and trees, distributes pivot/pair tasks, reduces raw histograms and publishes normalized output on rank zero. It adds launch, replication, reduction and communication costs. More ranks on a fixed set of cores are not automatically faster than OpenMP.\n\nMeasure ranks x threads with explicit affinity and enough tasks for balance. Job wall time is the maximum participating rank time; processor cost is the sum of rank CPU times. Compare MPI and OpenMP observables at matching controls. Local multi-rank agreement does not establish multi-node scaling.\n\nPerlmutter CPU jobs for every registered engine are in tests/slurm_scripts. The initial MPI layout is two ranks per node with 64 OpenMP threads each; OpenMP comparison jobs use one node. The README explains shared catalogue packets for the shear Python launcher, Cray MPICH builds, the scaling sweep and numerical validation. The scripts do not establish Perlmutter speedup or a universal approximation-error bound.",
+      "sources": [
+        "addons/balltree_shear_sphere_2balls_mpi/README.md",
+        "addons/octree_shear_sphere_2balls_mpi/README.md",
+        "docs/shear.rst",
+        "tests/python/README_shear_corr_all_engines.md",
+        "tests/slurm_scripts/README.md"
+      ],
+      "source_sha256": {
+        "addons/balltree_shear_sphere_2balls_mpi/README.md": "740d8fdb01ab82ec3f4ecba1acf30024805b9d672f2fc005b997d4968aa25341",
+        "addons/octree_shear_sphere_2balls_mpi/README.md": "7196608bfde1bd6def933e6e4efd5a9fe574fd77d07896272f1a2cc235d1720c",
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "tests/slurm_scripts/README.md": "cc6e75433cf55066b35d6bd8daeaaf5c9816b6bd85af75a7de68a7f61410ba62"
+      }
+    },
+    {
+      "id": "perlmutter",
+      "title": "Planning a Perlmutter run",
+      "questions": [
+        "Can the MPI version improve on Perlmutter?",
+        "How should I run on NERSC?",
+        "Should I use CPU or GPU nodes?"
+      ],
+      "keywords": [
+        "Perlmutter",
+        "NERSC",
+        "Slurm",
+        "srun",
+        "affinity",
+        "GPU"
+      ],
+      "answer": "These OpenMP/MPI engines are CPU implementations; requesting a GPU does not automatically accelerate them. On Perlmutter, first establish a one-node timing at the required accuracy. Then test ranks per node and threads per rank with explicit binding, keeping their product consistent with the allocated cores and avoiding oversubscription.\n\nUse enough tasks for load balance and account for replicated catalogue/tree memory on every rank. Keep all approximation controls identical on the ranks. If many realizations or tomographic regions are independent, distributing separate runs may give better total throughput than dividing a single calculation over many nodes.\n\nThe portable DES workflows contain Slurm examples, but host paths, account, allocation and current site policy must be set on NERSC. No Perlmutter speedup can be inferred from the macOS measurements in the local calibration table.",
+      "sources": [
+        "docs/shear.rst",
+        "docs/performance.rst",
+        "tests/python/README_shear_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/performance.rst": "436d081aa8ec1132acb823461d88bbde657f1534b6574d75a478562ac160b72e",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0"
+      }
+    },
+    {
+      "id": "lya",
+      "title": "Choosing and accelerating Lyα forest estimators",
+      "questions": [
+        "Which lya searching engine should I use?",
+        "How do the forest kernels work?",
+        "Can Lyalpha be faster without approximate bins?"
+      ],
+      "keywords": [
+        "lya",
+        "forest",
+        "LOS",
+        "delta",
+        "lya2Kernel",
+        "lya3Kernel",
+        "radial"
+      ],
+      "answer": "Lyα engines operate on weighted delta pixels with integer forest IDs. The 3D family uses observer-centered geometry and anisotropic separation bins. The 1D family uses radial separations and distinct-forest rules; the same-LOS 2PCF is a separate estimator. Do not exchange them only to get a faster time.\n\nThe LOS-tree 3D hierarchy supports certified cell/range moments. --lya2-kernel 1 and --lya3-kernel 5 select the corresponding optimized paths in current comparison drivers. Zero slops preserve bin membership; they do not prohibit all acceleration. Positive slops or approximate pivot grouping require separate error measurements.\n\nKeep forest selection, pixel stride, weights, delta projection, redshift conversion and exclusions identical in reference comparisons. Finite angular multipole reconstruction has an additional convergence requirement even with exact traversal.",
+      "sources": [
+        "docs/lyman_alpha.rst",
+        "docs/LYA_HIERARCHICAL_REUSE.md",
+        "docs/LYA_LOS_HIERARCHICAL_REUSE.md",
+        "docs/LYA_MULTIPOLE_RECONSTRUCTION.md"
+      ],
+      "source_sha256": {
+        "docs/lyman_alpha.rst": "600b93b8ff2b518c5f6e77e757ec7d7e6d0de70f4853a7e33db1a2147c1624b0",
+        "docs/LYA_HIERARCHICAL_REUSE.md": "028f66d509b85bccb403893841848979d2fb9de4d384570bb16a510b182ac443",
+        "docs/LYA_LOS_HIERARCHICAL_REUSE.md": "ce01ae1f6ba23ef5a64d937c1c515b6508153d734b9df48d0062f311f9865b24",
+        "docs/LYA_MULTIPOLE_RECONSTRUCTION.md": "b870b1c808a3cd25886743806b9a7174ed6347ff4a1c4350ae4b838aef481330"
+      }
+    },
+    {
+      "id": "threads",
+      "title": "Choosing the number of threads and benchmarking",
+      "questions": [
+        "Should I use 16 threads?",
+        "Why does adding more threads not help?",
+        "How do I make fair CPU benchmarks?"
+      ],
+      "keywords": [
+        "threads",
+        "scaling",
+        "python",
+        "affinity",
+        "oversubscription",
+        "memory"
+      ],
+      "answer": "Sweep a few thread counts on the intended machine and catalogue; do not assume the largest count wins. Thread scaling can be limited by task imbalance, memory bandwidth, private histogram size, serial setup, reduction and output. Avoid multiple libraries each creating a full thread pool.\n\nRecord wall time and total process CPU time. Native MainLoop timing excludes Python input loading and most extraction/plotting work; a shell time command measures a wider scope. Under MPI, use maximum rank wall time and summed rank CPU time. Do not divide CPU time by the number of workers and call that elapsed time.\n\nRepeat comparable measurements, keep cache/resume state and affinity explicit, and compare at matched measured error. Small samples may be dominated by setup and histogram overhead rather than neighbor search.",
+      "sources": [
+        "docs/performance.rst",
+        "tests/python/README_shear_corr_all_engines.md",
+        "tests/python/README_kappa_corr_all_engines.md"
+      ],
+      "source_sha256": {
+        "docs/performance.rst": "436d081aa8ec1132acb823461d88bbde657f1534b6574d75a478562ac160b72e",
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+      }
+    },
+    {
+      "id": "resume",
+      "title": "Resume, caches and reproducible timings",
+      "questions": [
+        "What does resume do?",
+        "Can a cached run make my benchmark misleading?",
+        "Why did the script finish immediately?"
+      ],
+      "keywords": [
+        "resume",
+        "cache",
+        "cached",
+        "reproducible",
+        "output directory"
+      ],
+      "answer": "A resume workflow may reuse completed outputs rather than repeat the numerical calculation. Native tree caches can also change repeated-run setup costs. Label cold, warm and resumed measurements separately; an immediate resume is not evidence of a faster estimator.\n\nUse a fresh output directory for an intended recomputation, and retain the input identity, sampling seed, effective bins, multipoles, approximation controls, compiled build and timing scope. Do not compare outputs from different catalogue samples as if their difference were a tree-approximation error.\n\nBefore accepting resumed output, inspect the workflow's saved configuration and completion checks. Old parameter files and explicit environment overrides do not change merely because source defaults were updated.",
+      "sources": [
+        "tests/python/README_shear_corr_all_engines.md",
+        "tests/python/README_kappa_corr_all_engines.md",
+        "docs/RESULT_AVAILABILITY_AND_IDENTITY.md"
+      ],
+      "source_sha256": {
+        "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
+        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff",
+        "docs/RESULT_AVAILABILITY_AND_IDENTITY.md": "8d5adbc723032895119b8ddfe3dca52997c8caec48a8cbe0bb0d7f2c515696a7"
+      }
+    },
+    {
+      "id": "build-controls",
+      "title": "Change compile-time defaults and rebuild consistently",
+      "questions": [
+        "Can I use question mark equals in the Makefile?",
+        "How do I set THETA before compiling?",
+        "Why do cballs and cyballs disagree?",
+        "How do I rebuild the Python wrapper?"
+      ],
+      "keywords": [
+        "THETA",
+        "?=",
+        "make-info",
+        "compiling",
+        "rebuild",
+        "cyballs"
+      ],
+      "answer": "The default Make assignments use ?=, so explicit make arguments can override them, for example make THETA=1 CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.05 cballs libcballs.a. This sets compiled defaults. Runtime theta and corresponding runtime environment overrides are separate.\n\nKeep the executable and Cython extension on one matching build profile. After building the static library, rebuild the extension in the intended Python environment with CBALLS_STATIC_LIBRARY_READY=1 python3 setup.py build_ext --inplace --force. Restart Python to load the new extension. That environment variable means the static library is already ready; it does not rebuild an out-of-date library for you.\n\nUse cballs options=make-info and options=print-search-methods to inspect the binary, and check cyballs.__file__ if Python may be importing an older installation.",
+      "sources": [
+        "README.md",
+        "docs/installation.rst",
+        "docs/build_profiles.rst",
+        "docs/APPROXIMATION_DEFAULTS.md"
+      ],
+      "source_sha256": {
+        "README.md": "15fa5af22e754b75eebaaef6c034e5feb599ad38bd68f85d63d4f2eae4114ec7",
+        "docs/installation.rst": "04044a64d2bd2f4be3eb8d072ca5d5fde1eccd0273211b354111e72a5012def3",
+        "docs/build_profiles.rst": "16749324cb5e55377727fd727c99a868c58c42cd99c50eb4553d444e6e2a1a1b",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+      }
+    },
+    {
+      "id": "script-locations",
+      "title": "Where analysis, benchmarks and regressions live",
+      "questions": [
+        "Where are the benchmark scripts?",
+        "Where are the test scripts?",
+        "What are the private _TC scripts?",
+        "Where are Makefile_tests and plotting scripts?"
+      ],
+      "keywords": [
+        "tests/python",
+        "tests/python",
+        "tests/python",
+        "run2/python",
+        "_dual_node.py",
+        "Makefile_tests"
+      ],
+      "answer": "Public all-engine CPU benchmarks, automated Python regressions, analysis, input and plotting helpers are together in tests/python, alongside their README files. The main Makefile includes Makefile_tests for the test targets.\n\nThe working project also has private comparison workflows under run2/python and portable DES kappa/shear workflows under run2/Eladio/Eladio_Takahashi_tomo-4DES. The _dual_node.py scripts compare with optional external dual node-based calculations; they are not extra native search engines. These private directories are outside a normal public source package.\n\nKeep driver, shared helper, output schema and plotting versions consistent. The public README files describe their command-line options. This tutor indexes the public maintained checkout by default and summarizes the relevant discussion; it does not silently scan other private folders or unrelated chats.\n\nPerlmutter CPU batch jobs, build instructions and scaling/validation helpers are in tests/slurm_scripts.",
+      "sources": [
+        "README.md",
+        "tests/python/README_benchmark_suite.md",
+        "tests/python/README_regression_tests.md",
+        "tests/python/README.md"
+      ],
+      "source_sha256": {
+        "README.md": "15fa5af22e754b75eebaaef6c034e5feb599ad38bd68f85d63d4f2eae4114ec7",
+        "tests/python/README_benchmark_suite.md": "63d6fbbbff04f707735366e43804fe059d8249ebd3b6e67efc1fb1d3ba3cd82f",
+        "tests/python/README_regression_tests.md": "618a88c165a177eac9187ef047e36405026fb73828207f8727e7702548312bc3",
+        "tests/python/README.md": "6516a6aaa4b6584da47fc6d36731fe0ed4e0843af40c944f48605ce442f630c3"
+      }
+    },
+    {
+      "id": "two-versus-three",
+      "title": "Why a 3PCF costs more than a 2PCF",
+      "questions": [
+        "Why is 3pcf more expensive than 2pcf?",
+        "What does --statistics select?",
+        "Can I skip the other statistic?"
+      ],
+      "keywords": [
+        "2pcf",
+        "3pcf",
+        "statistics",
+        "only-2pcf",
+        "only-3pcf",
+        "cost"
+      ],
+      "answer": "A 2PCF combines pairs. A 3PCF needs the relation between two neighbors of a pivot, represented here through radial-bin pairs and angular moments instead of explicit enumeration of every triplet. More bins and more retained harmonics increase contractions, memory and correction work. Survey geometry and maximum separation affect the number of useful neighbors.\n\nUse --statistics 2pcf or --statistics 3pcf in the drivers, corresponding to native only-2pcf or only-3pcf where supported, when you need only one statistic. The both mode can share some work, but approximate shear combined runs may retain separate acceptance policies for pair and ring calculations.\n\nChanging statistic, binning or multipole order changes the requested scientific output. Compare speedups at the same output definition.",
+      "sources": [
+        "docs/search_methods.rst",
+        "docs/shear.rst",
+        "docs/3pcf.rst"
+      ],
+      "source_sha256": {
+        "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda",
+        "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
+        "docs/3pcf.rst": "f305a703d374dd68698ef30b1303cc6049331bf6751dfb4ddb16928d2f226e6f"
+      }
+    },
+    {
+      "id": "tutor-memory",
+      "title": "How this tutor learns from documentation and discussions",
+      "questions": [
+        "What is in the tutor database?",
+        "Do you remember all my chats?",
+        "How do I update the tutor knowledge?",
+        "Is this a real language model?"
+      ],
+      "keywords": [
+        "tutor",
+        "database",
+        "knowledge",
+        "offline",
+        "model",
+        "chat",
+        "update"
+      ],
+      "answer": "Offline mode combines current documentation search with reviewed scientific explanations distilled from the visible cTreeBalls discussion. It is a local retrieval tutor, not a generative language model. It keeps short conversational context in memory and does not save questions unless you use /save or --transcript.\n\nThe source knowledge lives in tutor/knowledge/questions.json, tutor/notes and the maintained README/documentation files. A rebuildable SQLite index is stored under build/ia-tutor. Changed source hashes trigger reindexing. Saved answers whose cited source files changed are marked for review. /reindex refreshes search; it does not invent or silently approve new scientific answers.\n\nThe tutor cannot read unrelated chats automatically. Add reviewed notes to tutor/notes or update the question file to preserve later discussions. Optional --backend ollama --model YOUR_INSTALLED_MODEL enables local-model synthesis using retrieved evidence. No model is downloaded or analysis command executed by the tutor.",
+      "sources": [
+        "docs/ia_tutor.rst"
+      ],
+      "source_sha256": {
+        "docs/ia_tutor.rst": "55cc597c19ae5848d20e973a31397f0d9036adf18ee588454e486889f481cd1f"
+      }
+    }
+  ]
+}

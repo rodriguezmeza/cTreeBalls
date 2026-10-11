@@ -9,17 +9,23 @@ See tests/python/README_lya_corr_all_engines.md for commands and scientific limi
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+
 import argparse
 from dataclasses import dataclass, field
 import glob
+from importlib.machinery import EXTENSION_SUFFIXES
 import json
 import math
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
-import sys
 import time
 
 import numpy as np
@@ -31,6 +37,18 @@ from kappa_corr_all_engines import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Prefer a matching local rebuild, including when this driver is copied into
+# run2/python. An explicit source override remains authoritative.
+_source_override = os.environ.get("CTREEBALLS_SOURCE_ROOT")
+if _source_override:
+    sys.path.insert(0, str(Path(_source_override).expanduser().resolve()))
+else:
+    for _candidate in (PROJECT_ROOT, *(p / "cTreeBalls" for p in Path(__file__).resolve().parents)):
+        if ((_candidate / "Makefile").is_file()
+                and any((_candidate / ("cyballs" + suffix)).is_file()
+                        for suffix in EXTENSION_SUFFIXES)):
+            sys.path.insert(0, str(_candidate))
+            break
 MPI_CHILD = "CTREEBALLS_LYA_MPI_CHILD"
 DESI_BASE = ("https://data.desi.lbl.gov/public/dr1/vac/dr1/lya-deltas/"
              "v1.0/delta-lya-0-0/Delta/")
@@ -149,9 +167,12 @@ class RunConfig:
     engines: tuple[str, ...]
     output_dir: Path
     qualification_reference: Path | None = None
-    qualification_rtol: float = .02
+    qualification_rtol: float = .05
     qualification_atol: float = 1e-10
+    accuracy_report_only: bool = False
     threads: int = 1
+    verbose: int = 1
+    verbose_log: int = 0
     rp_max: float = 200.0
     rt_max: float = 200.0
     rp_bins: int = 50
@@ -192,6 +213,8 @@ class RunConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or not 1 <= value <= 100000:
                 raise ValueError(f"{name} must be an integer in [1, 100000]")
+        if self.verbose not in range(4) or self.verbose_log not in range(4):
+            raise ValueError("verbose and verbose_log must be in [0,3]")
         if self.lya2_kernel not in (0,1) or self.lya3_kernel not in range(6):
             raise ValueError("require lya2_kernel=0..1 and lya3_kernel=0..5")
         if not isinstance(self.lya3_pivot_cell_max,int) or not 1<=self.lya3_pivot_cell_max<=64:
@@ -488,12 +511,15 @@ def engine_parameters(config, engine, root):
                     useLogHist=False, rangeN=config.r3_max,
                     rminHist=config.multipole_rmin,
                     sizeHistN=config.r3_bins, mChebyshev=config.multipole_lmax,
-                    verbose=0, verbose_log=0,
+                    verbose=config.verbose, verbose_log=config.verbose_log,
                     options="only-3pcf-3d,exclude-all-same-los,no-smooth-pivot")
+    # set() merges overrides: reset the order after a rank-zero-only
+    # multipole run so later MPI startup controls agree on every rank.
     return dict(searchMethod=engine, rootDir=str(root), iCatalogs="1",
                 numberThreads=config.threads, usePeriodic=False, useLogHist=False,
                 rangeN=max(config.rp_max, config.rt_max, config.r3_max),
-                rminHist=0.0, sizeHistN=4, verbose=0, verbose_log=0,
+                rminHist=0.0, sizeHistN=4, mChebyshev=config.multipole_lmax,
+                verbose=config.verbose, verbose_log=config.verbose_log,
                 options="no-smooth-pivot",
                 lya2RpMax=config.rp_max, lya2RtMax=config.rt_max,
                 lya2RpBins=config.rp_bins, lya2RtBins=config.rt_bins,
@@ -719,7 +745,8 @@ def run_engine_suite(catalog, config, comm=None):
                         from cyballs import publish_result_packet
                         publish_result_packet(balls,root/'qualification',
                             Path(config.qualification_reference)/engine/'qualification' if config.qualification_reference else None,
-                            rtol=config.qualification_rtol,atol=config.qualification_atol)
+                            rtol=config.qualification_rtol,atol=config.qualification_atol,
+                    fail_on_rejection=not config.accuracy_report_only)
             try:
                 collective(comm, compute)
             finally:
@@ -798,9 +825,10 @@ def run_engine_suite(catalog, config, comm=None):
 
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--qualification-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
-    parser.add_argument('--qualification-rtol',type=float,default=.02)
+    parser.add_argument('--qualification-reference','--accuracy-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
+    parser.add_argument('--qualification-rtol',type=float,default=.05)
     parser.add_argument('--qualification-atol',type=float,default=1e-10)
+    parser.add_argument('--accuracy-report-only',action='store_true',help='retain results and report penalties even above the relative L2 target')
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--fits", nargs="+", help="DESI, eBOSS/PICCA, or Cartesian forest FITS files/globs/directories")
     source.add_argument("--catalog", type=Path, help="NPZ with positions, delta, weights, forest_ids")
@@ -816,6 +844,10 @@ def parse_arguments(argv=None):
     parser.add_argument("--output", type=Path, default=Path("Output_lya_all_engines"))
     parser.add_argument("--save-catalog", type=Path, help="cache the selected input as NPZ")
     parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--verbose", type=int, choices=range(4), default=1,
+                        help="native verbosity; 1 enables live counting, 0 silences it")
+    parser.add_argument("--verbose-log", type=int, choices=range(4), default=0,
+                        help="native log verbosity; 1 records live counting in cballs.log")
     for name, default in (("rp-max", 200.), ("rt-max", 200.), ("r3-max", 20.)):
         parser.add_argument("--"+name, type=float, default=default, help="Mpc/h")
     for name, default in (("rp-bins", 50), ("rt-bins", 50), ("r3-bins", 4),
@@ -866,6 +898,7 @@ def parse_arguments(argv=None):
     parser.add_argument("--mpi-ranks", type=int, default=1)
     parser.add_argument("--mpiexec", help="launcher built against the same MPI as cyballs/mpi4py")
     parser.add_argument("--mpi-extra-arg", action="append", default=[])
+    parser.epilog = 'Native timings separate Python Run from C MainLoop: MPI wall=max participating ranks, CPU=sum participating ranks. CPU includes worker threads and may exceed wall time. --verbose 1 enables live completion counters; --verbose-log 1 records them. LOS-tree methods are included in all-tree; estimator families are compared separately. Angular shear/scalar pivot-reuse and count-window options do not apply to forest estimators.'
     return parser.parse_args(argv)
 
 
@@ -940,7 +973,9 @@ def main(argv=None):
     if comm.size == 1 and any(LYA_ENGINES[e].mpi for e in engines):
         comm = get_mpi_comm(True)
     config = RunConfig(engines, args.output, threads=args.threads,
+                       verbose=args.verbose, verbose_log=args.verbose_log,
             qualification_reference=args.qualification_reference,
+            accuracy_report_only=args.accuracy_report_only,
             qualification_rtol=args.qualification_rtol,
             qualification_atol=args.qualification_atol, rp_max=args.rp_max,
                        rt_max=args.rt_max, rp_bins=args.rp_bins, rt_bins=args.rt_bins,

@@ -28,7 +28,7 @@ def test_calibrated_complex_coefficients():
         exact = reference.run_native_catalogs([catalog], 4,
             options=shared.BASE+",no-one-ball,no-two-balls", **kwargs)
         for tolerance, expected_pass in [(0.3, True), (1., False)]:
-            with patch.dict(os.environ, CBALLS_SHEAR_PIVOT_TOL=str(tolerance)):
+            with patch.dict(os.environ, CBALLS_SHEAR_PIVOT_TOL=str(tolerance), CBALLS_SHEAR_BIN_THETA="0"):
                 actual = reference.run_native_catalogs([catalog], 4,
                     options=shared.REUSE, **kwargs)
             passed = True
@@ -44,6 +44,7 @@ def test_balltree_reuse():
     with patch.object(shared, "ENGINE", "balltree-shear-sphere-2balls-omp"):
         for test in (
             shared.test_exact_limit_and_fallbacks,
+            shared.test_high_order_signal_and_window_symmetries,
             shared.test_aggregate_pivots_and_determinism,
             shared.test_cross_masks_and_polar_geometry,
             shared.test_inherited_rings_and_masked_aggregation,

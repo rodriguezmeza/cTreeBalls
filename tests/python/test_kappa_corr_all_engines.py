@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Contracts for the active convergence all-engines driver."""
 
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+
 import json
 import math
 import os
-from pathlib import Path
 import subprocess
-import sys
 
 import numpy as np
 import pytest
@@ -27,6 +32,7 @@ from kappa_corr_all_engines import (  # noqa: E402
     make_plots,
     merge_statistics_options,
     print_engine_table,
+    parse_arguments,
     resolve_engines,
     run_engine_suite,
     smooth_pivot_mode,
@@ -56,6 +62,12 @@ def test_registry_is_limited_to_active_scalar_addons():
     assert resolve_engines(("all-omp",), ACTIVE_ENGINES) == list(ACTIVE_ENGINES[::2])
     assert resolve_engines(("all-mpi",), ACTIVE_ENGINES) == list(ACTIVE_ENGINES[1::2])
     assert resolve_engines(("all",), ACTIVE_ENGINES) == list(ACTIVE_ENGINES)
+
+
+def test_leaf_capacity_default_and_override():
+    assert RunConfig(ACTIVE_ENGINES, Path("unused")).nsmooth == 8
+    assert parse_arguments([]).nsmooth == 8
+    assert parse_arguments(["--nsmooth", "16"]).nsmooth == 16
 
 
 def test_other_field_families_are_rejected():
@@ -93,7 +105,7 @@ def test_active_engine_capabilities_and_parameters():
 def test_smooth_pivot_policy():
     for name in ACTIVE_ENGINES[:4]:
         config = RunConfig((name,), Path("unused"), smooth_pivot_compiled=True)
-        assert smooth_pivot_mode(config, name) == "enabled-by-build-default"
+        assert smooth_pivot_mode(config, name) == "disabled-by-default"
         config.options = ("no-smooth-pivot",)
         assert smooth_pivot_mode(config, name) == "disabled-by-option"
     for name in ACTIVE_ENGINES[4:]:
@@ -161,8 +173,8 @@ def test_flatten_and_plot_contract(tmp_path):
         flatten_radial_matrix(np.zeros((2, 3)))
     pytest.importorskip("matplotlib")
     results = {
-        "a": {"r": np.arange(4), "xi": np.arange(4), "zeta_m_0": matrix},
-        "b": {"r": np.arange(4), "xi": np.arange(4)+0.1,
+        "a": {"r": np.geomspace(.003, .05, 4), "xi": np.arange(4), "zeta_m_0": matrix},
+        "b": {"r": np.geomspace(.003, .05, 4), "xi": np.arange(4)+0.1,
               "zeta_m_0": matrix+0.1},
     }
     config = RunConfig(tuple(results), tmp_path, bins=4, multipoles=2).normalized()
@@ -186,7 +198,7 @@ def test_engine_table_uses_dual_node_terminology(capsys):
     print_engine_table(ACTIVE_ENGINES, True)
     text = capsys.readouterr().out
     assert "frontier=dual-node" in text
-    assert "smooth=default-on" in text
+    assert "smooth=opt-in" in text
     assert "smooth=unsupported" in text
 
 

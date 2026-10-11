@@ -64,7 +64,7 @@ Module map
        ``node`` header so tree traversal can work on ``nodeptr`` values.
    * - ``include/datastruc_hist.h``
      - Per-thread and global histogram workspaces used by the search code.
-   * - ``include/angular_contracts.h``
+   * - ``include/angular_checks.h``
      - Observer-frame selection, tangent phases, and projected angular bounds.
    * - ``include/scalar_moments.h``
      - Weighted raw KD/balltree moments and distinct-neighbor subtraction.

@@ -5,6 +5,21 @@ OpenMP workers). MPI CPU totals sum participating ranks. Catalog loading,
 registration, plotting and launcher overhead are outside the timed Run scope.
 """
 import math
+import os
+
+
+def runtime_environment(environ=None):
+    """Record explicit tuning overrides, without guessing compiled defaults.
+
+    In particular SHEAR_PROFILE is presence-based: the string '0' still enables
+    its instrumentation. Effective native settings live in run provenance.
+    """
+    environ = os.environ if environ is None else environ
+    names = {"OMP_NUM_THREADS", "OMP_DYNAMIC", "OMP_PROC_BIND", "OMP_PLACES",
+             "OMP_WAIT_POLICY", "GOMP_CPU_AFFINITY", "KMP_AFFINITY",
+             "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"}
+    return {key: value for key, value in sorted(environ.items())
+            if key in names or key.startswith(("CBALLS_SHEAR_", "CBALLS_SCALAR_", "CBALLS_LYA_"))}
 
 
 def _seconds(value, name):
@@ -20,7 +35,7 @@ def timing_metadata(setup_wall, setup_cpu, compute_wall, compute_cpu, scope):
     result = {name: _seconds(value, name) for name, value in values.items()}
     result.update(total_wall_time=result["setup_wall_time"]+result["compute_wall_time"],
                   total_cpu_time=result["setup_cpu_time"]+result["compute_cpu_time"],
-                  timing_scope=scope)
+                  timing_scope=scope, runtime_environment=runtime_environment())
     return result
 
 
@@ -46,6 +61,7 @@ def aggregate_rank_timings(rows):
     if len(scopes) != 1:
         raise ValueError("participating ranks must use the same timing scope")
     result.update(ranks=len(rows), rank_timings=list(rows),
+                  runtime_environment=rows[0].get("runtime_environment", {}),
                   timing_scope=scopes.pop()+
                   "; wall=max(participating ranks), CPU=sum(participating ranks)")
     return result

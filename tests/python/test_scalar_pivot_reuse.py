@@ -397,7 +397,7 @@ def test_native_phase_enclosure():
     """Sample descendants, including least-axis switches and near axial legs."""
     import subprocess, shlex
 
-    angular = (ROOT / "include/angular_contracts.h").read_text()
+    angular = (ROOT / "include/angular_checks.h").read_text()
     basis = angular[
         angular.index("static inline bool cballs_angular_basis") : angular.index(
             "\n#endif", angular.index("static inline bool cballs_angular_basis")

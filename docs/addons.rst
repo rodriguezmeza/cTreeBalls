@@ -33,8 +33,8 @@ complex Toeplitz solve. Empty or singular scalar systems publish NaN with
 validity and conditioning diagnostics. Masking is
 selection; it does not itself request edge correction.
 
-The KD and PCA ball-tree families use smooth pivots by default when
-``SMOOTHPIVOTON=1``. ``no-smooth-pivot`` disables this. The native-octree
+The KD and PCA ball-tree families can use smooth pivots when
+``SMOOTHPIVOTON=1``. Explicit ``smooth-pivot`` enables this; the default is off. The native-octree
 dual-node path retains exact body pivots.
 
 Full-Sky Spin-2 Trees
@@ -87,7 +87,7 @@ MPI methods reduce raw sums before normalization.
 Validation
 ----------
 
-Run the focused launchers from ``tests/make_tests`` and the driver contracts::
+Run the focused launchers from ``tests/make_tests`` and the driver checks::
 
    make test-search-methods test-two-ball-edge
    python3 -m pytest -q tests/python/test_kappa_corr_all_engines.py

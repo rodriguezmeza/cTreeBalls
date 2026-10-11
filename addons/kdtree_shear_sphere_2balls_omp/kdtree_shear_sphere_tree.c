@@ -4,6 +4,11 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+#ifdef OPENMPCODE
+#include <omp.h>
+#endif
+
+#define KD_SHEAR_PARALLEL_BUILD_CUTOFF 8192
 
 #include "globaldefs.h"
 #include "kdtree_shear_sphere_tree.h"
@@ -235,11 +240,8 @@ static int kd_shear_aggregate(struct cmdline_data *cmd,
     if (!kd_shear_unit3(center_sum, center_unit))
         if (!kd_shear_unit3(Pos(tree->bptr[node->first]), center_unit))
             return FAILURE;
-    if (!kd_shear_basis(center_unit, center_east, center_north)) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "kdtree-shear-sphere-2balls-omp: node tangent frame is undefined");
+    if (!kd_shear_basis(center_unit, center_east, center_north))
         return FAILURE;
-    }
     DO_COORD(axis) {
         node->center[axis] = (cballs_storage_real)center_unit[axis];
         node->cmpos[axis] = (cballs_storage_real)center_unit[axis];
@@ -263,11 +265,8 @@ static int kd_shear_aggregate(struct cmdline_data *cmd,
 
         if (!(weight >= 0.0) || !isfinite(weight)
             || !kd_shear_rotation(center_unit, center_east, center_north,
-                                  Pos(body), &rotation)) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "kdtree-shear-sphere-2balls-omp: invalid spin-2 node member");
+                                  Pos(body), &rotation))
             return FAILURE;
-        }
         transported = kd_shear_mul(weighted_gamma, rotation);
         node->weight += weight;
         node->shear_gamma_re += transported.re;
@@ -285,31 +284,37 @@ static int kd_shear_aggregate(struct cmdline_data *cmd,
     return SUCCESS;
 }
 
+/* Exact size of the median-split subtree, without visiting its nodes.
+ * At one level all populations are floor(count/width) or that value plus
+ * one. Stop when only the larger populations can still exceed capacity. */
+static INTEGER kd_shear_subtree_nodes(INTEGER count, int leaf_capacity)
+{
+    INTEGER width = 1;
+    if (count <= leaf_capacity) return 1;
+    if (leaf_capacity == 1) return 2*count - 1;
+    while (count/width > leaf_capacity) width *= 2;
+    return 2*width - 1
+        + (count/width == leaf_capacity ? 2*(count%width) : 0);
+}
+
 static int kd_shear_build_node(struct cmdline_data *cmd,
                                fcfc_balltreeptr tree, INTEGER first,
-                               INTEGER last, int leaf_capacity, int depth,
-                               bool pivot_role, INTEGER *result)
+                               INTEGER last, int leaf_capacity, INTEGER index,
+                               bool pivot_role, bool parallel_build)
 {
     cballs_storage_real minimum[NDIM];
     cballs_storage_real maximum[NDIM];
     fcfc_ballnode *node;
-    INTEGER index;
     INTEGER point;
     int split_axis = 0;
     int axis;
 
-    if (tree->nnode >= tree->capacity) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "kdtree-shear-sphere-2balls-omp: node capacity exceeded");
-        return FAILURE;
-    }
-    index = tree->nnode++;
+    if (index < 0 || index >= tree->nnode) return FAILURE;
     node = &tree->nodes[index];
     node->first = first;
     node->last = last;
     node->left = -1;
     node->right = -1;
-    if (depth > tree->max_depth) tree->max_depth = depth;
 
     DO_COORD(axis)
         minimum[axis] = maximum[axis] = Pos(tree->bptr[first])[axis];
@@ -329,15 +334,31 @@ static int kd_shear_build_node(struct cmdline_data *cmd,
         const INTEGER middle = first + (last - first + 1)/2;
 
         kd_shear_select(tree->bptr, first, last, middle, split_axis);
-        if (kd_shear_build_node(cmd, tree, first, middle - 1,
-                                leaf_capacity, depth + 1, pivot_role,
-                                &node->left) == FAILURE
-            || kd_shear_build_node(cmd, tree, middle, last,
-                                   leaf_capacity, depth + 1, pivot_role,
-                                   &node->right) == FAILURE)
-            return FAILURE;
+        int left_status = FAILURE, right_status = FAILURE;
+        /* Reserve the original depth-first layout before launching work.
+         * Siblings touch disjoint body-pointer and node ranges. Each node's
+         * centre and spin moments retain their original summation order. */
+        node->left = index + 1;
+        node->right = node->left
+            + kd_shear_subtree_nodes(middle - first, leaf_capacity);
+#ifdef OPENMPCODE
+        if (parallel_build && middle - first >= KD_SHEAR_PARALLEL_BUILD_CUTOFF) {
+#pragma omp task shared(left_status)
+            left_status = kd_shear_build_node(cmd, tree, first, middle - 1,
+                leaf_capacity, node->left, pivot_role, TRUE);
+            right_status = kd_shear_build_node(cmd, tree, middle, last,
+                leaf_capacity, node->right, pivot_role, TRUE);
+#pragma omp taskwait
+        } else
+#endif
+        {
+            left_status = kd_shear_build_node(cmd, tree, first, middle - 1,
+                leaf_capacity, node->left, pivot_role, FALSE);
+            right_status = kd_shear_build_node(cmd, tree, middle, last,
+                leaf_capacity, node->right, pivot_role, FALSE);
+        }
+        if (left_status == FAILURE || right_status == FAILURE) return FAILURE;
     }
-    *result = index;
     return SUCCESS;
 }
 
@@ -358,7 +379,7 @@ int kdtree_shear_sphere_build(
     fcfc_balltreeptr tree = NULL;
     INTEGER valid_count = 0;
     INTEGER source;
-    INTEGER root = -1;
+    int build_status = FAILURE;
 #ifdef LONGINT
     const uintmax_t integer_max = (uintmax_t)LONG_MAX;
 #else
@@ -391,7 +412,11 @@ int kdtree_shear_sphere_build(
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
     tree->npoint = valid_count;
-    tree->capacity = 2*valid_count;
+    tree->capacity = kd_shear_subtree_nodes(valid_count, leaf_capacity);
+    tree->nnode = tree->capacity;
+    for (INTEGER count = valid_count; count > leaf_capacity;
+         count = count/2 + count%2)
+        tree->max_depth++;
     tree->bptr = malloc((size_t)valid_count*sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
     if (tree->bptr == NULL || tree->nodes == NULL)
@@ -403,8 +428,26 @@ int kdtree_shear_sphere_build(
         if (kd_shear_valid(cmd, body, pivot_role))
             tree->bptr[valid_count++] = body;
     }
-    if (kd_shear_build_node(cmd, tree, 0, valid_count - 1, leaf_capacity,
-                            0, pivot_role, &root) == FAILURE || root != 0) {
+#ifdef OPENMPCODE
+    if (valid_count >= 2*KD_SHEAR_PARALLEL_BUILD_CUTOFF
+        && cmd->numthreads > 1 && !omp_in_parallel()) {
+#pragma omp parallel num_threads(cmd->numthreads)
+        {
+#pragma omp single
+            build_status = kd_shear_build_node(cmd, tree, 0, valid_count - 1,
+                leaf_capacity, 0, pivot_role, TRUE);
+        }
+    } else
+#endif
+    {
+        build_status = kd_shear_build_node(cmd, tree, 0, valid_count - 1,
+            leaf_capacity, 0, pivot_role, FALSE);
+    }
+    if (build_status == FAILURE) {
+        /* A single writer reports errors after all construction tasks join. */
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "kdtree-shear-sphere: invalid node geometry or spin-2 member "
+                 "during construction");
         kdtree_shear_sphere_free(tree);
         return FAILURE;
     }

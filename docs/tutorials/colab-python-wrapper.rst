@@ -12,7 +12,7 @@ returned arrays into NumPy, and plots the radial bins, 2PCF-style values, and
 histogram counts.
 
 This historical notebook pins a published release (currently 1.0.1); it does
-not validate the repaired 1.1.0 source profile. For current numerical contracts
+not validate the repaired 1.1.0 source profile. For current numerical definitions
 and in-memory examples, build the checkout using :doc:`../installation`
 and use :doc:`../user/python`.
 

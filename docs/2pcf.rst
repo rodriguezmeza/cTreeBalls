@@ -29,4 +29,4 @@ Other Fields
 Where available, ``only-2pcf`` avoids unrelated scalar 3PCF work.
 The physical-3D family instead uses ``only-2pcf-3d``; forest methods encode
 their selected orders in the search name. The two ``balltree-2balls-..._3pcf``
-addons have no 2PCF mode. See :doc:`benchmarks` for comparable timing contracts.
+addons have no 2PCF mode. See :doc:`benchmarks` for comparable timing conventions.

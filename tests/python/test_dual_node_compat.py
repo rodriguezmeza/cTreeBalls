@@ -1,6 +1,11 @@
 """Keep optional external comparisons working across the naming boundary."""
-from pathlib import Path
+
 import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 from types import SimpleNamespace
 import numpy as np
 import pytest

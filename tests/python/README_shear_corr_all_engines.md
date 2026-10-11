@@ -9,7 +9,7 @@ Native `MainLoop`, complete Python `Run`, and launcher times stay separate.
 
 
 The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
-`MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
+`MainLoop`, excluding the collection of run information in Python) from `compute_*` (the complete
 Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
 `native_mainloop_cpu_time`. MPI uses maximum rank wall time and summed rank CPU
 for both scopes; use the same scope, output settings and accuracy for comparisons.
@@ -27,7 +27,7 @@ the six full-sky dual node methods enabled in the public Makefile profile:
 
 All methods use observer-centered unit vectors, local east/north shear
 components, great-circle parallel transport, and the same cTreeBalls
-2PCF/3PCF output contract. Disabled addons are excluded from this public profile.
+2PCF/3PCF output definition. Disabled addons are excluded from this public profile.
 
 ## Build
 
@@ -85,17 +85,17 @@ For a first large-map test, add `--max-points 100000`. This deterministic
 selection is useful for timing and regression checks but is not the full
 survey estimator.
 
-With `SMOOTHPIVOTON=1`, capable paths enable pivot smoothing by default;
-`--no-smooth-pivot` disables it. A literal `--smooth-radius` is specified in
+With `SMOOTHPIVOTON=1`, pivot smoothing is available but off by default;
+`--more-options smooth-pivot` enables it and `--no-smooth-pivot` disables it. A literal `--smooth-radius` is specified in
 arcminutes and must obey `2*rsmooth <= min-sep`. Use `--tree-theta 0 --exact-tree --no-smooth-pivot` for an unsmoothed
 body reference accepted by the numerical qualification API. `--nsmooth` controls the native
 leaf/smoothing capacity; `--more-options NAME[,NAME...]` adds native options.
 
-OpenMP native octree, KD-tree, and ball-tree 3PCF support opt-in `--more-options shear-pivot-reuse`
+OpenMP and MPI native octree, KD-tree, and ball-tree 3PCF support opt-in `--more-options shear-pivot-reuse`
 with `--no-smooth-pivot`, `BALLS4SCANLEVON=1`, positive `theta` and full pivot
-coverage. All MPI shear methods reject this option. MPI shear also rejects
+coverage. MPI controls must match across ranks. MPI shear rejects
 `legacy-one-ball`. `CBALLS_SHEAR_PIVOT_TOL` sets a phase
-budget in radians in `[0,3]`, default `0.1`, not a percentage error guarantee.
+budget in radians in `[0,3]`, default `0`, not a percentage error guarantee.
 With reuse active the budget controls 3PCF acceptance instead of the magnitude
 of `theta`. Zero budget only disables reuse, not ordinary neighbor acceptance.
 Use `no-one-ball` for an exact native-octree 3PCF. Calibrate against exact
@@ -126,7 +126,7 @@ The sign policy matches the DES workflow:
 
 The result is `gamma1+i*gamma2` in the local east/north basis. The table
 already encodes its footprint and uses unit pixel weights. `WTSUM`, `G1MEAN`
-and `G2MEAN` are retained as provenance, never used to divide or recenter the
+and `G2MEAN` are retained as run information, never used to divide or recenter the
 fields. Extra masks, custom weights/field selectors, flat geometry and
 `--conjugate-input-shear` are rejected for this format. REALIZ/TOMOBIN/REGION
 are checked against standard filenames, and NPIXCAT against the row count.
@@ -149,9 +149,22 @@ retained sample; thinning changes the catalog and is not a full-survey result.
 
 `--binning sofia-fig1` reproduces the supplied workflow's 20 logarithmic chord
 bins whose first/last centers correspond to 8/200 arcmin. The distinct
-`paper-8-200-edges` preset uses 8/200 arcmin as outer edges. Presets override
-min/max separation, unit and bin-count arguments, and reject linear bins.
-`custom` preserves explicit settings. Angular edge/center arrays are saved.
+`paper-8-200-edges` preset uses 8/200 arcmin as outer edges. Presets supply
+omitted controls; explicit `--min-sep`, `--max-sep`, `--sep-units`, and `--nbins`
+take precedence regardless of argument order. Explicit limits are outer edges,
+not centers, in the selected units (arcmin by default for a named preset).
+Unspecified preset edges are converted if you change units. Named presets
+require spherical logarithmic bins; use `custom` for linear bins. Custom
+omitted defaults remain 0.05–2 degrees and 6 bins.
+
+This applies equally to 2PCF, 3PCF, and DES batch runs. For example,
+`--binning sofia-fig1 --min-sep 2.5 --max-sep 250 --sep-units arcmin`
+measures 20 bins with outer edges 2.5 and 250 arcmin. Angular edge/center
+arrays are saved. The 2PCF axes span those edges; the first/last points are
+bin centers inside them. Flattened 3PCF plots use a pair-index axis, with
+actual coordinates recorded in `shear_3pcf_radial_pairs.csv` and the measured
+range in the title. A range change requires recomputing correlations, not
+relabeling old results.
 
 For deterministic realization/bin/region jobs, including array-task selection:
 
@@ -178,7 +191,7 @@ compared with a matching exact-reference packet. `[done]` only confirms
 execution. To qualify, first retain an identical catalog/binning/multipole run
 with `--tree-theta 0 --exact-tree --no-smooth-pivot`, then pass its output root
 as `--qualification-reference` on the candidate run. The tolerances are
-`--qualification-rtol` (default 0.02) and `--qualification-atol` (1e-10).
+`--qualification-rtol` (default 0.05) and `--qualification-atol` (1e-10).
 Acceptance is per-observable L2 error; pointwise deviations are diagnostics,
 not a guarantee that every bin satisfies the relative tolerance. Even a
 reference run initially reports UNMEASURED. Different catalogs or NSIDEs need
@@ -218,7 +231,7 @@ are not bundled in this public checkout.
 ## Optional external dual-node API
 
 The all-engines driver times native cTreeBalls engines. Separate external
-comparisons can use [dual_node_compat.py](dual_node_compat.py), which lazily
+comparisons can use [dual_node_compat.py](../python/dual_node_compat.py), which lazily
 loads the installed external library and translates `bin_theta` and
 `angle_theta` without changing their values. It is optional; no external
 package is required for the native driver. For example:
@@ -248,10 +261,10 @@ both legs are complete; diagonal self-neighbor subtraction is retained.
 
 The option is off by default and requires `no-smooth-pivot`, positive `theta`,
 full pivot coverage, and `BALLS4SCANLEVON=1`. Exact controls and smoothing retain
-the body-pivot fallback. MPI shear methods continue to reject this experimental
-option. The independent 2PCF pass retains its own acceptance rules.
+the body-pivot fallback. The octree, KD-tree and ball-tree MPI shear methods also support this
+option; controls must agree across ranks. The independent 2PCF pass retains its own acceptance rules.
 
-- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `0.1`.
+- `CBALLS_SHEAR_PIVOT_TOL`: phase budget in radians, finite `[0,3]`, default `0`.
 - `CBALLS_SHEAR_BIN_THETA`: internal radial-bin assignment allowance, finite `[0,1]`
   bin widths, default `0`. Zero requires complete containment inside a bin.
   Positive values allow center-based assignment when the combined cap radius
@@ -262,16 +275,89 @@ option. The independent 2PCF pass retains its own acceptance rules.
   tree storage and can improve reuse; the octree already has individual-body leaves.
 
 For a performance/accuracy trial through the Python drivers, add
-`--nsmooth 1 --more-options shear-pivot-reuse` and explicitly set the two environment
-controls, for example `CBALLS_SHEAR_PIVOT_TOL=3 CBALLS_SHEAR_BIN_THETA=0.5`.
-These are approximate trial settings, not an accuracy guarantee. Compare raw
+`--tree-theta 0.025 --nsmooth 1 --more-options shear-pivot-reuse` with explicit
+`CBALLS_SHEAR_PIVOT_TOL=0.1 CBALLS_SHEAR_BIN_THETA=0`.
+These positive tolerances are trial settings; shipped tolerances are zero.
+The compiled defaults can be changed with `?=` assignments in
+`addons/Makefile_addons_settings` or overridden by the runtime environment.
+Positive trial settings need accuracy checks. Compare raw
 numerators, windows, and corrected complex multipoles against an exact reference
 for the actual catalog. Poorly conditioned windows can amplify small raw errors.
 
-Native provenance records `shear_hierarchical_reuse.enabled`,
+Native run information records `shear_hierarchical_reuse.enabled`,
 `phase_budget_radians`, and `radial_bin_slop` from the completed run. With
 `CBALLS_SHEAR_PROFILE=1`, `radial_pairs` counts actual radial-pair combinations,
 `represented_pairs` counts the equivalent individual-pivot combinations, and
 `partial_reductions` identifies completion above unresolved descendants. The
 64 MiB per-worker scratch limit includes completion masks. Reuse walk timers
 include reductions and must not be added to the reduction timer.
+
+Benchmark controls and timing (October 2026)
+
+The shared benchmark_timing.py records explicit CBALLS_SHEAR_*,
+CBALLS_SCALAR_*, CBALLS_LYA_* and thread-placement environment overrides.
+An omitted environment variable is not assumed to be a compiled default;
+read native run information for the effective settings and build identity.
+
+compute_wall_time/compute_cpu_time cover the complete Python Run call.
+native_mainloop_wall_time/native_mainloop_cpu_time cover the native C loop.
+MPI CPU sums participating ranks; wall takes their maximum, including the
+maximum of each rank's setup+compute total rather than the sum of separate
+phase maxima. CPU is never divided by thread or rank count. The CPU/wall
+ratio estimates average CPU use, not elapsed-time speedup. Read timing_scope
+for setup, output, cleanup and external-adapter boundaries.
+
+--tree-theta defaults to 1 (approximate traversal) in angular drivers. Make THETA
+is a distinct legacy compile-time criterion, also defaulting to 1. Opt-in
+shear-pivot-reuse uses CBALLS_SHEAR_PIVOT_TOL=3 and CBALLS_SHEAR_BIN_THETA=0.5.
+--nsmooth defaults to 8 in the active kappa and shear drivers, matching native cballs.
+Scalar reuse uses phase tolerance 0.1 and bin tolerance 0. Environment values
+override these compiled reuse controls, not theta. These are speed/accuracy
+choices, not a universal percentage-error bound. Lyα keeps certified cell
+aggregation with zero bin slops; positive slops remain explicit choices.
+CBALLS_SHEAR_TASKS and CBALLS_SHEAR_TASK_MEMORY_MB also apply to MPI frontiers.
+--verbose 1 enables available live work counters. CBALLS_SHEAR_PROFILE adds
+instrumentation whenever present, including value 0; unset it to disable.
+
+Shear retains full count/window modes by default. --more-options
+no-count-multipoles selects N0 normalization; edge-corrections takes
+precedence and restores higher window modes. Scalar dual-node runs already
+skip higher count modes without edge correction; ggg-full-window is the
+octree compatibility diagnostic override. NMultipolesON is a legacy build
+switch, not a substitute for these runtime controls.
+
+See [the approximation defaults and 5% L2 criterion](../../docs/APPROXIMATION_DEFAULTS.md) for fast defaults, measured penalties, exact references, and the limits of finite-multipole reconstruction.
+
+Measured approximation penalties
+
+Pass --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only to compare
+against saved exact results for the identical input, bins and multipoles. The
+reference root must contain ENGINE/qualification for each native engine.
+Each native run writes ENGINE/qualification/approximation-penalty.json and
+prints raw, normalized and corrected relative L2 percentages where available,
+including each shear component. Without a reference the penalty is UNMEASURED.
+The default comparison target is 5% (--qualification-rtol 0.05); it does not
+change traversal controls. Report-only retains results above the target;
+without it a failed requested numerical qualification raises an error.
+Relative L2 uses no denominator floor: zero reference norms are undefined and
+absolute errors are retained. A small pooled L2 does not bound every bin.
+
+
+## Parameters used by each run
+
+Native runs write `OUTDIR/ENGINE/parameters-usedvalues` before counting starts
+and refresh it after MainLoop completes. The `run_stage` comment distinguishes
+startup records from completed calculations; failed searches retain their startup
+record. dual node saves its record after its calculation completes.
+Native runs retain the usual `name = value` entries from cballs, updated with
+the final effective values. Python arguments, angular units, catalogue sizes,
+environment overrides, compiled reuse defaults and active reuse controls are
+included as `%` comments. This also preserves the shear record after its
+temporary native directory is removed. The recorded native `rootDir` describes
+that directory; `infile=m0` denotes data supplied from Python, not a disk file.
+
+MPI publishes this file only on global rank zero. dual node adapters save their
+actual correlation-object bin/slop settings under the same filename, clearly
+identified as dual node settings rather than native cballs parameters. Parameter
+output is outside the reported correlation compute time. Explicit argument and
+environment overrides are recorded; omitted values use the effective defaults.

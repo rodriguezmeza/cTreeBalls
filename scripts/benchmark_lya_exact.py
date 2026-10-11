@@ -13,6 +13,9 @@ import io
 import json
 import os
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests" / "python"))
+from benchmark_timing import runtime_environment
 import platform
 import re
 import statistics
@@ -137,7 +140,7 @@ def main():
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     binaries = {k: getattr(args, k).resolve() for k in ("baseline", "candidate")}
-    report = dict(status="RUNNING", platform=platform.platform(), cpu_count=os.cpu_count(),
+    report = dict(runtime_environment=runtime_environment(dict(os.environ, OMP_DYNAMIC="FALSE", OMP_WAIT_POLICY="PASSIVE")), status="RUNNING", platform=platform.platform(), cpu_count=os.cpu_count(),
                   numpy=np.__version__, binaries={k: dict(path=str(v), sha256=digest(v)) for k, v in binaries.items()},
                   threads=args.threads, repeats=args.repeats, catalogs={}, accuracy=[], samples=[], summary=[],
                   methodology="Fresh processes, paired alternating execution order, OMP_WAIT_POLICY=PASSIVE. "

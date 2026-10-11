@@ -9,7 +9,7 @@ Native `MainLoop`, complete Python `Run`, and launcher times stay separate.
 
 
 The timing table separates `mainloop_wall_s` / `mainloop_cpu_s` (native
-`MainLoop`, excluding Python provenance capture) from `compute_*` (the complete
+`MainLoop`, excluding the collection of run information in Python) from `compute_*` (the complete
 Python `Run` call). JSON stores these as `native_mainloop_wall_time` and
 `native_mainloop_cpu_time`. MPI uses maximum rank wall time and summed rank CPU
 for both scopes; use the same scope, output settings and accuracy for comparisons.
@@ -149,7 +149,7 @@ builds its own C-owned tree and histograms.
 ## Optional external dual-node API
 
 The all-engines driver times native cTreeBalls engines. Separate external
-comparisons can use [dual_node_compat.py](dual_node_compat.py), which lazily
+comparisons can use [dual_node_compat.py](../python/dual_node_compat.py), which lazily
 loads the installed external library and translates `bin_theta` and
 `angle_theta` without changing their values. It is optional; no external
 package is required for the native driver. For example:
@@ -171,9 +171,106 @@ The native `theta` parameter retains its existing meaning.
 For the scalar `octree-2balls`, `kdtree-2balls`, and `balltree-2balls` engines
 (OpenMP or MPI), append `--more-options scalar-pivot-reuse --no-smooth-pivot`.
 Select these engines explicitly; other engine families reject this option.
-`CBALLS_SCALAR_PIVOT_TOL` (default 0.1 radians) and
+`CBALLS_SCALAR_PIVOT_TOL` (default 0 radians) and
 `CBALLS_SCALAR_BIN_THETA` (default 0 bin widths) are runtime environment
 variables; MPI ranks must receive matching values. Benchmark and qualify
 the actual scalar products before choosing looser values.
 The qualification packet retains the native hierarchy controls and counters.
 See [the algorithm, limits, and benchmark instructions](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+
+### Explicit separation limits and plotted coordinates
+
+The existing `--theta-min`, `--theta-max`, and `--theta-scale` names remain
+supported. Their aliases are `--min-sep`, `--max-sep`, and `--sep-units`.
+Units may be `degree`, `arcmin`, `radian`, or native distances (`au`, also
+spelled `chord`). `au` is the historical native-distance spelling, not an
+astronomical-unit conversion. Defaults remain unchanged: about 7.35028–217.67984
+arcmin, expressed as 0.12250467913471644–3.6279974066581295 degrees, and 20 bins.
+For example, `--min-sep 2.5 --max-sep 250 --sep-units arcmin --nbins 20`
+uses 2.5 and 250 arcmin as outer edges for both statistics and both 3PCF legs.
+Angular values are converted to sphere chords before correlation; plotted
+coordinates are converted back to the requested units.
+
+2PCF figures show those explicit edges and use logarithmic axes for logarithmic
+bins. 3PCF heat maps show actual radial edges in the selected units on both axes.
+Flattened 3PCF plots retain an index axis; `plots/ENGINE_radial_pairs.csv` maps
+each index to its two actual radial centers. Plot titles state the measured
+range. No correlation coefficients or bin assignments are changed by plotting.
+NPZ products now retain `radial_edges`, and angular runs also retain
+`chord_edges`, `theta_edges_arcmin` and `theta_arcmin`. Native-distance runs
+need not be spherical, so angular metadata is not invented for them.
+`summary.json` and per-engine JSON record `separation_binning`.
+
+A measurement made with different edges must be recomputed; changing axis limits
+cannot reconstruct missing separations. No C recompilation is needed for these
+Python changes.
+
+Benchmark controls and timing (October 2026)
+
+The shared benchmark_timing.py records explicit CBALLS_SHEAR_*,
+CBALLS_SCALAR_*, CBALLS_LYA_* and thread-placement environment overrides.
+An omitted environment variable is not assumed to be a compiled default;
+read native run information for the effective settings and build identity.
+
+compute_wall_time/compute_cpu_time cover the complete Python Run call.
+native_mainloop_wall_time/native_mainloop_cpu_time cover the native C loop.
+MPI CPU sums participating ranks; wall takes their maximum, including the
+maximum of each rank's setup+compute total rather than the sum of separate
+phase maxima. CPU is never divided by thread or rank count. The CPU/wall
+ratio estimates average CPU use, not elapsed-time speedup. Read timing_scope
+for setup, output, cleanup and external-adapter boundaries.
+
+--tree-theta defaults to 1 (approximate traversal) in angular drivers. Make THETA
+is a distinct legacy compile-time criterion, also defaulting to 1. Opt-in
+shear-pivot-reuse uses CBALLS_SHEAR_PIVOT_TOL=3 and CBALLS_SHEAR_BIN_THETA=0.5.
+--nsmooth defaults to 8 in the active kappa and shear drivers, matching native cballs.
+Scalar reuse uses phase tolerance 0.1 and bin tolerance 0. Environment values
+override these compiled reuse controls, not theta. These are speed/accuracy
+choices, not a universal percentage-error bound. Lyα keeps certified cell
+aggregation with zero bin slops; positive slops remain explicit choices.
+CBALLS_SHEAR_TASKS and CBALLS_SHEAR_TASK_MEMORY_MB also apply to MPI frontiers.
+--verbose 1 enables available live work counters. CBALLS_SHEAR_PROFILE adds
+instrumentation whenever present, including value 0; unset it to disable.
+
+Shear retains full count/window modes by default. --more-options
+no-count-multipoles selects N0 normalization; edge-corrections takes
+precedence and restores higher window modes. Scalar dual-node runs already
+skip higher count modes without edge correction; ggg-full-window is the
+octree compatibility diagnostic override. NMultipolesON is a legacy build
+switch, not a substitute for these runtime controls.
+
+See [the approximation defaults and 5% L2 criterion](../../docs/APPROXIMATION_DEFAULTS.md) for fast defaults, measured penalties, exact references, and the limits of finite-multipole reconstruction.
+
+Measured approximation penalties
+
+Pass --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only to compare
+against saved exact results for the identical input, bins and multipoles. The
+reference root must contain ENGINE/qualification for each native engine.
+Each native run writes ENGINE/qualification/approximation-penalty.json and
+prints raw, normalized and corrected relative L2 percentages where available,
+including each shear component. Without a reference the penalty is UNMEASURED.
+The default comparison target is 5% (--qualification-rtol 0.05); it does not
+change traversal controls. Report-only retains results above the target;
+without it a failed requested numerical qualification raises an error.
+Relative L2 uses no denominator floor: zero reference norms are undefined and
+absolute errors are retained. A small pooled L2 does not bound every bin.
+
+
+## Parameters used by each run
+
+Native runs write `OUTDIR/ENGINE/parameters-usedvalues` before counting starts
+and refresh it after MainLoop completes. The `run_stage` comment distinguishes
+startup records from completed calculations; failed searches retain their startup
+record. dual node saves its record after its calculation completes.
+Native runs retain the usual `name = value` entries from cballs, updated with
+the final effective values. Python arguments, angular units, catalogue sizes,
+environment overrides, compiled reuse defaults and active reuse controls are
+included as `%` comments. This also preserves the shear record after its
+temporary native directory is removed. The recorded native `rootDir` describes
+that directory; `infile=m0` denotes data supplied from Python, not a disk file.
+
+MPI publishes this file only on global rank zero. dual node adapters save their
+actual correlation-object bin/slop settings under the same filename, clearly
+identified as dual node settings rather than native cballs parameters. Parameter
+output is outside the reported correlation compute time. Explicit argument and
+environment overrides are recorded; omitted values use the effective defaults.

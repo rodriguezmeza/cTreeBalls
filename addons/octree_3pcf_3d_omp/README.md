@@ -172,24 +172,27 @@ For the 2PCF the output is the Landy-Szalay/ENCORE ratio
 
     xi = (D - alpha R)^2 / (alpha R)^2.
 
-For the 3PCF, cBalls measures signed numerator multipoles 'N_l' and positive
-random multipoles 'R_l', forms 'f_l=R_l/R_0', and solves independently for each
-distinct radial-bin pair:
+For the 3PCF, cBalls measures signed numerator multipoles `N_l` and random
+multipoles `R_l` (higher orders need not be positive). In the standard Legendre
+basis, `M[i,j] = (2*i+1) sum_k (R_k/R_0) Wigner3j(i,j,k;0,0,0)^2` and
+`M zeta = N/R_0`. The window includes all modes through twice the solve order.
 
-    sum_lpp M[l,lpp] zeta_lpp = N_l/R_0
+`surveySignalLmax=-1` retains the legacy output order `mChebyshev-1` (or
+`mChebyshev` with `survey-keep-top-multipole`). Explicit values override that
+mapping. `surveySolvePadding=1` adds a solved nuisance mode;
+`surveyWindowLmax=-1` measures twice the solve order automatically. The solve
+order is at most 32 and window order at most 64. Insufficient window bandwidth
+is rejected. `surveyRcondMin=1e-10` rejects poorly conditioned support.
+Correction runs before optional serialization and is retained by the model.
 
-    M[l,lpp] = sum_lp f_lp sqrt((2l+1)(2lp+1)(2lpp+1))
-                Wigner3j(l,lp,lpp;0,0,0)^2 / (4 pi).
-
-As in ENCORE, 'mChebyshev' is the measured maximum multipole. By default the
-edge-corrected file emits only 'ell <= mChebyshev-1', since the highest measured
-mode supplies the extra window-coupling order. The diagnostic option
-'survey-keep-top-multipole' also emits that last, truncation-sensitive mode.
+See [physical survey semantics](../../docs/physical_survey_semantics.rst) for
+normalization, owned arrays, condition/residual diagnostics, invalid status
+codes, convergence tests and exact-reference science acceptance.
 
 Survey mode requires exactly two distinct catalogs and is incompatible with
 'read-mask', 'remove-mean', and the LOS-exclusion options. Encode the angular
-and radial selection directly in the random catalog. Radial shell pairs use
-'bin1 < bin2', matching ENCORE's 3PCF estimator.
+and radial selection directly in the random catalog. Files emit radial shell pairs with 'bin1 < bin2'; owned API arrays also include
+same-shell and transposed pairs, always excluding repeated catalog members.
 
 ## Main bin/multipole parameters
 
@@ -221,11 +224,10 @@ Survey outputs are written separately, leaving legacy output names untouched:
     <histXi2pcfFileName>_3d_survey.txt
     <histZetaMFileName>_3d_survey.txt
 
-The survey 3PCF file contains both the standard Legendre coefficient and the
-ENCORE-basis coefficient, along with raw 'N_l', raw 'R_l', 'R_0', a pivot-based
-conditioning diagnostic, and a validity flag. Empty-window or singular radial
-pairs follow the project zero-denominator policy: corrected values are written
-as zero with 'valid=0'.
+The survey 3PCF file contains standard and ENCORE-basis corrected coefficients,
+raw moments, an infinity-norm condition, validity, reciprocal condition,
+relative backward residual and status code. Invalid coefficients are NaN.
+The API exposes the same corrections with output enabled or disabled.
 
 ## cTreeBalls versus ENCORE example
 
@@ -261,8 +263,8 @@ Run:
 
     tests/make_tests/run_test_octree_3pcf_3d_omp
 
-The launcher executes the legacy scalar-field oracle and a separate direct
-survey oracle. The latter brute-forces '(D-alpha R)^2', '(D-alpha R)^3', random
+The launcher executes the legacy scalar-field reference calculation and a separate direct
+survey reference calculation. The latter brute-forces '(D-alpha R)^2', '(D-alpha R)^3', random
 multipoles, the Gaunt coupling matrix, and the corrected solution, then compares
 one-thread and multi-thread outputs.
 

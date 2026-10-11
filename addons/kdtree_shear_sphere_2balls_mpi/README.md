@@ -5,8 +5,8 @@ active Makefile profile. Both 2PCF and 3PCF use the optimized shared shear kerne
 
 ```sh
 make KDTREESHEARSPHERE2BALLSMPION=1 cballs
-mpiexec -n 4 ./cballs parameters.ini \
-    searchMethod=kdtree-shear-sphere-2balls-mpi numberThreads=2
+# Set searchMethod = kdtree-shear-sphere-2balls-mpi and numberThreads = 2 in parameters.ini.
+mpiexec -n 4 ./cballs paramfile=parameters.ini
 ```
 
 Use `options=only-2pcf,no-smooth-pivot` for pairs,
@@ -19,6 +19,9 @@ to the least-loaded rank; OpenMP dynamically schedules that rank's tasks.
 Catalogs and trees are replicated on every rank; task histograms are local.
 This distributes computation, not catalog storage. Use the same thread count
 and settings on every rank, and load the same catalog on every rank.
+Each rank builds independent KD branches with OpenMP tasks, preserving the
+serial node layout and node moment summation order. Rank-local tree storage
+uses the exact node count for the selected leaf capacity.
 
 The pair-only route uses the symmetric dual-tree frontier. Exact combined
 runs (no-one-ball, no-two-balls, or theta=0) fuse pairs with the 3PCF ring walk.
@@ -34,13 +37,15 @@ Gamma, writes products, and publishes `getResults()`. Invoke Python `Run()`
 collectively on all ranks; read global results on rank zero. Tree preparation,
 smoothing, result and traversal allocations have collective error boundaries;
 returned application errors permit cleanup and same-object recovery. Process
-death and a failed MPI communicator are outside this recovery contract.
+death and a failed MPI communicator are outside this recovery guarantees.
 
 `theta`, `rsmooth`, `nsmooth`, `SMOOTHPIVOTON`, `BALLS4SCANLEVON` and `THETA`
 retain the shared OpenMP kernel's meanings. Approximation requires qualification
 against an exact reference for each observable and data geometry. The
-experimental `shear-pivot-reuse` option and `legacy-one-ball` compatibility
-option are rejected in these MPI engines. MPI reduction ordering can change
+experimental `shear-pivot-reuse` option is supported with matching approximation
+controls across ranks, `no-smooth-pivot`, positive `theta`, full pivot coverage
+and `BALLS4SCANLEVON=1`; exact controls retain the body-pivot fallback.
+`legacy-one-ball` is rejected. MPI reduction ordering can change
 roundoff across rank/thread counts; bitwise identity is not promised.
 
 Set `CBALLS_SHEAR_PROFILE=1` for rank/thread timings. Regression coverage:
@@ -51,10 +56,13 @@ python tests/python/test_shear_sphere_mpi.py \
 ```
 
 This compares 1/2/4 ranks and 1/2 threads against OpenMP and independent shear
-oracles, covers both orders and combined runs, masks, cross catalogs, repeated
+reference calculations, covers both orders and combined runs, masks, cross catalogs, repeated
 roles, poles, sparse work, smoothing and approximation. It
 checks raw histograms at strict floating-point tolerance. Corrected bins with
 window condition number above 1e8 are marked unstable in the retained evidence
 and checked by backward residual; they are not forward-accuracy qualifications.
-The release gate also faults every reached named application boundary on either rank under owned
+The release checks also faults every reached named application boundary on either rank under owned
 and borrowed MPI, followed by recovery.
+
+For Perlmutter CPU jobs, shared inputs, effective parameter files and scaling
+checks, see [the batch-job guide](../../tests/slurm_scripts/README.md).

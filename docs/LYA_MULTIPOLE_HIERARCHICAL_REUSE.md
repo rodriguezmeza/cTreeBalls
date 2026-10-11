@@ -81,7 +81,7 @@ python scripts/benchmark_lya_hierarchy.py \
   --warmups 1 --repeats 3 --outdir results/lya-multipole-before-after
 ```
 
-The benchmark alternates versions, retains raw moment arrays and provenance,
+The benchmark alternates versions, retains raw moment arrays and run information,
 and reports MainLoop wall time separately from process CPU time. It excludes
 catalog loading/registration and output-file serialization. Dataset, cutoff,
 bin occupancy, Lmax and thread count affect the gain; qualify representative

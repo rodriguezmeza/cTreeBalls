@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """Exact/slop Ly-alpha pair-cell calibration with retained CPU, wall, RSS and raw sums."""
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import platform
 import re
 import numpy as np
+from benchmark_timing import runtime_environment
 from benchmark_lya_triplet_kernels import run_process,ROOT
 from lya_corr_all_engines import read_npz,read_ascii,synthetic_catalog,save_catalog
 
@@ -75,7 +82,7 @@ def main(argv=None):
         for xyz,delta,weight,fid in zip(catalog.positions,catalog.delta,catalog.weights,catalog.forest_ids):
             stream.write(' '.join(format(v,'.17g') for v in (*xyz,delta,weight))+f' {int(fid)}\n')
     binary=args.cballs.resolve();baseline=(args.baseline_cballs or binary).resolve()
-    report=dict(platform=platform.platform(),binaries={str(b):hashlib.sha256(b.read_bytes()).hexdigest() for b in [binary,baseline]},
+    report=dict(runtime_environment=runtime_environment(),platform=platform.platform(),binaries={str(b):hashlib.sha256(b.read_bytes()).hexdigest() for b in [binary,baseline]},
         catalog_sha256=hashlib.sha256(cat.read_bytes()).hexdigest(),pixels=catalog.nbody,forests=len(np.unique(catalog.forest_ids)),
         selection=catalog.metadata,settings=vars(args),timing_scope='complete native process; FITS preprocessing excluded',
         rss_scope='native process high-water RSS from wait4',runs=[],comparisons=[],accepted_cases=[])

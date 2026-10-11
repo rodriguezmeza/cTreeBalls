@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'scripts'))
 from active_release_gate import Gate, expected_registry, parse_registry
 from cyballs import build_info, cballs, CosmoComputationError
-from test_provenance_window import parameters, register
+from test_run_information_and_window import parameters, register
 from test_two_ball_edge_corrections import catalog
 
 

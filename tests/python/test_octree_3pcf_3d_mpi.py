@@ -130,19 +130,23 @@ def c_tests(binary, mpi, mpi_only, fits=False):
             for name, path in products(empty).items():
                 values = np.loadtxt(path)
                 if mode and name.startswith("histZetaM"):
-                    assert np.isfinite(np.delete(values, 12, axis=1)).all()
-                    assert np.isposinf(values[:, 12]).all()
+                    assert values.shape[1] == 17
+                    assert np.isnan(values[:, [5,6,15]]).all()
+                    assert np.isposinf(values[:,12]).all()
+                    assert np.isfinite(np.delete(values,[5,6,12,15],axis=1)).all()
+                    np.testing.assert_array_equal(values[:,7:12],0)
+                    np.testing.assert_array_equal(values[:,[13,14,16]],0)
+                elif mode:
+                    assert values.shape[1] == 7
+                    assert np.isnan(values[:,2]).all()
+                    assert np.isfinite(np.delete(values,2,axis=1)).all()
+                    np.testing.assert_array_equal(values[:,3:],0)
                 else:
                     assert np.isfinite(values).all()
-                if name.startswith("histXi2pcf"):
-                    np.testing.assert_array_equal(values[:, 2:5], 0)
-                    if mode:
-                        np.testing.assert_array_equal(values[:, 5], 0)
-                elif mode:
-                    np.testing.assert_array_equal(values[:, 5:12], 0)
-                    np.testing.assert_array_equal(values[:, 13], 0)
-                else:
-                    np.testing.assert_array_equal(values[:, 5:], 0)
+                    if name.startswith("histXi2pcf"):
+                        np.testing.assert_array_equal(values[:,2:5],0)
+                    else:
+                        np.testing.assert_array_equal(values[:,5:],0)
             nonroot = root/f"nonroot-{mode}"
             run(mode, overrides={"1": {"rootDir": str(nonroot)}})
             assert not nonroot.exists(), "non-root rank wrote output"

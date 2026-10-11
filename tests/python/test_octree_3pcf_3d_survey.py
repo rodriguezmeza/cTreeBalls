@@ -89,18 +89,18 @@ def neighbors(catalog, pivot_index):
     return shells
 
 
-def direct_counts(catalog):
+def direct_counts(catalog, lmax=LMAX):
     xi = [0.0] * NBINS
     multipoles = [
         [[0.0] * NBINS for _ in range(NBINS)]
-        for _ in range(LMAX + 1)
+        for _ in range(lmax + 1)
     ]
     for pivot_index, pivot in enumerate(catalog):
         shells = neighbors(catalog, pivot_index)
         for bin_index, shell in enumerate(shells):
             for _, weight, _ in shell:
                 xi[bin_index] += pivot[3] * weight
-        for ell in range(LMAX + 1):
+        for ell in range(lmax + 1):
             for first_bin in range(NBINS):
                 for second_bin in range(NBINS):
                     for first in shells[first_bin]:
@@ -169,10 +169,10 @@ def solve(matrix, vector):
 def corrected_oracle(numerator, randoms, first_bin, second_bin):
     n_encore = []
     r_encore = []
-    for ell in range(LMAX + 1):
+    for ell in range(2*LMAX + 1):
         sign = -1.0 if ell % 2 else 1.0
         conversion = FOURPI * sign * math.sqrt(2 * ell + 1)
-        n_encore.append(numerator[ell][first_bin][second_bin] / conversion)
+        if ell<=LMAX:n_encore.append(numerator[ell][first_bin][second_bin] / conversion)
         r_encore.append(randoms[ell][first_bin][second_bin] / conversion)
     window = [value / r_encore[0] for value in r_encore]
     matrix = []
@@ -180,7 +180,7 @@ def corrected_oracle(numerator, randoms, first_bin, second_bin):
         row = []
         for output in range(LMAX + 1):
             coupling = 0.0
-            for window_ell in range(LMAX + 1):
+            for window_ell in range(2*LMAX + 1):
                 coupling += (
                     window[window_ell]
                     * wigner_zero_squared(signal, window_ell, output)
@@ -323,7 +323,7 @@ def check_oracle(root, weight_scale=1.0):
         for x, y, z, weight in random_catalog
     )
     numerator_xi, numerator_zeta = direct_counts(combined)
-    random_xi, random_zeta = direct_counts(normalized_randoms)
+    random_xi, random_zeta = direct_counts(normalized_randoms, 2*LMAX)
 
     xi_rows = read_rows(root / "histXi2pcf_3d_survey.txt")
     zeta_rows = read_rows(root / "histZetaM_3d_survey.txt")

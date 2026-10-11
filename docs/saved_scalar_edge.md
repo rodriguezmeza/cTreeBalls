@@ -45,7 +45,7 @@ Errors raise normally and the same object can be reconfigured and reused.
 Successful preprocessing writes files and cleans its native state; it does not
 publish catalog-based `run_settings` or expose native histogram getters.
 
-## Scientific contract
+## Numerical definitions
 
 For modes `-M <= ell,n <= M`, solve
 
@@ -162,5 +162,5 @@ both the native program and Python extension. The regression suite includes
 the W2=0.4 analytic case (zeta1=1/7), independent-prefix rescaling, complex
 NumPy solves, support statuses, malformed/incomplete inputs, writer failure,
 Python recovery, and native round trips for three engines and both linear and
-logarithmic bins. Existing in-run brute-force oracles independently check the
+logarithmic bins. Existing in-run brute-force reference calculations independently check the
 shared numerical path.

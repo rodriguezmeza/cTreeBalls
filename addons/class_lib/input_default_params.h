@@ -11,10 +11,14 @@ int input_default_params(struct cmdline_data *cmd)
     //B Parameters related to the searching method
     cmd->searchMethod = "octree-2balls-omp";
     cmd->mChebyshev = 7;
+    cmd->surveySignalLmax = -1;
+    cmd->surveyWindowLmax = -1;
+    cmd->surveySolvePadding = 1;
+    cmd->surveyRcondMin = 1e-10;
     cmd->nsmooth = 8;
     //E
     cmd->rsmooth = "\0";
-    cmd->theta = 1.05;
+    cmd->theta = 1.0;
     cmd->usePeriodic = 0;
     //E
 

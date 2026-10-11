@@ -32,16 +32,18 @@ def test_complete_public_source_policy(tmp_path):
 
 
 @pytest.mark.parametrize('missing', [
+    'scripts/release_readiness.py', 'scripts/accuracy_cases.py', 'scripts/generate_accuracy_docs.py',
+    'tests/python/test_configuration_contracts.py', 'tests/python/test_incremental_build.py',
     'tests/python/shear_fits_catalog.py', 'tests/python/shear_products.py',
     'tests/python/run_desy3_shear_catalogs.py', 'tests/python/test_shear_fits_catalog.py',
-    'include/cli_contracts.h', 'python/qualification_api.pxi',
+    'include/cli_validation.h', 'python/qualification_api.pxi',
     'scripts/qualify_results.py', 'scripts/benchmark_representative.py',
-    'tests/python/test_clustered_contracts.py', 'tests/python/test_mpi_boundary_contracts.py',
+    'tests/python/test_clustered_catalogs.py', 'tests/python/test_mpi_boundary_checks.py',
     'ENGINEERING_COMPLETION.md',
     'addons/lya_forest_omp/search_lya_forest_los_tree_omp.c',
     'addons/lya_forest_omp/lya_pivot_frontier.h',
-    'include/input_contracts.h',
-    'tests/python/test_input_failure_contracts.py',
+    'include/input_validation.h',
+    'tests/python/test_invalid_input.py',
     'addons/balltree_2balls_omp/dual_node_pivot_reuse.h',
     'tests/python/test_scalar_pivot_reuse.py',
     'scripts/benchmark_scalar_pivot_reuse.py',
@@ -58,7 +60,7 @@ def test_complete_public_source_policy(tmp_path):
     'addons/lya_forest_omp/lya_triplet_multipole.h',
     'addons/lya_forest_omp/lya_los_moments.h',
     'tests/python/test_lya_los_hierarchy.py',
-    'python/ccyballs.pxd.in', 'requirements/build.txt'])
+    'Makefile_tests', 'python/ccyballs.pxd.in', 'requirements/build.txt'])
 def test_missing_build_inputs_fail(tmp_path, missing):
     with pytest.raises(AssertionError, match='missing public source'):
         inspect_archive(archive(tmp_path, omit=missing))

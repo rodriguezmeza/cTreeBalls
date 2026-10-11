@@ -63,6 +63,10 @@ cdef extern from "cballs.h":
         #B Parameters related to the searching method
         char * searchMethod
         int mChebyshev
+        int surveySignalLmax
+        int surveyWindowLmax
+        int surveySolvePadding
+        double surveyRcondMin
         int nsmooth
         #E
         char * rsmooth                                 # use to smooth pivot
@@ -274,6 +278,7 @@ cdef extern from "cballs.h":
         double *histShearGammaRe
         double *histShearGammaIm
         int shearMultipoleMax
+        int shearWindowMultipoleMax
         int shearAngularBins
 
         #B To save total 3pcf

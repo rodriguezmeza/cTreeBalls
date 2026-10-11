@@ -39,7 +39,7 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
                     "Select one with search=<name> or searchMethod=<name>.\n");
     verb_print_zero(cmd->verbose,
                     "Common controls: rangeN, rminHist, sizeHistN, useLogHist, "
-                    "theta, numberThreads, and options.\n");
+                    "theta (runtime default 1), numberThreads (per rank), and options.\n");
     verb_print_zero(cmd->verbose,
                     "Only methods enabled by this executable's build profile are shown.\n");
 
@@ -58,7 +58,7 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
             || strcmp(cballs_engine_registry[i].name, "octree-2balls-mpi") == 0) {
 #ifdef SMOOTHPIVOT
             verb_print_zero(cmd->verbose,
-                "  smooth-pivot: default-on only with options=legacy-one-ball; add no-smooth-pivot to disable it\n");
+                "  smooth-pivot: opt-in with options=legacy-one-ball,smooth-pivot; disabled by default\n");
 #else
             verb_print_zero(cmd->verbose,
                 "  smooth-pivot: legacy-one-ball supports it, but SMOOTHPIVOTON=1 is not compiled\n");
@@ -66,7 +66,7 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
         } else if (cballs_method_supports_smooth_pivot(cballs_engine_registry[i].name)) {
 #ifdef SMOOTHPIVOT
             verb_print_zero(cmd->verbose,
-                "  smooth-pivot: default-on; add options=no-smooth-pivot to disable\n");
+                "  smooth-pivot: default-off; add options=smooth-pivot to enable\n");
 #else
             verb_print_zero(cmd->verbose,
                 "  smooth-pivot: supported but not compiled; set SMOOTHPIVOTON=1 and rebuild\n");
@@ -92,7 +92,8 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
                 "Pairs exclude the same quasar; triplets require three distinct "
                 "quasars. Histograms are weight-normalized; empty bins are zero. "
                 "Use tests/python/lya_corr_all_engines.py for DESI/eBOSS FITS, NPZ or ASCII, "
-                "one-time loading and MPI broadcasting. Legacy options=smooth-pivot is unsupported.\n");
+                "one-time loading and MPI broadcasting. Legacy options=smooth-pivot is unsupported. "
+                "verbose=1 enables live work completion; verbose_log=1 records it in the log.\n");
         if (strstr(cballs_engine_registry[i].name, "shear-sphere-2balls-") != NULL)
             verb_print_zero(cmd->verbose,
                 "  input: observer-centered unit vectors with local east/north gamma1,gamma2; "
@@ -103,7 +104,13 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
                 "These are Python driver arguments, not native options or infileformat values.\n"
                 "  accuracy: use theta=0 and no-one-ball,no-smooth-pivot for an unsmoothed "
                 "body reference. no-two-balls alone does not make the 3PCF neighbor scan exact. "
-                "UNMEASURED means no matching exact-reference comparison was supplied.\n");
+                "UNMEASURED means no matching exact-reference comparison was supplied.\n"
+                "  reuse: opt-in shear-pivot-reuse works with OMP and MPI when BALLS4SCANLEVON=1; "
+                "use no-smooth-pivot. Phase/bin tolerances are independent of theta; see make-info.\n"
+                "  counts: no-count-multipoles keeps N0; edge-corrections overrides it and "
+                "requires higher window modes. Default shear retains all window modes.\n"
+                "  telemetry: verbose=1 enables available live counters; CBALLS_SHEAR_PROFILE "
+                "adds timing instrumentation whenever present (unset to disable).\n");
         if (strncmp(cballs_engine_registry[i].name, "octree-3pcf-3d-", 15) == 0)
             verb_print_zero(cmd->verbose,
                 "  modes: only-2pcf-3d, only-3pcf-3d, or "
@@ -116,7 +123,8 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
             && strstr(cballs_engine_registry[i].name, "shear") == NULL)
             verb_print_zero(cmd->verbose,
                 "  edge correction: add edge-corrections,no-normalize-HistZeta "
-                "for complex scalar 3PCF window deconvolution. Window modes "
+                "for complex scalar 3PCF window deconvolution; ordinary scalar dual-node runs "
+                "skip higher count modes. Window modes "
                 "extend through 2*mChebyshev. weights-norm weights both signal "
                 "and window; unsupported corrected bins are NaN; window diagnostics distinguish empty, singular, and valid bins. 2PCF is unchanged.\n");
     }

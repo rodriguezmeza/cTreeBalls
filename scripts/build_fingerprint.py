@@ -23,7 +23,7 @@ def digest(data):
 
 def source_files(root):
     for directory in ("source", "main", "include", "general_libs", "getparam",
-                      "addons", "support", "python", "scripts", "tests", "capabilities"):
+                      "addons", "support", "python", "scripts", "tests", "capabilities", "tutor"):
         for parent, dirs, files in os.walk(root / directory):
             dirs[:] = sorted(d for d in dirs if not d.startswith((".", "backup"))
                              and d not in {"build", "python_env", "__pycache__"})
@@ -32,11 +32,11 @@ def source_files(root):
                 if path.is_symlink() or name == "cyballs.c":
                     continue
                 if (path.suffix in {".c", ".h", ".cpp", ".py", ".pyx", ".pxi", ".sh"}
-                        or (directory == "capabilities" and path.suffix == ".json")
+                        or (directory in {"capabilities", "tutor"} and path.suffix == ".json")
                         or name.endswith(".pxd.in") or name.startswith(("Makefile", "run_test"))
                         or "fixtures" in path.parts):
                     yield path
-    for name in ("Makefile", "Makefile_settings", "Makefile_machine", "setup.py",
+    for name in ("Makefile", "Makefile_tests", "Makefile_settings", "Makefile_machine", "setup.py",
                  "pyproject.toml", "MANIFEST.in"):
         yield root / name
 
@@ -46,6 +46,37 @@ def query(command):
     if result.returncode:
         raise RuntimeError(f"toolchain query failed: {command}: {result.stderr}")
     return result.stdout.strip()
+
+
+def mpi_wrapper_flags(wrapper, environ=None):
+    """Query Open MPI, MPICH and HPE Cray wrappers without compiling a probe."""
+    command = shlex.split(wrapper)
+    if not command:
+        raise RuntimeError("MPI support is enabled but MPICC is empty")
+
+    def flags(argument):
+        try:
+            result = subprocess.check_output(command + [argument], text=True,
+                stderr=subprocess.PIPE, env=environ, timeout=30).strip()
+            return shlex.split(result)
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return None
+
+    for compile_query, link_query in (
+        ("--showme:compile", "--showme:link"),
+        ("--cray-print-opts=cflags", "--cray-print-opts=libs"),
+    ):
+        compile_flags, link_flags = flags(compile_query), flags(link_query)
+        if compile_flags is not None and link_flags:
+            return compile_flags, link_flags
+    # MPICH versions without separate queries expose a complete driver command.
+    combined = flags("-show")
+    if combined:
+        if not combined[0].startswith("-"):
+            combined = combined[1:]
+        if combined:
+            return combined, combined
+    raise RuntimeError(f"Could not query MPI include/link flags from MPICC={wrapper!r}")
 
 
 def resolve(root):
@@ -61,7 +92,7 @@ def resolve(root):
              "compiler_target": query(compiler + ["-dumpmachine"]),
              "python_version": platform.python_version(), "python_implementation": platform.python_implementation(),
              "system": platform.system(), "machine": platform.machine(), "byteorder": sys.byteorder}
-    tools["build_packages"] = {name: importlib.metadata.version(name) for name in ("Cython", "numpy", "setuptools")}
+    tools["build_packages"] = {name: importlib.metadata.version(name) for name in ("Cython", "numpy", "setuptools", "wheel")}
     for name, command in (("gsl", [os.environ.get("GSL_CONFIG", "gsl-config"), "--version"]),
                           ("cfitsio", [os.environ.get("PKG_CONFIG", "pkg-config"), "--modversion", "cfitsio"])):
         try:
@@ -70,7 +101,7 @@ def resolve(root):
             tools[name+"_version"] = "unavailable; resolved link flags retained"
     if settings.get("BUILD_MPI") == "mpi":
         wrapper = shlex.split(os.environ.get("MPICC", os.environ["CC"]))
-        tools["mpi_wrapper"] = query(wrapper + ["-show"])
+        tools["mpi_wrapper"] = mpi_wrapper_flags(shlex.join(wrapper))
         try:
             tools["mpi_version"] = query(wrapper + ["--showme:version"])
         except RuntimeError:

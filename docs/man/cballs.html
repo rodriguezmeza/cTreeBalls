@@ -224,6 +224,22 @@
   <dd>Number of radial bins.</dd>
   <dt id="mChebyshev="><a class="permalink" href="#mChebyshev="><b>mChebyshev=</b><i>order</i></a></dt>
   <dd>Largest positive 3PCF multipole order.</dd>
+  <dt id="surveySignalLmax="><a class="permalink" href="#surveySignalLmax="><b>surveySignalLmax=</b><i>order</i></a></dt>
+  <dd>Physical survey corrected output order; -1 (default) selects mChebyshev-1,
+      or mChebyshev with survey-keep-top-multipole.</dd>
+  <dt id="surveySolvePadding="><a class="permalink" href="#surveySolvePadding="><b>surveySolvePadding=</b><i>count</i></a></dt>
+  <dd>Extra solved physical signal modes (default 1); signal plus padding
+      &lt;=32.</dd>
+  <dt id="surveyWindowLmax="><a class="permalink" href="#surveyWindowLmax="><b>surveyWindowLmax=</b><i>order</i></a></dt>
+  <dd>Physical random window order; -1 (default) selects twice the solve order.
+      Explicit values must be at least twice the solve order and at most
+    64.</dd>
+  <dt id="surveyRcondMin="><a class="permalink" href="#surveyRcondMin="><b>surveyRcondMin=</b><i>value</i></a></dt>
+  <dd>Minimum reciprocal infinity-norm condition (default 1e-10). Unsupported
+      corrected coefficients are NaN with validity and status codes. Correction
+      is computed before optional file output and retained by Python
+      getPhysicalResults/getResults with rcond and relative residual
+      diagnostics.</dd>
   <dt id="useLogHist="><a class="permalink" href="#useLogHist="><b>useLogHist=</b><i>bool</i></a></dt>
   <dd>Choose logarithmic or linear radial bins.</dd>
   <dt id="numberThreads="><a class="permalink" href="#numberThreads="><b>numberThreads=</b><i>count</i></a></dt>
@@ -281,12 +297,12 @@
 <h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
 <dl class="Bl-tag">
   <dt id="CBALLS_SHEAR_PIVOT_TOL"><a class="permalink" href="#CBALLS_SHEAR_PIVOT_TOL"><b>CBALLS_SHEAR_PIVOT_TOL</b></a></dt>
-  <dd>Finite phase budget in radians from 0 to 3, default 0.1. Not a
+  <dd>Finite phase budget in radians from 0 to 3, default 3. Not a
       relative-error guarantee. With reuse enabled, this budget controls 3PCF
       acceptance; theta's magnitude does not. Zero disables reuse, not ordinary
       neighbor approximation.</dd>
   <dt id="CBALLS_SHEAR_BIN_THETA"><a class="permalink" href="#CBALLS_SHEAR_BIN_THETA"><b>CBALLS_SHEAR_BIN_THETA</b></a></dt>
-  <dd>Internal radial-bin assignment slop in [0,1] bin widths, default 0. Used
+  <dd>Internal radial-bin assignment slop in [0,1] bin widths, default 0.5. Used
       only with shear-pivot-reuse. Radial range cutoffs remain strict. Resolved
       radial pairs complete at parent cells; descendants inherit completion
       masks. Use nsmooth=1 for a finer binary pivot hierarchy. Qualify raw and
@@ -302,11 +318,11 @@
     retain one NumPy catalog across selected engines and write timing and
     comparison summaries. Their timing tables separate setup, complete Python
     compute calls, and native MainLoop time. mainloop_wall_s and mainloop_cpu_s
-    exclude Python provenance capture; compute columns include it. MPI wall time
-    is the maximum across participating ranks and CPU time is their sum. The
-    forest driver reads DESI and eBOSS/PICCA delta FITS, compares compatible
+    exclude Python run information capture; compute columns include it. MPI wall
+    time is the maximum across participating ranks and CPU time is their sum.
+    The forest driver reads DESI and eBOSS/PICCA delta FITS, compares compatible
     estimator families, and supports model distortion/covariance analysis.
-    Consult its README for input contracts and separately scoped external
+    Consult its README for input definitions and separately scoped external
     reference timings.</p>
 </section>
 <section class="Sh">
@@ -409,6 +425,20 @@
     Shared builders and compatibility kernels required by enabled addons are in
     support. The branch excludes inactive standalone addons and
     addons/python_env.</p>
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CPU_TIME_BENCHMARKS"><a class="permalink" href="#CPU_TIME_BENCHMARKS">CPU
+  TIME BENCHMARKS</a></h1>
+<p class="Pp">The maintained Lyman-alpha, kappa and shear drivers are
+    lya_corr_all_engines.py, kappa_corr_all_engines.py and
+    shear_corr_all_engines.py, all under tests/python. Process CPU time includes
+    OpenMP workers. MPI CPU time is summed over participating ranks; elapsed
+    time is the maximum rank duration. Compare matched catalogues, estimators
+    and accuracy controls before comparing timings. The optional external dual
+    node reference is separate from the native engine registry. The make-info,
+    print-options and print-search-methods options report the compiled active
+    profile.</p>
 </section>
 </div>
 <table class="foot">

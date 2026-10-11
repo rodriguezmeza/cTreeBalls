@@ -26,7 +26,7 @@ the same bin assignments. Terminal leaf pairs are gathered into fixed-size
 batches so distance filtering and logarithmic bin lookup are no longer mixed
 with histogram branches. On macOS, batches of at least eight logarithms use
 Accelerate/vForce; other platforms and short tails use the scalar libm path.
-The exact batched kernel is covered by an independent-oracle and OpenMP
+The exact batched kernel is covered by an independent reference calculation and OpenMP
 determinism test.
 
 The LogMultipole path caches each pivot's spherical tangent basis and norm,
@@ -105,7 +105,7 @@ reduces task-local histograms before root-only normalization and publication.
 through order `2*mChebyshev` and applies the shared complex edge-correction
 solve. The implementation inherits `weights-norm`, `compute-HistN`,
 `out-m-HistZeta`, in-memory catalogs, and recoverable error handling from the
-dual-node-style estimator contract.
+dual-node-style estimator definition.
 
 The traversal is adapted from dual-node by Mike Jarvis under its BSD license;
 the full notice is in `addons/balltree_2balls_omp/DUAL_NODE_LICENSE`.
@@ -118,4 +118,4 @@ both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
 2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
 and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
 depend on the observable, controls, and geometry. See the
-[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+[hierarchy definition, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

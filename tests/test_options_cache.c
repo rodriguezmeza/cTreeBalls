@@ -72,15 +72,9 @@ int main(void)
 
     first.options = "";
     cballs_refresh_option_cache(&first);
-#ifdef SMOOTHPIVOT
-    if (require_true(cballs_opt_smooth_pivot(&first),
-                     "supported method did not default to smoothing") == FAILURE)
-        return EXIT_FAILURE;
-#else
     if (require_true(!cballs_opt_smooth_pivot(&first),
-                     "compiled-off method defaulted to smoothing") == FAILURE)
+                     "supported method must require explicit smoothing") == FAILURE)
         return EXIT_FAILURE;
-#endif
 
     second.options = "smooth,no-check-two-bodies-eq-pos,ggg-full-window,ggg-profile,legacy-one-ball";
     cballs_refresh_option_cache(&second);
@@ -93,15 +87,9 @@ int main(void)
                      "high cache bits or exact token matching failed") == FAILURE)
         return EXIT_FAILURE;
 
-#ifdef SMOOTHPIVOT
-    if (require_true(cballs_opt_smooth_pivot(&second),
-                     "legacy octree compatibility must default to smoothing") == FAILURE)
-        return EXIT_FAILURE;
-#else
     if (require_true(!cballs_opt_smooth_pivot(&second),
-                     "compiled-off smoothing became effective") == FAILURE)
+                     "legacy mode must require explicit smoothing") == FAILURE)
         return EXIT_FAILURE;
-#endif
     puts("PASS: search option cache fallback, refresh, and ownership");
     return EXIT_SUCCESS;
 }

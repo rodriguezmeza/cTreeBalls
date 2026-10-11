@@ -1,10 +1,12 @@
 /* MPI specialization of the full-sky shear two-ball estimator. */
 #define OCTREE_SHEAR_SPHERICAL 1
 #define SHEAR_SPHERE_FAST_KERNEL 1
+#define SHEAR_SPHERE_NATIVE_CACHED_GEOMETRY 1
 #define OCTREE_SHEAR_SPHERICAL_TWO_BALLS 1
 #define SHEAR_SPHERE_BODY_POSITIONS_UNIT 1
 #ifdef BALLS4SCANLEV
 #define SHEAR_SPHERE_NATIVE_FRONTIER_SCHEDULER 1
+#define SHEAR_SPHERE_PIVOT_REUSE 1
 #endif
 #define SHEAR_MPI_ENABLED 1
 #define SHEAR_ENGINE_NAME "octree-shear-sphere-2balls-mpi"

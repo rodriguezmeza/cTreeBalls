@@ -67,6 +67,27 @@ base="$seed_dir/parameters_null-cballs-usedvalues"
     || fail_with_log "valid standalone parameter file was rejected" \
                      "$TMP_ROOT/valid.log"
 
+# Reverse adjacent short-field declarations: neither may overwrite the other.
+verbosity="$TMP_ROOT/verbosity.params"
+awk '!/^verbose[[:space:]]*=/ && !/^verbose_log[[:space:]]*=/' "$base" >"$verbosity"
+printf '\nverbose_log = 2\nverbose = 1\n' >>"$verbosity"
+"$CBALLS" "$verbosity" >"$TMP_ROOT/verbosity.log" 2>&1 \
+    || fail_with_log "independent verbosity fields were rejected" "$TMP_ROOT/verbosity.log"
+verbosity_used="$seed_dir/verbosity.params-usedvalues"
+[ -f "$verbosity_used" ] || verbosity_used="$base"
+grep -Eq '^verbose[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$verbosity_used" \
+    || fail_with_log "verbose was not preserved" "$TMP_ROOT/verbosity.log"
+grep -Eq '^verbose_log[[:space:]]*=[[:space:]]*2[[:space:]]*$' "$verbosity_used" \
+    || fail_with_log "verbose overwrote verbose_log" "$TMP_ROOT/verbosity.log"
+
+for key in verbose verbose_log; do
+    for value in 32768 -32769; do
+        range_file="$TMP_ROOT/$key-$value.params"
+        sed "s/^$key[[:space:]]*=.*/$key = $value/" "$base" >"$range_file"
+        expect_failure "$key-$value" 'outside the short integer range' "$range_file"
+    done
+done
+
 missing_name="$TMP_ROOT/missing-name.params"
 {
     printf '   = 1\n'

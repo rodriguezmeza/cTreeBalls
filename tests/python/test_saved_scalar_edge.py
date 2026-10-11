@@ -224,7 +224,7 @@ def test_python_failure_and_same_object_recovery(tmp_path):
         assert obj.run_settings is None
         with pytest.raises(Exception): obj.getHistNN()
         obj.clean_all()
-        from test_provenance_window import parameters, register
+        from test_run_information_and_window import parameters, register
         from test_two_ball_edge_corrections import catalog
         register(obj, catalog())
         obj.set(parameters(tmp_path / "normal"))

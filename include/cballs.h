@@ -1,6 +1,12 @@
 #ifndef _cballs_h
 #define _cballs_h
 
+/* Public native contract: serialize ALL API entry across contexts in one
+ * process, including configuration, result access and destruction. Guarded
+ * entry points recover errors; they are not concurrency locks. OpenMP is
+ * internal to one call; MPI calls additionally require main-thread FUNNELED
+ * entry and matching rank order. See docs/engineering_contracts.rst. */
+
 //B wlcf
 //B standard libraries
 #include <stdio.h>

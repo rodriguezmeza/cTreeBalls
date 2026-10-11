@@ -67,7 +67,7 @@ certify the discovery cut; ambiguous ranges retain pixel tests. The original
 segment kernel now combines child sums/bounds instead of rescanning every
 node's complete pixel range.
 
-## MPI, memory and provenance
+## MPI, memory and run information
 
 Catalogs, trees and histograms remain replicated. Pair cells use cyclic forest
 rows; persistent triples use cyclic fixed pivot-task blocks. Pixel fallback
@@ -124,7 +124,7 @@ mpiexec -n 2 python3 -O tests/python/test_lya_hierarchy.py --cython-mpi-worker
 ```
 
 The final command requires a rebuilt extension and mpi4py. Tests cover direct
-oracles, adversarial geometry/weights, forest exclusions, strict cuts, actual
+reference calculations, adversarial geometry/weights, forest exclusions, strict cuts, actual
 aggregation, thread/rank agreement, and rank-local failures with recovery.
 Measure the intended catalog and bins before choosing a performance profile.
 

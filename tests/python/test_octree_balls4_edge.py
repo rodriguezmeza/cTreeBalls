@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Independent masked/distinct-triplet oracle and C/OpenMP/MPI comparisons."""
-import argparse
+
+import sys
 from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+import argparse
 import re
 import shlex
 import subprocess

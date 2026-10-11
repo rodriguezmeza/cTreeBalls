@@ -9,6 +9,9 @@ permissions:
   contents: read
 
 jobs:
+  support-coverage:
+    uses: ./.github/workflows/support-matrix.yml
+
   active-public-release:
     runs-on: ubuntu-22.04
     steps:
@@ -29,6 +32,7 @@ jobs:
         run: |
           python scripts/generate_capabilities.py --check
           python scripts/generate_profile_docs.py --check
+          python scripts/generate_accuracy_docs.py --check
           base="$PR_BASE"
           if [ -z "$base" ]; then base="$(git rev-parse HEAD^ 2>/dev/null || true)"; fi
           if [ -n "$base" ]; then
@@ -38,15 +42,13 @@ jobs:
           fi
       - name: Verify the unchanged public profile and every registered method
         run: |
-          python scripts/active_release_gate.py --output release-gate \
+          python scripts/release_readiness.py run --component active --output release-active \
             --mpi-command 'mpiexec --oversubscribe --bind-to none'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: active-public-release-evidence
-          path: |
-            release-gate/
-            regression-selection.json
+          path: release-active/
 
   octree-3pcf-3d-mpi:
     runs-on: ubuntu-22.04
@@ -275,16 +277,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential python3-dev pkg-config libopenmpi-dev openmpi-bin libgsl-dev libcfitsio-dev zlib1g-dev
           python -m pip install --upgrade build twine
-      - name: Build and inspect the source distribution
+      - name: Build, check and test the isolated installed package
         run: |
-          python -m build --sdist
-          python -m twine check --strict dist/*.tar.gz
-          mkdir -p release-package
-          python scripts/check_sdist.py dist/*.tar.gz --output release-package/sdist.json
-      - name: Build native and isolated wheel from the archive, then compute outside it
-        run: |
-          python scripts/verify_sdist_install.py dist/*.tar.gz \
-            --output release-package/artifact-check --jobs 2
+          python scripts/release_readiness.py run --component package \
+            --output release-package --jobs 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -295,7 +291,6 @@ jobs:
             !release-package/**/install-env/**
             !release-package/**/native-source/**
             !release-package/**/wheel-source/**
-            dist/
 
   sanitizers:
     runs-on: ubuntu-22.04
@@ -309,16 +304,56 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential python3-dev pkg-config libopenmpi-dev openmpi-bin libgsl-dev libcfitsio-dev zlib1g-dev
           python -m pip install -r requirements/build.txt
-      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+      - name: Run required AddressSanitizer and UndefinedBehaviorSanitizer checks
         run: |
-          make -j2 DEBUGCOMPILINGON=1 SANITIZER=address,undefined cballs
-      - name: Run focused sanitizer paths
-        env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
-          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          python scripts/release_readiness.py run --component sanitizers \
+            --output release-sanitizers --jobs 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sanitizer-evidence
+          path: release-sanitizers/
+
+  release-readiness:
+    needs: [active-public-release, install-sdist, sanitizers, support-coverage]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: active-public-release-evidence
+          path: readiness/active
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: source-install-evidence
+          path: readiness/package
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: sanitizer-evidence
+          path: readiness/sanitizers
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: support-coverage-decision
+          path: readiness/support
+      - name: Require complete evidence for this exact source
+        if: always()
         run: |
-          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-parameter-parser
-          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-parameter-file-parser
-          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-standalone-parser
-          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-sanitizer-smoke
-          make DEBUGCOMPILINGON=1 SANITIZER=address,undefined test-octree-3pcf-3d-omp
+          python scripts/release_readiness.py collect \
+            --active readiness/active/result.json \
+            --package readiness/package/result.json \
+            --sanitizers readiness/sanitizers/result.json \
+            --support readiness/support/support-coverage.json \
+            --output release-readiness.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-readiness-decision
+          path: release-readiness.json

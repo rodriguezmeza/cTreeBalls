@@ -7,8 +7,8 @@
 Harmonic base
 -------------
 
-Scalar angular contract
-~~~~~~~~~~~~~~~~~~~~~~~
+Scalar angular definitions
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The active scalar Fourier engines (the KD-tree, PCA-ball-tree, and native
 octree dual-node OpenMP/MPI variants) use observer-relative tangent angles in
@@ -53,10 +53,8 @@ angular Fourier estimator.
 Smoothing and approximations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``SMOOTHPIVOTON=1`` enables smoothing by default on supported engines. Add
-``options=no-smooth-pivot`` to recover the unsmoothed estimator. The historical
-``smooth-pivot`` option is retained as an explicit, backward-compatible
-request. Raw distinct-multipole mode in KD-tree and legacy balltree requires
+``SMOOTHPIVOTON=1`` compiles smoothing support. Smoothing is off by default;
+``options=smooth-pivot`` explicitly selects the smoothed estimator. Raw distinct-multipole mode in KD-tree and legacy balltree requires
 ``no-smooth-pivot`` because grouped pivots do not implement this raw weighted
 estimator. Other engines retain their documented option restrictions.
 
@@ -67,18 +65,18 @@ decreasing ``theta`` for the desired angular range and maximum multipole.
 
 Rebuild both C and Cython after updating. Higher modes and raw KD-tree/balltree
 or BALLS4 outputs from older implementations are not numerically interchangeable
-with this contract and should be recomputed.
+with this definition and should be recomputed.
 
 Regression checks
 ~~~~~~~~~~~~~~~~~
 
 From the source root, with matching C and Cython builds::
 
-   python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
-   CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/python/test_scalar_numerical_contract.py
+   python3 -m pytest -q tests/python/test_scalar_numerical_definitions.py
+   CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/python/test_scalar_numerical_definitions.py
 
 The tests compare independent ordered-triplet sums, dual-node and exact limits, full/partial-sky
 rotations, nonuniform weights, degenerate bearings, inactive smoothing,
 OpenMP threads, MPI ranks, and both ASCII input formats. CI runs both compiled
-smoothing profiles. These small-catalog checks validate numerical contracts;
+smoothing profiles. These small-catalog checks validate numerical definitions;
 they are not a full-sky performance certification.

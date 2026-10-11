@@ -93,7 +93,30 @@ See :download:`driver README <../tests/python/README_lya_corr_all_engines.md>`,
 :download:`MPI addon README <../addons/lya_forest_mpi/README.md>`,
 and ``examples/lya_corr_all_engines.ipynb``.
 The script/notebook ``examples/compare_lya_1d_3d`` compares radial and 3D
-workflows while keeping their estimator contracts distinct.
+workflows while keeping their estimator definitions distinct.
+
+Live counting progress
+----------------------
+
+Native Ly-alpha methods report live progress with ``verbose=1`` (terminal) or
+``verbose_log=1`` (``cballs.log``). The all-engines Python driver enables terminal
+progress by default; use ``--verbose 0`` to silence native output or
+``--verbose-log 1`` to record progress in the native log. No profiling variable
+is required.
+
+Each line identifies the engine, counting phase, rank, completed/total tasks,
+percentage, and elapsed wall seconds. Tasks are coarse pivot blocks, forest-pair
+rows, cell blocks, or radial tree/correction blocks, as indicated by the phase.
+They have unequal costs: the percentage is completed work units, not a runtime
+estimate or a count of individual pairs/triples. Updates are flushed about every
+one percent, or after five seconds at the next completed task. A long individual
+task can therefore leave the display unchanged for longer than five seconds.
+
+Combined estimators may show separate pair and triple phases. Reaching 100%
+finishes that counting phase; later phases, MPI reductions and file output may
+still be pending. MPI follows the existing rank-zero logging policy and shows
+only rank zero's assigned tasks, not a global fraction. Logging does not change
+the histogram arithmetic, task order, or scientific approximations.
 
 Validation
 ----------
@@ -113,7 +136,7 @@ Run ``make test-lya-forest-omp test-lya-forest-1d-omp`` and
 The MPI implementation replicates input/tree memory and partitions pivot or
 task blocks. Thread-count changes are deterministic at fixed rank count;
 changing ranks may change rounding. Native and Cython tests cover independent
-oracles, scan/tree agreement, exclusions, strict in-memory multipoles, and
+reference calculations, scan/tree agreement, exclusions, strict in-memory multipoles, and
 recoverable failures.
 
 LOS Hierarchical Reuse
@@ -130,7 +153,7 @@ Zero slops preserve the hard-bin estimator to summation rounding. These
 methods do not replace the five-dimensional histogram by truncated
 multipoles. MPI counterparts support the same kernels. See the
 :download:`LOS implementation and validation guide <LYA_LOS_HIERARCHICAL_REUSE.md>`
-for contracts, work counters, benchmark commands and limits.
+for definitions, work counters, benchmark commands and limits.
 
 Anisotropic Legendre moment acceleration
 ----------------------------------------

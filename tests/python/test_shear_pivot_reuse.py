@@ -20,7 +20,7 @@ def compare(a, b, rtol=2.e-11, atol=3.e-12):
 
 def test_exact_limit_and_fallbacks():
     catalog = reference.fixture(80)
-    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "1e-12"}):
+    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "1e-12", "CBALLS_SHEAR_BIN_THETA": "0"}):
         for use_log in (False, True):
             exact = reference.run_native(*catalog, 1, options=BASE+",no-one-ball",
                                          use_log=use_log, engine=ENGINE)
@@ -38,7 +38,7 @@ def test_exact_limit_and_fallbacks():
         for key in a:
             np.testing.assert_array_equal(a[key], b[key])
     a = reference.run_native(*catalog, 1, options=BASE, engine=ENGINE)
-    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0"}):
+    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0", "CBALLS_SHEAR_BIN_THETA": "0"}):
         b = reference.run_native(*catalog, 1, options=REUSE, engine=ENGINE)
     compare(a, b, 0, 0)
 
@@ -55,10 +55,32 @@ def clustered_catalog():
     return position, gamma, weight
 
 
+def test_high_order_signal_and_window_symmetries():
+    """Keep nmax+3 spin rings and all 2*nmax window modes independent."""
+    catalog = reference.fixture(32)
+    with patch.object(reference, "NMAX", 7):
+        expected = reference.oracle(*catalog, use_log=True)
+        exact = reference.run_native(*catalog, 1,
+            options=BASE+",no-one-ball", engine=ENGINE, use_log=True)
+        compare({key: expected[key] for key in exact}, exact,
+                rtol=3.e-10, atol=3.e-11)
+        # The same second/third catalog can also be passed under distinct
+        # catalog ids. That forces the general two-leg contraction, providing
+        # an independent check of the symmetric radial-pair implementation.
+        general = reference.run_native_catalogs([catalog, catalog, catalog], 1,
+            options=BASE+",no-one-ball", engine=ENGINE, use_log=True)
+        # Copies count coincident neighbor rows separately, so compare only
+        # off-diagonal radial bins, which cannot contain repeated neighbors.
+        off_diagonal = ~np.eye(reference.BINS, dtype=bool)
+        for key in ("upsilon", "window"):
+            np.testing.assert_allclose(exact[key][..., off_diagonal],
+                general[key][..., off_diagonal], rtol=3.e-10, atol=3.e-11)
+
+
 def test_aggregate_pivots_and_determinism():
     catalog = clustered_catalog()
     with patch.object(reference, "ENGINE", ENGINE), patch.dict(
-            os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0.1"}):
+            os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0.1", "CBALLS_SHEAR_BIN_THETA": "0"}):
         exact = reference.run_native(*catalog, 1, options=BASE+",no-one-ball")
         result, profile = reference.run_native_with_profile(*catalog, 1, REUSE)
         count = sum(map(int, re.findall(r"aggregate_pivots=(\d+)", profile)))
@@ -86,7 +108,7 @@ def test_cross_masks_and_polar_geometry():
     position /= np.linalg.norm(position, axis=1)[:, None]
     second = position, gamma, weight
     masks = [np.arange(len(c[0])) % 4 != 0 for c in (first, second)]
-    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "1e-10"}), \
+    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "1e-10", "CBALLS_SHEAR_BIN_THETA": "0"}), \
             patch.object(reference, "RMAX", 2.0):
         for catalogs, order, selected_masks in (
                 ([first, second], None, masks),
@@ -110,7 +132,7 @@ def test_inherited_rings_and_masked_aggregation():
     gamma = .02*(rng.normal(size=2048) + 1j*rng.normal(size=2048))
     weight = rng.uniform(.5, 1.5, 2048)
     with patch.object(reference, "ENGINE", ENGINE), patch.dict(
-            os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0.5"}):
+            os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0.5", "CBALLS_SHEAR_BIN_THETA": "0"}):
         actual, profile = reference.run_native_with_profile(
             position, gamma, weight, 4, REUSE)
         if not (sum(map(int, re.findall(r"ancestor_merges=(\d+)", profile))) > 0):
@@ -123,7 +145,7 @@ def test_inherited_rings_and_masked_aggregation():
                 raise AssertionError((key, error))
     catalog = clustered_catalog()
     masks = [(np.arange(384) % 7 == 0).astype(np.int32)]
-    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0.03"}):
+    with patch.dict(os.environ, {"CBALLS_SHEAR_PIVOT_TOL": "0.03", "CBALLS_SHEAR_BIN_THETA": "0"}):
         for catalogs, selected_masks in (([catalog], masks),
                                          ([catalog, catalog], masks*2)):
             exact = reference.run_native_catalogs(catalogs, 1,
@@ -227,6 +249,56 @@ def test_bin_slop_cutoffs_and_validation():
                 raise AssertionError('invalid bin slop accepted: '+text)
 
 
+def test_sparse_spherical_cells_preserve_outer_cutoffs():
+    """Tighter cell bounds must enclose sparse arcs, poles and masked children.
+
+    Internal bin assignments may move at nonzero bin slop, but total pair
+    weight and the triplet window monopole cannot cross either outer cutoff.
+    """
+    rng = np.random.default_rng(53269)
+    for pole in (False, True):
+        angles = np.repeat([0., .20, .40, .60], 40)
+        angles += rng.normal(0., 2.e-4, angles.size)
+        p = np.column_stack((np.cos(angles), np.sin(angles),
+                             rng.normal(0., 1.e-5, angles.size)))
+        if pole:
+            p = p[:, [2, 1, 0]]
+        p /= np.linalg.norm(p, axis=1)[:, None]
+        g = rng.normal(0., .02, len(p)) + 1j*rng.normal(0., .02, len(p))
+        w = rng.uniform(.1, 2., len(p))
+        mask = (np.arange(len(p)) % 7 != 0).astype(np.uint8)
+        # Adjacent groups straddle the inner cut; groups two steps apart
+        # straddle the outer cut. Remaining nodes can still aggregate.
+        with patch.object(reference, 'RMIN', 2*np.sin(.20/2)), \
+                patch.object(reference, 'RMAX', 2*np.sin(.40/2)), \
+                patch.dict(os.environ, CBALLS_SHEAR_PIVOT_TOL='3',
+                           CBALLS_SHEAR_BIN_THETA='.5'):
+            for masked in (False, True):
+                options = 'no-out-Hist,no-smooth-pivot'
+                if masked:
+                    options += ',read-mask'
+                kw = dict(engine=ENGINE, use_log=True,
+                          mask=mask if masked else None)
+                exact = reference.run_native(p, g, w, 1,
+                    options+',no-one-ball', **kw)
+                actual = reference.run_native(p, g, w, 4,
+                    options+',shear-pivot-reuse', **kw)
+                # Independent ordered pair/triplet counts: no tree bounds
+                # enter this reference, including the distinct-neighbor term.
+                live_weight = np.where(mask, w, 0.) if masked else w
+                distances = np.linalg.norm(p[:, None, :] - p[None, :, :], axis=2)
+                inside = (distances > reference.RMIN) & (distances < reference.RMAX)
+                neighbors = inside*live_weight[None, :]
+                total = neighbors.sum(axis=1)
+                expected_pairs = live_weight @ total
+                expected_triples = live_weight @ (total**2 - (neighbors**2).sum(axis=1))
+                for result in (exact, actual):
+                    np.testing.assert_allclose(result['xi_weight'].sum(),
+                        expected_pairs, rtol=5.e-13, atol=1.e-10)
+                    np.testing.assert_allclose(result['window'][2*reference.NMAX].sum(),
+                        expected_triples, rtol=5.e-13, atol=1.e-10)
+
+
 def test_reuse_provenance_is_frozen():
     import tempfile
     position,gamma,weight = reference.fixture(40)
@@ -307,9 +379,11 @@ int main(void) {
 
 if __name__ == "__main__":
     for test in (test_exact_limit_and_fallbacks, test_aggregate_pivots_and_determinism,
+                 test_high_order_signal_and_window_symmetries,
                  test_cross_masks_and_polar_geometry, test_inherited_rings_and_masked_aggregation,
                  test_validation_and_smoothing_fallback,
                  test_hierarchical_radial_completion, test_bin_slop_cutoffs_and_validation,
+                 test_sparse_spherical_cells_preserve_outer_cutoffs,
                  test_reuse_provenance_is_frozen,
                  test_phase_bound_encloses_geodesic_formula):
         test()

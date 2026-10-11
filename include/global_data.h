@@ -196,6 +196,8 @@ struct global_data{
     bool shearReuseEnabled;
     real shearReusePhaseBudget;
     real shearReuseBinSlop;
+    INTEGER shearFrontierTarget, shearFrontierTasks, shearFrontierLocalTasks;
+    size_t shearTaskHistogramBytes;
     real *histShearXiPlusRe;
     real *histShearXiPlusIm;
     real *histShearXiMinusRe;
@@ -210,6 +212,7 @@ struct global_data{
     real *histShearGammaRe;
     real *histShearGammaIm;
     int shearMultipoleMax;
+    int shearWindowMultipoleMax;
     int shearAngularBins;
 #ifdef USEGSL
 //    gsl_matrix_complex *histXi_gsl;

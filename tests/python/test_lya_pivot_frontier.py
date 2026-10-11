@@ -6,11 +6,17 @@ original field, weight and row-ID ownership at its representative's coordinates.
 This separately tests the C product-of-sums and multiplicity contracts.
 """
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import itertools
 import json
 import math
 import os
-from pathlib import Path
 import re
 import subprocess
 import numpy as np

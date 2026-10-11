@@ -520,6 +520,10 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
     size_t block_size=cmd->lya3PivotBlock?(size_t)cmd->lya3PivotBlock:8;
     size_t blocks=tree.tasks_count/block_size+(tree.tasks_count%block_size!=0);
     const size_t first_block=lya_parallel_first(cmd),block_stride=lya_parallel_stride(cmd);
+    lya_progress progress;
+    lya_progress_init(&progress,cmd,gd,
+        compute2 ? "2PCF+3PCF cell blocks" : "3PCF cell blocks",
+        lya_progress_local_tasks(blocks,first_block,block_stride));
     unsigned long long pivot_aggregates=0;
     unsigned long long geometry_evaluations=0,cache_hits=0,pruned_nodes=0,leaf_evaluations=0,pair_cache_hits=0;
 #pragma omp parallel
@@ -571,6 +575,7 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
                     } else {
                         lya_commit_worker(&w,num2,den2,num3,den3,compute2,1);
                         *visits+=w.accepted_visits;*pairs+=w.pair_count;*triplets+=w.ordered_triplet_count;
+                        lya_progress_step(&progress);
                     }
                 }
                 if(worker_failed && !failed) {failed=1;snprintf(error,sizeof(error),"%s",local_error);}
@@ -594,6 +599,7 @@ static int lya_cells_run(struct cmdline_data *cmd,struct global_data *gd,
     verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
         "Forest geometry: evaluations=%llu cache_hits=%llu pruned_nodes=%llu leaf_evaluations=%llu pair_cache_hits=%llu\n",
         geometry_evaluations,cache_hits,pruned_nodes,leaf_evaluations,pair_cache_hits);
+    lya_progress_finish(&progress,!failed);
     lya_cells_free(&tree);
     if(failed) {snprintf(cmd->error_message,_ERRORMSGSIZE_,"%s",error);return FAILURE;}
     return SUCCESS;

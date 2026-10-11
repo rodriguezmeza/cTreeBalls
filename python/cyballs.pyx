@@ -782,9 +782,11 @@ cdef class cballs:
         if (family == "forest" and not method.startswith("lya-")) or (family == "physical" and "3pcf-3d" not in method and "ggg-3d" not in method):
             raise CosmoSevereError("result getter does not match the completed estimator")
         arrays = {}
-        for slot in range(8):
+        slot = 0
+        while True:
             a=cballs_result_at(self.runtime_state,slot)
-            if a == NULL: continue
+            if a == NULL: break
+            slot += 1
             shape=tuple(a.shape[i] for i in range(a.rank))
             if a.kind == 2:
                 counts=np.empty(a.count,dtype=np.uint64)
@@ -808,8 +810,16 @@ cdef class cballs:
         return self._dedicated_results("forest")
 
     def getPhysicalResults(self):
-        """Copied raw physical multipoles; survey returns D-R and random sums."""
-        return self._dedicated_results("physical")
+        """Copied raw physical sums and owned corrected survey products.
+
+        Survey corrections are computed even with no-out-Hist. Invalid
+        coefficients are NaN; consult zeta_status/xi_status and diagnostics.
+        Raw data_* arrays denote D-alpha*R; random_* arrays denote alpha*R.
+        """
+        packet=self._dedicated_results("physical")
+        if "zeta_corrected_legendre" in packet['arrays'] or "xi_corrected" in packet['arrays']:
+            packet['normalization']='data_* and random_* are raw sums; *_corrected* are survey observables; *_valid and *_status define support'
+        return packet
 
     def getAllocationInfo(self):
         """Common histogram plan and live pointer presence (bytes per rank)."""
@@ -850,9 +860,11 @@ cdef class cballs:
             if 'only-3pcf' not in options:
                 arrays['xi_plus'] = self.getShearXiPlus()
                 arrays['xi_minus'] = self.getShearXiMinus()
+                arrays['xi_weight'] = self.getShearXiWeight()
             if 'only-2pcf' not in options:
                 arrays['upsilon_raw'] = self.getShearUpsilonMultipoles()
-                arrays['gamma_corrected'] = self.getShearGammaMultipoles()
+                key = 'gamma_corrected' if self.gd.shearWindowMultipoleMax > 0 else 'gamma_normalized'
+                arrays[key] = self.getShearGammaMultipoles()
                 arrays['window'] = self.getShearWindowMultipoles()
         else:
             if 'only-3pcf' not in options:
@@ -869,11 +881,11 @@ cdef class cballs:
         return dict(engine=method,arrays=arrays,metadata=metadata,
                     ownership='independent NumPy copies; survive cleanup')
 
-    def qualifyAgainst(self, reference, *, rtol=.02, atol=1e-10):
+    def qualifyAgainst(self, reference, *, rtol=.02, atol=1e-10, selection=None, metric="l2"):
         """Attach observable-specific evidence from an exact matching result packet."""
         if hasattr(reference, 'getResults'):
             reference = reference.getResults()
-        report = qualification_report(self.getResults(), reference, rtol=rtol, atol=atol)
+        report = qualification_report(self.getResults(), reference, rtol=rtol, atol=atol, selection=selection, metric=metric)
         self._qualification = report
         return json.loads(json.dumps(report))
 
@@ -965,6 +977,11 @@ cdef class cballs:
             "options": _parameter_text(self.cmd.options),
             "sizeHistN": self.cmd.sizeHistN,
             "mChebyshev": self.cmd.mChebyshev,
+            "surveySignalLmax": self.cmd.surveySignalLmax,
+            "surveyWindowLmax": self.cmd.surveyWindowLmax,
+            "surveySolvePadding": self.cmd.surveySolvePadding,
+            "surveyRcondMin": self.cmd.surveyRcondMin,
+
             "sizeHistPhi": self.cmd.sizeHistPhi,
             "useLogHist": bool(self.cmd.useLogHist),
             "logHistBinsPD": self.cmd.logHistBinsPD,
@@ -1674,7 +1691,10 @@ cdef class cballs:
             count, (4, multipoles, bins, bins))
 
     def getShearGammaXMultipoles(self):
-        """Return edge-corrected Porth x-projection 3PCF multipoles.
+        """Return Porth x-projection 3PCF multipoles.
+
+        Default: edge-corrected. With no-count-multipoles and no explicit
+        edge-corrections: Upsilon/N0, still convolved with the window.
 
         The first axis contains :math:`\\Gamma_0^{\\times}` through
         :math:`\\Gamma_3^{\\times}`; the second contains orders
@@ -1683,14 +1703,14 @@ cdef class cballs:
         return self.getShearGammaMultipoles()
 
     def getShearWindowMultipoles(self):
-        """Return window multipoles ``N_n`` with shape ``(4*nmax+1, B, B)``."""
+        """Return computed window modes: (4*nmax+1,B,B), or (1,B,B) for N0-only."""
         cdef int bins
         cdef int multipoles
         cdef Py_ssize_t count
 
         self._require_shear_results()
         bins = self.cmd.sizeHistN
-        multipoles = 4*self.gd.shearMultipoleMax + 1
+        multipoles = 2*self.gd.shearWindowMultipoleMax + 1
         count = <Py_ssize_t>multipoles*bins*bins
         return self._copy_shear_complex(
             self.gd.histShearDenominatorRe,
@@ -1720,6 +1740,12 @@ cdef class cballs:
         self._require_shear_results()
         return np.arange(-self.gd.shearMultipoleMax,
                          self.gd.shearMultipoleMax + 1, dtype=np.int32)
+
+    def getShearWindowMultipoleOrders(self):
+        """Return only computed window orders; [0] for N0-only normalization."""
+        self._require_shear_results()
+        return np.arange(-self.gd.shearWindowMultipoleMax,
+                         self.gd.shearWindowMultipoleMax + 1, dtype=np.int32)
 
     def getShearPhiCenters(self):
         """Return angular-bin centers in radians on ``[-pi, pi)``."""
@@ -1870,3 +1896,5 @@ cdef class cballs:
 include "resource_api.pxi"
 
 include "qualification_api.pxi"
+
+include "physical_survey_api.pxi"

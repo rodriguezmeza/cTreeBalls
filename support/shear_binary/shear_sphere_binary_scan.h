@@ -898,9 +898,7 @@ static void kd_shear_walk(shear_pivot_workspace *work,
 
 /* Split expensive pivot cells first, then retain only conservative neighbor
  * frontier roots.  Exact body pivots and in-root traversal order are kept. */
-#define KD_SHEAR_PIVOT_TASK_TARGET ((INTEGER)256)
 #define KD_SHEAR_NEIGHBOR_FRONTIER_TARGET ((INTEGER)256)
-#define KD_SHEAR_TASK_HISTOGRAM_MEMORY ((size_t)256 << 20)
 
 typedef struct {
     INTEGER pivot_node;
@@ -1012,44 +1010,28 @@ static void kd_shear_sort_pivot_tasks(kd_shear_pivot_task *tasks,
 
 static int kd_shear_assign_pivot_tasks(
         struct cmdline_data *cmd, kd_shear_pivot_task *tasks,
-        INTEGER count, int rank_count)
+        INTEGER count, int rank_count, size_t rank_limit)
 {
-    long double *rank_work;
-
-    rank_count = MAX(1, rank_count);
-    if ((size_t)rank_count > SIZE_MAX / sizeof(*rank_work)
-        || (rank_work = calloc((size_t)rank_count, sizeof(*rank_work)))
-               == NULL) {
+    shear_frontier_priority *order = NULL;
+    if ((size_t)count > SIZE_MAX/sizeof(*order)
+        || (count && (order = malloc((size_t)count*sizeof(*order))) == NULL)) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 SHEAR_ENGINE_NAME ": rank-work allocation failed");
+                 SHEAR_ENGINE_NAME ": task-priority allocation failed");
         return FAILURE;
     }
-    for (INTEGER task = 0; task < count; task++) tasks[task].owner = -1;
-    for (INTEGER assigned = 0; assigned < count; assigned++) {
-        INTEGER largest = -1;
-        int owner = 0;
-
-        for (INTEGER task = 0; task < count; task++) {
-            if (tasks[task].owner < 0
-                && (largest < 0
-                    || tasks[task].estimated_work
-                       > tasks[largest].estimated_work))
-                largest = task;
+    if (!count) return SUCCESS;
+    for (INTEGER i = 0; i < count; i++) {
+        order[i].task = i;
+        order[i].cost = tasks[i].estimated_work;
+    }
+    int status = shear_frontier_assign(cmd, order, count, rank_count, rank_limit);
+    if (status == SUCCESS)
+        for (INTEGER i = 0; i < count; i++) {
+            tasks[order[i].task].owner = order[i].owner;
+            tasks[order[i].task].local_index = order[i].local_index;
         }
-        for (int rank = 1; rank < rank_count; rank++)
-            if (rank_work[rank] < rank_work[owner]) owner = rank;
-        tasks[largest].owner = owner;
-        rank_work[owner] += tasks[largest].estimated_work;
-    }
-    for (INTEGER task = 0; task < count; task++) {
-        INTEGER local_index = 0;
-
-        for (INTEGER previous = 0; previous < task; previous++)
-            if (tasks[previous].owner == tasks[task].owner) local_index++;
-        tasks[task].local_index = local_index;
-    }
-    free(rank_work);
-    return SUCCESS;
+    free(order);
+    return status;
 }
 
 static size_t kd_shear_count_task_neighbors(
@@ -1092,7 +1074,7 @@ static void kd_shear_release_frontier_schedule(
 static int kd_shear_build_frontier_schedule(
         struct cmdline_data *cmd, fcfc_balltreeptr pivot_tree,
         fcfc_balltreeptr first_tree, fcfc_balltreeptr second_tree,
-        INTEGER target, int rank_count,
+        INTEGER target, int rank_count, size_t rank_limit,
         kd_shear_frontier_schedule *schedule)
 {
     INTEGER *first_frontier = NULL;
@@ -1161,7 +1143,7 @@ static int kd_shear_build_frontier_schedule(
     }
     kd_shear_sort_pivot_tasks(schedule->tasks, count);
     if (kd_shear_assign_pivot_tasks(
-            cmd, schedule->tasks, count, rank_count) == FAILURE)
+            cmd, schedule->tasks, count, rank_count, rank_limit) == FAILURE)
         goto cleanup;
 
     for (INTEGER task = 0; task < count; task++) {
@@ -1248,35 +1230,8 @@ cleanup:
     return status;
 }
 
-static INTEGER kd_shear_pivot_task_target(int threads, int ranks,
-                                          size_t accumulator_stride)
-{
-    size_t workers = (size_t)MAX(1, threads);
-    size_t target;
-    size_t bytes_per_task;
-    size_t memory_target;
 
-    ranks = MAX(1, ranks);
-    if (workers > SIZE_MAX / (size_t)ranks)
-        workers = SIZE_MAX;
-    else
-        workers *= (size_t)ranks;
-    target = workers > (size_t)KD_SHEAR_PIVOT_TASK_TARGET / 8
-        ? (size_t)KD_SHEAR_PIVOT_TASK_TARGET : 8 * workers;
-    target = MAX((size_t)64, target);
-    target = MIN(target, (size_t)KD_SHEAR_PIVOT_TASK_TARGET);
-    if (accumulator_stride == 0
-        || accumulator_stride > SIZE_MAX / sizeof(real))
-        return 1;
-    bytes_per_task = accumulator_stride * sizeof(real);
-    memory_target = KD_SHEAR_TASK_HISTOGRAM_MEMORY / bytes_per_task;
-    target = MIN(target, MAX((size_t)1, memory_target));
-    return (INTEGER)MAX((size_t)1, target);
-}
-
-#undef KD_SHEAR_PIVOT_TASK_TARGET
 #undef KD_SHEAR_NEIGHBOR_FRONTIER_TARGET
-#undef KD_SHEAR_TASK_HISTOGRAM_MEMORY
 #endif /* SHEAR_SPHERE_BINARY_FRONTIER_SCHEDULER */
 
 #undef KD_SHEAR_PAIR_FRONTIER

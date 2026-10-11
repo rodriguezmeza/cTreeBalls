@@ -72,11 +72,12 @@ The numerical test in :doc:`benchmarks` checks both input paths independently.
 Smoothing Changed an Unsmoothed Run
 -----------------------------------
 
-With current code, ``SMOOTHPIVOTON=1`` enables smoothing by default on
-supported engines. Add ``options=no-smooth-pivot`` to reproduce an unsmoothed
-run, then rebuild both interfaces and restart Python after changing the build
-flag. Raw KD/legacy balltree multipoles require that opt-out; BALLS4 and the
-compact two-ball engines have no smooth-pivot mode.
+Smoothing is now off by default, including builds with ``SMOOTHPIVOTON=1``.
+Earlier builds enabled it implicitly on supported engines. Remove an explicit
+``smooth-pivot`` request or use ``options=no-smooth-pivot`` for an unsmoothed
+run. Rebuild both interfaces and restart Python after updating the source.
+Native scalar octree two-ball mode remains unsmoothed; compatibility mode can
+use smoothing explicitly.
 
 Zero or Unexpected Results
 --------------------------
@@ -88,8 +89,8 @@ antipodal legs have undefined angular bearings and are excluded from angular
 
 Empty/singular scalar angular edge systems return NaN with validity diagnostics.
 Do not interpret unsupported bins as measured zeros. Physical-3D survey products
-also expose validity and conditioning diagnostics. These zeros are not
-automatically evidence of a measured null signal. Narrow windows can amplify
+also return NaN for unsupported coefficients, with validity, conditioning and
+residual diagnostics. See :doc:`physical_survey_semantics`. Narrow windows can amplify
 noise even when a solver succeeds.
 
 Getter Errors or Repeated-run Failures

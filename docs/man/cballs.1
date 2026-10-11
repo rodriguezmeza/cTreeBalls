@@ -225,6 +225,23 @@ Number of radial bins.
 .BI mChebyshev= order
 Largest positive 3PCF multipole order.
 .TP
+.BI surveySignalLmax= order
+Physical survey corrected output order; -1 (default) selects mChebyshev-1,
+or mChebyshev with survey-keep-top-multipole.
+.TP
+.BI surveySolvePadding= count
+Extra solved physical signal modes (default 1); signal plus padding <=32.
+.TP
+.BI surveyWindowLmax= order
+Physical random window order; -1 (default) selects twice the solve order.
+Explicit values must be at least twice the solve order and at most 64.
+.TP
+.BI surveyRcondMin= value
+Minimum reciprocal infinity-norm condition (default 1e-10).
+Unsupported corrected coefficients are NaN with validity and status codes.
+Correction is computed before optional file output and retained by Python
+getPhysicalResults/getResults with rcond and relative residual diagnostics.
+.TP
 .BI useLogHist= bool
 Choose logarithmic or linear radial bins.
 .TP
@@ -283,12 +300,12 @@ octree, KD-tree and ball-tree OpenMP two-ball 3PCF scans.
 .SH ENVIRONMENT
 .TP
 .B CBALLS_SHEAR_PIVOT_TOL
-Finite phase budget in radians from 0 to 3, default 0.1. Not a relative-error
+Finite phase budget in radians from 0 to 3, default 3. Not a relative-error
 guarantee. With reuse enabled, this budget controls 3PCF acceptance; theta's
 magnitude does not. Zero disables reuse, not ordinary neighbor approximation.
 .TP
 .B CBALLS_SHEAR_BIN_THETA
-Internal radial-bin assignment slop in [0,1] bin widths, default 0.
+Internal radial-bin assignment slop in [0,1] bin widths, default 0.5.
 Used only with shear-pivot-reuse. Radial range cutoffs remain strict.
 Resolved radial pairs complete at parent cells; descendants inherit completion
 masks. Use nsmooth=1 for a finer binary pivot hierarchy. Qualify raw and
@@ -304,12 +321,12 @@ The convergence, shear, and forest drivers are under
 They retain one NumPy catalog across selected engines and write timing and
 comparison summaries.
 Their timing tables separate setup, complete Python compute calls, and native
-MainLoop time. mainloop_wall_s and mainloop_cpu_s exclude Python provenance
+MainLoop time. mainloop_wall_s and mainloop_cpu_s exclude Python run information
 capture; compute columns include it. MPI wall time is the maximum
 across participating ranks and CPU time is their sum. The forest driver reads
 DESI and eBOSS/PICCA delta FITS, compares compatible estimator families, and
 supports model distortion/covariance analysis. Consult its README for input
-contracts and separately scoped external reference timings.
+definitions and separately scoped external reference timings.
 .SH MPI
 Use one MPI implementation for MPICC, the runtime launcher, the extension, and
 mpi4py. numberThreads is per rank. All ranks enter the same run and cleanup
@@ -394,3 +411,14 @@ Python benchmark, analysis and regression scripts are under tests/python.
 The python directory contains only Cython binding sources. Shared builders and
 compatibility kernels required by enabled addons are in support. The branch
 excludes inactive standalone addons and addons/python_env.
+
+.SH CPU TIME BENCHMARKS
+The maintained Lyman-alpha, kappa and shear drivers are
+lya_corr_all_engines.py, kappa_corr_all_engines.py and
+shear_corr_all_engines.py, all under tests/python.
+Process CPU time includes OpenMP workers. MPI CPU time is summed over
+participating ranks; elapsed time is the maximum rank duration. Compare matched
+catalogues, estimators and accuracy controls before comparing timings.
+The optional external dual node reference is separate from the native engine
+registry. The make-info, print-options and print-search-methods options report
+the compiled active profile.

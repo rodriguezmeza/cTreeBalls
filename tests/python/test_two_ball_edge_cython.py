@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Cython lifetime, sparse-window, and driver edge-correction regressions."""
 
-from pathlib import Path
-import json
 import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+
+import json
 import tempfile
 
 import numpy as np

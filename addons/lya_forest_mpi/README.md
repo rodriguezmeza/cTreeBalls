@@ -40,7 +40,7 @@ parameters. Radial modes ignore transverse separation; their 2PCF uses
 `2*lya3RBins` bins per axis. Require one `lya-ascii` catalog and
 `usePeriodic=false`. These estimators do not approximate pivots by smoothing.
 
-## Parallel and numerical contract
+## Parallel execution rules and numerical definitions
 
 Each rank reads the catalog and builds its own tree/index. Memory for the
 catalog and multidimensional histograms is replicated, not distributed.
@@ -100,7 +100,7 @@ PYTHONPATH="$PWD:$PWD/python" python3 tests/python/test_lya_forest_mpi.py \
 The Cython MPI check additionally requires `mpi4py` in that Python environment.
 Use `--mpi-only` (or `LYA_MPI_TEST_ARGS=--mpi-only` with make) when the OpenMP-only
 siblings were intentionally disabled. Tests cover every method, independent
-2PCF/3PCF oracles, rank/thread comparisons, radial scan versus interval-tree
+2PCF/3PCF reference calculations, rank/thread comparisons, radial scan versus interval-tree
 results, zero windows, same-quasar exclusion, and recoverable input/output errors.
 
 ## Hierarchical radial moments
@@ -115,5 +115,5 @@ See the [implementation and benchmark guide](../../docs/LYA_HIERARCHICAL_REUSE.m
 
 The LOS-tree variants share exact block discovery and use `lya2Kernel=1
 lya3Kernel=5` for adaptive hierarchical moments. They retain the same startup,
-collective error, root-publication and cleanup contracts. See
+collective error, root-publication and cleanup definitions. See
 [LOS hierarchical reuse](../../docs/LYA_LOS_HIERARCHICAL_REUSE.md).

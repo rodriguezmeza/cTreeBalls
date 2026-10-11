@@ -213,6 +213,10 @@ typedef struct {
     cballs_storage_real size;
     nodeptr more;
     nodeptr subp[NSUB];
+#ifdef THREEPCFSHEAR
+    real shear_sphere_radius;  /* Bound about the normalized cell center. */
+    compute_vector shear_sphere_center;
+#endif
 #ifdef IdCellON
     INTEGER Id;
 #endif
@@ -224,6 +228,10 @@ typedef struct {
 //E
 #define More(x)   (((cellptr) (x))->more)
 #define Subp(x)   (((cellptr) (x))->subp)
+#ifdef THREEPCFSHEAR
+#define ShearSphereRadius(x) (((cellptr) (x))->shear_sphere_radius)
+#define ShearSphereCenter(x) (((cellptr) (x))->shear_sphere_center)
+#endif
 #ifdef IdNodeON
 #define IdCell(x)   (((cellptr) (x))->Id)
 #endif

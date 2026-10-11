@@ -89,8 +89,8 @@ class ComparisonConfig:
             raise ValueError("both catalogs need at least three points")
         if self.nbins < 2:
             raise ValueError("ENCORE 3PCF needs at least two radial bins")
-        if not 1 <= self.measured_lmax <= 10:
-            raise ValueError("measured_lmax must be in 1..10")
+        if not 2 <= self.measured_lmax <= 5:
+            raise ValueError("measured_lmax must be in 2..5 (ENCORE measures twice this window order)")
         if not math.isfinite(self.rmin) or not math.isfinite(self.rmax):
             raise ValueError("rmin and rmax must be finite")
         if self.rmin < 0.0 or self.rmax <= self.rmin:
@@ -232,11 +232,13 @@ def _ctree_settings(config: ComparisonConfig, root: Path) -> Dict[str, object]:
         "sizeHistN": config.nbins,
         "sizeHistPhi": 8,
         "mChebyshev": config.measured_lmax,
+        "surveySignalLmax": config.measured_lmax,
+        "surveySolvePadding": 0,
+        "surveyWindowLmax": 2*config.measured_lmax,
         "lengthBox": 2.0,
         "useLogHist": False,
         "usePeriodic": False,
         "numberThreads": config.threads,
-        "scanLevel": 2,
         "stepState": 1000000,
         "verbose": 0,
         "verbose_log": 0,
@@ -310,6 +312,9 @@ def run_ctreeballs_cli(
         f"rminHist={config.rmin:.17g}",
         f"sizeHistN={config.nbins}",
         f"mChebyshev={config.measured_lmax}",
+        f"surveySignalLmax={config.measured_lmax}",
+        "surveySolvePadding=0",
+        f"surveyWindowLmax={2*config.measured_lmax}",
         "stepState=1000000",
         "verbose=0",
         "verbose_log=0",
@@ -342,6 +347,17 @@ def _replace_define(source: str, name: str, value: int) -> str:
     return updated
 
 
+def _encore_coupling_path(config: ComparisonConfig) -> Path:
+    """Use a supplied matrix with sufficient bandwidth, slicing its lower block."""
+    required=2*config.measured_lmax
+    candidates=[]
+    for path in (config.encore_source/'coupling_matrices').glob('edge_correction_matrix_3pcf_LMAX*.npy'):
+        match=re.fullmatch(r'edge_correction_matrix_3pcf_LMAX(\d+)\.npy',path.name)
+        if match and int(match.group(1))>=required:candidates.append((int(match.group(1)),path))
+    if not candidates:raise FileNotFoundError(f'ENCORE needs a supplied 3PCF coupling matrix with LMAX >= {required}')
+    return min(candidates)[1]
+
+
 def prepare_encore(config: ComparisonConfig) -> Tuple[Path, Path, float]:
     """Return executable, runtime directory, and native build time."""
     source = config.encore_source
@@ -350,13 +366,7 @@ def prepare_encore(config: ComparisonConfig) -> Tuple[Path, Path, float]:
             f"ENCORE source not found at {source}; use --encore-source"
         )
     coupling_source = source / "coupling_matrices"
-    coupling_file = coupling_source / (
-        f"edge_correction_matrix_3pcf_LMAX{config.measured_lmax}.npy"
-    )
-    if not coupling_file.is_file():
-        raise FileNotFoundError(
-            f"ENCORE coupling matrix not found: {coupling_file}"
-        )
+    coupling_file = _encore_coupling_path(config)
 
     runtime = config.output_dir / "encore"
     runtime.mkdir(parents=True, exist_ok=True)
@@ -376,7 +386,7 @@ def prepare_encore(config: ComparisonConfig) -> Tuple[Path, Path, float]:
     source_text = (source / "encore.cpp").read_text(encoding="utf-8")
     source_text = _replace_define(source_text, "NBIN", config.nbins)
     source_text = _replace_define(
-        source_text, "ORDER", config.measured_lmax
+        source_text, "ORDER", 2*config.measured_lmax
     )
     source_text = _replace_define(source_text, "MAXTHREAD", 1)
     configured_source.write_text(source_text, encoding="utf-8")
@@ -461,7 +471,7 @@ def read_ctreeballs(config: ComparisonConfig) -> Dict[str, np.ndarray]:
     zeta = np.atleast_2d(
         _load_numeric_rows(root / "histZetaM_3d_survey.txt")
     )
-    if xi.shape[1] != 6 or zeta.shape[1] != 14:
+    if xi.shape[1] != 7 or zeta.shape[1] != 17:
         raise RuntimeError("unexpected cTreeBalls survey output format")
     return {"xi": xi, "zeta": zeta}
 
@@ -512,12 +522,12 @@ def read_and_correct_encore(
     bin1, bin2, numerator_3 = read_encore_3pcf(
         output / "comparison.n00_3pcf.txt",
         config.nbins,
-        config.measured_lmax,
+        2*config.measured_lmax,
     )
     random_bin1, random_bin2, random_3 = read_encore_3pcf(
         output / "comparison.r_3pcf.txt",
         config.nbins,
-        config.measured_lmax,
+        2*config.measured_lmax,
     )
     if not np.array_equal(bin1, random_bin1) or not np.array_equal(
         bin2, random_bin2
@@ -530,16 +540,15 @@ def read_and_correct_encore(
         out=np.zeros_like(numerator_2),
         where=random_2 != 0.0,
     )
-    coupling_path = config.encore_source / "coupling_matrices" / (
-        f"edge_correction_matrix_3pcf_LMAX{config.measured_lmax}.npy"
-    )
-    coupling = np.load(coupling_path)
+    coupling = np.load(_encore_coupling_path(config))
     mode_count = config.measured_lmax + 1
-    if coupling.shape != (mode_count, mode_count, mode_count):
+    window_count=2*config.measured_lmax+1
+    if coupling.ndim!=3 or len(set(coupling.shape))!=1 or coupling.shape[0]<window_count:
         raise RuntimeError(
             f"unexpected ENCORE coupling shape {coupling.shape}"
         )
-    corrected = np.zeros_like(numerator_3)
+    coupling=coupling[:mode_count,:mode_count,:window_count]
+    corrected = np.full((mode_count,numerator_3.shape[1]),np.nan)
     valid = np.zeros(numerator_3.shape[1], dtype=bool)
     condition = np.full(numerator_3.shape[1], np.inf)
     for pair in range(numerator_3.shape[1]):
@@ -550,22 +559,25 @@ def read_and_correct_encore(
         matrix = np.einsum("ijk,k->ij", coupling, window)
         try:
             corrected[:, pair] = np.linalg.solve(
-                matrix, numerator_3[:, pair] / r0
+                matrix, numerator_3[:mode_count, pair] / r0
             )
         except np.linalg.LinAlgError:
             continue
-        condition[pair] = np.linalg.cond(matrix)
-        valid[pair] = np.isfinite(corrected[:, pair]).all()
+        conversion=(-1.)**np.arange(mode_count)*np.sqrt(2*np.arange(mode_count)+1)
+        standard=conversion[:,None]*matrix/conversion[None,:]
+        condition[pair] = np.linalg.cond(standard,np.inf)
+        valid[pair] = np.isfinite(corrected[:, pair]).all() and condition[pair]<=1e10
         if not valid[pair]:
-            corrected[:, pair] = 0.0
+            corrected[:, pair] = np.nan
     return {
         "xi": xi,
         "numerator_2": numerator_2,
         "random_2": random_2,
         "bin1": bin1,
         "bin2": bin2,
-        "numerator_3": numerator_3,
-        "random_3": random_3,
+        "numerator_3": numerator_3[:mode_count],
+        "random_3": random_3[:mode_count],
+        "window_3": random_3,
         "corrected_3": corrected,
         "valid_3": valid,
         "condition_3": condition,
@@ -856,6 +868,8 @@ def summarize(
             "alpha": encore_timings["alpha"],
             "reported_lmax": config.reported_lmax,
             "measured_lmax": config.measured_lmax,
+            "window_lmax": 2*config.measured_lmax,
+            "solve_padding": 0,
             "relative_difference_definition": (
                 "(cTreeBalls-ENCORE)/max(abs(ENCORE), floor)"
             ),

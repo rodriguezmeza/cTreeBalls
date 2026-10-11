@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "scope": "Targeted CI coverage; successful current receipts are required to claim verification. Standard GIL CPython, public double-precision profile.",
+  "rows": [
+    {
+      "id": "linux-3.10-current",
+      "runner": "ubuntu-22.04",
+      "system": "Linux",
+      "machine": "x86_64",
+      "python": "3.10",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "linux-3.11-current",
+      "runner": "ubuntu-22.04",
+      "system": "Linux",
+      "machine": "x86_64",
+      "python": "3.11",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "linux-3.12-current",
+      "runner": "ubuntu-22.04",
+      "system": "Linux",
+      "machine": "x86_64",
+      "python": "3.12",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "linux-3.13-current",
+      "runner": "ubuntu-22.04",
+      "system": "Linux",
+      "machine": "x86_64",
+      "python": "3.13",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "linux-3.10-minimum",
+      "runner": "ubuntu-22.04",
+      "system": "Linux",
+      "machine": "x86_64",
+      "python": "3.10",
+      "build_requirements": [
+        "setuptools==68.2.2",
+        "wheel==0.41.3",
+        "Cython==0.29.36",
+        "numpy==2.0.2"
+      ],
+      "runtime_requirements": [
+        "numpy==1.22.4",
+        "scipy"
+      ]
+    },
+    {
+      "id": "darwin-3.10-current",
+      "runner": "macos-14",
+      "system": "Darwin",
+      "machine": "arm64",
+      "python": "3.10",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "darwin-3.11-current",
+      "runner": "macos-14",
+      "system": "Darwin",
+      "machine": "arm64",
+      "python": "3.11",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "darwin-3.12-current",
+      "runner": "macos-14",
+      "system": "Darwin",
+      "machine": "arm64",
+      "python": "3.12",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "darwin-3.13-current",
+      "runner": "macos-14",
+      "system": "Darwin",
+      "machine": "arm64",
+      "python": "3.13",
+      "build_requirements": [
+        "setuptools>=68",
+        "wheel",
+        "Cython>=0.29.36,<4",
+        "numpy>=2.0"
+      ],
+      "runtime_requirements": [
+        "numpy>=2.0",
+        "scipy"
+      ]
+    },
+    {
+      "id": "darwin-3.10-minimum",
+      "runner": "macos-14",
+      "system": "Darwin",
+      "machine": "arm64",
+      "python": "3.10",
+      "build_requirements": [
+        "setuptools==68.2.2",
+        "wheel==0.41.3",
+        "Cython==0.29.36",
+        "numpy==2.0.2"
+      ],
+      "runtime_requirements": [
+        "numpy==1.22.4",
+        "scipy"
+      ]
+    }
+  ]
+}

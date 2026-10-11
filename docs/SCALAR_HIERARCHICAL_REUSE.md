@@ -47,7 +47,7 @@ window modes retain their conventions. Repeated-neighbor subtraction and
 cardinality checks are unchanged. Minimum/maximum radial cuts stay strict;
 a positive bin theta can move assignments across internal bin edges.
 
-In 3D, the native basis selects the least-aligned Cartesian reference axis.
+In 3D, the native basis selects the least-aligned Cartesia reference axis.
 Acceptance rejects pivot caps that could cross that axis-selection boundary.
 It bounds changes in both the separation vector and the native basis. An
 accepted source's phase remains frozen in its original coordinates, with a
@@ -100,7 +100,7 @@ coordinate units. Supply the same data and radial limits to all three runs.
 sets the radial-bin count (default 20). NPZ subsamples are deterministic
 permutation prefixes controlled by `--sampling-seed`. Both native caches
 are disabled for these measurements. Outputs are `.json`
-(timings/provenance) and `.npz` (all four raw components, complex signal,
+(timings/run information) and `.npz` (all four raw components, complex signal,
 corrected signal and W0 when requested). The script never labels a timing
 measurement as a passed accuracy qualification.
 
@@ -151,3 +151,12 @@ Always compare raw and corrected observables and their valid-output support
 against exact results at the intended geometry, binning, and harmonic order.
 A raw-moment phase bound does not constrain the conditioning of the window
 solve. No multi-node scaling or general numerical qualification is claimed.
+
+## Measured approximation penalty
+
+The shipped angular opening is `theta=1`. Scalar reuse remains opt-in, with
+phase tolerance `0.1` and strict radial-bin containment (`0`). The phase is in
+radians, not percent error. Use `--accuracy-reference EXACT_OUTPUT_ROOT
+--accuracy-report-only` in the comparison drivers to retain fast results while
+reporting their measured raw and corrected errors. See
+[the defaults and comparison guide](APPROXIMATION_DEFAULTS.md).

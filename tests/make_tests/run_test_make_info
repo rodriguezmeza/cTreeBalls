@@ -89,8 +89,8 @@ smooth_setting=$(sed -nE \
 if [[ "${smooth_setting}" == 1 ]]; then
     for expected in \
         'smooth-pivot policy: compiled=yes' \
-        'default=enabled' \
-        'opt-out=options=no-smooth-pivot'; do
+        'default=disabled' \
+        'opt-in=options=smooth-pivot'; do
         if ! grep -Fq -- "${expected}" "${output}"; then
             printf 'FAIL: enabled smooth-pivot policy is missing: %s\n' \
                 "${expected}" >&2

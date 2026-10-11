@@ -10,7 +10,7 @@ the associated scientific work identified by the project:
   <https://arxiv.org/abs/2408.16847>`_.
 
 For reproducibility, record the cTreeBalls commit hash, compiler, active
-Makefile settings, thread count, search method, input-catalog provenance, and
+Makefile settings, thread count, search method, input-catalog information, and
 generated used-values parameter file.
 
 The project acknowledges methods, software, and data infrastructure including

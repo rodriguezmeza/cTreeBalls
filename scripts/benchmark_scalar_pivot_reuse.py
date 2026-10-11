@@ -7,6 +7,8 @@ Timings exclude catalog generation/loading and product extraction.
 """
 import os, sys, time, json, tempfile, argparse
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests" / "python"))
+from benchmark_timing import runtime_environment
 import numpy as np
 
 p = argparse.ArgumentParser()
@@ -126,7 +128,10 @@ for rep in range(a.repeat):
         m.Run(level=["MainLoop"])
         wall = time.perf_counter() - t
         cpu = time.process_time() - cpu
+        native = m.getTimings()
         if comm:
+            native["wall_seconds"] = comm.allreduce(native["wall_seconds"], op=MPI.MAX)
+            native["process_cpu_seconds"] = comm.allreduce(native["process_cpu_seconds"], op=MPI.SUM)
             wall = comm.allreduce(wall, op=MPI.MAX)
             cpu = comm.allreduce(cpu, op=MPI.SUM)
         if comm is None or comm.rank == 0:
@@ -155,7 +160,7 @@ for rep in range(a.repeat):
             if a.statistic != "3pcf":
                 result.update(pairs=m.getHistNN().copy(), xi=m.getHistXi2pcf().copy())
             np.savez(a.output + ".npz", **result)
-            records.append(dict(wall=wall, cpu=cpu, metadata=m.getRunMetadata()))
+            records.append(dict(wall=wall, cpu=cpu, native_timings=native, runtime_environment=runtime_environment(), metadata=m.getRunMetadata()))
             print(a.engine, a.n, a.reuse, wall, flush=True)
         m.struct_cleanup()
         if comm:

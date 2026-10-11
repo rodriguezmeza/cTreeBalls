@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 
-from build_fingerprint import write_changed
+from build_fingerprint import write_changed, mpi_wrapper_flags
 
 
 COMPILE_VARIABLES = (
@@ -46,8 +46,7 @@ def command_signature(kind, environ=None):
         compiler + ["--version"], text=True, env=environ)
     if environ.get("BUILD_MPI") == "mpi":
         wrapper = shlex.split(environ.get("MPICC") or environ["CC"])
-        values["mpi_wrapper_flags"] = shlex.split(subprocess.check_output(
-            wrapper + ["-show"], text=True, env=environ))
+        values["mpi_wrapper_flags"] = mpi_wrapper_flags(shlex.join(wrapper), environ)
     return values
 
 

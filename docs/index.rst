@@ -12,7 +12,7 @@ project provides:
 * OpenMP and MPI addon engines, test catalogs, plotting scripts, and benchmarks.
 
 This guide describes the 1.1.0 source tree, including the repaired scalar
-numerical contract. Published packages may lag behind local changes.
+numerical definition. Published packages may lag behind local changes.
 Begin with :doc:`search_methods` to select the correct field and geometry.
 
 Basic Usage
@@ -92,6 +92,7 @@ add-ons remains available under Tutorials and Reference.
    overview
    installation
    quickstart
+   ia_tutor
    user/command-line
    user/configuration
    user/inputs
@@ -99,10 +100,14 @@ add-ons remains available under Tutorials and Reference.
    user/python
    search_methods
    active_profile
+   accuracy_acceptance
+   exact_numerical_robustness
    shear
    lyman_alpha
    scalar_3d
+   physical_survey_semantics
    performance
+   engineering_contracts
    benchmarks
 
 .. toctree::

@@ -20,6 +20,7 @@ int parser_read_file(char * filename,
   FileArg value;
 
     pfc->size = 0; pfc->filename = NULL; pfc->name = NULL; pfc->value = NULL; pfc->read = NULL;
+    pfc->line_number = NULL;
 
   class_open(inputfile,filename,"r",errmsg);
 
@@ -108,6 +109,17 @@ int parser_read_file(char * filename,
             parser_free(pfc);
             return FAILURE;
         }
+        for (int previous = 0; previous < counter; previous++) {
+            if (strcmp(pfc->name[previous], name) == 0) {
+                snprintf(errmsg, _ERRORMSGSIZE_,
+                         "%.300s:%lu: unknown or duplicated parameter '%.200s' "
+                         "(first declared at line %lu)",
+                         filename, line_number, name, pfc->line_number[previous]);
+                fclose(inputfile);
+                parser_free(pfc);
+                return FAILURE;
+            }
+        }
         if (copy_checked(pfc->name[counter], sizeof(FileArg),
                          name, "parameter name") != 0) {
             fclose(inputfile);
@@ -123,6 +135,7 @@ int parser_read_file(char * filename,
         }
 
       pfc->read[counter]=FALSE;
+      pfc->line_number[counter]=line_number;
       counter++;
     }
   }
@@ -156,6 +169,7 @@ int parser_init(struct file_content * pfc,
   pfc->name = NULL;
   pfc->value = NULL;
   pfc->read = NULL;
+  pfc->line_number = NULL;
 
   if (size > 0) {
     pfc->size = size;
@@ -201,6 +215,12 @@ int parser_init(struct file_content * pfc,
       parser_free(pfc);
       return FAILURE;
     }
+    pfc->line_number = calloc((size_t)size, sizeof(unsigned long));
+    if (pfc->line_number == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_, "could not allocate parameter line numbers");
+      parser_free(pfc);
+      return FAILURE;
+    }
   }
 
   return SUCCESS;
@@ -215,11 +235,13 @@ int parser_free(struct file_content * pfc) {
   free(pfc->name);
   free(pfc->value);
   free(pfc->read);
+  free(pfc->line_number);
   free(pfc->filename);
 
   pfc->name = NULL;
   pfc->value = NULL;
   pfc->read = NULL;
+  pfc->line_number = NULL;
   pfc->filename = NULL;
   pfc->size = 0;
 
@@ -241,207 +263,61 @@ int parser_read_line(char * line,
 }
 
 // Adapt it to read long integers
-int parser_read_int(struct file_content * pfc,
-                    char * name,
-                    int * value,
-                    int * found,
-                    ErrorMsg errmsg) {
-  int index;
-  int i;
-
-  /* intialize the 'found' flag to false */
-
-  * found = FALSE;
-
-  /* search parameter */
-
-  index=0;
-  while ((index < pfc->size) && (strcmp(pfc->name[index],name) != 0))
-    index++;
-
-  /* if parameter not found, return with 'found' flag still equal to false */
-
-  if (index == pfc->size)
-    return SUCCESS;
-
-  /* read parameter value. If this fails, return an error */
-
-  if (parse_int_checked(pfc->value[index], value,
-                        errmsg, _ERRORMSGSIZE_, name) == FAILURE)
-    return FAILURE;
-
-  /* if parameter read correctly, set 'found' flag to true, as well as the flag
-     associated with this parameter in the file_content structure */
-
-  * found = TRUE;
-  pfc->read[index] = TRUE;
-
-  /* check for multiple entries of the same parameter. If another occurence is found,
-     return an error. */
-
-    for (i=index+1; i < pfc->size; i++) {
-        if (strcmp(pfc->name[i], name) == 0) {
-            snprintf(errmsg, _ERRORMSGSIZE_,
-                     "multiple entry of parameter '%s' in file '%s'\n",
-                     name, pfc->filename);
-            return FAILURE;
-        }
+/* Locate before conversion: duplicate keys never mutate the destination or
+ * the read bitmap. The CLI merger owns intentional file -> CLI overrides. */
+static int parser_find_unique(struct file_content *pfc, const char *name,
+                              int *index, ErrorMsg errmsg)
+{
+  *index = -1;
+  for (int i=0; i<pfc->size; ++i) {
+    if (strcmp(pfc->name[i], name) != 0) continue;
+    if (*index >= 0) {
+      snprintf(errmsg, _ERRORMSGSIZE_,
+               "multiple entry of parameter '%s' in file '%s'\n",
+               name, pfc->filename != NULL ? pfc->filename : "(memory)");
+      return FAILURE;
     }
-
-  /* if everything proceeded normally, return with 'found' flag equal to true */
-
-  return SUCCESS;
-
-}
-
-int parser_read_double(struct file_content * pfc,
-                       char * name,
-                       double * value,
-                       int * found,
-                       ErrorMsg errmsg) {
-  int index;
-  int i;
-
-  /* intialize the 'found' flag to false */
-
-  * found = FALSE;
-
-  /* search parameter */
-
-  index=0;
-  while ((index < pfc->size) && (strcmp(pfc->name[index],name) != 0))
-    index++;
-
-  /* if parameter not found, return with 'found' flag still equal to false */
-
-  if (index == pfc->size)
-    return SUCCESS;
-
-  /* read parameter value. If this fails, return an error */
-
-  if (parse_double_checked(pfc->value[index], value,
-                           errmsg, _ERRORMSGSIZE_, name) == FAILURE)
-    return FAILURE;
-
-  /* if parameter read correctly, set 'found' flag to true, as well as the flag
-     associated with this parameter in the file_content structure */
-
-  * found = TRUE;
-  pfc->read[index] = TRUE;
-
-  /* check for multiple entries of the same parameter. If another occurence is found,
-     return an error. */
-
-    for (i=index+1; i < pfc->size; i++) {
-        if (strcmp(pfc->name[i], name) == 0) {
-            snprintf(errmsg, _ERRORMSGSIZE_,
-                     "multiple entry of parameter '%s' in file '%s'\n",
-                     name, pfc->filename);
-            return FAILURE;
-        }
-    }
-
-  /* if everything proceeded normally, return with 'found' flag equal to true */
-
-  return SUCCESS;
-
-}
-
-int parser_read_double_and_position(struct file_content * pfc,
-                                    char * name,
-                                    double * value,
-                                    int * position,
-                                    int * found,
-                                    ErrorMsg errmsg) {
-  int index;
-  int i;
-
-  /* intialize the 'found' flag to false */
-
-  * found = FALSE;
-
-  /* search parameter */
-
-  index=0;
-  while ((index < pfc->size) && (strcmp(pfc->name[index],name) != 0))
-    index++;
-
-  /* if parameter not found, return with 'found' flag still equal to false */
-
-  if (index == pfc->size)
-    return SUCCESS;
-
-  /* read parameter value. If this fails, return an error */
-
-  if (parse_double_checked(pfc->value[index], value,
-                           errmsg, _ERRORMSGSIZE_, name) == FAILURE)
-    return FAILURE;
-
-  /* if parameter read correctly, set 'found' flag to true, as well as the flag
-     associated with this parameter in the file_content structure */
-
-  * found = TRUE;
-  pfc->read[index] = TRUE;
-
-  /* check for multiple entries of the same parameter. If another occurence is found,
-     return an error. */
-
-  for (i=index+1; i < pfc->size; i++) {
-    class_test(strcmp(pfc->name[i],name) == 0,
-               errmsg,
-               "multiple entry of parameter '%s' in file '%s'\n",name,pfc->filename);
+    *index = i;
   }
-
-  /* if everything proceeded normally, return with 'found' flag equal to true */
-
-  * position = index;
-
   return SUCCESS;
-
 }
 
-int parser_read_string(struct file_content * pfc,
-                       char * name,
-                       FileArg * value,
-                       int * found,
-                       ErrorMsg errmsg) {
-  int index;
-  int i;
+#define CBALLS_SCALAR_READER(function, type, convert) \
+int function(struct file_content *pfc, char *name, type *value, \
+             int *found, ErrorMsg errmsg) \
+{ \
+  int index; *found=FALSE; \
+  if (parser_find_unique(pfc,name,&index,errmsg)==FAILURE) return FAILURE; \
+  if (index < 0) return SUCCESS; \
+  if (convert(pfc->value[index],value,errmsg,_ERRORMSGSIZE_,name)==FAILURE) \
+    return FAILURE; \
+  *found=TRUE; pfc->read[index]=TRUE; return SUCCESS; \
+}
+CBALLS_SCALAR_READER(parser_read_int, int, parse_int_checked)
+CBALLS_SCALAR_READER(parser_read_double, double, parse_double_checked)
+CBALLS_SCALAR_READER(parser_read_bool, bool, parse_bool_checked)
+#undef CBALLS_SCALAR_READER
 
-  * found = FALSE;                          // intialize the 'found' flag to false
-
-//B search parameter
-  index=0;
-  while ((index < pfc->size) && (strcmp(pfc->name[index],name) != 0))
-    index++;
-//E
-
-  if (index == pfc->size)                 // if parameter not found, return with
-    return SUCCESS;                       //  'found' flag still equal to false
-
-  if (copy_checked(*value, sizeof(FileArg),
-                   pfc->value[index], "parser string value") != 0)
+int parser_read_double_and_position(struct file_content *pfc, char *name,
+    double *value, int *position, int *found, ErrorMsg errmsg)
+{
+  int index; *found=FALSE;
+  if (parser_find_unique(pfc,name,&index,errmsg)==FAILURE) return FAILURE;
+  if (index < 0) return SUCCESS;
+  if (parse_double_checked(pfc->value[index],value,errmsg,_ERRORMSGSIZE_,name)==FAILURE)
     return FAILURE;
+  *found=TRUE; pfc->read[index]=TRUE; *position=index; return SUCCESS;
+}
 
-// Set 'found' flag to true, as well as the flag
-//     associated with this parameter in the file_content structure
-  * found = TRUE;
-  pfc->read[index] = TRUE;
-
-//B check for multiple entries of the same parameter. 
-// If another occurence is found, return an error.
-    for (i=index+1; i < pfc->size; i++) {
-        if (strcmp(pfc->name[i], name) == 0) {
-            snprintf(errmsg, _ERRORMSGSIZE_,
-                     "multiple entry of parameter '%s' in file '%s'\n",
-                     name, pfc->filename);
-            return FAILURE;
-        }
-    }
-//E
-
-// if everything proceeded normally, return with 'found' flag equal to true
-  return SUCCESS;
+int parser_read_string(struct file_content *pfc, char *name, FileArg *value,
+                       int *found, ErrorMsg errmsg)
+{
+  int index; *found=FALSE;
+  if (parser_find_unique(pfc,name,&index,errmsg)==FAILURE) return FAILURE;
+  if (index < 0) return SUCCESS;
+  if (copy_checked(*value,sizeof(FileArg),pfc->value[index],"parser string value")!=0)
+    return FAILURE;
+  *found=TRUE; pfc->read[index]=TRUE; return SUCCESS;
 }
 
 int parser_read_list_of_doubles(struct file_content * pfc,
@@ -784,6 +660,7 @@ int parser_cat(struct file_content * pfc1,
     pfc3->value = NULL;
     pfc3->name = NULL;
     pfc3->read = NULL;
+    pfc3->line_number = NULL;
     pfc3->size = 0;
 
   class_test(pfc1->size < 0.,
@@ -893,6 +770,12 @@ int parser_cat(struct file_content * pfc1,
       parser_free(pfc3);
       return FAILURE;
     }
+    pfc3->line_number = calloc((size_t)pfc3->size, sizeof(unsigned long));
+    if (pfc3->line_number == NULL) {
+      snprintf(errmsg, _ERRORMSGSIZE_, "could not allocate parameter line numbers");
+      parser_free(pfc3);
+      return FAILURE;
+    }
 
     for (i=0; i < pfc1->size; i++) {
       if (copy_checked(pfc3->value[i], sizeof(FileArg),
@@ -908,6 +791,7 @@ int parser_cat(struct file_content * pfc1,
       }
 
       pfc3->read[i]=pfc1->read[i];
+      pfc3->line_number[i]=pfc1->line_number ? pfc1->line_number[i] : 0;
     }
 
     for (i=0; i < pfc2->size; i++) {
@@ -924,6 +808,7 @@ int parser_cat(struct file_content * pfc1,
       }
 
       pfc3->read[i+pfc1->size]=pfc2->read[i];
+      pfc3->line_number[i+pfc1->size]=pfc2->line_number ? pfc2->line_number[i] : 0;
     }
 
   return SUCCESS;

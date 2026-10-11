@@ -21,7 +21,7 @@ changing the input catalog or mixing forests. They do not depend on the legacy
 compile flags or `smooth-pivot`/`rsmooth` options. They support the six original
 and LOS-tree OpenMP 3D methods with pixel-pivot kernels; persistent 3PCF kernels
 3/4/5, MPI, radial and multipole paths reject active controls. See the
-[complete contract and calibration script](../../tests/python/README_benchmark_lya_pivot_frontier.md)
+[complete definition and calibration script](../../tests/python/README_benchmark_lya_pivot_frontier.md)
 for supported combinations, equations, Cython use and accuracy/timing/memory
 measurements.
 
@@ -53,7 +53,7 @@ except `lya-1d-tree-same-los-2pcf-omp`,
 replacing the final `-omp` with `-mpi`.
 See
 [`addons/lya_forest_mpi/README.md`](../lya_forest_mpi/README.md) for the
-replicated-catalog contract, example parameters, and rank-comparison tests.
+replicated-catalog requirements, example parameters, and rank-comparison tests.
 
 ## Octree Discovery and LOS Trees
 
@@ -137,7 +137,7 @@ or `lya-los-tree-3pcf-omp`. The old `lya-1d-tree-*` methods remain unchanged
 and measure different, radial-only statistics.
 
 Run `make test-lya-forest-los-tree` (requires pytest and NumPy) for independent
-oracle checks, old/new 3D histogram equality, forest exclusion, near-boundary
+checks against reference calculations, old/new 3D histogram equality, forest exclusion, near-boundary
 and non-collinear geometry, combined/separate modes, and thread determinism.
 
 ## Input
@@ -258,14 +258,14 @@ columns are `bin radial_separation xi sum_xi contributing_los`; consequently
 
 ## Tests
 
-The regular regression uses independent NumPy 2PCF and 3PCF oracles and checks
+The regular regression uses independent NumPy 2PCF and 3PCF reference calculations and checks
 OpenMP determinism:
 
 ```bash
 make LYAFORESTOMPON=1 test-lya-forest-omp
 ```
 
-The radial regression additionally checks direct Python 2PCF and 3PCF oracles,
+The radial regression additionally checks direct Python 2PCF and 3PCF reference calculations,
 the scan and tree implementations against one another, same-quasar subtraction,
 the same-LOS equal-forest estimator, invariance under arbitrary changes to
 transverse coordinates, and one-thread versus multi-thread byte-for-byte
@@ -286,7 +286,7 @@ make LYAFORESTOMPON=1 \
 ```
 
 This reference checkout implements only the 2PCF computation. The independent
-oracle remains the regression reference for the addon 3PCF.
+reference calculation remains the regression reference for the addon 3PCF.
 
 Compare the native radial estimators, the radial interval tree, and the 3D
 octree estimators on the same exactly collinear catalog with:
@@ -387,7 +387,7 @@ for separate existing catalogs. The script retains catalogs, commands,
 binary hashes, histograms, logs, and `benchmark.json`. It checks occupied bins,
 numerators, denominators, correlations, exact pair/triplet counts, and thread
 determinism before accepting timings. Numerical limits are `rtol=3e-12` and
-`atol=3e-12`; independent brute-force oracles are provided by
+`atol=3e-12`; independent brute-force reference calculations are provided by
 `make test-lya-forest-omp` at the tighter existing `2e-13` limits.
 
 Accuracy runs also warm the filesystem cache. Timed runs start fresh processes,

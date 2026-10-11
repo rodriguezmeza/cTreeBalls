@@ -15,7 +15,7 @@
 //
 
 #include "globaldefs.h"
-#include "input_contracts.h"
+#include "input_validation.h"
 #include <errno.h>
 #include <ctype.h>
 #include <limits.h>

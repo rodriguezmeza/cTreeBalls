@@ -193,9 +193,19 @@ def validate_des_controls(*, geometry="sphere", mask=None, weight_field=None,
         raise ValueError("--nsides requires a dense HEALPix map; DES tables use --sizes row samples")
 
 
-def apply_binning_preset(name, minimum, maximum, bins, units, *, linear=False, geometry="sphere"):
+def apply_binning_preset(name, minimum=None, maximum=None, bins=None, units=None,
+                         *, linear=False, geometry="sphere"):
+    """Fill omitted CLI controls; explicit limits are outer edges in units.
+
+    None means omitted, so an explicit value equal to a custom default still
+    overrides a named preset. Unspecified preset edges are converted into the
+    requested units before applying overrides.
+    """
     if name == "custom":
-        return minimum, maximum, bins, units
+        return (0.05 if minimum is None else minimum,
+                2.0 if maximum is None else maximum,
+                6 if bins is None else bins,
+                "degree" if units is None else units)
     if name not in ("sofia-fig1", "paper-8-200-edges"):
         raise ValueError("unknown binning preset")
     if linear or geometry != "sphere":
@@ -205,7 +215,14 @@ def apply_binning_preset(name, minimum, maximum, bins, units, *, linear=False, g
         step = (hi/lo)**(1/19)
         lo, hi = lo/np.sqrt(step), hi*np.sqrt(step)
     limits = np.rad2deg(2*np.arcsin(np.array([lo, hi])/2))*60
-    return float(limits[0]), float(limits[1]), 20, "arcmin"
+    units = "arcmin" if units is None else units
+    if units not in ("arcmin", "degree", "radian"):
+        raise ValueError("named binning presets require angular separation units")
+    scale = {"arcmin": 1.0, "degree": 1/60, "radian": np.pi/10800}[units]
+    limits *= scale
+    return (float(limits[0]) if minimum is None else minimum,
+            float(limits[1]) if maximum is None else maximum,
+            20 if bins is None else bins, units)
 
 
 def integer_selection(text, low=1, high=108):

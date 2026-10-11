@@ -31,6 +31,10 @@ struct cmdline_data{
     //B Parameters related to the searching method
     string searchMethod;
     int mChebyshev;
+    int surveySignalLmax;
+    int surveyWindowLmax;
+    int surveySolvePadding;
+    real surveyRcondMin;
     int nsmooth;
     //E
     string rsmooth;                                 // use to smooth pivot

@@ -27,8 +27,9 @@
 #include <stdio.h>
 #include "globaldefs.h"
 #include "cmdline_defs.h"
+#include "ia_tutor_cli.h"
 #ifdef CLASSLIB
-#include "cli_contracts.h"
+#include "cli_validation.h"
 #endif
 
 /*
@@ -45,6 +46,9 @@
  */
 int main(int argc, string argv[])
 {
+    int tutor_status = 0;
+    if (cballs_ia_tutor_cli(argc, argv, &tutor_status)) return tutor_status;
+
     struct cmdline_data cmd;                        // share command parameters
     struct global_data gd;                          // share global parameters
     int run_status = FAILURE;

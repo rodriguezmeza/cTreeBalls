@@ -6,7 +6,7 @@ dual-node 2PCF traversal, and the production body-pivot LogMultipole 3PCF
 traversal. Neighbor moments and repeated-neighbor subtraction share the
 OpenMP implementation through `BALLTREE_2BALLS_PRIMARY_FEATURES=1`.
 
-The shared [scalar numerical contract](../../docs/3pcf.rst) defines
+The shared [scalar numerical definitions](../../docs/3pcf.rst) specify
 observer-centered tangent angles, chord bins, weighted raw distinct triplets,
 and the undefined-bearing policy. Use `no-normalize-HistZeta,weights-norm`
 for raw comparisons. Repeated neighbors are already excluded natively.
@@ -24,8 +24,8 @@ Build and run with:
 
 ```text
 make BALLTREE2BALLSMPION=1 cballs
-mpiexec -n 4 ./cballs parameters.ini \
-    search=balltree-2balls-mpi numberThreads=4
+# Set searchMethod = balltree-2balls-mpi and numberThreads = 4 in parameters.ini.
+mpiexec -n 4 ./cballs paramfile=parameters.ini
 ```
 
 `TWOPCFON` and `TPCFON` select the compiled correlation orders.
@@ -58,4 +58,7 @@ both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
 2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
 and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
 depend on the observable, controls, and geometry. See the
-[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+[hierarchy definition, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+
+For Perlmutter CPU jobs, shared inputs, effective parameter files and scaling
+checks, see [the batch-job guide](../../tests/slurm_scripts/README.md).

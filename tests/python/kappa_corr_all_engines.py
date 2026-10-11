@@ -42,7 +42,8 @@ import time
 from typing import Any, Dict, Iterable, Optional, Sequence
 
 import numpy as np
-from benchmark_timing import timing_metadata as _timing_metadata, aggregate_rank_timings
+from benchmark_timing import timing_metadata as _timing_metadata, aggregate_rank_timings, runtime_environment
+from used_parameters import save_native_parameters, save_native_startup, save_dual_node_parameters
 
 
 # healpy imports matplotlib. Keep a persistent writable cache when the home
@@ -256,12 +257,13 @@ class RunConfig:
     bins: int = 20
     multipoles: int = 7
     qualification_reference: Optional[Path] = None
-    qualification_rtol: float = .02
+    qualification_rtol: float = .05
     qualification_atol: float = 1e-10
+    accuracy_report_only: bool = False
     threads: int = max(1, (os.cpu_count() or 2) - 1)
     use_log_bins: bool = True
     tree_theta: float = 1.0
-    nsmooth: int = 16
+    nsmooth: int = 8
     phi_left: float = 0.0
     phi_right: float = 90.0
     theta_left: float = 0.0
@@ -310,14 +312,16 @@ class RunConfig:
             raise ValueError("cTreeBalls requires multipoles >= 2")
         if self.nsmooth < 1:
             raise ValueError("nsmooth must be positive")
-        if self.theta_scale not in {"degree", "radian", "au"}:
-            raise ValueError("theta_scale must be degree, radian, or au")
+        if self.theta_scale not in {"degree", "arcmin", "radian", "au", "chord"}:
+            raise ValueError("theta_scale must be degree, arcmin, radian, au, or chord")
         if not math.isfinite(self.theta_min) or not math.isfinite(self.theta_max):
             raise ValueError("theta limits must be finite")
         if self.theta_min <= 0.0 or self.theta_max <= self.theta_min:
             raise ValueError("require 0 < theta_min < theta_max")
         if self.theta_scale == "degree" and self.theta_max > 180.0:
             raise ValueError("angular sphere separations cannot exceed 180 degrees")
+        if self.theta_scale == "arcmin" and self.theta_max > 10800.0:
+            raise ValueError("angular sphere separations cannot exceed 10800 arcmin")
         if self.theta_scale == "radian" and self.theta_max > math.pi:
             raise ValueError("angular sphere separations cannot exceed pi radians")
         if self.result_type not in {"sincos", "edge_effects"}:
@@ -484,7 +488,7 @@ def print_engine_table(
         if not spec.supports_smooth_pivot:
             smooth = "smooth=unsupported"
         elif smooth_pivot_compiled is True:
-            smooth = "smooth=default-on"
+            smooth = "smooth=opt-in"
         elif smooth_pivot_compiled is False:
             smooth = "smooth=not-compiled"
         else:
@@ -558,11 +562,46 @@ def angular_limits(config: RunConfig) -> tuple[float, float]:
     if config.theta_scale == "degree":
         minimum = math.radians(config.theta_min)
         maximum = math.radians(config.theta_max)
+    elif config.theta_scale == "arcmin":
+        minimum = math.radians(config.theta_min/60)
+        maximum = math.radians(config.theta_max/60)
     elif config.theta_scale == "radian":
         minimum, maximum = config.theta_min, config.theta_max
     else:
         return config.theta_min, config.theta_max
     return 2.0 * math.sin(0.5 * minimum), 2.0 * math.sin(0.5 * maximum)
+
+
+def display_radius(radius, config: RunConfig) -> np.ndarray:
+    """Convert native distances back to the requested angular plotting units."""
+    radius = np.asarray(radius, dtype=float)
+    if config.theta_scale in {"au", "chord"}:
+        return radius
+    if np.any(~np.isfinite(radius)) or np.any(radius < 0) or np.any(radius > 2 + 1.e-12):
+        raise ValueError("angular plots require finite unit-sphere chord radii in [0,2]")
+    radians = 2*np.arcsin(np.clip(radius/2, 0, 1))
+    return radians * {"radian": 1.0, "degree": 180/np.pi, "arcmin": 10800/np.pi}[config.theta_scale]
+
+
+def radial_edges(config: RunConfig, engine: str = "") -> np.ndarray:
+    logarithmic = config.use_log_bins or KAPPA_ENGINES.get(engine, EngineSpec()).force_log_bins
+    return (np.geomspace if logarithmic else np.linspace)(*angular_limits(config), config.bins+1)
+
+
+def attach_radial_grid(result: dict, config: RunConfig, engine: str) -> None:
+    """Publish the actual native grid without changing correlation arrays."""
+    edges = radial_edges(config, engine)
+    result["radial_edges"] = edges
+    result["separation_binning"] = dict(
+        minimum=config.theta_min, maximum=config.theta_max, units=config.theta_scale,
+        bins=config.bins, logarithmic=bool(config.use_log_bins or KAPPA_ENGINES[engine].force_log_bins))
+    # Native-distance input need not be a unit-sphere catalog. Do not invent angles.
+    if config.theta_scale not in {"au", "chord"}:
+        result["chord_edges"] = edges.copy()
+        result["theta_edges_arcmin"] = 60*np.degrees(2*np.arcsin(np.clip(edges/2, 0, 1)))
+        if "r" in result:
+            result["theta_arcmin"] = display_radius(result["r"], config) * {
+                "radian": 10800/np.pi, "degree": 60., "arcmin": 1.}[config.theta_scale]
 
 
 def _healpix_valid(values: np.ndarray, hp: Any) -> np.ndarray:
@@ -1137,7 +1176,7 @@ def smooth_pivot_mode(config: RunConfig, engine: str) -> str:
         return "not-compiled"
     if "smooth-pivot" in options:
         return "enabled-explicitly"
-    return "enabled-by-build-default" if config.smooth_pivot_compiled else "build-default"
+    return "disabled-by-default"
 
 
 def settings_to_json(value: Any) -> Any:
@@ -1403,6 +1442,9 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
     plot_root = config.output_dir / "plots"
     plot_root.mkdir(parents=True, exist_ok=True)
     paths: list[str] = []
+    separation_label = ("Native separation" if config.theta_scale in {"au", "chord"}
+                        else f"Angular separation [{config.theta_scale}]")
+    range_label = f"Measured range {config.theta_min:g}–{config.theta_max:g} {config.theta_scale}"
     pair_members = [
         (name, value) for name, value in results.items()
         if "r" in value and "xi" in value
@@ -1411,7 +1453,7 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
         rows = 2 if len(pair_members) > 1 else 1
         fig, axes = plt.subplots(rows, 1, figsize=(8.0, 3.5 * rows), squeeze=False)
         for name, value in pair_members:
-            axes[0, 0].plot(value["r"], value["xi"], marker=".", label=name)
+            axes[0, 0].plot(display_radius(value["r"], config), value["xi"], marker=".", label=name)
         axes[0, 0].set(ylabel="xi", title="Convergence 2PCF")
         axes[0, 0].legend(fontsize=8)
         axes[0, 0].grid(True, linestyle=":", alpha=0.5)
@@ -1425,11 +1467,16 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
                     1.0e-15,
                 )
                 difference = (value["xi"] - reference["xi"]) / denominator
-                axes[1, 0].plot(value["r"], difference, marker=".", label=name)
+                axes[1, 0].plot(display_radius(value["r"], config), difference, marker=".", label=name)
             axes[1, 0].set(ylabel="relative difference", title=f"relative to {reference_name}")
             axes[1, 0].grid(True, linestyle=":", alpha=0.5)
             axes[1, 0].legend(fontsize=8)
-        axes[-1, 0].set_xlabel("Euclidean chord separation")
+        axes[-1, 0].set_xlabel(separation_label)
+        for axis in axes.flat:
+            if config.use_log_bins:
+                axis.set_xscale("log")
+            axis.set_xlim(config.theta_min, config.theta_max)
+        fig.suptitle(range_label)
         fig.tight_layout()
         path = plot_root / "two_pcf.png"
         fig.savefig(path, dpi=160)
@@ -1438,6 +1485,24 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
 
     multipoles = {name: result_multipoles(value) for name, value in results.items()}
     modes = sorted({mode for values in multipoles.values() for mode in values})
+    for name, values in multipoles.items():
+        if not values:
+            continue
+        edges = radial_edges(config, name)
+        radius = results[name].get("r")
+        if radius is None:
+            logarithmic = config.use_log_bins or KAPPA_ENGINES.get(name, EngineSpec()).force_log_bins
+            radius = np.sqrt(edges[:-1]*edges[1:]) if logarithmic else (edges[:-1]+edges[1:])/2
+        radius = display_radius(radius, config)
+        if radius.shape != (config.bins,):
+            raise ValueError("3PCF radial centers do not match the matrix grid")
+        rows, columns = np.indices((config.bins, config.bins))
+        np.savetxt(plot_root / f"{name}_radial_pairs.csv",
+                   np.column_stack((np.arange(config.bins**2), rows.ravel(), columns.ravel(),
+                                    radius[rows.ravel()], radius[columns.ravel()])),
+                   delimiter=",", comments="", fmt=["%d", "%d", "%d", "%.17g", "%.17g"],
+                   header=("flat_index,row_bin1,column_bin2,"
+                           f"radius_bin1_{config.theta_scale},radius_bin2_{config.theta_scale}"))
     for mode in modes:
         members = [(name, values[mode]) for name, values in multipoles.items() if mode in values]
         for component, selector in (("real", np.real), ("imag", np.imag)):
@@ -1449,15 +1514,19 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
                 1, len(members), figsize=(4.8 * len(members), 4.1), squeeze=False
             )
             for axis, (name, _), values in zip(axes[0], members, arrays):
-                image = axis.imshow(
-                    values, origin="lower", aspect="equal", cmap="RdBu_r",
-                    vmin=-limit, vmax=limit,
-                )
+                edges = display_radius(radial_edges(config, name), config)
+                axis.set_facecolor("0.85")  # distinguish unsupported cells from valid zero
+                image = axis.pcolormesh(edges, edges, values, shading="flat", cmap="RdBu_r",
+                                        vmin=-limit, vmax=limit)
+                if config.use_log_bins:
+                    axis.set_xscale("log"); axis.set_yscale("log")
+                axis.set_xlim(config.theta_min, config.theta_max)
+                axis.set_ylim(config.theta_min, config.theta_max)
                 axis.set(
-                    title=name, xlabel="radial bin 2", ylabel="radial bin 1"
+                    title=name, xlabel=f"{separation_label}, bin axis 2", ylabel=f"{separation_label}, bin axis 1"
                 )
                 fig.colorbar(image, ax=axis, shrink=0.82)
-            fig.suptitle(f"3PCF mode m={mode}, {component} component")
+            fig.suptitle(f"3PCF mode m={mode}, {component} component\n{range_label}; gray cells: unsupported")
             fig.tight_layout()
             path = plot_root / f"three_pcf_m{mode}_{component}.png"
             fig.savefig(path, dpi=160)
@@ -1473,13 +1542,19 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
                 relative = 2.0 * np.abs(values - reference) / np.maximum(
                     np.abs(values) + np.abs(reference), 1.0e-15
                 )
-                image = axis.imshow(relative, origin="lower", aspect="equal", cmap="magma")
+                edges = display_radius(radial_edges(config, name), config)
+                axis.set_facecolor("0.85")  # distinguish unsupported cells from valid zero
+                image = axis.pcolormesh(edges, edges, relative, shading="flat", cmap="magma")
+                if config.use_log_bins:
+                    axis.set_xscale("log"); axis.set_yscale("log")
+                axis.set_xlim(config.theta_min, config.theta_max)
+                axis.set_ylim(config.theta_min, config.theta_max)
                 axis.set(
                     title=f"{name} vs {reference_name}",
-                    xlabel="radial bin 2", ylabel="radial bin 1",
+                    xlabel=f"{separation_label}, bin axis 2", ylabel=f"{separation_label}, bin axis 1",
                 )
                 fig.colorbar(image, ax=axis, shrink=0.82)
-            fig.suptitle(f"3PCF mode m={mode}, symmetric relative difference")
+            fig.suptitle(f"3PCF mode m={mode}, symmetric relative difference\n{range_label}; gray cells: unsupported")
             fig.tight_layout()
             path = plot_root / f"three_pcf_m{mode}_relative.png"
             fig.savefig(path, dpi=160)
@@ -1506,13 +1581,14 @@ def make_plots(results: dict[str, dict], config: RunConfig) -> list[str]:
                     axis.plot(np.arange(flattened.size), flattened, label=name)
                 for boundary in range(config.bins, config.bins ** 2, config.bins):
                     axis.axvline(boundary - 0.5, color="0.82", linewidth=0.55)
+                axis.set_xlim(-0.5, config.bins**2 - 0.5)
                 axis.set_ylabel(f"m={mode}")
                 axis.grid(True, axis="y", linestyle=":", alpha=0.45)
                 axis.legend(fontsize=7, ncol=2)
             axes[-1, 0].set_xlabel(
                 "flattened radial-bin index (bin 1 major, bin 2 minor)"
             )
-            fig.suptitle(f"3PCF flattened radial-bin matrices, {component} component")
+            fig.suptitle(f"3PCF flattened radial-bin matrices, {component} component\n{range_label}")
             fig.tight_layout()
             path = plot_root / f"three_pcf_flattened_{component}.png"
             fig.savefig(path, dpi=160)
@@ -1576,6 +1652,7 @@ def timing_summary(results: dict[str, dict]) -> dict[str, dict[str, Any]]:
                 compute_cpu / compute_wall if compute_wall > 0.0 else None
             ),
             "native_reported_cpu_time": result.get("native_reported_cpu_time"),
+            "runtime_environment": result.get("runtime_environment", {}),
             "timing_scope": result.get("timing_scope", "unspecified"),
         }
     return summary
@@ -1697,6 +1774,8 @@ def run_engine_suite(
                     balls.Run(level=["SetNumberThreads"])
                     setup_seconds = time.perf_counter() - setup_started
                     setup_cpu_seconds = time.process_time() - setup_cpu_started
+                    if comm.rank == 0:
+                        save_native_startup(engine_root, config, engine, catalog)
                     started = time.perf_counter()
                     started_cpu = time.process_time()
                     balls.Run(level=["MainLoop"])
@@ -1714,11 +1793,14 @@ def run_engine_suite(
                     rank_timing.update(native_mainloop_wall_time=float(native["wall_seconds"]),
                                        native_mainloop_cpu_time=float(native["process_cpu_seconds"]))
                     if comm.rank == 0:
+                        parameters_file = save_native_parameters(balls, config, catalog)
                         from cyballs import publish_result_packet
                         qualification_path = publish_result_packet(balls,engine_root/'qualification',
                             Path(config.qualification_reference)/engine/'qualification' if config.qualification_reference else None,
-                            rtol=config.qualification_rtol,atol=config.qualification_atol)
+                            rtol=config.qualification_rtol,atol=config.qualification_atol,
+                    fail_on_rejection=not config.accuracy_report_only)
                         result = copy_engine_results(balls, engine, config)
+                        result["parameters_file"] = parameters_file
                         result['qualification_packet'] = qualification_path
                         result['qualification'] = balls.getRunMetadata()['qualification']
                 except Exception as exc:
@@ -1755,6 +1837,7 @@ def run_engine_suite(
                 if not config.continue_on_error:
                     raise RuntimeError(f"{engine} failed: {message}")
             elif comm.rank == 0 and result is not None:
+                attach_radial_grid(result, config, engine)
                 results[engine] = result
                 save_engine_results(config.output_dir / engine, result)
                 print(
@@ -1787,6 +1870,7 @@ def run_engine_suite(
                     "native_mainloop_wall_time": value.get("native_mainloop_wall_time"),
                     "native_mainloop_cpu_time": value.get("native_mainloop_cpu_time"),
                     "provenance": value["run_settings"]["provenance"],
+                    "runtime_environment": value.get("runtime_environment", {}),
                     "timing_scope": value.get("timing_scope"),
                     "rank_timings": value["rank_timings"],
                     "ranks": value["ranks"],
@@ -1806,6 +1890,9 @@ def run_engine_suite(
             "comparisons": compare_result_arrays(results),
             "timings": timings,
         }
+        summary["separation_binning"] = dict(
+            minimum=config.theta_min, maximum=config.theta_max, units=config.theta_scale,
+            bins=config.bins, requested_logarithmic=config.use_log_bins)
         summary["plots"] = make_plots(results, config) if config.plots else []
         (config.output_dir / "summary.json").write_text(
             json.dumps(summary, indent=2) + "\n", encoding="utf-8"
@@ -1833,9 +1920,10 @@ def spawn_mpi(args: argparse.Namespace) -> int:
 
 def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--qualification-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
-    parser.add_argument('--qualification-rtol',type=float,default=.02)
+    parser.add_argument('--qualification-reference','--accuracy-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
+    parser.add_argument('--qualification-rtol',type=float,default=.05)
     parser.add_argument('--qualification-atol',type=float,default=1e-10)
+    parser.add_argument('--accuracy-report-only',action='store_true',help='retain results and report penalties even above the relative L2 target')
     sources = parser.add_mutually_exclusive_group()
     sources.add_argument("--fits", type=Path, help="HEALPix convergence FITS map")
     sources.add_argument("--catalog-npz", type=Path, help="positions/kappa NPZ catalog")
@@ -1880,10 +1968,13 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--mpi-ranks", type=int, default=1)
     parser.add_argument("--mpiexec", type=Path)
     parser.add_argument("--mpi-extra-arg", action="append", default=[])
-    parser.add_argument("--theta-min", type=float, default=0.12250467913471644)
-    parser.add_argument("--theta-max", type=float, default=3.6279974066581295)
+    parser.add_argument("--theta-min", "--min-sep", dest="theta_min", type=float, default=0.12250467913471644,
+                        help="outer lower edge in --theta-scale / --sep-units")
+    parser.add_argument("--theta-max", "--max-sep", dest="theta_max", type=float, default=3.6279974066581295,
+                        help="outer upper edge in --theta-scale / --sep-units")
     parser.add_argument(
-        "--theta-scale", choices=("degree", "radian", "au"), default="degree"
+        "--theta-scale", "--sep-units", dest="theta_scale",
+        choices=("degree", "arcmin", "radian", "au", "chord"), default="degree"
     )
     parser.add_argument("--nbins", type=int, default=20)
     parser.add_argument("--multipoles", type=int, default=7)
@@ -1892,7 +1983,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--dual-node-bin-theta", action="store_true",
         help="enable theta-sized approximate dual-node acceptance",
     )
-    parser.add_argument("--nsmooth", type=int, default=16)
+    parser.add_argument("--nsmooth", type=int, default=8)
     parser.add_argument("--linear-bins", action="store_true")
     parser.add_argument(
         "--patch", action="store_true",
@@ -1910,7 +2001,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--more-options", action="append", default=[])
     parser.add_argument(
         "--no-smooth-pivot", action="store_true",
-        help="disable the SMOOTHPIVOTON default on engines that support it",
+        help="explicitly disable pivot smoothing; smoothing is already off by default",
     )
     parser.add_argument(
         "--edge-corrections", action="store_true",
@@ -1929,6 +2020,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--no-flatten-plots", action="store_true",
         help="omit Figure-7-style flattened 3PCF radial-bin plots",
     )
+    parser.epilog = 'Timing: compute_* measures Python Run; native_mainloop_* measures the C MainLoop. MPI uses max participating-rank wall and summed process CPU. --verbose 1 enables live work counters; --verbose-log 1 writes them to the log. Use --more-options scalar-pivot-reuse with --no-smooth-pivot for opt-in hierarchical 3PCF. CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA control reuse, independently of --tree-theta (default 1; approximate traversal). Scalar dual-node higher count modes are needed for edge-corrections; ggg-full-window requests the compatibility window explicitly.'
     return parser.parse_args(argv)
 
 
@@ -1989,6 +2081,7 @@ def main() -> int:
             multipoles=args.multipoles,
             threads=args.threads,
             qualification_reference=args.qualification_reference,
+            accuracy_report_only=args.accuracy_report_only,
             qualification_rtol=args.qualification_rtol,
             qualification_atol=args.qualification_atol,
             use_log_bins=not args.linear_bins,

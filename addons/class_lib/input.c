@@ -17,6 +17,7 @@
 
 #include "globaldefs.h"
 #include "input.h"
+#include <limits.h>
 
 typedef struct {
     struct cmdline_data *cmd;
@@ -419,6 +420,15 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     
     if (flag == TRUE)
       cmd->mChebyshev = param;
+    PARSER_READ(parser_read_int(pfc, "surveySignalLmax", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->surveySignalLmax = param;
+    PARSER_READ(parser_read_int(pfc, "surveyWindowLmax", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->surveyWindowLmax = param;
+    PARSER_READ(parser_read_int(pfc, "surveySolvePadding", &param, &flag, errmsg));
+    if (flag == TRUE) cmd->surveySolvePadding = param;
+    PARSER_READ(parser_read_double(pfc, "surveyRcondMin", &param1, &flag, errmsg));
+    if (flag == TRUE) cmd->surveyRcondMin = param1;
+
 
     PARSER_READ(parser_read_int(pfc, "nsmooth", &param, &flag, errmsg));
     
@@ -448,14 +458,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
       cmd->theta = param1;
     }
 
-    PARSER_READ(parser_read_string(pfc, "usePeriodic", &string1, &flag1, errmsg));
-
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->usePeriodic=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->usePeriodic=0;
-    }
+    PARSER_READ(parser_read_bool(pfc, "usePeriodic", &cmd->usePeriodic, &flag1, errmsg));
     //E
 
     //B Parameters about the I/O file(s)
@@ -606,17 +609,7 @@ int input_read_parameters_general(struct cmdline_data *cmd,
     //E
 
     //B Parameters to control histograms and their output files
-    class_call_except(parser_read_string(pfc, "useLogHist",
-                                         &string1, &flag1, errmsg),
-                      errmsg,
-                      errmsg,
-                      BASE_FREE_STRINGS_ON_FAILURE(););
-    if (flag1 == TRUE) {
-        if (strchr("tTyY1", *string1) != NULL)
-            cmd->useLogHist=1;
-        if (strchr("fFnN0", *string1) != NULL)
-            cmd->useLogHist=0;
-    }
+    PARSER_READ(parser_read_bool(pfc, "useLogHist", &cmd->useLogHist, &flag1, errmsg));
     PARSER_READ(parser_read_int(pfc, "logHistBinsPD", &param, &flag, errmsg));
     if (flag == TRUE)
       cmd->logHistBinsPD = param;
@@ -799,11 +792,23 @@ int input_read_parameters_general(struct cmdline_data *cmd,
       cmd->stepState = param;
 
     PARSER_READ(parser_read_int(pfc, "verbose", &param, &flag, errmsg));
-    if (flag == TRUE)
-      cmd->verbose = param;
+    if (flag == TRUE) {
+      if (param < SHRT_MIN || param > SHRT_MAX) {
+        snprintf(errmsg, _ERRORMSGSIZE_, "verbose is outside the short integer range");
+        BASE_FREE_STRINGS_ON_FAILURE();
+        return FAILURE;
+      }
+      cmd->verbose = (short)param;
+    }
     PARSER_READ(parser_read_int(pfc, "verbose_log", &param, &flag, errmsg));
-    if (flag == TRUE)
-      cmd->verbose_log = param;
+    if (flag == TRUE) {
+      if (param < SHRT_MIN || param > SHRT_MAX) {
+        snprintf(errmsg, _ERRORMSGSIZE_, "verbose_log is outside the short integer range");
+        BASE_FREE_STRINGS_ON_FAILURE();
+        return FAILURE;
+      }
+      cmd->verbose_log = (short)param;
+    }
 
 #ifdef OPENMPCODE
     PARSER_READ(parser_read_int(pfc, "numberThreads", &param, &flag, errmsg));
@@ -878,9 +883,14 @@ int input_default_params(struct cmdline_data *cmd)
     //B Parameters related to the searching method
     cmd->searchMethod = "octree-2balls-omp";
     cmd->mChebyshev = 7;
+    cmd->surveySignalLmax = -1;
+    cmd->surveyWindowLmax = -1;
+    cmd->surveySolvePadding = 1;
+    cmd->surveyRcondMin = 1e-10;
+
     cmd->nsmooth = 8;
     cmd->rsmooth = "\0";
-    cmd->theta = 1.05;
+    cmd->theta = 1.0;
     cmd->usePeriodic = 0;
     //E
 
@@ -967,6 +977,9 @@ local int testParameterFile(struct cmdline_data* cmd,
 #define MAXCHARBUF 1024
 
     string routineName = "testParameterFile";
+    /* The generic integer bindings require int storage, not short fields. */
+    int verbose_value = cmd->verbose;
+    int verbose_log_value = cmd->verbose_log;
     FILE *fd;
 
   int  i,j,nt;
@@ -1009,6 +1022,11 @@ local int testParameterFile(struct cmdline_data* cmd,
     //B Parameters related to the searching method
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
     IPName(cmd->mChebyshev,"mChebyshev");
+    IPName(cmd->surveySignalLmax,"surveySignalLmax");
+    IPName(cmd->surveyWindowLmax,"surveyWindowLmax");
+    IPName(cmd->surveySolvePadding,"surveySolvePadding");
+    RPName(cmd->surveyRcondMin,"surveyRcondMin");
+
     IPName(cmd->nsmooth,"nsmooth");
     SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
     RPName(cmd->theta,"theta");
@@ -1066,8 +1084,8 @@ local int testParameterFile(struct cmdline_data* cmd,
 #else
     IPName(cmd->stepState,"stepState");
 #endif
-    IPName(cmd->verbose,"verbose");
-    IPName(cmd->verbose_log,"verbose_log");
+    IPName(verbose_value,"verbose");
+    IPName(verbose_log_value,"verbose_log");
 #ifdef OPENMPCODE
     IPName(cmd->numthreads,"numberThreads");
 #endif
@@ -1286,6 +1304,16 @@ local int testParameterFile(struct cmdline_data* cmd,
         }
     }
 #endif
+
+    if (verbose_value < SHRT_MIN || verbose_value > SHRT_MAX
+        || verbose_log_value < SHRT_MIN || verbose_log_value > SHRT_MAX) {
+        snprintf(errmsg, _ERRORMSGSIZE_,
+                 "verbose or verbose_log is outside the short integer range");
+        FREE_TEST_STRINGS();
+        return FAILURE;
+    }
+    cmd->verbose = (short)verbose_value;
+    cmd->verbose_log = (short)verbose_log_value;
 
     FREE_TEST_STRINGS();
 

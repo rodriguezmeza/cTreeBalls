@@ -52,10 +52,14 @@ string defv[] = {  ";"HEAD1": " HEAD2 "\n\t " HEAD3,
 
     //B Parameters related to the searching method
     "searchMethod=octree-2balls-omp",     ";Searching method to use", ":search",
+    "surveySignalLmax=-1", ";Physical survey output order (-1: legacy mChebyshev mapping)",
+    "surveyWindowLmax=-1", ";Physical survey window order (-1: twice solve order)",
+    "surveySolvePadding=1", ";Physical survey extra solved signal modes",
+    "surveyRcondMin=1e-10", ";Physical survey minimum reciprocal infinity-norm condition",
     "mChebyshev=7",                     ";Number of Chebyshev polynomial to use (m+1)", ":mcheb",
     "nsmooth=8",                        ";Number of bodies to smooth out (or in a bucket)", ":nsm",
     "rsmooth=",                         ";Radius of the pivot smoothing neighbourhood. If empty a default is set", ":rsm",
-    "theta=1.05",                        ";Control tree search parameter, can be used to increase speed",
+    "theta=1",                        ";Tree opening tolerance; zero is exact, positive values require accuracy checks",
     "usePeriodic=false",                ";If false, don't use periodic boundary condition", ":periodic",
     //E
 

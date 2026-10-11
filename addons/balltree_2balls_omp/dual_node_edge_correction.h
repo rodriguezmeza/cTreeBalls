@@ -133,6 +133,15 @@ static int dual_node_publish_edge(
             for (int m=0; m<window_orders; m++)
                 modes[orders+m] = cballs_scalar_complex(window[(size_t)m*plane+bin],
                     window[((size_t)window_orders+m)*plane+bin]);
+            for (int m=0;m<orders;m++) {
+                const double re=gd->histZetaMcos[m+1][i][j]+gd->histZetaMsin[m+1][i][j];
+                const double im=gd->histZetaMsincos[m+1][i][j]-gd->histZetaMcossin[m+1][i][j];
+                if (!isfinite(re) || !isfinite(im)) {
+                    snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                        "%s: numerical range: complex scalar moment is not representable",DUAL_NODE_METHOD_NAME);
+                    goto cleanup;
+                }
+            }
             double pivot_ratio;
             const int solve_status = cballs_scalar_edge_deconvolve(
                 modes, modes+orders, mmax, matrix, rhs, &pivot_ratio);

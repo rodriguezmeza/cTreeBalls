@@ -19,7 +19,7 @@ and settings. Task execution is dynamically scheduled. Each task still walks
 the neighbor tree separately for its representative pivots; the frontier is
 not a dual-tree cell-pair kernel and does not guarantee a speedup.
 
-## Smoothing contract
+## Smoothing rule
 
 Active, valid pivots are sorted by forest ID, observer distance and original row
 ID. Starting at the first unused pixel, a group includes consecutive pixels

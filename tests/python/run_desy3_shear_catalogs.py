@@ -1,15 +1,47 @@
 #!/usr/bin/env python3
 """Run one Slurm array item, or a serial sequence of DES-Y3 shear catalog jobs."""
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import subprocess
-import sys
 from shear_fits_catalog import integer_selection, discover_des_catalogs as discover, shear_convention as convention
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE_ROOT))
+
+
+def run_logged(command, log_path):
+    """Stream child output to the terminal and keep an identical binary log."""
+    with log_path.open('wb') as log, subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as process:
+        try:
+            for line in iter(process.stdout.readline, b''):
+                log.write(line)
+                log.flush()
+                console = getattr(sys.stdout, 'buffer', None)
+                if console is not None:
+                    console.write(line)
+                    console.flush()
+                else:
+                    sys.stdout.write(line.decode('utf-8', errors='replace'))
+                    sys.stdout.flush()
+            return process.wait()
+        except BaseException:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            raise
 
 
 def main(argv=None):
@@ -44,8 +76,9 @@ def main(argv=None):
             p.error(f'--task-index must be in 0..{len(jobs)-1}')
         jobs = [jobs[args.task_index]]
     here = Path(__file__).resolve().parent
-    code = {name: hashlib.sha256((here/name).read_bytes()).hexdigest() for name in
-            ('shear_corr_all_engines.py', 'shear_fits_catalog.py', 'shear_products.py', 'run_desy3_shear_catalogs.py')}
+    code_paths = [here/name for name in ('shear_corr_all_engines.py', 'benchmark_timing.py', 'run_desy3_shear_catalogs.py')]
+    code_paths += [here.parent/'python'/name for name in ('shear_fits_catalog.py', 'shear_products.py')]
+    code = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in code_paths}
     defaults = ['--binning', 'sofia-fig1', '--statistics', 'both',
                 '--no-plots', '--max-points', '0', '--multipoles', '7', '--phi-bins', '32']
     for job in jobs:
@@ -56,7 +89,11 @@ def main(argv=None):
                       arguments=defaults+extra, code=code,
                       native_source=str(SOURCE_ROOT),
                       native_executable=os.environ.get('CTREEBALLS_CBALLS'),
-                      shear_pivot_budget=os.environ.get('CBALLS_SHEAR_PIVOT_TOL', '0.1'),
+                      # None means use the compiled default; the extension hash below
+                      # also invalidates resume when build defaults change.
+                      shear_controls={name: os.environ.get(name) for name in (
+                          'CBALLS_SHEAR_PIVOT_TOL', 'CBALLS_SHEAR_BIN_THETA',
+                          'CBALLS_SHEAR_TASKS', 'CBALLS_SHEAR_TASK_MEMORY_MB')},
                       python=str(Path(sys.executable).resolve()))
         # Native extension content is included so a rebuilt library invalidates resume.
         import importlib.util
@@ -84,8 +121,7 @@ def main(argv=None):
         (target/'request.json').write_text(json.dumps(dict(command=command, **config), indent=2)+'\n')
         print(f"RUN r{job['realization']:03d} bin{job['tomobin']} region{job['region']}", flush=True)
         # Isolate native state and reclaim catalog/tree memory between jobs.
-        with (target/'run.log').open('w') as stream:
-            status = subprocess.call(command, stdout=stream, stderr=subprocess.STDOUT)
+        status = run_logged(command, target/'run.log')
         if status:
             raise RuntimeError(f'{target}/run.log: driver failed with status {status}')
         summary = json.loads((target/'summary.json').read_text())

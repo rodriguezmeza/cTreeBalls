@@ -16,6 +16,7 @@
 
 #include "globaldefs.h"
 #include "native_octree_pair.h"
+#include "distinct_products.h"
 #include "octree_2balls_tree.h"
 
 #define NATIVE_PAIR_SPLIT_FACTOR ((real)0.585)
@@ -752,7 +753,7 @@ static int native_pair_compute_balls4_cf(
                 4.0*PI*(r1*r1*r1-r0*r0*r0)/3.0;
             const real expected =
                 body_count*body_count*shell_volume/volume;
-            gd->histCF[bin] = cballs_normalize_or_zero(
+            gd->histCF[bin] = cballs_checked_ratio(
                 gd->histNN[bin], expected) - 1.0;
         } else {
             const real norm = volume
@@ -770,6 +771,73 @@ static int native_pair_compute_balls4_cf(
 #endif
     }
     return SUCCESS;
+}
+
+/* Rare extreme-range fallback: O(N^2), O(radial bins) memory. Each MPI
+ * rank has the replicated catalog; collective publication/failure is unchanged. */
+static bool native_pair_requires_scaled_pairs(const fcfc_balltreeptr tree)
+{
+    for (INTEGER i=0;i<tree->npoint;i++) {
+        const fcfc_ballpoint *p=&tree->packed_points[i];
+        double values[2]={p->weight,p->kappa};
+        for (int k=0;k<2;k++) if (values[k]!=0.0) {
+            int exponent; frexp(values[k],&exponent);
+            if (!isfinite(values[k]) || exponent>200 || exponent< -200) return TRUE;
+        }
+    }
+    return FALSE;
+}
+static int native_pair_scaled_pairs(const native_pair_context *context,
+                                  fcfc_balltreeptr a, fcfc_balltreeptr b, bool same,
+                                  const cballs_native_pair_policy *policy)
+{
+    struct cmdline_data *cmd=context->cmd;
+    struct global_data *gd=context->gd;
+    size_t stride=(size_t)cmd->sizeHistN+1;
+    cballs_scaled_sum *sums=calloc(2*stride,sizeof(*sums));
+    int status=SUCCESS;
+    if (sums==NULL || cballs_opt_smooth_pivot(cmd)) {
+        snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                 "%s: numerical range: scaled pair accumulation requires scratch memory and unsmoothed fields",
+                 native_pair_method(cmd));
+        free(sums); return FAILURE;
+    }
+    for (INTEGER i=0;i<a->npoint;i++) for (INTEGER j=same?i+1:0;j<b->npoint;j++) {
+        const fcfc_ballpoint *p=&a->packed_points[i], *q=&b->packed_points[j];
+        if (p->source && p->source==q->source) continue;
+        const int bin=native_pair_bin_index_squared(context,
+            native_pair_point_distance_squared(cmd,gd,p,q));
+        if (bin<0) continue;
+        double factors[4]={context->weighted_signal?p->weight:1.0,
+                           context->weighted_signal?q->weight:1.0,p->kappa,q->kappa};
+        double norm[2]={context->weighted_normalization?p->weight:1.0,
+                        context->weighted_normalization?q->weight:1.0};
+        cballs_scaled_add(&sums[bin],norm,2);
+        cballs_scaled_add(&sums[stride+bin],factors,4);
+        gd->histNN[bin]+=context->pair_scale; gd->histNNSubXi2pcf[bin]+=context->pair_scale; gd->nbbcalc++;
+    }
+    for (int bin=1;bin<=cmd->sizeHistN;bin++) {
+        gd->histXi2pcf[bin]=cballs_scaled_ratio(sums[stride+bin],sums[bin]);
+        if (!isfinite(gd->histXi2pcf[bin])) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                "%s: numerical range: normalized pair bin %d is not representable",native_pair_method(cmd),bin);
+            status=FAILURE; break;
+        }
+    }
+    free(sums);
+    if (status==SUCCESS) {
+        gd->histogram_products |= CBALLS_PRODUCT_NN | CBALLS_PRODUCT_XI;
+        if (cballs_opt_compute_histn(cmd) && cballs_opt_and_cf(cmd)) {
+            if (policy->balls4_density_normalization) {
+                status=native_pair_compute_balls4_cf(cmd,gd,a->npoint);
+                if (status==SUCCESS) gd->histogram_products |= CBALLS_PRODUCT_CF;
+            } else {
+                for(int bin=1;bin<=cmd->sizeHistN;bin++) gd->histNN[bin]*=2.0;
+                status=search_compute_HistN(cmd,gd,a->npoint);
+            }
+        }
+    }
+    return status;
 }
 
 static int native_pair_run_tasks(
@@ -797,6 +865,10 @@ static int native_pair_run_tasks(
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "%s: compact point storage is unavailable",
                  native_pair_method(cmd));
+        goto cleanup;
+    }
+if (native_pair_requires_scaled_pairs(tree1) || native_pair_requires_scaled_pairs(tree2)) {
+        status=native_pair_scaled_pairs(context,tree1,tree2,auto_correlation,policy);
         goto cleanup;
     }
 #ifdef OPENMPCODE
@@ -915,8 +987,18 @@ static int native_pair_run_tasks(
     gd->nbccalc += thread_cell_counts[0];
 
     for (int bin = 1; bin <= cmd->sizeHistN; bin++) {
-        gd->histXi2pcf[bin] = cballs_normalize_or_zero(
-            gd->histXi2pcf[bin], thread_histograms[stride + (size_t)bin]);
+        const real denominator=thread_histograms[stride + (size_t)bin];
+        if (!isfinite(gd->histXi2pcf[bin]) || !isfinite(denominator)) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                "%s: numerical range: pair accumulation is not representable",native_pair_method(cmd));
+            goto cleanup;
+        }
+        gd->histXi2pcf[bin] = cballs_checked_ratio(gd->histXi2pcf[bin],denominator);
+        if (!isfinite(gd->histXi2pcf[bin])) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                "%s: numerical range: normalized pair is not representable",native_pair_method(cmd));
+            goto cleanup;
+        }
     }
     if (context->profile)
         context->timers->reduction += native_pair_timer_now() - phase_started;

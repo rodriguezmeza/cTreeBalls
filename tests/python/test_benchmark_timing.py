@@ -1,6 +1,11 @@
 """Public benchmark timing contracts without an MPI runtime."""
-from pathlib import Path
+
 import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 
 import pytest
 
@@ -92,3 +97,23 @@ def test_rank_duplicates_and_scope_mismatch_are_rejected():
 def test_shear_and_scalar_use_identical_rank_accounting():
     from shear_corr_all_engines import aggregate_rank_timings as shear_aggregate
     assert shear_aggregate is aggregate_rank_timings
+
+
+def test_environment_snapshot_preserves_presence_based_profile_and_excludes_unrelated_values():
+    from benchmark_timing import runtime_environment
+    env = {"CBALLS_SHEAR_PROFILE": "0", "CBALLS_SHEAR_BIN_THETA": "0.2",
+           "CBALLS_SCALAR_PIVOT_TOL": "0.1", "OMP_PLACES": "cores", "UNRELATED_SECRET": "hidden"}
+    snapshot = runtime_environment(env)
+    assert snapshot["CBALLS_SHEAR_PROFILE"] == "0"
+    assert snapshot["CBALLS_SHEAR_BIN_THETA"] == "0.2"
+    assert "UNRELATED_SECRET" not in snapshot
+    assert "CBALLS_SHEAR_PIVOT_TOL" not in snapshot  # No guessed compiled default.
+
+
+def test_per_rank_environment_is_retained():
+    rows = [_timing_metadata(1, 1, 2, 3, "Run") for _ in range(2)]
+    for rank, row in enumerate(rows):
+        row.update(rank=rank, native_reported_cpu_time=2,
+                   runtime_environment={"OMP_PLACES": f"rank-{rank}"})
+    result = aggregate_rank_timings(rows)
+    assert result["rank_timings"][1]["runtime_environment"]["OMP_PLACES"] == "rank-1"

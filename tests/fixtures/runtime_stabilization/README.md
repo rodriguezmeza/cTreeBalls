@@ -33,7 +33,7 @@ Other permanent cases in `test_runtime_stabilization.c` and
   bins, invalid domains/counts and count-only operation. The zero-cutoff log
   first bin intentionally reflects the existing producers' truncation toward
   zero: its lower edge is one log step below the nominal grid.
-- Independent all-pairs counts and shell-volume oracles for default octree, KD,
+- Independent all-pairs counts and shell-volume reference calculations for default octree, KD,
   ball and KD-box methods, and legacy KD/ball paths. Legacy octree uses the B4
   pivot approximation even with `no-one-ball`; its shell normalization is
   checked against the DD it actually publishes. This is not a claim that its

@@ -5,7 +5,7 @@
 2PCF traversal, and LogMultipole 3PCF estimator.
 
 It shares the repaired observer-frame, tangent-angle, chord-bin, and distinct
-raw-moment contract described in [the scalar guide](../../docs/3pcf.rst).
+raw-moment definition described in [the scalar guide](../../docs/3pcf.rst).
 `read-mask` and complex `edge-corrections,no-normalize-HistZeta` are
 supported; `weights-norm` applies catalog weights. Raw and corrected
 products are not interchangeable.
@@ -17,7 +17,7 @@ neighbor frontier as the OpenMP implementation. The independent 2PCF instead
 uses one reusable histogram per OpenMP thread, combines them with a binary
 tree reduction, and performs a single aggregate MPI reduction before rank 0
 publishes the result. This removes dense per-task pair storage and serial
-publication while preserving the numerical contract. Each catalog also uses
+publication while preserving the numerical definition. Each catalog also uses
 the OpenMP implementation's density/bin-width/`theta` leaf-capacity policy;
 exact mode keeps the configured `nsmooth` value.
 
@@ -29,8 +29,8 @@ Build and run:
 
 ```sh
 make OCTREE2BALLSMPION=1 cballs
-mpiexec -n 4 ./cballs parameters.ini \
-    search=octree-2balls-mpi numberThreads=4
+# Set searchMethod = octree-2balls-mpi and numberThreads = 4 in parameters.ini.
+mpiexec -n 4 ./cballs paramfile=parameters.ini
 ```
 
 `only-2pcf`, `only-3pcf`, `no-two-balls`, `weights-norm`, and
@@ -72,4 +72,7 @@ both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
 2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
 and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
 depend on the observable, controls, and geometry. See the
-[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+[hierarchy definition, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+
+For Perlmutter CPU jobs, shared inputs, effective parameter files and scaling
+checks, see [the batch-job guide](../../tests/slurm_scripts/README.md).

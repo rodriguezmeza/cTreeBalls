@@ -24,7 +24,7 @@ switch.
 
    * - Runtime name
      - Build switch
-     - Contract
+     - Calculated quantities
    * - ``kdtree-2balls-omp`` / ``kdtree-2balls-mpi``
      - ``KDTREE2BALLSOMPON`` / ``KDTREE2BALLSMPION``
      - Median KD-tree dual-node 2PCF and body-pivot LogMultipole 3PCF.
@@ -54,8 +54,7 @@ All six methods accept masks and complex scalar 3PCF edge correction. Use::
 ``weights-norm`` applies catalog weights to signal and window moments. Empty or
 singular scalar correction systems publish NaN with validity diagnostics,
 not a measured zero. The KD and PCA ball-tree
-methods support the compiled smooth-pivot default; ``no-smooth-pivot`` disables
-it. Native octree dual node mode does not use smooth pivots; its
+methods support explicit ``smooth-pivot`` when compiled; the default is off. Native octree dual node mode does not use smooth pivots; its
 ``legacy-one-ball`` compatibility mode does. Compatibility kernels are shared
 implementation support, not additional registered addons.
 

@@ -19,6 +19,7 @@ import shlex
 #E
 import subprocess
 import sys
+import runpy
 
 import numpy as nm
 #E
@@ -122,39 +123,11 @@ def get_pkg_config(package, flag):
 #E
 
 
-def mpi_wrapper_flags(wrapper):
-    """Return compile and link flags advertised by an MPI C wrapper."""
-    command = shlex.split(wrapper)
-    if not command:
-        raise RuntimeError("MPI support is enabled but MPICC is empty")
-
-    def query(arguments):
-        try:
-            output = subprocess.check_output(
-                command + arguments,
-                text=True,
-                stderr=subprocess.STDOUT,
-            ).strip()
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            return None
-        return shlex.split(output)
-
-    compile_flags = query(["--showme:compile"])
-    link_flags = query(["--showme:link"])
-    if compile_flags is not None and link_flags is not None:
-        return compile_flags, link_flags
-
-    # MPICH-family wrappers commonly expose one combined command with -show.
-    combined = query(["-show"])
-    if combined:
-        if not combined[0].startswith("-"):
-            combined = combined[1:]
-        return combined, combined
-
-    raise RuntimeError(
-        "MPI support is enabled, but could not query compiler/linker flags "
-        f"from MPICC={wrapper!r}"
-    )
+# PEP 517 may execute this file without putting its directory on sys.path.
+# Resolve local build helpers from this file, independently of the caller's cwd.
+mpi_wrapper_flags = runpy.run_path(
+    str(Path(__file__).resolve().parent / "scripts" / "build_fingerprint.py")
+)["mpi_wrapper_flags"]
 
 # generator function
 def indent_block(text, spaces=8):
@@ -206,7 +179,8 @@ addons_settings = os.path.join(root_folder, "addons", "Makefile_addons_settings"
 def read_make_cyballs_env():
     try:
         output = subprocess.check_output(
-            ["make", "--no-print-directory", "-s", "print-cyballs-build-env"],
+            ["make", "--no-print-directory", "-s",
+             f"PYTHON={shlex.quote(sys.executable)}", "print-cyballs-build-env"],
             cwd=root_folder,
             text=True,
             stderr=subprocess.STDOUT,
@@ -643,6 +617,7 @@ class build_ext(cython_build_ext):
         generate_ccyballs_pxd()
         if os.environ.get("CBALLS_STATIC_LIBRARY_READY") != "1":
             make_profile = {
+                "PYTHON": shlex.quote(sys.executable),
                 "ADDONSON": ADDONSON,
                 "CLASSLIBON": CLASSLIBON,
                 "PXDON": PXDON,

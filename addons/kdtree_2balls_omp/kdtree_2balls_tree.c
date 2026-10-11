@@ -9,6 +9,7 @@
 #endif
 
 #include "globaldefs.h"
+#include "distinct_products.h"
 #include "kdtree_2balls_tree.h"
 
 #define KDTREE_2BALLS_ROOT 0
@@ -65,7 +66,7 @@ static void kdtree_2balls_point_values(
     (void)role;
 #endif
     *normalization = cballs_opt_weights_norm(cmd) ? Weight(body) : 1.0;
-    *field = *normalization * kdtree_2balls_raw_field(body);
+    *field = cballs_product(*normalization,kdtree_2balls_raw_field(body));
 }
 
 static int kdtree_2balls_before(bodyptr left, bodyptr right, int axis)
@@ -139,10 +140,13 @@ static void kdtree_2balls_aggregate(
     CLRV(geometric_position);
     node->weight = 0.0;
     node->kappa_sum = 0.0;
+    node->kappa_distinct = 0.0;
     node->kappa_sq_sum = 0.0;
     node->field_weight_sum = 0.0;
+    node->field_weight_distinct = 0.0;
     node->field_weight_sq_sum = 0.0;
     node->weighted_kappa_sum = 0.0;
+    node->weighted_kappa_distinct = 0.0;
     node->weighted_kappa_sq_sum = 0.0;
 
     for (point = node->first; point <= node->last; point++) {
@@ -159,10 +163,16 @@ static void kdtree_2balls_aggregate(
         }
         position_weight += mass;
         node->weight += mass;
+        node->kappa_distinct = cballs_distinct_merge(
+            node->kappa_distinct, 0.0, node->kappa_sum, raw_field);
         node->kappa_sum += raw_field;
         node->kappa_sq_sum += raw_field * raw_field;
+        node->field_weight_distinct = cballs_distinct_merge(
+            node->field_weight_distinct, 0.0, node->field_weight_sum, normalization);
         node->field_weight_sum += normalization;
         node->field_weight_sq_sum += normalization * normalization;
+        node->weighted_kappa_distinct = cballs_distinct_merge(
+            node->weighted_kappa_distinct, 0.0, node->weighted_kappa_sum, field);
         node->weighted_kappa_sum += field;
         node->weighted_kappa_sq_sum += field * field;
     }

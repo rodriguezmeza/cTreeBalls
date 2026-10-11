@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / 'tests/python'), str(ROOT/'scripts')]
+sys.path[:0] = [str(ROOT), str(ROOT / 'tests/python'), str(ROOT / 'tests/python'), str(ROOT/'scripts')]
 from capabilities_generated import ENGINES, gate_plan
 
 

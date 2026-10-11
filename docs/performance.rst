@@ -27,8 +27,8 @@ Search Controls
     Usually controls leaf capacity in KD/ball trees; meaning is engine-specific.
 
 ``rsmooth``
-    Smoothing radius for supported methods. ``SMOOTHPIVOTON=1`` enables the
-    smoothing path by default; ``no-smooth-pivot`` disables it for one run.
+    Smoothing radius for supported methods. ``SMOOTHPIVOTON=1`` compiles the
+    smoothing path; explicit ``smooth-pivot`` enables it for one run.
 
 ``options=no-one-ball``
     Disables the one-ball acceleration path in supported searches.  It is
@@ -96,7 +96,7 @@ For a production configuration:
 * repeat timings and record thread affinity and hardware;
 * retain the used-values file and Makefile settings.
 
-See :doc:`benchmarks` for estimator contracts, MPI timing scopes, and the
+See :doc:`benchmarks` for estimator definitions, MPI timing scopes, and the
 maintained scripts in ``tests/python``. Compare saved arrays as well as timing
 tables when checking a new build. Synthetic measurements are not predictions
 for a full-resolution survey catalog.

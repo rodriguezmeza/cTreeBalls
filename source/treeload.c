@@ -17,7 +17,7 @@
 //
 
 #include "globaldefs.h"
-#include "tree_contracts.h"
+#include "tree_checks.h"
 
 local int treeInfo(struct  cmdline_data* cmd, struct  global_data* gd,
                    int, INTEGER);
@@ -37,6 +37,7 @@ local int statBodies(struct  cmdline_data* cmd, struct  global_data* gd,
                      bodyptr btab, int nbody);
 
 #define MAXLEVEL  CBALLS_TREE_MAXLEVEL
+#include "../support/shear_kernel/native_octree_build.h"
 /* Build/traversal scratch belongs to the active runtime context. */
 #define cellhist (cballs_runtime_current()->tree_workspace.cellhist)
 #define subnhist (cballs_runtime_current()->tree_workspace.subnhist)
@@ -155,6 +156,10 @@ local int MakeTree_local(struct  cmdline_data* cmd,
     bodyptr p;
     int i;
     bool preserve_catalog_frame = cballs_observer_frame(cmd);
+    const bool shear_profile = shear_octree_build_method(gd)
+        && getenv("CBALLS_SHEAR_PROFILE") != NULL;
+    const double wall_started = shear_profile ? shear_octree_build_wall() : 0.0;
+    double insertion_wall = 0.0;
 
     cpustart = CPUTIME;
     gd->bytes_tot_cells = 0;
@@ -246,15 +251,19 @@ local int MakeTree_local(struct  cmdline_data* cmd,
 
     treeInfo(cmd, gd, ifile, nbody);
 
+    const bool bulk_build = shear_octree_bulk_eligible(cmd, gd, nbody);
+    const double insertion_started = shear_profile ? shear_octree_build_wall() : 0.0;
     DO_BODY(p, btab, btab+nbody) {
 #ifdef BODY3ON
-        Nbb(p) = 1;                                 // Check consistency with
-                                                    //  smoothing... Correction
+        Nbb(p) = 1;
 #endif
-        if (loadbody(cmd, gd, p, ifile) == FAILURE) return FAILURE;
+        if (!bulk_build && loadbody(cmd, gd, p, ifile) == FAILURE) return FAILURE;
         Nb(p) = 1;
         Radius(p) = 0.0;
     }
+    if (bulk_build && shear_octree_bulk_build(cmd, gd, btab, nbody, ifile) == FAILURE)
+        return FAILURE;
+    if (shear_profile) insertion_wall = shear_octree_build_wall() - insertion_started;
     verb_print_debug_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\n%s: loadbody CPU time: %lf %s\n",
                 routineName, CPUTIME - cpustartMiddle, PRNUNITOFTIMEUSED);
@@ -470,6 +479,11 @@ local int MakeTree_local(struct  cmdline_data* cmd,
 #endif
 
 compact_tree_ready:
+    if (shear_profile)
+        fprintf(stderr, "SHEAR_TREE_BUILD engine=%s catalog=%d spatial_build=%.6f "
+                "native_tree_total=%.6f bulk=%d cells=%ld\n", cmd->searchMethod,
+                ifile, insertion_wall, shear_octree_build_wall() - wall_started,
+                (int)bulk_build, (long)gd->ncellTable[ifile]);
     gd->cputree = CPUTIME - cpustart;
     verb_print_min_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\tdone with the tree.\nmaking tree CPU time : %lf %s\n\n",
@@ -503,7 +517,7 @@ local int scanLevel(struct  cmdline_data* cmd, struct  global_data* gd, int ifil
 
     verb_print_normal_info(cmd->verbose, cmd->verbose_log, gd->outlog,
                 "\nMaximum and minimum cell size: %e %e\n",
-                gd->Rcell[0],gd->Rcell[gd->tdepthTable[ifile]-1]);
+                gd->Rcell[0],gd->Rcell[MAX(0,gd->tdepthTable[ifile]-1)]);
 
 //B socket:
 #ifdef ADDONS

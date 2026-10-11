@@ -17,7 +17,7 @@
 //
 
 #include "globaldefs.h"
-#include "tree_contracts.h"
+#include "tree_checks.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -174,6 +174,10 @@ global int cballs_load_memory_catalog(struct cmdline_data *cmd,
         Id(p) = (INTEGER)i + 1;
     }
 
+#if defined(OCTREE3PCF3DOMP) || defined(OCTREE3PCF3DMPI)
+    /* A new catalog has no supplied LOS IDs, regardless of a previous run. */
+    gd->octree3pcf3d_los_ids[ifile] = FALSE;
+#endif
     bodytable[ifile] = catalog;
     gd->nbodyTable[ifile] = (INTEGER)nbody;
     gd->ninfiles = ifile + 1;

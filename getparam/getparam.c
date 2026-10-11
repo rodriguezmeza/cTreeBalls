@@ -308,15 +308,12 @@ double GetdParam(string name)
 
 bool GetbParam(string name)
 {
-    char *val;
-
-    val = GetParam(name);
-    if (strchr("tTyY1", *val) != NULL)
-        return (TRUE);
-    if (strchr("fFnN0", *val) != NULL)
-        return (FALSE);
-    error("getbparam: %s=%s not bool\n", name, val);
-    return (FALSE);
+    char errmsg[256];
+    bool value = FALSE;
+    if (parse_bool_checked(GetParam(name), &value,
+                           errmsg, sizeof(errmsg), name) != 0)
+        error("getbparam: %s\n", errmsg);
+    return value;
 }
 
 local param *FindParam(string name, param *pvec)

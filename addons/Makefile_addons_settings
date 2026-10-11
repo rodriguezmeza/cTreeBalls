@@ -46,7 +46,15 @@ TPCFON = 1
 TPCFSHEARON = 0
 PRUNEON = 1
 BALLS4SCANLEVON = 1
-THETA = 1.25
+# Fast traversal defaults; measure the L2 penalty for each observable.
+# This legacy scan criterion is separate from runtime theta (default 1).
+THETA ?= 1
+# Defaults used only by opt-in shear/scalar pivot reuse. Environment values at run
+# time override these compiled defaults. These are not relative-error bounds.
+CBALLS_SHEAR_PIVOT_TOL ?= 3
+CBALLS_SHEAR_BIN_THETA ?= 0.5
+CBALLS_SCALAR_PIVOT_TOL ?= 0.1
+CBALLS_SCALAR_BIN_THETA ?= 0
 NORMALHISTSCALEON = 0
 _DEBUGON_ = 0
 LOGBINON = 0

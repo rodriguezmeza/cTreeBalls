@@ -6,9 +6,15 @@ handling. A distortion matrix is a forward operator (paper equation 2.5).
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+
 from itertools import combinations
 import math
-from pathlib import Path
 import numpy as np
 
 

@@ -9,6 +9,7 @@
 #include "globaldefs.h"
 #include "lya_forest_defs.h"
 #include "lya_forest_parallel.h"
+#include "lya_progress.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -512,6 +513,12 @@ setup_done:
         cmd->searchMethod, compute_2pcf, compute_3pcf, cutoff,
         LYA1D_OMP_PIVOT_BLOCK_SIZE, block_count);
 
+    lya_progress progress;
+    lya_progress_init(&progress,cmd,gd,
+        compute_2pcf && compute_3pcf ? "1D 2PCF+3PCF pivot blocks" :
+        (compute_3pcf ? "1D 3PCF pivot blocks" : "1D 2PCF pivot blocks"),
+        lya_progress_local_tasks((size_t)block_count,(size_t)first_task,(size_t)task_stride));
+
 #pragma omp parallel shared(allocation_failed,worker_error,num2,den2,num3,den3,accepted_visits,pair_count,ordered_triplet_count)
     {
         lya1d_worker_hist worker;
@@ -565,11 +572,14 @@ setup_done:
                     accepted_visits += worker.accepted_visits;
                     pair_count += worker.pair_count;
                     ordered_triplet_count += worker.ordered_triplet_count;
+                    lya_progress_step(&progress);
                 }
             }
         }
         if (worker_ready) lya1d_worker_free(&worker);
     }
+
+    lya_progress_finish(&progress, !allocation_failed);
 
     if (allocation_failed) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,

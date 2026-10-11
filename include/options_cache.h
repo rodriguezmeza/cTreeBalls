@@ -68,7 +68,8 @@
     X(GGG_PROFILE, ggg_profile, "ggg-profile", 56) \
     X(NO_SMOOTH_PIVOT, no_smooth_pivot, "no-smooth-pivot", 57) \
     X(ONLY_3PCF, only_3pcf, "only-3pcf", 58) \
-    X(LEGACY_ONE_BALL, legacy_one_ball, "legacy-one-ball", 59)
+    X(LEGACY_ONE_BALL, legacy_one_ball, "legacy-one-ball", 59) \
+    X(NO_COUNT_MULTIPOLES, no_count_multipoles, "no-count-multipoles", 60)
 
 #define CBALLS_OPTION_ENUM(symbol, accessor, text, bit) \
     CBALLS_OPTF_##symbol = 1ULL << (bit),
@@ -161,6 +162,7 @@ static inline bool cballs_opt_smooth_pivot(const struct cmdline_data *cmd)
 #ifdef SMOOTHPIVOT
     return cmd != NULL
         && cballs_run_supports_smooth_pivot(cmd)
+        && cballs_opt_smooth_pivot_requested(cmd)
         && !cballs_opt_no_smooth_pivot(cmd);
 #else
     (void)cmd;

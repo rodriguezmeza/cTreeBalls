@@ -100,7 +100,7 @@ avoid hidden 3PCF work and ``--max-points N`` for deterministic bottom-hash
 sampling. Map and mask columns are scanned in bounded chunks, and masked-out
 pixels are discarded before the Cartesian catalog is built. A thinned run
 measures the sampled catalog; use ``--max-points 0`` for the full retained map.
-All compared arrays use the native cTreeBalls normalization contract.
+All compared arrays use the native cTreeBalls normalization convention.
 ``no-normalize-HistZeta,weights-norm`` selects weighted raw sums. With
 ``--edge-corrections``, active scalar engines build window modes through order
 ``2M`` and apply the per-bin scalar mode-coupling solve.

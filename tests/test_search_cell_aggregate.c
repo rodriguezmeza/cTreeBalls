@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "globaldefs.h"
-#include "tree_contracts.h"
+#include "tree_checks.h"
 
 static void set_position(nodeptr p, real x, real y, real z)
 {

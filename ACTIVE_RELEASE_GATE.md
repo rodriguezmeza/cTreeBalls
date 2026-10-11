@@ -1,4 +1,4 @@
-# Active-profile release gate
+# Active-profile release checks
 
 Run this gate from the source tree after changing source, settings, dependencies,
 or the compiler. It rebuilds the native executable/static library and Cython
@@ -15,6 +15,42 @@ generates `active-profile.md` from resolved settings and records every required
 regression module in `declared_regression_coverage`. Missing executions fail the
 gate. Other dimensions, precision
 profiles, or newly registered engines need an explicit matrix extension.
+
+## Combined release decision
+
+The active gate is one component of release approval. It now requires the native
+parameter-file parser regression, public Python configuration contracts,
+incremental-build regression and generated accuracy-document checks. Release
+approval additionally requires a clean source-archive/wheel installation and the
+focused AddressSanitizer/UndefinedBehaviorSanitizer suite on a compatible host.
+
+Run components from the same unchanged source, using new output directories:
+
+```sh
+python scripts/release_readiness.py run --component active --output release-active \
+  --mpi-command 'mpiexec --oversubscribe --bind-to none'
+python scripts/release_readiness.py run --component package --output release-package
+python scripts/release_readiness.py run --component sanitizers --output release-sanitizers
+python scripts/release_readiness.py collect \
+  --active release-active/result.json --package release-package/result.json \
+  --sanitizers release-sanitizers/result.json --output release-readiness.json
+```
+
+Run the components sequentially when they share a checkout: sanitizer builds
+replace native artifacts. CI runs them in separate checkouts. The collector
+requires the same source identity, all mandatory successful checks, and successful
+command trails. It returns nonzero for FAIL or INCOMPLETE. Missing, skipped,
+unavailable or still-running evidence cannot approve a release; a mismatched
+source or contradictory command result fails. CI retains this aggregate even
+when a dependency fails, and publication requires it to pass.
+
+The sanitizer runner checks compiler/runtime support before building. It records
+UNAVAILABLE when the compiler cannot build/run its instrumentation probe; this
+leaves the aggregate INCOMPLETE. Select a compatible compiler/runtime with
+`--make-arg NAME=VALUE`. Instrumentation remains mandatory. On macOS the default
+ASan settings disable unsupported leak detection; on Linux they enable it. The
+ASan/UBSan checks remain required on both platforms. A compatible-host sanitizer
+result is evidence for that toolchain, not every compiler.
 
 ## Invocation
 
@@ -77,13 +113,13 @@ The core sine/cosine retained case checks finite products and repeatability; its
 existing native family comparison scripts provide additional numerical coverage.
 
 Cross-execution comparisons use relative and absolute tolerances of `3e-12`,
-with identical finite/unsupported-bin masks. Each independent oracle keeps its
+with identical finite/unsupported-bin masks. Each independent reference calculation keeps its
 own pre-existing tolerance. The MPI 3D suite also retains byte-exact comparisons
 for thread changes and aliases, and larger multiple-block cases ensure that
 non-root ranks receive real work. Rank-count changes may regroup floating-point
 sums; the gate does not promise bitwise equality across rank counts.
 
-The three `lya-los-tree-*` methods each retain independent 3D oracle checks,
+The three `lya-los-tree-*` methods each retain independent 3D checks against reference calculations,
 thread comparisons, and comparisons against their original `lya-*` counterparts.
 The focused LOS-tree suite also covers larger multi-block forests, adversarial
 geometry, unequal 2PCF/3PCF domains, wide forest IDs and rejected parameters.
@@ -91,9 +127,9 @@ The in-memory scalar suite uses the public octree two-ball engine. Unavailable
 legacy compatibility comparisons appear as explicit pytest skips with reasons.
 The startup suite also checks successful large-tree runs and cleanup after the
 cellRadius overflow-bin repair; it no longer expects that repaired input to fail.
-It remains part of the active gate. Its memory check uses live malloc bytes on
+It remains part of the checks for the selected build. Its memory check uses live malloc bytes on
 macOS (where freed allocator pages can remain resident) and RSS elsewhere.
-The input failure suite (`tests/python/test_input_failure_contracts.py`)
+The input failure suite (`tests/python/test_invalid_input.py`)
 uses isolated, time-limited workers to reject truncated binary and positional
 ASCII input, nonfinite selected ASCII/FITS columns and HEALPix values, and
 malformed multi-column rows. Every rejected catalog is followed by a valid
@@ -120,10 +156,10 @@ Some legacy names describe asymmetric formats: `columns-ascii-pos` writes a
 headerless position table but its reader expects a native header and assigns a
 constant scalar of 2. The `numpy-healpix` writer emits an XYZ/KAPPA FITS table;
 its ordinary reader consumes headerless native-endian doubles, while its mask
-branches use FITS. The route tests check these actual contracts explicitly and
+branches use FITS. The route tests check these actual definitions explicitly and
 do not silently fall back to an unrecognized format name.
 
-## Build identity and result provenance
+## Build identity and result run information
 
 `make print-build-fingerprint` prints the resolved identity. The native query is
 `cballs options=build-fingerprint verbose=0 verbose_log=0`; Python exposes
@@ -149,7 +185,7 @@ MPI failure consensus for correlation output. For Python in-memory results:
 ```python
 balls.Run()
 metadata = balls.getRunMetadata()  # independent, JSON-serializable copy
-immutable = balls.run_settings['provenance']
+immutable = balls.run_settings['run information']
 ```
 
 The snapshot remains readable after `struct_cleanup()`. Changes to parameters or
@@ -170,7 +206,7 @@ Always check the process result. Reusing a native output directory outside the
 gate can leave products from an earlier run after a later failure. The gate
 refuses existing result directories and never treats those stale files as a pass.
 
-A passing gate validates the retained fixtures and active runtime contracts. It
+A passing gate validates the retained fixtures and active runtime definitions. It
 is not a production-scale accuracy, performance, memory-scaling, or unrestricted
 Python concurrency certification.
 
@@ -195,20 +231,20 @@ editing the development checkout. The verifier builds the native program and
 an isolated wheel from separate extractions of that archive, then installs the
 wheel in a fresh environment. It rejects a module loaded from the checkout,
 verifies dependency settings, source identity, ABI and the public registry, and
-computes independent scalar-window and weighted LOS pair/triplet oracles. A successful import alone
+computes independent scalar-window and weighted LOS pair/triplet reference calculations. A successful import alone
 does not count as an installation test. The source archive has its own build
 fingerprint because it deliberately excludes inactive development source trees.
 
 ## Resource and accuracy acceptance
 
-The gate also runs `test-resource-contracts`, the Python resource/lifecycle suite,
-and retained exact-subsample accuracy cases. See [Resource and scientific contracts](RESOURCE_SCIENTIFIC_CONTRACTS.md) for the budget scope, geometry and timing semantics, accepted engine settings, and explicitly unaccepted legacy diagnostics.
+The gate also runs `test-resource-checks`, the Python resource/lifecycle suite,
+and retained exact-subsample accuracy cases. See [Resource and numerical definitions](RESOURCE_AND_NUMERICAL_CHECKS.md) for the budget scope, geometry and timing semantics, the generated bounded acceptance settings, and their distinction from fast runtime defaults.
 
-## Capability and maintenance contracts
+## Capability and maintenance definitions
 
 The engine matrix comes from `capabilities/engines.json`. Builds check generated
-outputs before compiling. The gate retains its oracle plan and conservative
+outputs before compiling. The gate retains its reference calculation plan and conservative
 regression selection, checks direct runtime ownership and two-rank MPI lifecycle
 and consensus, and runs cold-process phase/peak-RSS/accuracy benchmarks. See
-[MAINTAINABILITY_CONTRACTS.md](MAINTAINABILITY_CONTRACTS.md) and
+[DEVELOPMENT_GUIDELINES.md](DEVELOPMENT_GUIDELINES.md) and
 [ENGINE_CAPABILITIES.md](ENGINE_CAPABILITIES.md).

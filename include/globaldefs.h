@@ -139,8 +139,8 @@ typedef char ErrorMsg[_ERRORMSGSIZE_];
 #include "cmdline_data.h"
 #include "options_cache.h"
 #include "global_data.h"
-#include "angular_contracts.h"
-#include "resource_contracts.h"
+#include "angular_checks.h"
+#include "resource_checks.h"
 
 global bodyptr bodytable[MAXITEMS];
 global nodeptr *nodetablescanlev[MAXITEMS];
@@ -211,7 +211,7 @@ typedef struct cballs_result_array {
 } cballs_result_array;
 typedef struct cballs_runtime_state {
     cballs_runtime_attachment attachments[2]; /* native octree, PCA ball tree */
-    cballs_result_array results[8];
+    cballs_result_array results[32];
     int retain_results;
     cballs_mpi_engine_state mpi[CBALLS_MPI_ENGINE_COUNT];
     int mpi_local_depth;

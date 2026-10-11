@@ -7,7 +7,7 @@ This section describes the various formats of catalog points you need to compute
 They are given with the option: ``infileformat``.
 
 Standard formats
-----------------------------------
+----------------
 
 :columns-ascii:
     The file(s) with the data to be correlated.
@@ -20,7 +20,7 @@ Standard formats
     The file with data to be correlated using Takahashi etal simulations format (can be transformed to Healpix format).
 
 Miscellaneous formats
-------------------------
+---------------------
 
 :gadget: Gadget files can be read using this format. Catalog can be only one file or composed of several files.
 

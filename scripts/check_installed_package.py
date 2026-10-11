@@ -31,6 +31,73 @@ def check_profile(installed_build, intended_build, lookup):
     return expected
 
 
+def check_exact_numerics(cyballs, products):
+    import numpy as np
+    points=np.vstack((np.eye(3),-np.ones(3)/np.sqrt(3)))
+    cases=[]
+    for engine in ('octree-2balls-omp','kdtree-2balls-omp','balltree-2balls-omp','octree-3pcf-3d-omp'):
+        physical='3pcf-3d' in engine
+        model=cyballs.cballs()
+        options='no-out-Hist,no-smooth-pivot,weights-norm,no-normalize-HistZeta,no-one-ball,no-two-balls'
+        options+=',compute-2pcf-3d,compute-3pcf-3d' if physical else ',edge-corrections'
+        try:
+            model.set(searchMethod=engine,rootDir=str(products/(engine+'-range')),
+                sizeHistN=4,mChebyshev=2,rangeN=1.99,rminHist=.03,useLogHist=True,
+                usePeriodic=False,theta=0,numberThreads=2,verbose=0,verbose_log=0,options=options)
+            model.set_catalog(points,kappa=np.ones(4),weights=np.array([1e16,1,1,1]));model.Run()
+            if physical:
+                data=model.getPhysicalResults()['arrays']
+                values=[data['triple_numerator'][0].sum(),data['triple_denominator'][0].sum()]
+            else:
+                values=[model.getHistZetaMsincos(1,1).sum(),model.getScalarWindowDiagnostics()['window_monopole'].sum()]
+            np.testing.assert_allclose(values,[18e16+6]*2,rtol=3e-12,atol=0)
+            model.set_catalog(points,kappa=np.ones(4),weights=np.full(4,1e155))
+            try:
+                model.Run()
+            except Exception as error:
+                if 'numerical range' not in str(error):raise
+            else:raise AssertionError('installed raw overflow was accepted')
+            if model.state:raise AssertionError('failed installed run has a valid state')
+            model.set_catalog(points,kappa=np.ones(4),weights=np.ones(4));model.Run()
+            if not model.state:raise AssertionError('installed numerical error did not recover')
+            if not physical:
+                model.set(options='only-2pcf,no-out-Hist,no-smooth-pivot,weights-norm,no-one-ball,no-two-balls')
+                for weight in (1e-300,1e200,1e300):
+                    model.set_catalog(points,kappa=np.ones(4),weights=np.full(4,weight));model.Run()
+                    np.testing.assert_array_equal(model.getHistXi2pcf(),[0.,0.,0.,1.])
+            cases.append(dict(engine=engine,status='PASS',oracle='N1 distinct products and N2 range/recovery'))
+        finally:model.clean_all()
+    return cases
+
+
+def check_physical_survey(cyballs,products):
+    import numpy as np
+    solved=cyballs.solve_physical_survey([1.+.8/3,2.12],[1.,.8,.8],signal_lmax=1,padding=0)
+    np.testing.assert_allclose(solved['zeta_corrected_legendre'],[1.,1.],rtol=2e-14)
+    if solved['zeta_status']!=1:raise AssertionError('installed positive-window solve failed')
+    rng=np.random.default_rng(61011);random=rng.uniform(0,1,(48,3));random[:,0]**=2;data=rng.uniform(.1,.9,(27,3))
+    packets=[];model=cyballs.cballs()
+    try:
+        for enabled in (False,True):
+            model.set(searchMethod='octree-3pcf-3d-omp',rootDir=str(products/('survey-'+str(enabled))),
+                sizeHistN=2,mChebyshev=3,rangeN=1.2,rminHist=.05,useLogHist=False,usePeriodic=False,
+                numberThreads=2,verbose=0,verbose_log=0,iCatalogs='1,2',surveySignalLmax=1,surveySolvePadding=1,
+                options='survey-estimator-3d,compute-2pcf-3d,compute-3pcf-3d'+('' if enabled else ',no-out-Hist'))
+            model.set_catalog(data,catalog=0);model.set_catalog(random,catalog=1);model.Run()
+            packet=model.getResults();packets.append(packet)
+            if not packet['arrays']['zeta_valid'].all():raise AssertionError('installed survey lost support')
+            original=packet['arrays']['zeta_corrected_legendre'].copy()
+            packet['arrays']['zeta_corrected_legendre'][0,0,0]+=1
+            np.testing.assert_array_equal(model.getResults()['arrays']['zeta_corrected_legendre'],original)
+            packet['arrays']['zeta_corrected_legendre']=original
+            model.struct_cleanup()
+        for name,value in packets[0]['arrays'].items():np.testing.assert_array_equal(value,packets[1]['arrays'][name])
+        if cyballs.qualification_report(*packets,rtol=1e-12)['status']!='QUALIFIED':
+            raise AssertionError('installed corrected survey qualification failed')
+    finally:model.clean_all()
+    return dict(engine='octree-3pcf-3d-omp',status='PASS',oracle='positive window, owned correction, output independence, reused-object identity and corrected qualification',arrays=sorted(packets[0]['arrays']))
+
+
 def check(source_root, output, expected_build=None):
     import numpy as np
     import cyballs
@@ -121,6 +188,8 @@ def check(source_root, output, expected_build=None):
                               abi_sizes=model.abi_sizes(), build_id=model.getRunMetadata()['build']['id']))
         finally:
             model.struct_cleanup()
+    cases.extend(check_exact_numerics(cyballs,products))
+    cases.append(check_physical_survey(cyballs,products))
     result = dict(status='PASS', distribution=distribution.metadata['Name'],
                   version=distribution.version, python=sys.executable, prefix=sys.prefix,
                   working_directory=str(Path.cwd()), module=str(module),

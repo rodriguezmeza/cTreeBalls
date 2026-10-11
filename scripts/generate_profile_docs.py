@@ -13,8 +13,8 @@ def render():
     intro=('This testing branch contains the enabled Makefile addon set. '
            'The core octree method is always available. Shared implementation '
            'dependencies live in support/ and do not register standalone methods. '
-           'The Cython binding sources stay in python/; Python analysis, benchmark '
-           'and regression scripts live in tests/python/. Inactive addons and '
+           'The Cython binding sources stay in python/; analysis utilities live in '
+           'tests/python/, together with benchmarks and regression scripts. Test targets are included from Makefile_tests. Inactive addons and '
            'addons/python_env are excluded from the branch.')
     md=['# Active source profile\n\n',intro+'\n\n',
         'The development checkout includes the enabled bundled GSL and CFITSIO '
@@ -44,7 +44,8 @@ def render():
     rst+=['Source organization\n-------------------\n\n',
           '* ``addons/`` contains enabled engines and their I/O/binding dependencies.\n'
           '* ``support/`` contains shared builders and compatibility kernels.\n'
-          '* ``tests/python/`` contains all Python testing and benchmark scripts.\n'
+          '* ``tests/python/`` contains analysis, benchmarks, regression programs and their README files.\n'
+          '* ``Makefile_tests`` contains targets included by the main Makefile.\n'
           '* ``tests/make_tests/`` contains shell/native-test launchers.\n'
           '* ``python/`` contains Cython source and declaration files only.\n']
     return {ROOT/'docs/ACTIVE_PROFILE.md':''.join(md),ROOT/'docs/active_profile.rst':''.join(rst)}

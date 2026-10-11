@@ -17,7 +17,7 @@
 //
 
 #include "globaldefs.h"
-#include "tree_contracts.h"
+#include "tree_checks.h"
 
 #include <limits.h>
 #include <stdint.h>

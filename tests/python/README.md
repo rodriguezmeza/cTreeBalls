@@ -1,31 +1,26 @@
-# Python tests, analyses and benchmarks
+# Python programs for cTreeBalls
 
-Run from the repository root with a matching freshly built C/Cython profile.
-The Cython binding source stays in `python/`; all Python tests and analysis
-scripts are here. C test programs and shell/native launchers remain under
-`tests/` and `tests/make_tests/`.
+This directory contains the maintained analysis programs, CPU-time benchmarks,
+regression tests, catalogue readers and plotting utilities, together with their
+README files. Run them from the repository root with a matching native and Cython
+build. The `python/` directory contains only the Cython binding sources.
 
-CPU benchmark entry points:
+- [CPU-time benchmarks](README_benchmark_suite.md): Lyman-alpha, kappa and shear.
+- [Regression tests](README_regression_tests.md): numerical and interface checks.
+- [Cluster jobs](../slurm_scripts/README.md): SLURM launchers remain beside their
+  shell configuration; Python job tools are in this directory.
 
-- [Scalar/convergence](README_kappa_corr_all_engines.md): `kappa_corr_all_engines.py`.
-- [Shear](README_shear_corr_all_engines.md): `shear_corr_all_engines.py`.
-- [Forest](README_lya_corr_all_engines.md): `lya_corr_all_engines.py`.
+The three entry points are `lya_corr_all_engines.py`,
+`kappa_corr_all_engines.py` and `shear_corr_all_engines.py`.
+Use `--help` for input units, correlation orders and timing controls. CPU time is
+consumed process time, including OpenMP workers; MPI totals sum participating
+ranks. Elapsed time is the maximum participating-rank duration. Compare the same
+catalogue, estimator, geometry and numerical accuracy before comparing timings.
 
-All three share `benchmark_timing.py`. Compare equal catalogs, estimator,
-precision, geometry, output controls and accuracy before comparing times.
-Complete Python Run, native MainLoop and launcher scopes are recorded separately.
-MPI wall time is the maximum rank time; CPU is summed over participating ranks.
+The optional external dual node adapter is a reference calculation, not another
+native search method. Its package is credited in the main README Acknowledgments.
+The executable reports the active methods with `options=print-search-methods`.
 
-Run focused regression checks:
-
-```sh
-PYTHONPATH=. python -m pytest -q tests/python/test_benchmark_timing.py \
-  tests/python/test_public_profile.py tests/python/test_capability_contracts.py
-make test-make-info test-search-methods
-```
-
-[Regression guide](README_regression_tests.md) lists the wider test suite.
-Plotting and catalog conversion tools retain their required input data paths;
-run historical data-specific examples from `tests/` unless their CLI states
-otherwise. `example_scalar_catalog.py` resolves its example input relative to
-this repository and performs no work on import.
+Native C tests, fixtures and shell launchers keep their locations under `tests/`.
+Historical plotting examples may require their original input catalogues;
+`example_scalar_catalog.py` resolves its catalogue relative to the repository.

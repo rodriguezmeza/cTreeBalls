@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "globaldefs.h"
+#include "distinct_products.h"
 #include "octree_2balls_tree.h"
 
 #define OCTREE_2BALLS_ROOT 0
@@ -242,12 +243,18 @@ static void octree_2balls_finish_parent_geometry(struct cmdline_data *cmd,
         ? cballs_store_search_bound(rsqrt(radius_squared) / cmd->theta)
         : cballs_store_upper_bound(MAX_REAL_NUMBER);
     parent->weight = mass;
+    parent->kappa_distinct = cballs_distinct_merge(left->kappa_distinct,
+        right->kappa_distinct, left->kappa_sum, right->kappa_sum);
     parent->kappa_sum = left->kappa_sum + right->kappa_sum;
     parent->kappa_sq_sum = left->kappa_sq_sum + right->kappa_sq_sum;
+    parent->field_weight_distinct = cballs_distinct_merge(left->field_weight_distinct,
+        right->field_weight_distinct, left->field_weight_sum, right->field_weight_sum);
     parent->field_weight_sum =
         left->field_weight_sum + right->field_weight_sum;
     parent->field_weight_sq_sum =
         left->field_weight_sq_sum + right->field_weight_sq_sum;
+    parent->weighted_kappa_distinct = cballs_distinct_merge(left->weighted_kappa_distinct,
+        right->weighted_kappa_distinct, left->weighted_kappa_sum, right->weighted_kappa_sum);
     parent->weighted_kappa_sum =
         left->weighted_kappa_sum + right->weighted_kappa_sum;
     parent->weighted_kappa_sq_sum =
@@ -270,10 +277,13 @@ static void octree_2balls_finish_leaf_geometry(struct cmdline_data *cmd,
     CLRV(geometric_center);
     target->weight = 0.0;
     target->kappa_sum = 0.0;
+    target->kappa_distinct = 0.0;
     target->kappa_sq_sum = 0.0;
     target->field_weight_sum = 0.0;
+    target->field_weight_distinct = 0.0;
     target->field_weight_sq_sum = 0.0;
     target->weighted_kappa_sum = 0.0;
+    target->weighted_kappa_distinct = 0.0;
     target->weighted_kappa_sq_sum = 0.0;
     for (INTEGER point = target->first; point <= target->last; point++) {
         bodyptr body = tree->bptr[point];
@@ -285,20 +295,26 @@ static void octree_2balls_finish_leaf_geometry(struct cmdline_data *cmd,
         SETV(packed->pos, Pos(body));
         packed->kappa = field;
         packed->weight = field_weight;
-        packed->weighted_kappa = field_weight * field;
+        packed->weighted_kappa = cballs_product(field_weight,field);
         packed->source = body;
         DO_COORD(k) {
             cmpos_sum[k] += mass * (real)packed->pos[k];
             geometric_center[k] += (real)packed->pos[k];
         }
         target->weight += mass;
+        target->kappa_distinct = cballs_distinct_merge(
+            target->kappa_distinct, 0.0, target->kappa_sum, field);
         target->kappa_sum += field;
         target->kappa_sq_sum += field * field;
+        target->field_weight_distinct = cballs_distinct_merge(
+            target->field_weight_distinct, 0.0, target->field_weight_sum, field_weight);
         target->field_weight_sum += field_weight;
         target->field_weight_sq_sum += field_weight * field_weight;
-        target->weighted_kappa_sum += field_weight * field;
+        target->weighted_kappa_distinct = cballs_distinct_merge(
+            target->weighted_kappa_distinct, 0.0, target->weighted_kappa_sum, cballs_product(field_weight,field));
+        target->weighted_kappa_sum += cballs_product(field_weight,field);
         target->weighted_kappa_sq_sum +=
-            (field_weight * field) * (field_weight * field);
+            (cballs_product(field_weight,field)) * (cballs_product(field_weight,field));
     }
     DO_COORD(k)
         target->cmpos[k] = (cballs_storage_real)

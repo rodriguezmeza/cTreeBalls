@@ -31,7 +31,7 @@ including auxiliary mask/random catalogs.
 Qualification compares these effective identities before applying numerical error
 tolerances. Equivalent loaders/column selections can compare when they produce
 identical canonical native rows and all other estimator controls match. File paths,
-raw file SHA-256 hashes and selected columns/formats remain provenance; raw-byte
+raw file SHA-256 hashes and selected columns/formats remain run information; raw-byte
 identity is not a substitute for the interpreted catalog. Changes to unused file
 columns may therefore be compatible, while changing the selected field, weights,
 masks or membership is incompatible even if numerical arrays remain close.
@@ -59,3 +59,13 @@ PYTHONPATH="$PWD" python3 -m pytest -q \
 On macOS, run the same tests with `MallocScribble=1` to verify that unavailable
 products cannot expose allocator bytes. The count-CF test uses an independent
 pair enumeration and shell-volume formula, including invalidation and recovery.
+
+## Physical survey corrections
+
+`getPhysicalResults()` includes owned `zeta_corrected_legendre`,
+`zeta_corrected_encore` and `xi_corrected` when those statistics are requested,
+plus validity/status and conditioning/residual arrays. Results are computed
+with or without file output; copied packets survive cleanup. Raw `data_*`
+means D-alpha*R and raw `random_*` means alpha*R. Explicit signal/window orders
+and padding, invalid NaN semantics, and qualification requirements are documented
+in [physical survey semantics](physical_survey_semantics.rst).

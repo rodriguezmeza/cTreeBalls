@@ -25,7 +25,7 @@ measures independently with NumPy. Increasing L or damping ringing may help a
 particular catalog, but neither establishes a general per-bin accuracy bound.
 Never clip signed reconstructed denominators and call the result exact.
 
-## Usage and output contracts
+## Usage and output definitions
 
 Add these parameters to the usual native catalog command:
 
@@ -107,7 +107,7 @@ compares the selected mu product to the direct reference and separately records
 is never reported as acceptance of its approximate reconstruction. Full process
 timing includes both outputs and is not a moment-only kernel benchmark.
 
-Regression coverage includes an independent ordered-triangle oracle, raw moments,
+Regression coverage includes an independent ordered-triangle reference calculation, raw moments,
 orders 0/1/4/12/32, 1/3/4/20/65 mu bins, boundary and clustered geometry, bent
 forests, zero/tiny/dominant weights, signed fields, one/two-forest exclusions,
 OpenMP determinism, unchanged discovery counts, independence of exact bins from

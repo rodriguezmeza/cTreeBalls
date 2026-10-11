@@ -6,6 +6,9 @@ import it as ``cyballs``.
 These docs describe this source checkout. A published package or GitHub branch
 may not yet contain local changes. A source push does not publish a PyPI release.
 
+See :doc:`engineering_contracts` for the declared platform/dependency matrix
+and the distinction between configured CI coverage and successful evidence.
+
 Prerequisites
 -------------
 

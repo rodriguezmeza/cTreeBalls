@@ -1,4 +1,4 @@
-# Release, resource, scientific, ownership and performance contracts
+# Release, resource, scientific, ownership and performance definitions
 
 This change set follows the six-stage active-profile review. No saved addon
 flag or estimator default is changed. Numerical reference enumerators remain
@@ -9,7 +9,7 @@ independent of the production kernels.
 The installed-package checker resolves the intended Makefile profile (or accepts
 `--expected-build gate/build-fingerprint.json`) and compares exact method/ID
 mappings, including unavailable canonical names. It contains no fixed engine
-count. The active gate produces `active-profile.md` and fails if any required
+count. The checks for the selected build produces `active-profile.md` and fails if any required
 module declared by an active engine or regression group was not successfully
 executed. The Ly-alpha pair-cell module is included. Source archives must include
 the new API, shared kernels, regressions and benchmark drivers.
@@ -21,7 +21,7 @@ of resolving dependencies on a pristine operating system.
 
 ## 2. Resource policy
 
-`CBALLS_DEFAULT_MEMORY_BUDGET_MIB` in `include/resource_contracts.h` is the single
+`CBALLS_DEFAULT_MEMORY_BUDGET_MIB` in `include/resource_checks.h` is the single
 compiled default: **65536 MiB**. `CBALLS_MEMORY_BUDGET_MB` overrides it at runtime.
 Set the environment before constructing/running objects, identically on MPI
 ranks. No recompilation is needed. Invalid values fail closed.
@@ -157,7 +157,7 @@ They are not alternative reference implementations.
 `affected_regressions.py` follows transitive includes; regressions assert that
 changes in each extracted component select all six scalar OpenMP/MPI engines
 and their independent edge/numerical references. Unknown/shared paths still
-select the full active matrix. The full release gate remains the final check.
+select the full active matrix. The full release checks remains the final check.
 
 ## 6. Matching-science scaling
 
@@ -192,4 +192,4 @@ interference from this benchmark itself. Other host activity remains possible.
 `scaling.json`, `size-scaling.png` and `strong-scaling.png` retain the evidence.
 A speedup is an observation for that workload/host/configuration, not a claim
 that every exact optimization or thread count is faster. The existing scalar/
-shear `benchmark_contracts.py` phase and accuracy benchmark remains available.
+shear `benchmark_accuracy_and_timing.py` phase and accuracy benchmark remains available.

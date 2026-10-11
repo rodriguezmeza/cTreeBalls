@@ -2,7 +2,7 @@
 
 This update targets `testing/current-state-2026-08-30`. The branch contains only
 the enabled addon profile, with required shared kernels under `support/` and all
-Python benchmarks/regressions under `tests/python/`. See the
+Python benchmarks under `tests/python/` and regressions under `tests/python/`. See the
 [active profile](docs/ACTIVE_PROFILE.md) for its 41 methods and directory list.
 The main branch is unchanged; merging follows a separate full validation.
 
@@ -38,13 +38,28 @@ Major contributors:
 OpenMP and MPI availability depends on the selected build. Not every engine
 accepts every geometry, field, mask, or normalization.
 
+## Interactive scientific tutor
+
+Run `./cballs options=IA-tutor` to ask about engines, approximation penalties,
+normalization, MPI, timing and plots. The default offline mode searches local
+documentation and reviewed scientific explanations from the development
+questions, with source references. It needs Python 3.9+ and no model download.
+An already installed local Ollama model is optional. See
+[the tutor guide](docs/ia_tutor.rst) for conversation commands, catalogue header
+inspection, saved error reports and configuration.
+
+```sh
+./cballs options=IA-tutor
+./cballs options=IA-tutor --ask "Does bin theta override tree theta?"
+```
+
 ## Documentation
 
 - [Sphinx guide](https://ctreeballs.readthedocs.io/en/latest/)
 - [Installation](docs/installation.rst) and [build profiles](docs/build_profiles.rst)
 - [Search-method guide](docs/search_methods.rst)
-- [Active capability catalogue](ENGINE_CAPABILITIES.md) and [validation contracts](docs/capabilities.rst)
-- [Scalar numerical contract](docs/3pcf.rst)
+- [Active capability catalog](ENGINE_CAPABILITIES.md) and [validation rules](docs/capabilities.rst)
+- [Scalar numerical definitions](docs/3pcf.rst)
 - [Python API](docs/api.rst) and [in-memory catalogs](docs/user/python.rst)
 - [Benchmarking](docs/benchmarks.rst) and [regressions](tests/python/README_regression_tests.md)
 
@@ -109,16 +124,15 @@ For scalar angular 3PCF in 3D, use observer-centered positions and Euclidean
 chord bins. On a unit sphere, a separation angle `alpha` has chord length
 `2*sin(alpha/2)`. **Do not recenter a sky catalog.**
 
-The shared raw benchmark contract uses
+The shared raw benchmark definition uses
 `options=no-normalize-HistZeta,weights-norm` and ordered distinct triplets.
 Repeated neighbors are removed inside the search. See the
-[3PCF contract](docs/3pcf.rst) for complex-mode conventions and normalization.
+[3PCF definition](docs/3pcf.rst) for complex-mode conventions and normalization.
 Older affected multipoles must be recomputed.
 
-`SMOOTHPIVOTON=1` enables pivot smoothing by default on active engines that
-advertise support through `options=print-search-methods`. Add
-`options=no-smooth-pivot` to recover the unsmoothed estimator. The explicit
-`smooth-pivot` spelling remains accepted. Native octree scalar dual node mode
+`SMOOTHPIVOTON=1` compiles pivot smoothing on engines that advertise support
+through `options=print-search-methods`. Smoothing is off by default;
+`options=smooth-pivot` explicitly selects the smoothed estimator. Native octree scalar dual node mode
 retains body pivots; its `legacy-one-ball` compatibility mode supports smoothing.
 Validate approximate tree acceptance against exact small-catalog runs before
 interpreting speedups.
@@ -156,7 +170,7 @@ registered catalogs, and `clean_all()` when finished.
 
 Ready-to-use examples:
 
-All catalog drivers and their README files are in `tests/python`; `python/`
+Comparison drivers and their README files are in `tests/python`; `python/`
 contains the Cython bindings only. The public profile excludes disabled addon
 directories and `addons/python_env`. Required internal kernels live in shared
 support directories and do not register extra search methods.
@@ -178,9 +192,9 @@ Every rank must enter the same run and cleanup sequence; read published
 histograms on rank 0. The all-engines drivers manage catalog broadcasting.
 Native benchmark CPU time is summed across participating MPI ranks; wall time
 is the slowest rank. Save the per-rank timings and numerical settings alongside
-results. The `mainloop_*` table columns exclude Python provenance capture;
+results. The `mainloop_*` table columns exclude the collection of run information in Python;
 `compute_*` includes the complete `Run` call. Compare matching timing scopes.
-See `scripts/benchmark_contracts.py` for cold-process timing, memory and retained
+See `scripts/benchmark_accuracy_and_timing.py` for cold-process timing, memory and retained
 accuracy workloads. Exact native-octree 3PCF needs `no-one-ball,no-smooth-pivot`; scheduling
 with `BALLS4SCANLEVON=1` can remain enabled.
 
@@ -190,8 +204,8 @@ The documentation toolchain requires Python 3.11 or newer.
 
 ```sh
 make test-make-info test-search-methods
-python3 -m pytest -q tests/python/test_scalar_numerical_contract.py
-CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/python/test_scalar_numerical_contract.py
+python3 -m pytest -q tests/python/test_scalar_numerical_definitions.py
+CBALLS_TEST_MPI=1 mpiexec -n 2 python3 tests/python/test_scalar_numerical_definitions.py
 python3 -m pip install -r docs/requirements.txt
 python3 -m sphinx -E -a -n -W --keep-going -b html docs docs/_build/html
 ```
@@ -211,11 +225,33 @@ notebooks are maintained in
 
 Abraham Arvizu et al., [arXiv:2408.16847](https://arxiv.org/abs/2408.16847)
 
-## Active-profile contracts
+## Checks for the selected build
 
 See [Release work sequence](RELEASE_WORK_SEQUENCE.md) for exact-profile release checks,
 resource forecasts, held-out accuracy qualification, owned forest/physical result
 APIs, and matching-science scaling benchmarks.
+
+
+Physical survey corrections are now retained by the Python model, independently
+of output files. See [survey result semantics](docs/physical_survey_semantics.rst)
+for signal/window bandwidths, solve padding, validity, diagnostics and the
+required exact-reference science campaign. Fast defaults remain unchanged;
+passing software checks does not qualify rejected scientific results.
+
+## Engineering and repeatable measurements
+
+See [engineering contracts](docs/engineering_contracts.rst) for native concurrency,
+configuration ownership, acceptance policy, platform/version CI coverage and the
+correctness-gated dedicated-node benchmark workflow. Local smoke measurements
+are labeled explicitly and do not certify dedicated-node performance.
+
+See [the approximation defaults and 5% L2 criterion](docs/APPROXIMATION_DEFAULTS.md) for fast defaults, measured penalties, exact references, and the limits of finite-multipole reconstruction.
+
+## Perlmutter CPU batch jobs
+
+[Perlmutter job scripts](tests/slurm_scripts/README.md) cover every registered
+MPI and OpenMP engine, with shared input/output handling, saved run settings,
+approximation guidance, a scaling sweep and cross-node numerical checks.
 
 ## Acknowledgments
 

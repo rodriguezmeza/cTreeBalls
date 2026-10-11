@@ -5,14 +5,15 @@ typedef struct {
     INTEGER reuse_pairs, reuse_represented_pairs, reuse_parent_reductions;
     real *field_cos;
     real *field_sin;
-    real *self_coscos;
-    real *self_sinsin;
-    real *self_sincos;
+    real *distinct_coscos;
+    real *distinct_sinsin;
+    real *distinct_sincos;
     real *normalization;
-    real *normalization_sq;
+    real *normalization_distinct;
     real *neighbor_count; /* Exact 0, 1, or 2-or-more; shared scratch layout. */
     real *window_cos;
     real *window_sin;
+    real *window_distinct;
     size_t stride;
     size_t values;
     int orders;
@@ -164,20 +165,20 @@ static inline real dual_node_multipole_angular_extent(
 static void dual_node_initialize_multipole_scratch(
         dual_node_multipole_scratch *, real *, size_t, int, int, size_t);
 
-static inline real dual_node_node_field_sq_sum(
+static inline real dual_node_node_field_distinct_sum(
         const dual_node_search_context *context,
         const fcfc_ballnode *ball_node)
 {
-    return context->weighted ? ball_node->weighted_kappa_sq_sum
-                             : ball_node->kappa_sq_sum;
+    return context->weighted ? ball_node->weighted_kappa_distinct
+                             : ball_node->kappa_distinct;
 }
 
-static inline real dual_node_node_normalization_sq_sum(
+static inline real dual_node_node_normalization_distinct_sum(
         const dual_node_search_context *context,
         const fcfc_ballnode *ball_node)
 {
-    return context->weighted ? ball_node->field_weight_sq_sum
-                             : (real)dual_node_node_count(ball_node);
+    const real count = (real)dual_node_node_count(ball_node);
+    return context->weighted ? ball_node->field_weight_distinct : count*(count-1.0);
 }
 
 static inline real dual_node_body_normalization(
@@ -227,45 +228,53 @@ static void dual_node_multipole_clear_profiled(
 
 static void dual_node_multipole_add(
         dual_node_multipole_scratch *scratch, int radial_bin,
-        real field_sum, real field_sq_sum,
-        real normalization_sum, real normalization_sq_sum,
+        real field_sum, real field_distinct_sum,
+        real normalization_sum, real normalization_distinct_sum,
         INTEGER neighbors, real cosphi1, real sinphi1)
 {
     real cosphi = cosphi1;
     real sinphi = sinphi1;
     size_t index = (size_t)radial_bin;
 
-    scratch->normalization[radial_bin] += normalization_sum;
-    scratch->normalization_sq[radial_bin] += normalization_sq_sum;
-    scratch->neighbor_count[radial_bin] = MIN(2.0,
-        scratch->neighbor_count[radial_bin] + (real)MIN(neighbors, 2));
-    scratch->field_cos[index] += field_sum;
-    scratch->self_coscos[index] += field_sq_sum;
-    if (scratch->window_orders)
-        scratch->window_cos[index] += normalization_sum;
-    for (int order = 1;
+    /* Arguments and distinct_* slots carry internal ordered distinct products.
+     * Singleton bodies supply zero; accepted nodes supply stable tree merges. */
+    scratch->normalization_distinct[index] = cballs_distinct_merge(
+        scratch->normalization_distinct[index], normalization_distinct_sum,
+        scratch->normalization[index], normalization_sum);
+    scratch->normalization[index] += normalization_sum;
+    scratch->neighbor_count[index] = MIN(2.0,
+        scratch->neighbor_count[index] + (real)MIN(neighbors, 2));
+    for (int order = 0;
          order < MAX(scratch->orders, scratch->window_orders); order++) {
-        index += scratch->stride;
+        const real c = order ? cosphi : 1.0;
+        const real sn = order ? sinphi : 0.0;
         if (order < scratch->orders) {
-            const real field_cos = field_sum * cosphi;
-            const real field_sin = field_sum * sinphi;
-
-            scratch->field_cos[index] += field_cos;
-            scratch->field_sin[index] += field_sin;
-            scratch->self_coscos[index] += field_sq_sum * cosphi * cosphi;
-            scratch->self_sinsin[index] += field_sq_sum * sinphi * sinphi;
-            scratch->self_sincos[index] += field_sq_sum * sinphi * cosphi;
+            const real x = cballs_product(field_sum, c);
+            const real y = cballs_product(field_sum, sn);
+            const real px = scratch->field_cos[index], py = scratch->field_sin[index];
+            scratch->distinct_coscos[index] = cballs_distinct_merge(
+                scratch->distinct_coscos[index], field_distinct_sum*c*c, px, x);
+            scratch->distinct_sinsin[index] = cballs_distinct_merge(
+                scratch->distinct_sinsin[index], field_distinct_sum*sn*sn, py, y);
+            scratch->distinct_sincos[index] += field_distinct_sum*c*sn
+                + cballs_product(px,y) + cballs_product(py,x);
+            scratch->field_cos[index] += x;
+            scratch->field_sin[index] += y;
         }
         if (order < scratch->window_orders) {
-            scratch->window_cos[index] += normalization_sum * cosphi;
-            scratch->window_sin[index] += normalization_sum * sinphi;
+            const real x = normalization_sum*c, y = normalization_sum*sn;
+            scratch->window_distinct[index] += normalization_distinct_sum
+                + cballs_distinct_complex_cross(scratch->window_cos[index],
+                    scratch->window_sin[index], x, y);
+            scratch->window_cos[index] += x;
+            scratch->window_sin[index] += y;
         }
-        {
-            const real next_cos = cosphi * cosphi1 - sinphi * sinphi1;
-            const real next_sin = sinphi * cosphi1 + cosphi * sinphi1;
+        if (order) {
+            const real next_cos = cosphi*cosphi1-sinphi*sinphi1;
+            sinphi = sinphi*cosphi1+cosphi*sinphi1;
             cosphi = next_cos;
-            sinphi = next_sin;
         }
+        index += scratch->stride;
     }
 }
 
@@ -354,8 +363,8 @@ static int dual_node_multipole_add_body(
             ? (real)neighbor->weight : 1.0;
 
         dual_node_multipole_add(
-            scratch, radial_bin, field, field * field,
-            normalization, normalization * normalization,
+            scratch, radial_bin, field, 0.0,
+            normalization, 0.0,
             1, cosphi, sinphi);
     }
     scratch->body_visits++;
@@ -418,9 +427,9 @@ static int dual_node_multipole_scan_neighbors(
         dual_node_multipole_add(
             scratch, radial_bin,
             dual_node_node_field_sum(context, neighbor),
-            dual_node_node_field_sq_sum(context, neighbor),
+            dual_node_node_field_distinct_sum(context, neighbor),
             dual_node_node_normalization_sum(context, neighbor),
-            dual_node_node_normalization_sq_sum(context, neighbor),
+            dual_node_node_normalization_distinct_sum(context, neighbor),
             dual_node_node_count(neighbor), cosphi, sinphi);
         scratch->accepted_nodes++;
         return SUCCESS;
@@ -469,10 +478,10 @@ static void dual_node_multipole_finish_pivot_range(
         const size_t row=(size_t)n1*stride;
         for (int n2=n1;n2<=radial_bins;n2++) {
             if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
-            real denominator=scratch->normalization[n1]*scratch->normalization[n2];
-            if (n1==n2) denominator-=scratch->normalization_sq[n1];
-            hist->normalization[row+n2]+=pivot->normalization_sum*denominator;
-            if (n1!=n2) hist->normalization[(size_t)n2*stride+n1]+=pivot->normalization_sum*denominator;
+            real denominator=n1==n2 ? scratch->normalization_distinct[n1]
+                : cballs_product(scratch->normalization[n1],scratch->normalization[n2]);
+            hist->normalization[row+n2]+=cballs_product(pivot->normalization_sum,denominator);
+            if (n1!=n2) hist->normalization[(size_t)n2*stride+n1]+=cballs_product(pivot->normalization_sum,denominator);
         }
         for (int order=0;order<scratch->window_orders;order++) {
             const size_t offset=(size_t)order*scratch->stride;
@@ -482,14 +491,16 @@ static void dual_node_multipole_finish_pivot_range(
 #pragma omp simd
             for (int n2=n1;n2<=radial_bins;n2++) {
                 if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
-                real a=x*scratch->window_cos[offset+n2]+y*scratch->window_sin[offset+n2];
-                const real b=y*scratch->window_cos[offset+n2]-x*scratch->window_sin[offset+n2];
-                if (n1==n2) a-=scratch->normalization_sq[n1];
-                re[row+n2]+=pivot->normalization_sum*a;
-                im[row+n2]+=pivot->normalization_sum*b;
+                const real a=n1==n2 ? scratch->window_distinct[offset+n1]
+                    : cballs_product(x,scratch->window_cos[offset+n2])+cballs_product(y,scratch->window_sin[offset+n2]);
+                /* A complex diagonal is real by definition, including under FMA. */
+                const real b=n1==n2 ? 0.0
+                    : cballs_product(y,scratch->window_cos[offset+n2])-cballs_product(x,scratch->window_sin[offset+n2]);
+                re[row+n2]+=cballs_product(pivot->normalization_sum,a);
+                im[row+n2]+=cballs_product(pivot->normalization_sum,b);
                 if (n1!=n2) {
-                    re[(size_t)n2*stride+n1]+=pivot->normalization_sum*a;
-                    im[(size_t)n2*stride+n1]-=pivot->normalization_sum*b;
+                    re[(size_t)n2*stride+n1]+=cballs_product(pivot->normalization_sum,a);
+                    im[(size_t)n2*stride+n1]-=cballs_product(pivot->normalization_sum,b);
                 }
             }
         }
@@ -497,10 +508,10 @@ static void dual_node_multipole_finish_pivot_range(
 #pragma omp simd
         for (int n2=n1;n2<=radial_bins;n2++) {
             if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
-            real value=scratch->field_cos[n1]*scratch->field_cos[n2];
-            if (n1==n2) value-=scratch->self_coscos[n1];
-            monopole[row+n2]+=pivot->field_sum*value;
-            if (n1!=n2) monopole[(size_t)n2*stride+n1]+=pivot->field_sum*value;
+            real value=n1==n2 ? scratch->distinct_coscos[n1]
+                : cballs_product(scratch->field_cos[n1],scratch->field_cos[n2]);
+            monopole[row+n2]+=cballs_product(pivot->field_sum,value);
+            if (n1!=n2) monopole[(size_t)n2*stride+n1]+=cballs_product(pivot->field_sum,value);
         }
         for (int order=1;order<scratch->orders;order++) {
             const size_t offset=(size_t)order*scratch->stride;
@@ -512,20 +523,20 @@ static void dual_node_multipole_finish_pivot_range(
 #pragma omp simd
             for (int n2=n1;n2<=radial_bins;n2++) {
                 if (!DUAL_NODE_PAIR_PRESENT(n1,n2)) continue;
-                real a=x*scratch->field_cos[offset+n2];
-                real b=y*scratch->field_sin[offset+n2];
-                real c=y*scratch->field_cos[offset+n2];
-                real d=x*scratch->field_sin[offset+n2];
+                real a=n1==n2 ? 0.0 : cballs_product(x,scratch->field_cos[offset+n2]);
+                real b=n1==n2 ? 0.0 : cballs_product(y,scratch->field_sin[offset+n2]);
+                real c=n1==n2 ? 0.0 : cballs_product(y,scratch->field_cos[offset+n2]);
+                real d=n1==n2 ? 0.0 : cballs_product(x,scratch->field_sin[offset+n2]);
                 if (n1==n2) {
-                    a-=scratch->self_coscos[offset+n1];b-=scratch->self_sinsin[offset+n1];
-                    c-=scratch->self_sincos[offset+n1];d-=scratch->self_sincos[offset+n1];
+                    a=scratch->distinct_coscos[offset+n1];b=scratch->distinct_sinsin[offset+n1];
+                    c=scratch->distinct_sincos[offset+n1];d=scratch->distinct_sincos[offset+n1];
                 }
-                cc[row+n2]+=pivot->field_sum*a;ss[row+n2]+=pivot->field_sum*b;
-                sc[row+n2]+=pivot->field_sum*c;cs[row+n2]+=pivot->field_sum*d;
+                cc[row+n2]+=cballs_product(pivot->field_sum,a);ss[row+n2]+=cballs_product(pivot->field_sum,b);
+                sc[row+n2]+=cballs_product(pivot->field_sum,c);cs[row+n2]+=cballs_product(pivot->field_sum,d);
                 if (n1!=n2) {
                     const size_t column=(size_t)n2*stride+n1;
-                    cc[column]+=pivot->field_sum*a;ss[column]+=pivot->field_sum*b;
-                    sc[column]+=pivot->field_sum*d;cs[column]+=pivot->field_sum*c;
+                    cc[column]+=cballs_product(pivot->field_sum,a);ss[column]+=cballs_product(pivot->field_sum,b);
+                    sc[column]+=cballs_product(pivot->field_sum,d);cs[column]+=cballs_product(pivot->field_sum,c);
                 }
             }
         }
@@ -926,8 +937,8 @@ static void dual_node_multipole_clear_radial_through(
     const size_t count = (size_t)radial_bin + 1;
     real *order_arrays[5] = {
         scratch->field_cos, scratch->field_sin,
-        scratch->self_coscos, scratch->self_sinsin,
-        scratch->self_sincos
+        scratch->distinct_coscos, scratch->distinct_sinsin,
+        scratch->distinct_sincos
     };
 
     for (size_t array = 0; array < 5; array++)
@@ -935,12 +946,14 @@ static void dual_node_multipole_clear_radial_through(
             memset(order_arrays[array] + (size_t)order * scratch->stride,
                    0, count * sizeof(real));
     memset(scratch->normalization, 0, count * sizeof(real));
-    memset(scratch->normalization_sq, 0, count * sizeof(real));
+    memset(scratch->normalization_distinct, 0, count * sizeof(real));
     memset(scratch->neighbor_count, 0, count * sizeof(real));
     for (int order = 0; order < scratch->window_orders; order++) {
         memset(scratch->window_cos + (size_t)order * scratch->stride,
                0, count * sizeof(real));
         memset(scratch->window_sin + (size_t)order * scratch->stride,
+               0, count * sizeof(real));
+        memset(scratch->window_distinct + (size_t)order * scratch->stride,
                0, count * sizeof(real));
     }
     if (context->profile)
@@ -1000,8 +1013,8 @@ static void dual_node_multipole_scan_body_partial(
             dual_node_point_normalization(context, neighbor);
 
         dual_node_multipole_add(
-            scratch, radial_bin, field, field * field,
-            normalization, normalization * normalization,
+            scratch, radial_bin, field, 0.0,
+            normalization, 0.0,
             1, cosphi, sinphi);
     }
     statistics->body_visits++;
@@ -1066,9 +1079,9 @@ static void dual_node_multipole_scan_neighbors_partial(
         dual_node_multipole_add(
             scratch, radial_bin,
             dual_node_node_field_sum(context, neighbor),
-            dual_node_node_field_sq_sum(context, neighbor),
+            dual_node_node_field_distinct_sum(context, neighbor),
             dual_node_node_normalization_sum(context, neighbor),
-            dual_node_node_normalization_sq_sum(context, neighbor),
+            dual_node_node_normalization_distinct_sum(context, neighbor),
             dual_node_node_count(neighbor), cosphi, sinphi);
         statistics->accepted_nodes++;
         /* Acceptance is provisional until every neighbor has established the
@@ -1147,13 +1160,13 @@ static void dual_node_transport_moments(
             const size_t k = (size_t)m*scratch->stride+b;
             if (m < scratch->orders) {
                 const real x = scratch->field_cos[k], y = scratch->field_sin[k];
-                const real cc = scratch->self_coscos[k], ss = scratch->self_sinsin[k];
-                const real cs = scratch->self_sincos[k];
+                const real cc = scratch->distinct_coscos[k], ss = scratch->distinct_sinsin[k];
+                const real cs = scratch->distinct_sincos[k];
                 scratch->field_cos[k] = cm*x-sm*y;
                 scratch->field_sin[k] = sm*x+cm*y;
-                scratch->self_coscos[k] = cm*cm*cc+sm*sm*ss-2*cm*sm*cs;
-                scratch->self_sinsin[k] = sm*sm*cc+cm*cm*ss+2*cm*sm*cs;
-                scratch->self_sincos[k] = cm*sm*(cc-ss)+(cm*cm-sm*sm)*cs;
+                scratch->distinct_coscos[k] = cm*cm*cc+sm*sm*ss-2*cm*sm*cs;
+                scratch->distinct_sinsin[k] = sm*sm*cc+cm*cm*ss+2*cm*sm*cs;
+                scratch->distinct_sincos[k] = cm*sm*(cc-ss)+(cm*cm-sm*sm)*cs;
             }
             if (m < scratch->window_orders) {
                 const real x = scratch->window_cos[k], y = scratch->window_sin[k];
@@ -1343,9 +1356,9 @@ static int dual_node_allocate_multipole_scratch(
     order_values = order_arrays * (size_t)orders * stride;
     if (stride > (SIZE_MAX - order_values) / 3) goto invalid_size;
     *values_per_level = order_values + 3 * stride;
-    if ((size_t)window_orders > (SIZE_MAX - *values_per_level) / 2 / stride)
+    if ((size_t)window_orders > (SIZE_MAX - *values_per_level) / 3 / stride)
         goto invalid_size;
-    *values_per_level += 2 * (size_t)window_orders * stride;
+    *values_per_level += 3 * (size_t)window_orders * stride;
     if ((size_t)levels > SIZE_MAX / *values_per_level)
         goto invalid_size;
     *values_per_task = (size_t)levels * *values_per_level;
@@ -1378,15 +1391,17 @@ static void dual_node_initialize_multipole_scratch(
     scratch->reuse_parent_reductions = 0;
     scratch->field_cos = base;
     scratch->field_sin = scratch->field_cos + order_values;
-    scratch->self_coscos = scratch->field_sin + order_values;
-    scratch->self_sinsin = scratch->self_coscos + order_values;
-    scratch->self_sincos = scratch->self_sinsin + order_values;
-    scratch->normalization = scratch->self_sincos + order_values;
-    scratch->normalization_sq = scratch->normalization + stride;
-    scratch->neighbor_count = scratch->normalization_sq + stride;
+    scratch->distinct_coscos = scratch->field_sin + order_values;
+    scratch->distinct_sinsin = scratch->distinct_coscos + order_values;
+    scratch->distinct_sincos = scratch->distinct_sinsin + order_values;
+    scratch->normalization = scratch->distinct_sincos + order_values;
+    scratch->normalization_distinct = scratch->normalization + stride;
+    scratch->neighbor_count = scratch->normalization_distinct + stride;
     scratch->window_cos = window_orders ? scratch->neighbor_count + stride : NULL;
     scratch->window_sin = window_orders
         ? scratch->window_cos + (size_t)window_orders * stride : NULL;
+    scratch->window_distinct = window_orders
+        ? scratch->window_sin + (size_t)window_orders * stride : NULL;
     scratch->stride = stride;
     scratch->values = values;
     scratch->orders = orders;

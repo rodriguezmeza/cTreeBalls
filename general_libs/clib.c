@@ -35,7 +35,7 @@
 #include <stdint.h>
 #include <setjmp.h>
 #include <stdatomic.h>
-#include "resource_contracts.h"
+#include "resource_checks.h"
 
 
 //B Memory section

@@ -1,8 +1,11 @@
 include LICENSE
 include README.md
+recursive-include tutor *.py *.md *.rst *.json
+include docs/APPROXIMATION_DEFAULTS.md
 include pyproject.toml
 recursive-include requirements *.txt
 include Makefile
+include Makefile_tests
 include Makefile_machine
 include Makefile_settings
 recursive-include source *.c
@@ -28,7 +31,7 @@ recursive-include tests/fixtures/io_stabilization *
 recursive-include tests/fixtures/runtime_stabilization *
 include tests/test_runtime_stabilization.c
 include tests/test_scalar_window.c
-recursive-include tests/fixtures/provenance_window *
+recursive-include tests/fixtures/run_information_and_window *
 
 prune addons
 
@@ -79,11 +82,11 @@ global-exclude *.o *.a *.so *.dylib
 global-exclude __pycache__/*
 global-exclude *.pyc
 
-include RESOURCE_SCIENTIFIC_CONTRACTS.md
+include RESOURCE_AND_NUMERICAL_CHECKS.md
 
 recursive-include capabilities *.json
 include ENGINE_CAPABILITIES.md
-include MAINTAINABILITY_CONTRACTS.md
+include DEVELOPMENT_GUIDELINES.md
 include addons/*/startrun_*.h
 
 include RELEASE_WORK_SEQUENCE.md
@@ -106,3 +109,5 @@ include docs/SOURCE_DISTRIBUTION.md
 recursive-include support *.c *.h Makefile* *.md *.txt
 
 include docs/ACTIVE_PROFILE.md
+
+recursive-include tests/slurm_scripts *.py *.sh *.slurm *.json *.md

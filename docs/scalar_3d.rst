@@ -36,9 +36,10 @@ reduction. It does not average rank-local normalized correlations.
 The random catalog represents the selection; survey mode rejects
 ``read-mask``, ``remove-mean``, and line-of-sight exclusions.
 
-Empty windows return zero with ``valid=0``; ``pivot_condition`` remains
-infinite when no matrix was solved. Inspect validity and conditioning rather
-than interpreting every zero as a measured zero correlation.
+Empty, singular or poorly conditioned windows return NaN coefficients and
+explicit validity codes. Corrected arrays are available independently of file
+output. See :doc:`physical_survey_semantics` for signal/window orders, padding,
+conditioning, residuals, owned products and science acceptance.
 
 Examples and Reference
 ----------------------
@@ -63,5 +64,5 @@ Changing rank count may change floating-point grouping.
 
 Run ``make test-octree-3pcf-3d-omp`` and
 ``make test-octree-3pcf-3d-mpi`` for enabled profiles. Their regressions
-cover scalar/survey oracles, cutoff correctness, multiple ranks and threads,
+cover scalar/survey reference calculations, cutoff correctness, multiple ranks and threads,
 and input/output failure recovery.

@@ -26,6 +26,7 @@ run_help() {
 run_help print-search-methods "${methods_output}"
 run_help print-options "${options_output}"
 run_help make-info "${make_output}"
+grep -Fq "IA-tutor" "${options_output}" || { echo "FAIL: missing IA-tutor option" >&2; exit 1; }
 
 for expected in \
     'Searching methods registered in this executable' \

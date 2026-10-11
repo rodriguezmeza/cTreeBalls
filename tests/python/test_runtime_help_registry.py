@@ -35,5 +35,19 @@ def test_make_info_covers_resolved_build_profiles():
                 "GGG_OMP_FRONTIER_TARGET_TASKS", "GGG_OMP_FRONTIER_MIN_ACTIVE",
                 "GGG_MPI_PIVOT_CLAIM_SIZE", "SLEEFON", "SLEEF_PKG",
                 "SLEEF_AVAILABLE", "SLEEF_ENABLED", "SLEEF_CFLAGS",
-                "SLEEF_LDFLAGS", "SLEEF_LIBS", "SLEEF_RPATH"}
+                "SLEEF_LDFLAGS", "SLEEF_LIBS", "SLEEF_RPATH", "THETA",
+                "CBALLS_SHEAR_PIVOT_TOL", "CBALLS_SHEAR_BIN_THETA"}
     assert expected <= names
+
+
+def test_runtime_help_documents_current_progress_and_count_policy():
+    source = (ROOT / "source/startrun.c").read_text()
+    assert "NMultipolesON is a legacy build switch" in source
+    assert "CBALLS_SHEAR_TASK_MEMORY_MB" in source
+    assert "even if set to 0" in source
+    assert "bin slop does not replace theta" in source
+    # MPI-only profiles must also advertise the reuse option.
+    options = source.split("local int print_options(")[-1]
+    before_reuse = options.split('{"shear-pivot-reuse"')[0].rsplit("#if", 1)[-1]
+    for family in ("OCTREE", "KDTREE", "BALLTREE"):
+        assert family + "SHEARSPHERE2BALLSMPI" in before_reuse

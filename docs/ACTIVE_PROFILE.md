@@ -1,6 +1,6 @@
 # Active source profile
 
-This testing branch contains the enabled Makefile addon set. The core octree method is always available. Shared implementation dependencies live in support/ and do not register standalone methods. The Cython binding sources stay in python/; Python analysis, benchmark and regression scripts live in tests/python/. Inactive addons and addons/python_env are excluded from the branch.
+This testing branch contains the enabled Makefile addon set. The core octree method is always available. Shared implementation dependencies live in support/ and do not register standalone methods. The Cython binding sources stay in python/; analysis utilities live in tests/python/, together with benchmarks and regression scripts. Test targets are included from Makefile_tests. Inactive addons and addons/python_env are excluded from the branch.
 
 The development checkout includes the enabled bundled GSL and CFITSIO sources. A public source distribution excludes those libraries and sets `GSLINTERNAL=0, CFITSIOLIBON=0` in its staged Makefiles.
 
@@ -56,7 +56,7 @@ The development checkout includes the enabled bundled GSL and CFITSIO sources. A
 | `balltree-2balls-mpi` | 179 | scalar; FCFC PCA ball tree; deterministic MPI+OpenMP dual/triple-node scan; distributed 2PCF and angular-multipole 3PCF with auto- and cross-catalog support |
 | `octree-2balls-omp` | 176 | scalar; native octree; dual-node 2PCF and LogMultipole 3PCF; 2PCF and angular-multipole 3PCF with auto- and cross-catalog support |
 | `octree-2balls-mpi` | 177 | scalar; native octree; deterministic MPI+OpenMP frontier; distributed 2PCF and LogMultipole angular-multipole 3PCF |
-| `octree-shear-sphere-2balls-omp` | 200 | full-sky spin-2 shear; dual-node dual-node octree; OpenMP; xi+/xi- and four Gamma-x shear 3PCF components |
+| `octree-shear-sphere-2balls-omp` | 200 | full-sky spin-2 shear; dual-node octree; OpenMP; xi+/xi- and four Gamma-x shear 3PCF components |
 | `octree-shear-sphere-2balls-mpi` | 203 | full-sky spin-2 shear; native octree; adaptive MPI+OpenMP frontier; distributed xi+/xi- and four Gamma-x shear 3PCF components |
 | `kdtree-shear-sphere-2balls-omp` | 201 | full-sky spin-2 shear; dual-node median KD tree; OpenMP; xi+/xi- and four Gamma-x shear 3PCF components |
 | `kdtree-shear-sphere-2balls-mpi` | 204 | full-sky spin-2 shear; median KD tree; adaptive MPI+OpenMP frontier; distributed xi+/xi- and four Gamma-x shear 3PCF components |

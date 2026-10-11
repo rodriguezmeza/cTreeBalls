@@ -19,6 +19,7 @@
 #endif
 
 #include "globaldefs.h"
+#include "distinct_products.h"
 #include "fcfc_balltree.h"
 
 #if defined(__APPLE__) && !defined(DUAL_NODE_METHOD_NAME)
@@ -1476,6 +1477,8 @@ invalid_size:
     return FAILURE;
 }
 
+#include "dual_node_range_safe_pairs.h"
+
 static int dual_node_run_pair_tasks(
         const dual_node_search_context *context,
         fcfc_balltreeptr tree1, fcfc_balltreeptr tree2,
@@ -1502,6 +1505,10 @@ static int dual_node_run_pair_tasks(
         goto cleanup;
     }
 
+    if (dual_node_requires_scaled_pairs(tree1) || dual_node_requires_scaled_pairs(tree2)) {
+        status=dual_node_scaled_pairs(context,tree1,tree2,auto_correlation);
+        goto cleanup;
+    }
     allocation_status = dual_node_allocate_task_histograms(
         cmd, frontier_count1, stride, &task_histograms,
         &task_body_counts, &task_cell_counts);
@@ -1590,8 +1597,17 @@ static int dual_node_run_pair_tasks(
                 + (size_t)itask * 3 * stride;
             denominator += base[stride + (size_t)n];
         }
-        gd->histXi2pcf[n] = cballs_normalize_or_zero(
-            gd->histXi2pcf[n], denominator);
+        if (!isfinite(denominator) || !isfinite(gd->histXi2pcf[n])) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                "%s: numerical range: raw pair bin %d overflowed",DUAL_NODE_METHOD_NAME,n);
+            goto cleanup;
+        }
+        gd->histXi2pcf[n] = cballs_checked_ratio(gd->histXi2pcf[n], denominator);
+        if (!isfinite(gd->histXi2pcf[n])) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                "%s: numerical range: normalized pair bin %d overflowed",DUAL_NODE_METHOD_NAME,n);
+            goto cleanup;
+        }
     }
 
     gd->histogram_products |= CBALLS_PRODUCT_NN | CBALLS_PRODUCT_XI;
@@ -1943,13 +1959,13 @@ global int searchcalc_balltree_2balls_omp(
                     * (size_t)triple_orders * stride * stride + index];
             }
             for (int m = 1; m <= triple_orders; m++) {
-                gd->histZetaMcos[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMcos[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMcos[m][n1][n2], denominator);
-                gd->histZetaMsin[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMsin[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMsin[m][n1][n2], denominator);
-                gd->histZetaMsincos[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMsincos[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMsincos[m][n1][n2], denominator);
-                gd->histZetaMcossin[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMcossin[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMcossin[m][n1][n2], denominator);
             }
         }
@@ -2272,13 +2288,13 @@ global int searchcalc_balltree_2balls_omp(
                     * (size_t)triple_orders * stride * stride + index];
             }
             for (int m = 1; m <= triple_orders; m++) {
-                gd->histZetaMcos[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMcos[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMcos[m][n1][n2], denominator);
-                gd->histZetaMsin[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMsin[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMsin[m][n1][n2], denominator);
-                gd->histZetaMsincos[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMsincos[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMsincos[m][n1][n2], denominator);
-                gd->histZetaMcossin[m][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMcossin[m][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMcossin[m][n1][n2], denominator);
             }
         }

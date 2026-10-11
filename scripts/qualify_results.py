@@ -18,8 +18,14 @@ def main():
     p.add_argument('--reference',required=True,type=Path)
     p.add_argument('--output',required=True,type=Path)
     p.add_argument('--rtol',type=float,default=.02);p.add_argument('--atol',type=float,default=1e-10)
+    p.add_argument('--metric',choices=('l2','pointwise'),default='l2')
+    p.add_argument('--selection',type=Path,help='NPZ of Boolean masks by observable name')
     a=p.parse_args()
-    report=qualification_report(load_result_packet(a.candidate),load_result_packet(a.reference),rtol=a.rtol,atol=a.atol)
+    selection=None
+    if a.selection:
+        import numpy as np
+        with np.load(a.selection,allow_pickle=False) as masks:selection={k:masks[k] for k in masks.files}
+    report=qualification_report(load_result_packet(a.candidate),load_result_packet(a.reference),rtol=a.rtol,atol=a.atol,selection=selection,metric=a.metric)
     a.output.parent.mkdir(parents=True,exist_ok=True)
     a.output.write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
     print(report['status'])

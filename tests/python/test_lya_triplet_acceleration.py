@@ -157,10 +157,11 @@ def test_multipole_budget(tmp_path, monkeypatch):
     assert not (tmp_path/'budget/histZetaM_lya_multipoles.txt').exists()
 
 
-def test_calibration_flags_invalid_bins_and_floor():
+def test_calibration_flags_invalid_bins_and_floor(monkeypatch):
     import importlib.util
     from pathlib import Path
     path=Path(__file__).resolve().parents[1]/'python/benchmark_lya_triplet_kernels.py'
+    monkeypatch.syspath_prepend(str(path.parent))
     spec=importlib.util.spec_from_file_location('triplet_calibration',path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     ref=np.zeros((3,13));ref[:,0]=np.arange(3)

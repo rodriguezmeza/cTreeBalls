@@ -52,12 +52,14 @@ Output columns, multipole truncation, and empty/singular-window validity flags
 match the OpenMP implementation. Survey mode rejects `read-mask`,
 `remove-mean`, and LOS exclusions; the random catalog encodes the selection.
 
-For an empty window, corrected values are zero and `valid=0`; the
-`pivot_condition` diagnostic remains infinity because no matrix was solved.
+Unsupported window bins return NaN coefficients and explicit status codes.
+Corrections are owned rank-zero results even with `no-out-Hist`. Independent
+signal/window orders, solve padding, rcond and residuals follow the
+[shared physical survey contract](../../docs/physical_survey_semantics.rst).
 
 See `../octree_3pcf_3d_omp/README.md` for the detailed estimator definitions.
 
-## Parallel contract
+## Parallel execution rules
 
 - Each rank reads or receives the same complete catalog(s), and builds its own
   tree. Catalog, tree, histogram, and survey-workspace memory is replicated.
@@ -73,7 +75,7 @@ See `../octree_3pcf_3d_omp/README.md` for the detailed estimator definitions.
   errors are coordinated at the corresponding collective boundaries.
 - All ranks must run the same method, parameters, catalog contents, and stage
   sequence. Launch-time/parser failures before MPI initialization and process
-  crashes are outside the recoverable collective contract.
+  crashes are outside the recoverable collective recovery guarantees.
 - MPI calls occur outside OpenMP regions and require MPI_THREAD_FUNNELED or
   stronger support.
 
@@ -102,7 +104,7 @@ Cython MPI tests require `mpi4py`. Add `--mpi-only` (or
 `CB3D_MPI_TEST_ARGS=--mpi-only` with make) when the OpenMP sibling is disabled.
 Add `--fits` to check FITS 2PCF/3PCF and LOS exclusion when CFITSIO and Astropy
 are available.
-Tests include independent scalar and survey oracles, modes, multi-block
+Tests include independent scalar and survey reference calculations, modes, multi-block
 rank/thread comparisons, periodic and logarithmic bins, Rcut/theta, in-memory
 masks, collective failures, repeated Cython recovery, and post-finalization
 rejection. CI builds both with and without the OpenMP sibling.

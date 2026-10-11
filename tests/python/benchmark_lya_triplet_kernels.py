@@ -5,17 +5,23 @@ Uses the same DESI/eBOSS/Cartesian FITS reader as lya_corr_all_engines.py.
 No cyballs import is needed. Runs execute serially; each uses a fresh process.
 """
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
 import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
 import re
 import subprocess
-import sys
 import time
 import numpy as np
+from benchmark_timing import runtime_environment
 
 ROOT=Path(__file__).resolve().parents[2]
 METHOD='lya-anisotropic-multipole-3pcf-omp'
@@ -56,6 +62,7 @@ def run_process(command,log):
     text=log.read_text()
     match=re.search(r'cpusearch\s*=\s*([\d.eE+-]+)',text)
     result=dict(wall_seconds=seconds,process_cpu_seconds=cpu,peak_rss_bytes=rss,
+                runtime_environment=runtime_environment(), cpu_wall_ratio=cpu/seconds if cpu is not None and seconds>0 else None,
                 native_search_cpu_seconds=float(match[1]) if match else None)
     for key in ('aggregated_pairs','direct_pairs','segment_accepts'):
         found=re.search(rf'{key}=(\d+)',text)
@@ -102,7 +109,7 @@ def main(argv=None):
         for xyz,delta,weight,fid in zip(catalog.positions,catalog.delta,catalog.weights,catalog.forest_ids):
             stream.write(' '.join(format(v,'.17g') for v in (*xyz,delta,weight))+f' {int(fid)}\n')
     binary=args.cballs.resolve()
-    report=dict(platform=platform.platform(),binary=str(binary),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+    report=dict(runtime_environment=runtime_environment(),platform=platform.platform(),binary=str(binary),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
         catalog_sha256=hashlib.sha256(cat.read_bytes()).hexdigest(),pixels=catalog.nbody,forests=len(np.unique(catalog.forest_ids)),
         selection=catalog.metadata,settings=vars(args).copy(),timing_scope='complete native process, including input/tree/search/output; preprocessing excluded',
         rss_scope='per-process high-water RSS from wait4; not Python reader memory',runs=[],comparisons=[])

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Contracts for the active full-sky shear all-engines driver."""
 
-import os
-from pathlib import Path
 import sys
+from pathlib import Path
+
+# Locate sibling analysis and benchmark helpers for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
+
+
+import os
 
 import numpy as np
 import pytest
@@ -142,6 +147,8 @@ def test_cli_defaults_to_spherical_active_engines():
     assert args.geometry == "sphere"
     assert args.engines == []
     assert args.mpi_ranks == 2
+    assert args.nsmooth == RunConfig().nsmooth == 8
+    assert parse_arguments(["--nsmooth", "16"]).nsmooth == 16
 
 
 def test_mpi_runtime_contract_validation():
@@ -157,3 +164,40 @@ def test_mpi_runtime_contract_validation():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([os.fspath(Path(__file__))]))
+
+
+def test_mpi_launcher_forwards_progress_before_exit(tmp_path, capsys):
+    import threading
+    import time
+    from shear_corr_all_engines import _run_mpi_logged
+    marker=tmp_path/'release'
+    logfile=tmp_path/'worker.log'
+    command=[sys.executable,'-u','-c',
+             "import time,pathlib; print('task 1',flush=True); p=pathlib.Path("+repr(str(marker))+"); "+
+             "exec('while not p.exists(): time.sleep(.01)'); print('done',flush=True)"]
+    result=[]
+    worker=threading.Thread(target=lambda:result.append(_run_mpi_logged(command,logfile,5)))
+    worker.start()
+    try:
+        deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            if logfile.exists() and b'task 1' in logfile.read_bytes():break
+            time.sleep(.01)
+        assert worker.is_alive()
+        assert b'task 1' in logfile.read_bytes()
+        assert 'task 1' in capsys.readouterr().out
+    finally:
+        marker.touch();worker.join(timeout=6)
+    assert result==[0]
+    assert b'done' in logfile.read_bytes()
+
+
+def test_mpi_launcher_timeout_and_error_output(tmp_path, capsys):
+    from shear_corr_all_engines import _run_mpi_logged
+    command=[sys.executable,'-u','-c',"import time; print('started',flush=True); time.sleep(30)"]
+    with pytest.raises(RuntimeError,match='exceeded'):
+        _run_mpi_logged(command,tmp_path/'timeout.log',.5)
+    assert (tmp_path/'timeout.log').read_text()=='started\n'
+    assert 'started' in capsys.readouterr().out
+    assert _run_mpi_logged([sys.executable,'-c',"import sys; print('failed'); sys.exit(3)"],tmp_path/'failed.log',5)==3
+    assert 'failed' in (tmp_path/'failed.log').read_text()

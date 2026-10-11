@@ -58,8 +58,8 @@ from this table:
      - Double storage/computation; ``1`` selects mixed storage with double arithmetic.
    * - ``SMOOTHPIVOTON``
      - ``1``
-     - Enable smoothing by default on supported engines; use
-       ``options=no-smooth-pivot`` for an unsmoothed run.
+     - Compile smoothing support; enable it with ``options=smooth-pivot``.
+       The default estimator is unsmoothed.
 
 For MPI addons, the build selects the configured ``MPICC`` wrapper.
 The runtime must provide ``MPI_THREAD_FUNNELED`` or stronger support.

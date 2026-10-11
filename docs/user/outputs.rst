@@ -27,8 +27,8 @@ Common Outputs
     Additional multipole/angle representations produced by selected options
     and add-ons.
 
-Provenance and Logs
--------------------
+Run Information and Logs
+------------------------
 
 Each run writes a ``*-usedvalues`` parameter snapshot beneath ``rootDir``.
 When ``verbose_log`` is positive, log output is written under the run's
@@ -60,7 +60,7 @@ matrices reconstruct ``coscos+sinsin + 1j*(sincos-cossin)``.
 basis-dependent component matrices, under sky rotations.
 
 ``no-normalize-HistZeta,weights-norm`` selects the shared weighted raw
-distinct-triplet contract. KD-tree, legacy balltree, and BALLS4 remove repeated
+distinct-triplet definition. KD-tree, legacy balltree, and BALLS4 remove repeated
 neighbors natively; no Python subtraction is required. See :doc:`../3pcf`.
 
 For complex edge correction, ``histZetaM_EE_N.txt`` contains the real part and

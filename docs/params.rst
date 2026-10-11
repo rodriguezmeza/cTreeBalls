@@ -1,12 +1,12 @@
 
 Parameters
-========================
+==========
 
 This section describes the various parameters cBalls needs for controlling
 what the searching process do:
 
 Parameters related to the searching method
--------------------------------------------
+------------------------------------------
 
 :searchMethod: (str or list) [alias: search]
     The searching method to use. Choose one reported by

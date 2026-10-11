@@ -1,0 +1,83 @@
+name: Platform and dependency support
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  support-plan:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - id: matrix
+        run: echo "matrix=$(python scripts/platform_support.py matrix)" >> "$GITHUB_OUTPUT"
+
+  support-matrix:
+    needs: support-plan
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.support-plan.outputs.matrix) }}
+    env:
+      MAKEFLAGS: "-e"
+      CC: mpicc
+      MPICC: mpicc
+      GSLINTERNAL: "0"
+      CFITSIOLIBON: "0"
+      PYTHONNOUSERSITE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Linux native libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libopenmpi-dev openmpi-bin libgsl-dev libcfitsio-dev zlib1g-dev
+      - name: macOS native libraries and matching MPI compiler
+        if: runner.os == 'macOS'
+        run: |
+          brew install gcc@15 open-mpi gsl cfitsio pkg-config
+          echo "OMPI_CC=$(brew --prefix gcc@15)/bin/gcc-15" >> "$GITHUB_ENV"
+      - name: Build declared versions and test a clean installed wheel
+        run: python scripts/run_support_row.py --row '${{ matrix.id }}' --output support-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: support-${{ matrix.id }}
+          path: |
+            support-evidence/*.json
+            support-evidence/*.log
+            support-evidence/*.products/
+
+  support-coverage:
+    needs: [support-plan, support-matrix]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: support-*
+          path: support-results
+      - name: Require every declared platform/version row for this source
+        run: python scripts/platform_support.py collect --directory support-results --output support-coverage.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: support-coverage-decision
+          path: support-coverage.json
+

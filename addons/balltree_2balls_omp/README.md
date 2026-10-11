@@ -10,12 +10,12 @@ Either feature can be enabled alone, or both can be enabled in the same build.
 When both are built, `options=only-2pcf` or `options=only-3pcf` runs just one
 engine. Supplying both selectors is an error, as is selecting an engine that
 was compiled out.
-The production 3PCF follows the same body-pivot LogMultipole contract as
+The production 3PCF follows the same body-pivot LogMultipole definition as
 `kdtree-2balls-omp`: it accumulates radial field moments over accepted neighbor
 nodes, subtracts repeated-neighbor second moments, and forms every radial-bin
 pair without enumerating physical triples. `options=dual-node-direct-triples`
 retains the older `process3`/`process21`/`process111` traversal as a small-catalog
-validation oracle.
+reference calculation.
 
 Node pairs retain exact radial-bin containment. Oriented node triples use
 dual-node-style `bin_theta` and the LogMultipole default angular tolerance,
@@ -112,7 +112,7 @@ with `edge-corrections` is rejected. Remove `legacy-one-ball` to solve the windo
 
 Three-dimensional angular phases and acceptance use projected tangent
 bearings in the original observer frame, with chord-distance bins.
-See [the scalar contract](../../docs/3pcf.rst) for the positive complex-mode
+See [the scalar definition](../../docs/3pcf.rst) for the positive complex-mode
 convention and undefined-bearing policy. Raw `no-normalize-HistZeta` runs
 already exclude repeated neighbors; do not remove them again in Python.
 
@@ -127,7 +127,7 @@ frontier with at least 64 tasks and grow it with the available OpenMP/MPI
 worker pool. Task-local histograms are still reduced in frontier order, so the
 optimization preserves deterministic results. The production LogMultipole
 variant already uses a stronger work-estimated frontier of up to 256 tasks;
-the flag enables the same documented frontier contract without replacing that
+the flag enables the same documented task distribution rules without replacing that
 scheduler.
 
 The direct validation engine explicitly visits distinct triples and has cubic
@@ -147,4 +147,4 @@ both OpenMP and MPI, preserves strict radial cutoffs, and leaves the independent
 2PCF path in place. Runtime controls are `CBALLS_SCALAR_PIVOT_TOL` (default 0.1)
 and `CBALLS_SCALAR_BIN_THETA` (default 0). Numerical qualification and speed
 depend on the observable, controls, and geometry. See the
-[hierarchy contract, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).
+[hierarchy definition, MPI rules, tests, and benchmark commands](../../docs/SCALAR_HIERARCHICAL_REUSE.md).

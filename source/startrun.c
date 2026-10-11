@@ -353,6 +353,11 @@ local void ReadParametersCmdline(struct  cmdline_data* cmd,
     //B Parameters related to the searching method
     cmd->searchMethod = GetParam("searchMethod");
     cmd->mChebyshev = GetiParam("mChebyshev");
+    cmd->surveySignalLmax = GetiParam("surveySignalLmax");
+    cmd->surveyWindowLmax = GetiParam("surveyWindowLmax");
+    cmd->surveySolvePadding = GetiParam("surveySolvePadding");
+    cmd->surveyRcondMin = GetdParam("surveyRcondMin");
+
     cmd->nsmooth = GetiParam("nsmooth");
     //E
     cmd->rsmooth = GetParam("rsmooth");
@@ -453,6 +458,9 @@ local int ReadParameterFile(struct  cmdline_data* cmd,
 #define MAXCHARBUF 1024
 
     string routineName = "ReadParameterFile";
+    /* The generic integer bindings require int storage, not short fields. */
+    int verbose_value = cmd->verbose;
+    int verbose_log_value = cmd->verbose_log;
     FILE *fd = NULL;
 
   int  i,j,nt;
@@ -490,6 +498,11 @@ local int ReadParameterFile(struct  cmdline_data* cmd,
     //B Parameters related to the searching method
     SPName(cmd->searchMethod,"searchMethod",MAXLENGTHOFSTRSCMD);
     IPName(cmd->mChebyshev,"mChebyshev");
+    IPName(cmd->surveySignalLmax,"surveySignalLmax");
+    IPName(cmd->surveyWindowLmax,"surveyWindowLmax");
+    IPName(cmd->surveySolvePadding,"surveySolvePadding");
+    RPName(cmd->surveyRcondMin,"surveyRcondMin");
+
     IPName(cmd->nsmooth,"nsmooth");
     //E
     SPName(cmd->rsmooth,"rsmooth",MAXLENGTHOFSTRSCMD);
@@ -548,8 +561,8 @@ local int ReadParameterFile(struct  cmdline_data* cmd,
 #else
     IPName(cmd->stepState,"stepState");
 #endif
-    IPName(cmd->verbose,"verbose");
-    IPName(cmd->verbose_log,"verbose_log");
+    IPName(verbose_value,"verbose");
+    IPName(verbose_log_value,"verbose_log");
     IPName(cmd->numthreads,"numberThreads");
     SPName(cmd->options,"options",MAXLENGTHOFSTRSCMD);
     //E
@@ -714,6 +727,15 @@ local int ReadParameterFile(struct  cmdline_data* cmd,
     }
 #endif
 
+    if (verbose_value < SHRT_MIN || verbose_value > SHRT_MAX
+        || verbose_log_value < SHRT_MIN || verbose_log_value > SHRT_MAX) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "verbose or verbose_log is outside the short integer range");
+        goto fail;
+    }
+    cmd->verbose = (short)verbose_value;
+    cmd->verbose_log = (short)verbose_log_value;
+
     return SUCCESS;
 
 fail:
@@ -753,6 +775,12 @@ local int startup_setup_local(struct cmdline_data *cmd, struct global_data *gd)
             gd->stopflag = TRUE;
             return SUCCESS;
         }
+    }
+
+    if (scanopt(cmd->options, "IA-tutor") || scanopt(cmd->options, "ia-tutor")) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+            "IA-tutor is a standalone conversation: run cballs options=IA-tutor, or python3 scripts/ia_tutor.py. It is not a Cython/parameter-file search option.");
+        return FAILURE;
     }
 
     if (scanopt(cmd->options, "make-info")) {
@@ -1576,6 +1604,9 @@ int StartRun_Common(struct  cmdline_data* cmd, struct  global_data* gd)
         input_catalogs_in_memory, gd->stopflag, gd->inputHeaderFlag);
     if (n > 0 && n < sizeof(controls)) n += snprintf(controls+n,sizeof(controls)-n,
         "|%d|%.17g|%d|%d", cmd->usePeriodic, cmd->lengthBox, cmd->seed, cmd->nsmooth);
+    if (n > 0 && n < sizeof(controls)) n += snprintf(controls+n,sizeof(controls)-n,
+        "|%d|%d|%d|%.17g", cmd->surveySignalLmax,cmd->surveyWindowLmax,
+        cmd->surveySolvePadding,cmd->surveyRcondMin);
 #if defined(LYAFORESTOMP) || defined(LYAFORESTMPI)
     if (n > 0 && n < sizeof(controls)) n += snprintf(controls+n,sizeof(controls)-n,
         "|%.17g|%.17g|%d|%d|%.17g|%d|%d|%d|%d|%d|%d|%.17g|%.17g|%.17g|%d|%d|%.17g|%.17g|%d|%.17g|%d",
@@ -1855,7 +1886,8 @@ local int CheckParameters(struct  cmdline_data* cmd, struct  global_data* gd)
         if (cmd->mChebyshev < 0 || cmd->mChebyshev > (INT_MAX - 1) / 2)
             cBALLS_FAIL(cmd, "%s: edge-correction window order is out of range\n",
                         routineName);
-        if (!scanopt(cmd->options, "no-normalize-HistZeta")) {
+        if (strstr(cmd->searchMethod, "shear") == NULL
+            && !scanopt(cmd->options, "no-normalize-HistZeta")) {
             cBALLS_FAIL(cmd, "\n%s: 'edge-corrections' in options must be %s\n",
                         routineName, "accompanied by 'no-normalize-HistZeta'.\n");
         }
@@ -2608,6 +2640,10 @@ local int print_make_info(struct cmdline_data* cmd,
         MAKE_SETTING(PRUNEON),
         MAKE_SETTING(BALLS4SCANLEVON),
         MAKE_SETTING(THETA),
+        MAKE_SETTING(CBALLS_SHEAR_PIVOT_TOL),
+        MAKE_SETTING(CBALLS_SHEAR_BIN_THETA),
+        MAKE_SETTING(CBALLS_SCALAR_PIVOT_TOL),
+        MAKE_SETTING(CBALLS_SCALAR_BIN_THETA),
         MAKE_SETTING(NORMALHISTSCALEON),
         MAKE_SETTING(_DEBUGON_),
         MAKE_SETTING(LOGBINON),
@@ -2721,6 +2757,30 @@ local int print_make_info(struct cmdline_data* cmd,
     }
 
     verb_print_zero(cmd->verbose,
+        "[runtime controls and benchmark interpretation]\n"
+        "runtime theta defaults to 1 (approximate); set theta=<value> (Python --tree-theta). "
+        "Make THETA is a separate legacy compile-time scan criterion.\n"
+        "shear reuse compiled defaults: phase budget=%s radians; bin slop=%s bin widths. "
+        "CBALLS_SHEAR_PIVOT_TOL and CBALLS_SHEAR_BIN_THETA environment values override "
+        "these only for options=shear-pivot-reuse; bin slop does not replace theta.\n"
+        "shear frontier controls: CBALLS_SHEAR_TASKS=0 means automatic global target; "
+        "CBALLS_SHEAR_TASK_MEMORY_MB defaults to 256 MiB per rank. Controls must agree across ranks.\n"
+        "count multipoles: shear retains its full window by default; no-count-multipoles "
+        "keeps N0 and Gamma=Upsilon/N0. edge-corrections forces higher window modes on. "
+        "Scalar dual-node searches need higher count modes only for edge correction; "
+        "ggg-full-window retains the octree compatibility window explicitly. "
+        "NMultipolesON is a legacy build switch, not this runtime policy.\n"
+        "progress: verbose=1 or verbose_log=1 enables available completion counters; "
+        "counts are completed work units, not a linear ETA. MPI reports local rank work.\n"
+        "profiling: CBALLS_SHEAR_PROFILE enables instrumentation when present, even if set to 0; "
+        "unset it to disable profiling. Profiling adds timers/counters and is separate from verbose.\n"
+        "benchmark timing: wall is elapsed time; CPU is process user+system time across worker threads. "
+        "MPI reports max participating-rank wall and summed participating-rank CPU. "
+        "Python Run timings and native MainLoop timings have separate scopes.\n\n",
+        CBALLS_MAKE_CBALLS_SHEAR_PIVOT_TOL,
+        CBALLS_MAKE_CBALLS_SHEAR_BIN_THETA);
+
+    verb_print_zero(cmd->verbose,
                     "[effective compile-time features (enabled)]\n");
     verb_print_zero(cmd->verbose,
                     "engine registry: capabilities/engines.json; "
@@ -2754,7 +2814,7 @@ local int print_make_info(struct cmdline_data* cmd,
             printed = 1;
         }
         verb_print_zero(cmd->verbose,
-                        "%s; default=enabled; opt-out=options=no-smooth-pivot\n",
+                        "%s; default=disabled; opt-in=options=smooth-pivot\n",
                         printed ? "" : "none");
     }
 #else
@@ -2995,7 +3055,7 @@ local int print_make_info(struct cmdline_data* cmd,
     verb_print_zero(cmd->verbose,
         "spherical shear MPI policy: replicated catalogs, distributed pivot blocks, "
         "collective failure handling and raw-sum reduction; root publishes results; "
-        "numberThreads is per rank; legacy-one-ball and shear-pivot-reuse are rejected.\n");
+        "numberThreads is per rank; shear-pivot-reuse requires BALLS4SCANLEV; legacy-one-ball is rejected.\n");
 #endif
 
 //B correlations
@@ -3018,7 +3078,7 @@ local int print_make_info(struct cmdline_data* cmd,
 //B speed up
 #ifdef SMOOTHPIVOT
         verb_print_zero(cmd->verbose,
-                            "with SMOOTHPIVOT compiled; supported engines use it by default (options=no-smooth-pivot disables it)\n");
+                            "with SMOOTHPIVOT compiled; supported engines require options=smooth-pivot (default disabled)\n");
 #endif
 
 #ifdef BALLS4SCANLEV
@@ -3178,7 +3238,9 @@ local int print_options(struct cmdline_data* cmd,
         {"ecliptic", "coordinates",
          "interpret angular input as ecliptic coordinates"},
         {"edge-corrections", "multipoles",
-         "solve the complex angular survey-window system from unnormalized signal and count multipoles; requires 3PCF and no-normalize-HistZeta"},
+         "solve the complex angular survey-window system; requires 3PCF and forces its count modes on; scalar engines also require no-normalize-HistZeta"},
+        {"no-count-multipoles", "multipoles",
+         "shear: compute only N0 and return Upsilon/N0 without window correction; edge-corrections takes precedence; scalar two-ball windows are already off without edge-corrections"},
         {"edge-corrections-from-files", "multipoles",
          "solve versioned raw scalar exports: in=signal_prefix,window_prefix (see docs/saved_scalar_edge.md)"},
         {"ggg-full-window", "octree-2balls compatibility mode",
@@ -3224,7 +3286,7 @@ local int print_options(struct cmdline_data* cmd,
         {"survey-edge-correction", "3D scalar OpenMP/MPI",
          "alias of survey-estimator-3d, not angular edge-corrections"},
         {"survey-keep-top-multipole", "3D scalar OpenMP/MPI",
-         "also report the highest measured survey multipole instead of reserving it for window correction"},
+         "legacy output mapping: surveySignalLmax=-1 selects mChebyshev; explicit signal/window orders and padding control the solve"},
         {"exclude-same-los", "3D scalar OpenMP/MPI",
          "exclude pivot/neighbor LOS_ID matches; does not exclude neighbor/neighbor LOS_ID matches"},
         {"exclude-all-same-los", "3D scalar OpenMP/MPI",
@@ -3239,6 +3301,8 @@ local int print_options(struct cmdline_data* cmd,
          "select the convergence two-point correlation output"},
         {"KKKCorrelation", "correlation",
          "select the convergence three-point correlation output"},
+        {"IA-tutor", "standalone",
+         "interactive offline scientific tutor; launches scripts/ia_tutor.py before catalogue/MPI startup. Use cballs options=IA-tutor -- --help. Optional local model; CBALLS_TUTOR_PYTHON selects the Python executable and CBALLS_TUTOR_ROOT the source checkout."},
         {"make-info", "startup",
          "print compile-time Makefile settings, resolved SLEEF/vector-log state, and active engine policies"},
         {"make-tree", "tree search",
@@ -3277,12 +3341,13 @@ local int print_options(struct cmdline_data* cmd,
          "disable transient source-frame reuse during construction; direct member moments and conservative bounds are unchanged. The default scratch cache is capped at 256 MiB per tree build and freed before searching."},
         {"dual-node-bin-theta", "dual-node-style tree searches",
          "use dual-node-compatible Log/Linear bin-position-aware acceptance in supported scalar and spin-2 two-node pair and LogMultipole kernels; without it, accepted cells must fit wholly inside one bin"},
-#if defined(OCTREESHEARSPHERE2BALLSOMP) || defined(KDTREESHEARSPHERE2BALLSOMP) || defined(BALLTREESHEARSPHERE2BALLSOMP)
-        {"shear-pivot-reuse", "octree/kdtree/balltree-shear-sphere-2balls-omp 3PCF",
-         "opt-in hierarchical multipoles and completion of resolved radial pairs; CBALLS_SHEAR_BIN_THETA sets internal bin-assignment slop in [0,1] bin widths (default 0); radial range cutoffs remain strict. nsmooth=1 provides finer binary pivot hierarchy. Requires BALLS4SCANLEVON=1 and no-smooth-pivot. CBALLS_SHEAR_PIVOT_TOL sets a [0,3] radian phase budget (default 0.1; zero disables reuse), not a relative coefficient error guarantee. no-one-ball/no-two-balls disable reuse; use no-one-ball for an exact 3PCF. Unsupported shear engines and legacy mode reject this option. Calibrate against exact output before production use."},
+#if defined(OCTREESHEARSPHERE2BALLSOMP) || defined(KDTREESHEARSPHERE2BALLSOMP) || defined(BALLTREESHEARSPHERE2BALLSOMP) \
+ || defined(OCTREESHEARSPHERE2BALLSMPI) || defined(KDTREESHEARSPHERE2BALLSMPI) || defined(BALLTREESHEARSPHERE2BALLSMPI)
+        {"shear-pivot-reuse", "octree/kdtree/balltree-shear-sphere-2balls OMP and MPI 3PCF",
+         "opt-in hierarchical multipoles and completion of resolved radial pairs; CBALLS_SHEAR_BIN_THETA sets internal bin-assignment slop in [0,1] bin widths (shipped default 0.5; configurable at build time); radial range cutoffs remain strict. nsmooth defaults to 8; nsmooth=1 provides a finer binary pivot hierarchy. Requires BALLS4SCANLEVON=1 and no-smooth-pivot. CBALLS_SHEAR_PIVOT_TOL sets a [0,3] radian phase budget (shipped default 3; configurable at build time; zero disables reuse), not a relative coefficient error guarantee. no-one-ball/no-two-balls disable reuse; use no-one-ball for an exact 3PCF. Unsupported shear engines and legacy mode reject this option. Calibrate against exact output before production use."},
 #endif
         {"scalar-pivot-reuse", "scalar octree/kdtree/balltree-2balls OMP and MPI 3PCF",
-         "opt-in hierarchical neighbor moments and radial-pair completion; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1), CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0). Strict radial cutoffs; no-smooth-pivot and positive theta required. Zero phase budget, exact controls, smoothing, periodic runs and only-2pcf retain the original path. MPI controls must match on all ranks. Calibrate each observable and geometry."},
+         "opt-in hierarchical neighbor moments and radial-pair completion; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time), CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0). Strict radial cutoffs; no-smooth-pivot and positive theta required. Zero phase budget, exact controls, smoothing, periodic runs and only-2pcf retain the original path. MPI controls must match on all ranks. Calibrate each observable and geometry."},
         {"dual-node-profile", "scalar two-ball methods",
          "report tree build/cache, frontier, traversal, pivot, scratch, multipole-product, and reduction diagnostics supported by the active engine"},
         {"only-2pcf", "active scalar and shear two-ball methods",
@@ -3346,7 +3411,7 @@ local int print_options(struct cmdline_data* cmd,
         {"save-ra-dec", "output",
          "preserve angular RA/DEC coordinates when saving converted data"},
         {"smooth-pivot", "supported tree engines",
-         "backward-compatible explicit request; requires SMOOTHPIVOTON=1 and a method listed as smooth-pivot capable by print-search-methods"},
+         "explicit request; disabled by default; requires SMOOTHPIVOTON=1 and a method listed as smooth-pivot capable by print-search-methods"},
         {"no-smooth-pivot", "all searching engines",
          "disable the SMOOTHPIVOT default on capable methods; accepted as a harmless explicit unsmoothed contract on other methods"},
         {"statistics-histograms", "workflow",
@@ -3378,6 +3443,14 @@ local int print_options(struct cmdline_data* cmd,
 
     (void)gd;
 
+    verb_print_zero(cmd->verbose,
+        "\nRelated parameters: theta=1 default, numberThreads=threads per rank, "
+        "verbose=1 for live completion counters, verbose_log=1 for log counters.\n"
+        "Environment controls (not options tokens): CBALLS_SHEAR_PIVOT_TOL, "
+        "CBALLS_SHEAR_BIN_THETA, CBALLS_SHEAR_TASKS, CBALLS_SHEAR_TASK_MEMORY_MB; "
+        "scalar reuse uses CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA.\n"
+        "CBALLS_SHEAR_PROFILE enables extra timers/counters whenever set, including 0; "
+        "unset it for timings without profiling instrumentation. See make-info for compiled defaults.\n");
     verb_print_zero(cmd->verbose,
                     "\nRegistered options (%zu):\n", option_count);
     verb_print_zero(cmd->verbose,

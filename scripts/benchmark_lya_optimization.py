@@ -11,6 +11,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests" / "python"))
+from benchmark_timing import runtime_environment
 import platform
 import resource
 import statistics
@@ -44,7 +47,7 @@ def worker(case):
             model.set(case['parameters'] | {'rootDir': str(directory / f'run-{index}')})
             start = time.perf_counter(); cpu = time.process_time()
             model.Run()
-            sample = dict(wall_seconds=time.perf_counter()-start,
+            sample = dict(runtime_environment=runtime_environment(), wall_seconds=time.perf_counter()-start,
                           process_cpu_seconds=time.process_time()-cpu,
                           native_timings=model.getTimings())
         np.savez_compressed(directory / 'products.npz', **model.getForestResults()['arrays'])

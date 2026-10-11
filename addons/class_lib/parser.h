@@ -24,6 +24,7 @@ struct file_content {
   FileArg * value;                          // list of (size) values
   short * read;                             // set to _TRUE_ if this
                                             //  parameter is effectively read
+  unsigned long * line_number;               // file line, or zero for API/defaults
 };
 
 
@@ -57,6 +58,9 @@ extern "C" {
                       int * value,
                       int * found,
                       ErrorMsg errmsg);
+
+  int parser_read_bool(struct file_content *pfc, char *name, bool *value,
+                       int *found, ErrorMsg errmsg);
 
   int parser_read_double(struct file_content * pfc,
                          char * name,

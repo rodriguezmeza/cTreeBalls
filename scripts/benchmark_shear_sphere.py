@@ -18,6 +18,8 @@ import time
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tests" / "python"))
+from benchmark_timing import runtime_environment
 
 
 def compare(reference, candidate):
@@ -61,7 +63,7 @@ def main():
     parser.add_argument('--masked', action='store_true')
     parser.add_argument('--order', choices=('2', '3', 'both'), default='both')
     parser.add_argument('--threads', type=int, default=1)
-    parser.add_argument('--theta', type=float, default=.1)
+    parser.add_argument('--theta', '--tree-theta', type=float, default=1.0)
     parser.add_argument('--exact', action='store_true')
     parser.add_argument('--repeat', type=int, default=3)
     parser.add_argument('--bins', type=int, default=6)
@@ -71,6 +73,10 @@ def main():
     parser.add_argument('--smooth', type=float, help='rsmooth in arcminutes; approximate pivots')
     parser.add_argument('--nsmooth', type=int)
     parser.add_argument('--pivot-reuse', action='store_true')
+    parser.add_argument('--no-count-multipoles', action='store_true', help='N0 normalization; edge-corrections overrides this')
+    parser.add_argument('--edge-corrections', action='store_true')
+    parser.add_argument('--verbose', type=int, choices=range(4), default=0)
+    parser.add_argument('--verbose-log', type=int, choices=range(4), default=0)
     parser.add_argument('--reference', type=Path, help='NPZ from a matching exact run')
     args = parser.parse_args()
     if min(args.n, args.repeat, args.threads, args.bins) < 1:
@@ -112,10 +118,14 @@ def main():
         options += ['read-mask']
     if args.pivot_reuse:
         options += ['shear-pivot-reuse']
+    if args.no_count_multipoles:
+        options += ['no-count-multipoles']
+    if args.edge_corrections:
+        options += ['edge-corrections']
     params = dict(searchMethod=args.engine, usePeriodic=False,
                   useLogHist=True, rminHist=args.rmin, rangeN=args.rmax,
                   sizeHistN=args.bins, sizeHistPhi=32, mChebyshev=args.modes,
-                  theta=args.theta, numberThreads=args.threads, verbose=0, verbose_log=0)
+                  theta=args.theta, numberThreads=args.threads, verbose=args.verbose, verbose_log=args.verbose_log)
     if args.nsmooth is not None:
         params['nsmooth'] = args.nsmooth
     if args.smooth is not None:
@@ -126,8 +136,7 @@ def main():
     record = dict(schema_version=1, arguments={k: str(v) if isinstance(v, Path) else v
                                                for k, v in vars(args).items()},
                   parameters=params, build=cyballs.build_info(), host=platform.platform(),
-                  environment={k: os.environ.get(k) for k in
-                               ('CBALLS_SHEAR_PIVOT_TOL', 'CBALLS_SHEAR_BIN_THETA', 'CBALLS_SHEAR_PROFILE', 'OMP_PROC_BIND')},
+                  environment=runtime_environment(),
                   fixture_sha256=hashlib.sha256(b''.join(x.tobytes() for x in arrays.values())).hexdigest(),
                   timed_scope='Run through MainLoop: initialization, tree, search, correction; cold context each repeat',
                   reference_criterion='each observable L2 <= .02*reference L2 + 1e-12, identical finite mask',
@@ -155,6 +164,7 @@ def main():
                               corrected=model.getShearGammaXMultipoles())
             np.savez_compressed(args.output/f'products-{iteration}.npz', **values)
             sample = dict(wall_seconds=wall, process_cpu_seconds=cpu,
+                          native_timings=model.getTimings(),
                           run_metadata=model.getRunMetadata())
             if reference is not None:
                 if set(values) != set(reference):

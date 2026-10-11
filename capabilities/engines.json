@@ -10,7 +10,7 @@
       "aliases": [],
       "geometry": "2D/3D scalar; octree; OpenMP",
       "correlations": "standard 2PCF and sine/cosine 3PCF multipoles",
-      "usage": "Core method. Select KKKCorrelation for convergence 3PCF output. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it.",
+      "usage": "Core method. Select KKKCorrelation for convergence 3PCF output. With SMOOTHPIVOTON=1, pivot smoothing is off by default; use smooth-pivot to enable it.",
       "family": "core",
       "gate": {
         "oracle": "core",
@@ -34,13 +34,13 @@
       "aliases": [],
       "geometry": "scalar; median k-d tree; dual-node OpenMP scan",
       "correlations": "2PCF and LogMultipole angular 3PCF, masks, and complex edge correction",
-      "usage": "Enable KDTREE2BALLSOMPON=1. Two-node same-bin acceptance is the default; dual-node-bin-theta enables dual-node's bin-position tolerance and no-two-balls forces exact bodies. legacy-one-ball dispatches to the actual kdtree-omp kernel; there no-one-ball, smoothing, masks, order selection, and edge correction have the same meaning as for search=kdtree-omp. only-2pcf and only-3pcf select runtime work. nsmooth is the leaf capacity. BALLS4SCANLEVON=1 raises the minimum balanced KD frontier to 64 tasks. read-mask excludes masked bodies. With SMOOTHPIVOTON=1, an independent active-pivot tree uses smoothed pivot fields by default; use no-smooth-pivot to disable it. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
+      "usage": "Enable KDTREE2BALLSOMPON=1. Two-node same-bin acceptance is the default; dual-node-bin-theta enables dual-node's bin-position tolerance and no-two-balls forces exact bodies. legacy-one-ball dispatches to the actual kdtree-omp kernel; there no-one-ball, smoothing, masks, order selection, and edge correction have the same meaning as for search=kdtree-omp. only-2pcf and only-3pcf select runtime work. nsmooth is the leaf capacity. BALLS4SCANLEVON=1 raises the minimum balanced KD frontier to 64 tasks. read-mask excludes masked bodies. With SMOOTHPIVOTON=1, an independent active-pivot tree uses smoothed pivot fields only with explicit smooth-pivot. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/python/test_two_ball_edge_corrections.py",
-          "tests/python/test_scalar_numerical_contract.py",
+          "tests/python/test_scalar_numerical_definitions.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
           "tests/python/test_scalar_pivot_reuse.py"
@@ -63,16 +63,16 @@
       "aliases": [],
       "geometry": "scalar; median k-d tree; deterministic MPI+OpenMP dual-node scan",
       "correlations": "distributed 2PCF and LogMultipole angular 3PCF, masks, and complex edge correction",
-      "usage": "Enable KDTREE2BALLSMPION=1 and run with mpiexec; numberThreads is per rank. It accepts the kdtree-2balls-omp runtime controls. legacy-one-ball uses the distributed legacy KD kernel, and dual-node-direct-triples distributes the validation frontier; the latter still requires no-smooth-pivot. BALLS4SCANLEVON=1 sizes the balanced KD frontier for ranks times threads with a 64-task minimum. Ranks own deterministic frontier tasks, reduce raw histograms, and only rank 0 normalizes and writes output. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
+      "usage": "Enable KDTREE2BALLSMPION=1 and run with mpiexec; numberThreads is per rank. It accepts the kdtree-2balls-omp runtime controls. legacy-one-ball uses the distributed legacy KD kernel, and dual-node-direct-triples distributes the validation frontier; the latter still requires no-smooth-pivot. BALLS4SCANLEVON=1 sizes the balanced KD frontier for ranks times threads with a 64-task minimum. Ranks own deterministic frontier tasks, reduce raw histograms, and only rank 0 normalizes and writes output. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/python/test_two_ball_edge_corrections.py",
-          "tests/python/test_scalar_numerical_contract.py",
+          "tests/python/test_scalar_numerical_definitions.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py",
+          "tests/python/test_mpi_boundary_checks.py",
           "tests/python/test_scalar_pivot_reuse.py"
         ],
         "parallel": "mpi"
@@ -93,13 +93,13 @@
       "aliases": [],
       "geometry": "scalar; FCFC PCA ball tree; dual-node dual/triple-node OpenMP scan",
       "correlations": "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-      "usage": "TWOPCFON and TPCFON switch 2PCF and 3PCF independently; only-2pcf and only-3pcf select runtime work. Auto-correlations use a two-entry content-keyed cache whose packed points retain no body/Python pointers, so repeated 2PCFs and 3PCFs may reuse the compact tree; no-balltree-tree-cache forces cold construction. The production 3PCF inherits bounded sparse unresolved neighbor-node lists without copying multipole scratch; no-balltree-persistent-frontier restores a root restart for profiling. Deterministic upper-tree PCA statistics and sphere passes build in parallel; no-balltree-parallel-build selects the serial diagnostic path. dual-node-profile reports cache and native phases. Two-node acceptance is the default; dual-node-bin-theta enables bin-position tolerance, no-two-balls forces exact bodies, and dual-node-direct-triples retains the cubic validation traversal. nsmooth sets PCA-tree leaf capacity; dual-node-singleton-leaves and dual-node-bucket-leaves override the adaptive 2PCF leaf policy. legacy-one-ball dispatches to balltree-omp and rejects edge-corrections. Masks, weights, smoothing, and BALLS4SCANLEV remain supported; edge correction uses the native two-ball mode. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
+      "usage": "TWOPCFON and TPCFON switch 2PCF and 3PCF independently; only-2pcf and only-3pcf select runtime work. Auto-correlations use a two-entry content-keyed cache whose packed points retain no body/Python pointers, so repeated 2PCFs and 3PCFs may reuse the compact tree; no-balltree-tree-cache forces cold construction. The production 3PCF inherits bounded sparse unresolved neighbor-node lists without copying multipole scratch; no-balltree-persistent-frontier restores a root restart for profiling. Deterministic upper-tree PCA statistics and sphere passes build in parallel; no-balltree-parallel-build selects the serial diagnostic path. dual-node-profile reports cache and native phases. Two-node acceptance is the default; dual-node-bin-theta enables bin-position tolerance, no-two-balls forces exact bodies, and dual-node-direct-triples retains the cubic validation traversal. nsmooth sets PCA-tree leaf capacity; dual-node-singleton-leaves and dual-node-bucket-leaves override the adaptive 2PCF leaf policy. legacy-one-ball dispatches to balltree-omp and rejects edge-corrections. Masks, weights, smoothing, and BALLS4SCANLEV remain supported; edge correction uses the native two-ball mode. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/python/test_two_ball_edge_corrections.py",
-          "tests/python/test_scalar_numerical_contract.py",
+          "tests/python/test_scalar_numerical_definitions.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
           "tests/python/test_scalar_pivot_reuse.py"
@@ -122,16 +122,16 @@
       "aliases": [],
       "geometry": "scalar; FCFC PCA ball tree; deterministic MPI+OpenMP dual/triple-node scan",
       "correlations": "distributed 2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-      "usage": "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. It distributes the production body-pivot LogMultipole traversal and otherwise matches balltree-2balls-omp, including masks, smoothing, edge correction, order selectors, and BALLS4SCANLEV. legacy-one-ball dispatches to the privately linked distributed balltree legacy kernel. dual-node-direct-triples remains an OpenMP-only validation oracle. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
+      "usage": "Build with BALLTREE2BALLSMPION=1 and run with mpiexec. It distributes the production body-pivot LogMultipole traversal and otherwise matches balltree-2balls-omp, including masks, smoothing, edge correction, order selectors, and BALLS4SCANLEV. legacy-one-ball dispatches to the privately linked distributed balltree legacy kernel. dual-node-direct-triples remains an OpenMP-only reference calculation. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/python/test_two_ball_edge_corrections.py",
-          "tests/python/test_scalar_numerical_contract.py",
+          "tests/python/test_scalar_numerical_definitions.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py",
+          "tests/python/test_mpi_boundary_checks.py",
           "tests/python/test_scalar_pivot_reuse.py"
         ],
         "parallel": "mpi"
@@ -152,13 +152,13 @@
       "aliases": [],
       "geometry": "scalar; native octree; dual-node 2PCF and LogMultipole 3PCF",
       "correlations": "2PCF and angular-multipole 3PCF with auto- and cross-catalog support",
-      "usage": "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one in native two-ball mode. nsmooth bounds compact native-octree leaf occupancy. Conservative same-bin containment is the default 2PCF policy; dual-node-bin-theta selects dual-node-compatible Log/Linear near-bin acceptance, while no-two-balls selects exact body pairs. BALLS4SCANLEVON=1 supplies balanced frontiers. Normal mode stops tree preparation after production cell aggregation and does not use smooth pivots. legacy-one-ball instead builds the full threaded native octree and dispatches to the actual octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. read-mask accepts a FITS companion mask, columns-ascii-all/binary-all mask values, or set_catalog(mask=...) in cyballs. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
+      "usage": "Build with OCTREE2BALLSOMPON=1. TWOPCFON and TPCFON switch correlation orders; only-2pcf and only-3pcf select one in native two-ball mode. nsmooth bounds compact native-octree leaf occupancy. Conservative same-bin containment is the default 2PCF policy; dual-node-bin-theta selects dual-node-compatible Log/Linear near-bin acceptance, while no-two-balls selects exact body pairs. BALLS4SCANLEVON=1 supplies balanced frontiers. Normal mode stops tree preparation after production cell aggregation and does not use smooth pivots. legacy-one-ball instead builds the full threaded native octree and dispatches to the actual octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. read-mask accepts a FITS companion mask, columns-ascii-all/binary-all mask values, or set_catalog(mask=...) in cyballs. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/python/test_two_ball_edge_corrections.py",
-          "tests/python/test_scalar_numerical_contract.py",
+          "tests/python/test_scalar_numerical_definitions.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
           "tests/python/test_scalar_pivot_reuse.py"
@@ -181,16 +181,16 @@
       "aliases": [],
       "geometry": "scalar; native octree; deterministic MPI+OpenMP frontier",
       "correlations": "distributed 2PCF and LogMultipole angular-multipole 3PCF",
-      "usage": "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. Native two-ball mode accepts the octree-2balls-omp controls, including read-mask with valid-body-only normalization, except dual-node-direct-triples, which remains a serial validation oracle. legacy-one-ball instead builds the full threaded native octree and dispatches to the distributed octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. With BALLS4SCANLEVON=1, the selected backend builds its balanced adaptive frontier. Only rank 0 normalizes and writes output. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (default 0.1) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
+      "usage": "Build with OCTREE2BALLSMPION=1 and run with mpiexec. numberThreads sets OpenMP threads per rank. Native two-ball mode accepts the octree-2balls-omp controls, including read-mask with valid-body-only normalization, except dual-node-direct-triples, which remains a serial reference calculation. legacy-one-ball instead builds the full threaded native octree and dispatches to the distributed octree-GGG kernel, preserving behavior-ball/no-one-ball, masks, normalization, edge correction, ggg-profile, and SMOOTHPIVOTON/no-smooth-pivot behavior; only-3pcf and two-ball-specific controls are rejected in compatibility mode. With BALLS4SCANLEVON=1, the selected backend builds its balanced adaptive frontier. Only rank 0 normalizes and writes output. Packed tree caches belong to each runtime object; explicit cleanup/destruction releases them and parameter-only recomputation can reuse them within that object. Optional scalar-pivot-reuse retains hierarchical neighbor moments and completes radial pairs at parent pivots; CBALLS_SCALAR_PIVOT_TOL=[0,3] radians (shipped default 0.1; configurable at build time) and CBALLS_SCALAR_BIN_THETA=[0,1] bin widths (default 0) are runtime controls. Requires no-smooth-pivot and positive theta; MPI values must match across ranks. Strict radial cutoffs; qualify the actual observable and geometry. See docs/SCALAR_HIERARCHICAL_REUSE.md.",
       "family": "scalar",
       "gate": {
         "oracle": "scalar",
         "tests": [
           "tests/python/test_two_ball_edge_corrections.py",
-          "tests/python/test_scalar_numerical_contract.py",
+          "tests/python/test_scalar_numerical_definitions.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py",
+          "tests/python/test_mpi_boundary_checks.py",
           "tests/python/test_scalar_pivot_reuse.py"
         ],
         "parallel": "mpi"
@@ -209,9 +209,9 @@
       "cpp": "(defined(ADDONS)) && (defined(OCTREESHEARSPHERE2BALLSOMP))",
       "registration_header": "addons/octree_shear_sphere_2balls_omp/startrun_octree_shear_sphere_2balls_omp_11.h",
       "aliases": [],
-      "geometry": "full-sky spin-2 shear; dual-node dual-node octree; OpenMP",
+      "geometry": "full-sky spin-2 shear; dual-node octree; OpenMP",
       "correlations": "xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Build with OCTREESHEARSPHERE2BALLSOMPON=1. The native 2PCF uses combined node radii, bin-width opening tests, dual-node's 0.585 split heuristic, simultaneous splitting of comparable nodes, and a chunked symmetric dual-tree frontier. no-two-balls or no-one-ball forces exact body pairs. only-2pcf runs only the dual-node scan; approximate combined runs retain the separate pair pass, while no-one-ball or theta=0 fuses pairs and 3PCF rings in one exact body-pivot traversal. Small logarithmic histograms use guarded edge lookup; spin-2 transport and conjugate ring products share arithmetic without changing acceptance thresholds. only-3pcf skips pair work. With BALLS4SCANLEVON=1, a work-estimated native pivot-cell frontier conservatively prefilters neighbor roots, dynamically schedules exact body pivots, and merges task-local histograms in spatial order under a bounded memory budget. The experimental shear-pivot-reuse option instead inherits unresolved neighbors and partial rings and permits aggregate pivots; CBALLS_SHEAR_PIVOT_TOL controls its spherical phase budget and requires numerical calibration. It requires no-smooth-pivot and is off by default. Body unit vectors are reused while native aggregate-cell centers remain explicitly normalized. legacy-one-ball dispatches this search name to the actual octree-shear-sphere-omp kernel. Use no-smooth-pivot to make the unsmoothed pair paths available. Set CBALLS_SHEAR_PROFILE=1 for kernel timings. Hierarchical shear-pivot-reuse completes resolved radial-bin pairs at parent cells and inherits their ownership masks, preventing repeated combinations in descendants. CBALLS_SHEAR_BIN_THETA in [0,1] bin widths (default 0) optionally relaxes internal bin assignment while radial range limits remain strict. nsmooth=1 exposes a finer binary hierarchy; validate phase/bin tolerances on each observable. Runtime provenance records the effective reuse controls.",
+      "usage": "Build with OCTREESHEARSPHERE2BALLSOMPON=1. The native 2PCF uses combined node radii, bin-width opening tests, dual-node's 0.585 split heuristic, simultaneous splitting of comparable nodes, and a chunked symmetric dual-tree frontier. no-two-balls or no-one-ball forces exact body pairs. only-2pcf runs only the dual-node scan; approximate combined runs retain the separate pair pass, while no-one-ball or theta=0 fuses pairs and 3PCF rings in one exact body-pivot traversal. Small logarithmic histograms use guarded edge lookup; spin-2 transport and conjugate ring products share arithmetic without changing acceptance thresholds. only-3pcf skips pair work. With BALLS4SCANLEVON=1, a work-estimated native pivot-cell frontier conservatively prefilters neighbor roots, dynamically schedules exact body pivots, and merges task-local histograms in spatial order under a bounded memory budget. The experimental shear-pivot-reuse option instead inherits unresolved neighbors and partial rings and permits aggregate pivots; CBALLS_SHEAR_PIVOT_TOL controls its spherical phase budget and requires numerical calibration. It requires no-smooth-pivot and is off by default. Body unit vectors are reused while native aggregate-cell centers remain explicitly normalized. legacy-one-ball dispatches this search name to the actual octree-shear-sphere-omp kernel. Use no-smooth-pivot to make the unsmoothed pair paths available. Set CBALLS_SHEAR_PROFILE=1 for kernel timings. Hierarchical shear-pivot-reuse completes resolved radial-bin pairs at parent cells and inherits their ownership masks, preventing repeated combinations in descendants. CBALLS_SHEAR_BIN_THETA in [0,1] bin widths (shipped default 0.5; configurable at build time) optionally relaxes internal bin assignment while radial range limits remain strict. nsmooth=1 exposes a finer binary hierarchy; validate phase/bin tolerances on each observable. Run information records the effective reuse controls. Shipped reuse defaults are CBALLS_SHEAR_PIVOT_TOL=3 radians and CBALLS_SHEAR_BIN_THETA=0.5 bin widths; both may be overridden at build time or by runtime environment variables. These are not coefficient-error bounds.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
@@ -238,14 +238,15 @@
       "aliases": [],
       "geometry": "full-sky spin-2 shear; native octree; adaptive MPI+OpenMP frontier",
       "correlations": "distributed xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Enabled with OCTREESHEARSPHERE2BALLSMPION=1. Run with mpiexec; numberThreads sets OpenMP threads per rank. Catalogs and trees are replicated; work-estimated pivot and pair tasks are distributed across ranks with dynamic OpenMP scheduling locally. only-2pcf uses a symmetric dual-tree scan; only-3pcf skips pairs. Exact combined runs (no-one-ball or theta=0) fuse pair and ring visits. Approximate unsmoothed combined runs keep independent pair acceptance. Guarded small-log-bin lookup, direct spin-2 transport, shared signed-mode arithmetic, and binary geodesic pair projection match the optimized OpenMP siblings. Raw histograms are reduced before rank-zero normalization, mode-coupling solve, angular reconstruction and publication. Local preparation/allocation errors are agreed collectively. MPI ranks must call Run collectively with identical catalogs, settings and thread counts. theta, rsmooth and nsmooth retain their OpenMP meanings; qualify approximation for the actual geometry and observable. Experimental shear-pivot-reuse and legacy-one-ball are rejected. CBALLS_SHEAR_PROFILE=1 reports rank/thread timings.",
+      "usage": "Enabled with OCTREESHEARSPHERE2BALLSMPION=1. Run with mpiexec; numberThreads sets OpenMP threads per rank. Catalogs and trees are replicated; work-estimated pivot and pair tasks are distributed across ranks with dynamic OpenMP scheduling locally. only-2pcf uses a symmetric dual-tree scan; only-3pcf skips pairs. Exact combined runs (no-one-ball or theta=0) fuse pair and ring visits. Approximate unsmoothed combined runs keep independent pair acceptance. Guarded small-log-bin lookup, direct spin-2 transport, shared signed-mode arithmetic, and binary geodesic pair projection match the optimized OpenMP siblings. Raw histograms are reduced before rank-zero normalization, mode-coupling solve, angular reconstruction and publication. Local preparation/allocation errors are agreed collectively. MPI ranks must call Run collectively with identical catalogs, settings and thread counts. theta, rsmooth and nsmooth retain their OpenMP meanings; qualify approximation for the actual geometry and observable. With BALLS4SCANLEVON=1, shear-pivot-reuse shares the OpenMP hierarchical algorithm. CBALLS_SHEAR_PIVOT_TOL and CBALLS_SHEAR_BIN_THETA must agree across ranks; reuse failures are collective. MPI pivot targets scale with workers, bounded by per-rank task histogram memory. CBALLS_SHEAR_TASKS sets the global target and CBALLS_SHEAR_TASK_MEMORY_MB the per-rank MiB budget (default 256, at least one histogram). Calibrate approximation when changing the partition. legacy-one-ball is rejected. CBALLS_SHEAR_PROFILE=1 reports rank/thread timings. Shipped reuse defaults are CBALLS_SHEAR_PIVOT_TOL=3 radians and CBALLS_SHEAR_BIN_THETA=0.5 bin widths; both may be overridden at build time or by runtime environment variables. These are not coefficient-error bounds.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
         "parallel": "mpi",
         "tests": [
           "tests/python/test_shear_sphere_mpi.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py",
+          "tests/python/test_shear_pivot_reuse_mpi.py"
         ]
       },
       "sources": [
@@ -265,7 +266,7 @@
       "aliases": [],
       "geometry": "full-sky spin-2 shear; dual-node median KD tree; OpenMP",
       "correlations": "xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Build with KDTREESHEARSPHERE2BALLSOMPON=1. KD nodes store first and second spin-2 moments in their local tangent frames. only-2pcf uses a symmetric dual-node scan with direct great-circle pair projection; only-3pcf uses exact body pivots and accepted KD neighbor nodes. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier dynamically schedules 3PCF work, conservatively prefilters neighbor roots, and merges task-local histograms in spatial order under a bounded memory budget. Catalog positions are normalized once and reused by the SIMD-friendly transport/ring kernel. Guarded small-log-bin lookup and shared signed-mode arithmetic reduce per-neighbor work. Exact combined runs (no-one-ball, no-two-balls, or theta=0) fuse pair and ring visits; approximate unsmoothed combined runs retain separate pair acceptance. Smoothed combined visits share transport without changing the smoothing contract. no-two-balls or no-one-ball forces exact bodies, dual-node-bin-theta enables the looser radial criterion, and nsmooth sets leaf capacity. Masks, mode-coupling edge correction, and the safe SMOOTHPIVOTON/no-smooth-pivot contract match the spherical octree shear engines. Set CBALLS_SHEAR_PROFILE=1 for kernel timings. Hierarchical shear-pivot-reuse completes resolved radial-bin pairs at parent cells and inherits their ownership masks, preventing repeated combinations in descendants. CBALLS_SHEAR_BIN_THETA in [0,1] bin widths (default 0) optionally relaxes internal bin assignment while radial range limits remain strict. nsmooth=1 exposes a finer binary hierarchy; validate phase/bin tolerances on each observable. Runtime provenance records the effective reuse controls.",
+      "usage": "Build with KDTREESHEARSPHERE2BALLSOMPON=1. KD nodes store first and second spin-2 moments in their local tangent frames. only-2pcf uses a symmetric dual-node scan with direct great-circle pair projection; only-3pcf uses exact body pivots and accepted KD neighbor nodes. With BALLS4SCANLEVON=1, a work-estimated pivot-cell frontier dynamically schedules 3PCF work, conservatively prefilters neighbor roots, and merges task-local histograms in spatial order under a bounded memory budget. Catalog positions are normalized once and reused by the SIMD-friendly transport/ring kernel. Guarded small-log-bin lookup and shared signed-mode arithmetic reduce per-neighbor work. Exact combined runs (no-one-ball or theta=0) fuse pair and ring visits; approximate unsmoothed combined runs retain separate pair acceptance. Smoothed combined visits share transport without changing the smoothing rule. no-two-balls or no-one-ball forces exact bodies, dual-node-bin-theta enables the looser radial criterion, and nsmooth sets leaf capacity. Masks, mode-coupling edge correction, and the SMOOTHPIVOTON/no-smooth-pivot behavior match the spherical octree shear engines. Set CBALLS_SHEAR_PROFILE=1 for kernel timings. Hierarchical shear-pivot-reuse completes resolved radial-bin pairs at parent cells and inherits their ownership masks, preventing repeated combinations in descendants. CBALLS_SHEAR_BIN_THETA in [0,1] bin widths (shipped default 0.5; configurable at build time) optionally relaxes internal bin assignment while radial range limits remain strict. nsmooth=1 exposes a finer binary hierarchy; validate phase/bin tolerances on each observable. Run information records the effective reuse controls.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
@@ -292,14 +293,15 @@
       "aliases": [],
       "geometry": "full-sky spin-2 shear; median KD tree; adaptive MPI+OpenMP frontier",
       "correlations": "distributed xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Enabled with KDTREESHEARSPHERE2BALLSMPION=1. Run with mpiexec; numberThreads sets OpenMP threads per rank. Catalogs and trees are replicated; work-estimated pivot and pair tasks are distributed across ranks with dynamic OpenMP scheduling locally. only-2pcf uses a symmetric dual-tree scan; only-3pcf skips pairs. Exact combined runs (no-one-ball, no-two-balls, or theta=0) fuse pair and ring visits. Approximate unsmoothed combined runs keep independent pair acceptance. Guarded small-log-bin lookup, direct spin-2 transport, shared signed-mode arithmetic, and binary geodesic pair projection match the optimized OpenMP siblings. Raw histograms are reduced before rank-zero normalization, mode-coupling solve, angular reconstruction and publication. Local preparation/allocation errors are agreed collectively. MPI ranks must call Run collectively with identical catalogs, settings and thread counts. theta, rsmooth and nsmooth retain their OpenMP meanings; qualify approximation for the actual geometry and observable. Experimental shear-pivot-reuse and legacy-one-ball are rejected. CBALLS_SHEAR_PROFILE=1 reports rank/thread timings.",
+      "usage": "Enabled with KDTREESHEARSPHERE2BALLSMPION=1. Run with mpiexec; numberThreads sets OpenMP threads per rank. Catalogs and trees are replicated; work-estimated pivot and pair tasks are distributed across ranks with dynamic OpenMP scheduling locally. only-2pcf uses a symmetric dual-tree scan; only-3pcf skips pairs. Exact combined runs (no-one-ball or theta=0) fuse pair and ring visits. Approximate unsmoothed combined runs keep independent pair acceptance. Guarded small-log-bin lookup, direct spin-2 transport, shared signed-mode arithmetic, and binary geodesic pair projection match the optimized OpenMP siblings. Raw histograms are reduced before rank-zero normalization, mode-coupling solve, angular reconstruction and publication. Local preparation/allocation errors are agreed collectively. MPI ranks must call Run collectively with identical catalogs, settings and thread counts. theta, rsmooth and nsmooth retain their OpenMP meanings; qualify approximation for the actual geometry and observable. With BALLS4SCANLEVON=1, shear-pivot-reuse shares the OpenMP hierarchical algorithm. CBALLS_SHEAR_PIVOT_TOL and CBALLS_SHEAR_BIN_THETA must agree across ranks; reuse failures are collective. MPI pivot targets scale with workers, bounded by per-rank task histogram memory. CBALLS_SHEAR_TASKS sets the global target and CBALLS_SHEAR_TASK_MEMORY_MB the per-rank MiB budget (default 256, at least one histogram). Calibrate approximation when changing the partition. legacy-one-ball is rejected. CBALLS_SHEAR_PROFILE=1 reports rank/thread timings. Shipped reuse defaults are CBALLS_SHEAR_PIVOT_TOL=3 radians and CBALLS_SHEAR_BIN_THETA=0.5 bin widths; both may be overridden at build time or by runtime environment variables. These are not coefficient-error bounds.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
         "parallel": "mpi",
         "tests": [
           "tests/python/test_shear_sphere_mpi.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py",
+          "tests/python/test_shear_pivot_reuse_mpi.py"
         ]
       },
       "sources": [
@@ -320,7 +322,7 @@
       "aliases": [],
       "geometry": "full-sky spin-2 shear; dual-node FCFC PCA ball tree; OpenMP",
       "correlations": "xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Build with BALLTREESHEARSPHERE2BALLSOMPON=1. PCA-split nodes carry conservative spherical balls and direct first/second spin-2 moments. Construction skips leaf PCA, fuses center/PCA statistics, and parallelizes upper member passes with fixed chunks and exact preorder node ranges; no-balltree-parallel-build selects serial construction with identical chunking. Unsmoothed repeated roles share one tree within a call, without a cross-call cache. The symmetric dual-node 2PCF projects both shears onto their connecting great circle and combines auto-pair orientations. The default 3PCF uses exact body pivots. Guarded small-log-bin lookup and shared spin-2/signed-mode arithmetic reduce per-neighbor work. Exact combined runs (no-one-ball, no-two-balls, or theta=0) share pair and ring visits; approximate unsmoothed combined runs retain independent pair acceptance. Smoothed combined visits share arithmetic without changing the smoothing estimator. With BALLS4SCANLEVON=1, opt-in shear-pivot-reuse inherits sparse unresolved lists and ancestor-frame rings, permitting aggregate pivots under CBALLS_SHEAR_PIVOT_TOL; calibrate this spherical phase budget against exact results. It requires no-smooth-pivot, has a 64 MiB per-worker scratch cap, and does not change the 2PCF. The work-estimated frontier publishes histograms in spatial order under a 256 MiB cap. Either no-one-ball or no-two-balls disables cell aggregation for both statistics. dual-node-bin-theta enables the looser radial criterion; nsmooth sets leaf capacity. Masks, mode-coupling correction, and smoothing contracts match the other spherical shear engines. CBALLS_SHEAR_PROFILE=1 reports build, kernel, and reuse counters. Hierarchical shear-pivot-reuse completes resolved radial-bin pairs at parent cells and inherits their ownership masks, preventing repeated combinations in descendants. CBALLS_SHEAR_BIN_THETA in [0,1] bin widths (default 0) optionally relaxes internal bin assignment while radial range limits remain strict. nsmooth=1 exposes a finer binary hierarchy; validate phase/bin tolerances on each observable. Runtime provenance records the effective reuse controls.",
+      "usage": "Build with BALLTREESHEARSPHERE2BALLSOMPON=1. PCA-split nodes carry conservative spherical balls and direct first/second spin-2 moments. Construction skips leaf PCA, fuses center/PCA statistics, and parallelizes upper member passes with fixed chunks and exact preorder node ranges; no-balltree-parallel-build selects serial construction with identical chunking. Unsmoothed repeated roles share one tree within a call, without a cross-call cache. The symmetric dual-node 2PCF projects both shears onto their connecting great circle and combines auto-pair orientations. The default 3PCF uses exact body pivots. Guarded small-log-bin lookup and shared spin-2/signed-mode arithmetic reduce per-neighbor work. Exact combined runs (no-one-ball or theta=0) share pair and ring visits; approximate unsmoothed combined runs retain independent pair acceptance. Smoothed combined visits share arithmetic without changing the smoothing estimator. With BALLS4SCANLEVON=1, opt-in shear-pivot-reuse inherits sparse unresolved lists and ancestor-frame rings, permitting aggregate pivots under CBALLS_SHEAR_PIVOT_TOL; calibrate this spherical phase budget against exact results. It requires no-smooth-pivot, has a 64 MiB per-worker scratch cap, and does not change the 2PCF. The work-estimated frontier publishes histograms in spatial order under a 256 MiB cap. Either no-one-ball or no-two-balls disables cell aggregation for both statistics. dual-node-bin-theta enables the looser radial criterion; nsmooth sets leaf capacity. Masks, mode-coupling correction, and smoothing rules match the other spherical shear engines. CBALLS_SHEAR_PROFILE=1 reports build, kernel, and reuse counters. Hierarchical shear-pivot-reuse completes resolved radial-bin pairs at parent cells and inherits their ownership masks, preventing repeated combinations in descendants. CBALLS_SHEAR_BIN_THETA in [0,1] bin widths (shipped default 0.5; configurable at build time) optionally relaxes internal bin assignment while radial range limits remain strict. nsmooth=1 exposes a finer binary hierarchy; validate phase/bin tolerances on each observable. Run information records the effective reuse controls. Shipped reuse defaults are CBALLS_SHEAR_PIVOT_TOL=3 radians and CBALLS_SHEAR_BIN_THETA=0.5 bin widths; both may be overridden at build time or by runtime environment variables. These are not coefficient-error bounds. Large catalogue selection and pointer preparation run in parallel with stable source order. PCA projections are computed in the parallel member pass and cached for the unchanged median partition; the temporary projection cache uses at most 256 MiB per tree build. no-balltree-shear-projection-cache restores direct projections. MPI builds use the same OpenMP construction separately on each rank.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
@@ -349,14 +351,15 @@
       "aliases": [],
       "geometry": "full-sky spin-2 shear; FCFC PCA ball tree; adaptive MPI+OpenMP frontier",
       "correlations": "distributed xi+/xi- and four Gamma-x shear 3PCF components",
-      "usage": "Enabled with BALLTREESHEARSPHERE2BALLSMPION=1. Run with mpiexec; numberThreads sets OpenMP threads per rank. Catalogs and trees are replicated; work-estimated pivot and pair tasks are distributed across ranks with dynamic OpenMP scheduling locally. only-2pcf uses a symmetric dual-tree scan; only-3pcf skips pairs. Exact combined runs (no-one-ball, no-two-balls, or theta=0) fuse pair and ring visits. Approximate unsmoothed combined runs keep independent pair acceptance. Guarded small-log-bin lookup, direct spin-2 transport, shared signed-mode arithmetic, and binary geodesic pair projection match the optimized OpenMP siblings. Raw histograms are reduced before rank-zero normalization, mode-coupling solve, angular reconstruction and publication. Local preparation/allocation errors are agreed collectively. MPI ranks must call Run collectively with identical catalogs, settings and thread counts. theta, rsmooth and nsmooth retain their OpenMP meanings; qualify approximation for the actual geometry and observable. Experimental shear-pivot-reuse and legacy-one-ball are rejected. CBALLS_SHEAR_PROFILE=1 reports rank/thread timings.",
+      "usage": "Enabled with BALLTREESHEARSPHERE2BALLSMPION=1. Run with mpiexec; numberThreads sets OpenMP threads per rank. Catalogs and trees are replicated; work-estimated pivot and pair tasks are distributed across ranks with dynamic OpenMP scheduling locally. only-2pcf uses a symmetric dual-tree scan; only-3pcf skips pairs. Exact combined runs (no-one-ball or theta=0) fuse pair and ring visits. Approximate unsmoothed combined runs keep independent pair acceptance. Guarded small-log-bin lookup, direct spin-2 transport, shared signed-mode arithmetic, and binary geodesic pair projection match the optimized OpenMP siblings. Raw histograms are reduced before rank-zero normalization, mode-coupling solve, angular reconstruction and publication. Local preparation/allocation errors are agreed collectively. MPI ranks must call Run collectively with identical catalogs, settings and thread counts. theta, rsmooth and nsmooth retain their OpenMP meanings; qualify approximation for the actual geometry and observable. With BALLS4SCANLEVON=1, shear-pivot-reuse shares the OpenMP hierarchical algorithm. CBALLS_SHEAR_PIVOT_TOL and CBALLS_SHEAR_BIN_THETA must agree across ranks; reuse failures are collective. MPI pivot targets scale with workers, bounded by per-rank task histogram memory. CBALLS_SHEAR_TASKS sets the global target and CBALLS_SHEAR_TASK_MEMORY_MB the per-rank MiB budget (default 256, at least one histogram). Calibrate approximation when changing the partition. legacy-one-ball is rejected. CBALLS_SHEAR_PROFILE=1 reports rank/thread timings. Shipped reuse defaults are CBALLS_SHEAR_PIVOT_TOL=3 radians and CBALLS_SHEAR_BIN_THETA=0.5 bin widths; both may be overridden at build time or by runtime environment variables. These are not coefficient-error bounds. Large catalogue selection and pointer preparation run in parallel with stable source order. PCA projections are computed in the parallel member pass and cached for the unchanged median partition; the temporary projection cache uses at most 256 MiB per tree build. no-balltree-shear-projection-cache restores direct projections. MPI builds use the same OpenMP construction separately on each rank.",
       "family": "shear",
       "gate": {
         "oracle": "shear",
         "parallel": "mpi",
         "tests": [
           "tests/python/test_shear_sphere_mpi.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py",
+          "tests/python/test_shear_pivot_reuse_mpi.py"
         ]
       },
       "sources": [
@@ -401,7 +404,7 @@
       "aliases": [],
       "geometry": "periodic Cartesian box; linked boxes; OpenMP",
       "correlations": "periodic pair counts and unweighted density correlation function",
-      "usage": "Use usePeriodic=true. Coordinates are wrapped locally modulo lengthBox; centered and translated periodic catalogs are accepted. This method does not accumulate a convergence-weighted 2PCF. With SMOOTHPIVOTON=1, pivot smoothing is on by default; use no-smooth-pivot to disable it.",
+      "usage": "Use usePeriodic=true. Coordinates are wrapped locally modulo lengthBox; centered and translated periodic catalogs are accepted. This method does not accumulate a convergence-weighted 2PCF. With SMOOTHPIVOTON=1, pivot smoothing is off by default; use smooth-pivot to enable it.",
       "family": "box",
       "gate": {
         "oracle": "box",
@@ -461,7 +464,7 @@
           "tests/python/test_octree_3pcf_3d_mpi.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py"
         ],
         "parallel": "mpi"
       },
@@ -836,7 +839,7 @@
           "tests/python/test_lya_forest_los_tree.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py",
+          "tests/python/test_mpi_boundary_checks.py",
           "tests/python/test_lya_hierarchy.py"
         ],
         "parallel": "mpi"
@@ -866,7 +869,7 @@
           "tests/python/test_lya_triplet_acceleration.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py",
+          "tests/python/test_mpi_boundary_checks.py",
           "tests/python/test_lya_hierarchy.py"
         ],
         "parallel": "mpi"
@@ -896,7 +899,7 @@
           "tests/python/test_lya_triplet_acceleration.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py",
+          "tests/python/test_mpi_boundary_checks.py",
           "tests/python/test_lya_hierarchy.py"
         ],
         "parallel": "mpi"
@@ -925,7 +928,7 @@
           "tests/python/test_lya_forest_los_tree.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py"
         ],
         "parallel": "mpi"
       },
@@ -953,7 +956,7 @@
           "tests/python/test_lya_forest_los_tree.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py"
         ],
         "parallel": "mpi"
       },
@@ -981,7 +984,7 @@
           "tests/python/test_lya_forest_los_tree.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py"
         ],
         "parallel": "mpi"
       },
@@ -1009,7 +1012,7 @@
           "tests/python/test_lya_forest_los_tree.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py"
         ],
         "parallel": "mpi"
       },
@@ -1037,7 +1040,7 @@
           "tests/python/test_lya_forest_los_tree.py",
           "tests/python/test_owned_results_resources.py",
           "tests/python/test_scientific_qualification.py",
-          "tests/python/test_mpi_boundary_contracts.py"
+          "tests/python/test_mpi_boundary_checks.py"
         ],
         "parallel": "mpi"
       },
@@ -1187,12 +1190,12 @@
   "regression_groups": {
     "scalar": [
       "tests/python/test_two_ball_edge_corrections.py",
-      "tests/python/test_scalar_numerical_contract.py",
-      "tests/python/test_clustered_contracts.py"
+      "tests/python/test_scalar_numerical_definitions.py",
+      "tests/python/test_clustered_catalogs.py"
     ],
     "core": [
       "tests/python/test_runtime_stabilization.py",
-      "tests/python/test_clustered_contracts.py"
+      "tests/python/test_clustered_catalogs.py"
     ],
     "forest": [
       "tests/python/test_lya_forest_mpi.py",

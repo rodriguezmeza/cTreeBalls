@@ -483,6 +483,23 @@ static int dual_node_search_log_multipole(
             "two-ball multipole reduction") == FAILURE)
         goto cleanup;
 
+    operation_status=SUCCESS;
+    if (dual_node_distributed_publish()) {
+        for(size_t k=0;k<hist_values_per_task;k++) {
+            real total=0.0;
+            for(INTEGER task=0;task<task_count;task++)
+                total+=task_histograms[(size_t)task*hist_values_per_task+k];
+            if (!isfinite(total)) {
+                snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                    "%s: numerical range: raw scalar 3PCF/window product is not representable (overflow or underflow)",
+                    DUAL_NODE_METHOD_NAME);
+                operation_status=FAILURE; break;
+            }
+        }
+    }
+    if (dual_node_distributed_consensus(cmd,operation_status,"scalar raw arithmetic") == FAILURE)
+        goto cleanup;
+
     if (dual_node_distributed_publish()) {
     pair_test_total = distributed_statistics[0];
     pivot_restart_total = distributed_statistics[1];
@@ -535,6 +552,25 @@ static int dual_node_search_log_multipole(
     }
 
     }
+    operation_status=SUCCESS;
+    if (dual_node_distributed_publish() && dual_node_normalize_3pcf(cmd)) {
+        for(int i=1;i<=cmd->sizeHistN;i++) for(int j=1;j<=cmd->sizeHistN;j++) {
+            real denominator=0.0;
+            const size_t k=DUAL_NODE_ZETA_COMPONENTS*(size_t)orders*stride*stride+(size_t)i*stride+j;
+            for(INTEGER task=0;task<task_count;task++)
+                denominator+=task_histograms[(size_t)task*hist_values_per_task+k];
+            for(int m=1;m<=orders;m++) {
+                const real values[4]={gd->histZetaMcos[m][i][j],gd->histZetaMsin[m][i][j],
+                    gd->histZetaMsincos[m][i][j],gd->histZetaMcossin[m][i][j]};
+                for(int c=0;c<4;c++) if (!isfinite(cballs_checked_ratio(values[c],denominator)))
+                    operation_status=FAILURE;
+            }
+        }
+        if(operation_status==FAILURE) snprintf(cmd->error_message,_ERRORMSGSIZE_,
+            "%s: numerical range: normalized scalar 3PCF is not representable",DUAL_NODE_METHOD_NAME);
+    }
+    if (dual_node_distributed_consensus(cmd,operation_status,"scalar normalization preflight")==FAILURE)
+        goto cleanup;
     operation_status = dual_node_distributed_publish()
         ? dual_node_publish_edge(cmd, gd, task_histograms, task_count,
                                 hist_values_per_task, stride, orders)
@@ -557,13 +593,13 @@ static int dual_node_search_log_multipole(
                     * (size_t)orders * stride * stride + index];
             }
             for (int order = 1; order <= orders; order++) {
-                gd->histZetaMcos[order][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMcos[order][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMcos[order][n1][n2], denominator);
-                gd->histZetaMsin[order][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMsin[order][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMsin[order][n1][n2], denominator);
-                gd->histZetaMsincos[order][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMsincos[order][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMsincos[order][n1][n2], denominator);
-                gd->histZetaMcossin[order][n1][n2] = cballs_normalize_or_zero(
+                gd->histZetaMcossin[order][n1][n2] = cballs_checked_ratio(
                     gd->histZetaMcossin[order][n1][n2], denominator);
             }
         }
@@ -573,6 +609,19 @@ static int dual_node_search_log_multipole(
     if (context.profile && run_3pcf)
         phase_timers.reduction += dual_node_timer_now() - phase_started;
 
+    operation_status=SUCCESS;
+    if (run_3pcf && dual_node_distributed_publish()) {
+        for(int m=1;m<=orders;m++) for(int i=1;i<=cmd->sizeHistN;i++)
+            for(int j=1;j<=cmd->sizeHistN;j++)
+                if (!isfinite(gd->histZetaMcos[m][i][j]) || !isfinite(gd->histZetaMsin[m][i][j])
+                    || !isfinite(gd->histZetaMsincos[m][i][j]) || !isfinite(gd->histZetaMcossin[m][i][j])) {
+                    snprintf(cmd->error_message,_ERRORMSGSIZE_,
+                        "%s: numerical range: published scalar 3PCF is not representable",DUAL_NODE_METHOD_NAME);
+                    operation_status=FAILURE;
+                }
+    }
+    if (dual_node_distributed_consensus(cmd,operation_status,"scalar normalized arithmetic") == FAILURE)
+        goto cleanup;
     gd->cpusearch = CPUTIME - cpustart;
 #ifdef TWOPCF
     if (run_2pcf)

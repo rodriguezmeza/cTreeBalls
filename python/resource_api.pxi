@@ -58,10 +58,25 @@ def resource_plan(engine, pixels, threads=1, parameters=None, retained_cache_byt
     elif scalar or 'shear' in engine:
         estimates['compact_tree_at_two_nodes_per_pixel']=n*(2*sizes['binary_node']+sizes['packed_point'])
         if scalar3:estimates['scalar_worker_histograms']=t*(4*m*b*b*8+8*b*b*8+2*m*b*8)
+        if scalar3 and 'edge-corrections' in options:
+            estimates['scalar_distinct_window_scratch']=t*(2*m-1)*(b+1)*sizes['real']
         elif 'shear' in engine:estimates['shear_worker_moments']=t*8*(16*m*b*b+16*m*b)
     else:
         estimates['native_octree_at_one_cell_per_pixel']=n*sizes['octree_cell']
-        if '3pcf-3d' in engine or 'ggg-3d' in engine:estimates['physical_moments']=2*(t+1)*m*b*b*sizes['real']
+        if '3pcf-3d' in engine or 'ggg-3d' in engine:
+            if options & {'survey-estimator-3d','encore-survey-estimator','survey-edge-correction'}:
+                signal=int(p.get('surveySignalLmax',-1));padding=int(p.get('surveySolvePadding',1))
+                if signal==-1:signal=m-1-(0 if 'survey-keep-top-multipole' in options else 1)
+                solve=signal+padding;window=int(p.get('surveyWindowLmax',-1))
+                if window==-1:window=2*solve
+                if not 0<=signal<=solve<=32 or not 2*solve<=window<=64:
+                    raise ValueError('physical survey requires 0<=signal<=solve<=32 and 2*solve<=window<=64')
+                estimates['physical_moments']=2*((solve+1)+(t+1)*(window+1))*b*b*sizes['real']
+                estimates['physical_survey_corrections']=(2*(signal+1)*b*b+4*b*b+3*b)*sizes['real']
+                m=window+1
+            else:estimates['physical_moments']=2*(t+1)*m*b*b*sizes['real']
+        if '3pcf-3d' in engine:
+            estimates['physical_distinct_harmonics']=t*b*m*(m+1)//2*sizes['real']
     limit=(1 << (8*sizes['size_t']-1))-1
     if any(v<0 or v>limit for v in [*known.values(),*estimates.values(),sum(known.values())+sum(estimates.values())]):
         raise OverflowError('resource dimensions exceed PTRDIFF_MAX')

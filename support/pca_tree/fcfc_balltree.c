@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "globaldefs.h"
+#include "distinct_products.h"
 #include "fcfc_balltree.h"
 
 #define FCFC_BALLTREE_ROOT 0
@@ -555,7 +556,7 @@ static void fcfc_scalar_body_values(const struct cmdline_data *cmd,
 #endif
     *raw_field = fcfc_balltree_field(body);
     *normalization = cballs_opt_weights_norm(cmd) ? Weight(body) : 1.0;
-    *field = *normalization * *raw_field;
+    *field = cballs_product(*normalization,*raw_field);
 }
 
 typedef struct {
@@ -564,10 +565,13 @@ typedef struct {
     double mass_position_sum[NDIM];
     double mass_sum;
     double kappa_sum;
+    double kappa_distinct;
     double kappa_sq_sum;
     double field_weight_sum;
+    double field_weight_distinct;
     double field_weight_sq_sum;
     double weighted_kappa_sum;
+    double weighted_kappa_distinct;
     double weighted_kappa_sq_sum;
 } fcfc_balltree_range_statistics;
 
@@ -598,11 +602,17 @@ static void fcfc_balltree_compute_range_statistics(
                     position * (double)Pos(points[i])[k];
         }
         statistics->mass_sum += mass;
+        statistics->kappa_distinct = cballs_distinct_merge(
+            statistics->kappa_distinct, 0.0, statistics->kappa_sum, field);
         statistics->kappa_sum += field;
         statistics->kappa_sq_sum += (double)field * field;
+        statistics->field_weight_distinct = cballs_distinct_merge(
+            statistics->field_weight_distinct, 0.0, statistics->field_weight_sum, field_weight);
         statistics->field_weight_sum += field_weight;
         statistics->field_weight_sq_sum +=
             (double)field_weight * field_weight;
+        statistics->weighted_kappa_distinct = cballs_distinct_merge(
+            statistics->weighted_kappa_distinct, 0.0, statistics->weighted_kappa_sum, weighted_field);
         statistics->weighted_kappa_sum += weighted_field;
         statistics->weighted_kappa_sq_sum +=
             (double)weighted_field * weighted_field;
@@ -623,10 +633,16 @@ static void fcfc_balltree_add_range_statistics(
             total->position_outer[j][k] += part->position_outer[j][k];
     }
     total->mass_sum += part->mass_sum;
+    total->kappa_distinct = cballs_distinct_merge(total->kappa_distinct,
+        part->kappa_distinct, total->kappa_sum, part->kappa_sum);
     total->kappa_sum += part->kappa_sum;
     total->kappa_sq_sum += part->kappa_sq_sum;
+    total->field_weight_distinct = cballs_distinct_merge(total->field_weight_distinct,
+        part->field_weight_distinct, total->field_weight_sum, part->field_weight_sum);
     total->field_weight_sum += part->field_weight_sum;
     total->field_weight_sq_sum += part->field_weight_sq_sum;
+    total->weighted_kappa_distinct = cballs_distinct_merge(total->weighted_kappa_distinct,
+        part->weighted_kappa_distinct, total->weighted_kappa_sum, part->weighted_kappa_sum);
     total->weighted_kappa_sum += part->weighted_kappa_sum;
     total->weighted_kappa_sq_sum += part->weighted_kappa_sq_sum;
 }
@@ -688,11 +704,14 @@ static void fcfc_balltree_prepare_node_statistics(
     principal_axes_from_covariance(covariance, axes);
     node->weight = (real)total.mass_sum;
     node->kappa_sum = (real)total.kappa_sum;
+    node->kappa_distinct = (real)total.kappa_distinct;
     node->kappa = (real)(total.kappa_sum / (double)count);
     node->kappa_sq_sum = (real)total.kappa_sq_sum;
     node->field_weight_sum = (real)total.field_weight_sum;
+    node->field_weight_distinct = (real)total.field_weight_distinct;
     node->field_weight_sq_sum = (real)total.field_weight_sq_sum;
     node->weighted_kappa_sum = (real)total.weighted_kappa_sum;
+    node->weighted_kappa_distinct = (real)total.weighted_kappa_distinct;
     node->weighted_kappa_sq_sum = (real)total.weighted_kappa_sq_sum;
 }
 
@@ -1284,6 +1303,7 @@ typedef struct {
 typedef struct {
     bodyptr base;
     fcfc_shear_member *members;
+    real *projections;
 } fcfc_shear_member_cache;
 
 static void fcfc_shear_prepare_member(const struct cmdline_data *cmd,
@@ -1302,6 +1322,7 @@ static void fcfc_shear_prepare_member(const struct cmdline_data *cmd,
  * Only upper nodes pay for task scheduling; leaves need no covariance. */
 #define FCFC_SHEAR_RANGE_CHUNK ((INTEGER)4096)
 #define FCFC_SHEAR_RANGE_PARTS 32
+#define FCFC_SHEAR_PROJECTION_CUTOFF ((INTEGER)128)
 
 static void fcfc_shear_statistics_range(const struct cmdline_data *cmd,
         bodyptr *points, INTEGER first, INTEGER last, bool pivot_role,
@@ -1327,7 +1348,8 @@ static void fcfc_shear_statistics_range(const struct cmdline_data *cmd,
 static int fcfc_shear_members_range(const struct cmdline_data *cmd,
         bodyptr *points, INTEGER first, INTEGER last, bool pivot_role,
         const real *center_unit, const real *center_east, const real *center_north,
-        const fcfc_shear_member_cache *cache, fcfc_ballnode *part)
+        const fcfc_shear_member_cache *cache, const real *split_axis,
+        fcfc_ballnode *part)
 {
     real radius2 = 0.0;
     memset(part, 0, sizeof(*part));
@@ -1342,6 +1364,10 @@ static int fcfc_shear_members_range(const struct cmdline_data *cmd,
         fcfc_shear_complex rotation, transported;
         real distance2 = 0.0;
 
+        /* This pass is already parallel for large nodes. Cache each PCA
+         * projection once; the median loop then touches contiguous values. */
+        if (split_axis != NULL)
+            cache->projections[point] = projection(body, split_axis);
         if (member) {
             if (!member->valid || !fcfc_shear_rotation_prepared(center_unit,
                     center_east, center_north, member->unit, member->east,
@@ -1387,6 +1413,8 @@ static int fcfc_shear_aggregate(struct cmdline_data *cmd,
     int statuses[FCFC_SHEAR_RANGE_PARTS] = {0};
     int status = FAILURE;
     int axis;
+    const real *split_axis = internal && cache->projections != NULL
+        && count >= FCFC_SHEAR_PROJECTION_CUTOFF ? axes[0] : NULL;
 
     if (chunks == 1) {
         fcfc_shear_statistics_range(cmd, tree->bptr, node->first, node->last,
@@ -1451,7 +1479,7 @@ static int fcfc_shear_aggregate(struct cmdline_data *cmd,
     if (chunks == 1) {
         fcfc_ballnode part;
         if (fcfc_shear_members_range(cmd, tree->bptr, node->first, node->last,
-                pivot_role, center_unit, center_east, center_north, cache, &part) == FAILURE)
+                pivot_role, center_unit, center_east, center_north, cache, split_axis, &part) == FAILURE)
             goto cleanup;
         node->weight = part.weight;
         node->shear_gamma_re = part.shear_gamma_re;
@@ -1473,7 +1501,7 @@ static int fcfc_shear_aggregate(struct cmdline_data *cmd,
 #pragma omp task if(parallel_build) firstprivate(chunk, first, last) shared(moments, statuses, center_unit, center_east, center_north)
 #endif
                 statuses[chunk] = fcfc_shear_members_range(cmd, tree->bptr, first, last,
-                    pivot_role, center_unit, center_east, center_north, cache, &moments[chunk]);
+                    pivot_role, center_unit, center_east, center_north, cache, split_axis, &moments[chunk]);
             }
         }
         node->radius = 0.0;
@@ -1504,6 +1532,41 @@ cleanup:
     return status;
 }
 
+/* Same comparisons and swaps as select_median, including address tie breaks.
+ * Moving the value with its point preserves the exact previous permutation. */
+static bool fcfc_shear_projected_before(real a, bodyptr pa, real b, bodyptr pb)
+{
+    if (a < b) return TRUE;
+    if (a > b) return FALSE;
+    return (uintptr_t)pa < (uintptr_t)pb;
+}
+
+static void fcfc_shear_select_median(bodyptr *points, real *values,
+        INTEGER lo, INTEGER hi, INTEGER target)
+{
+    while (lo < hi) {
+        INTEGER i = lo, j = hi;
+        const INTEGER middle = lo + (hi - lo)/2;
+        const bodyptr pivot = points[middle];
+        const real value = values[middle];
+        while (i <= j) {
+            while (fcfc_shear_projected_before(values[i], points[i], value, pivot)) i++;
+            while (fcfc_shear_projected_before(value, pivot, values[j], points[j])) j--;
+            if (i <= j) {
+                const real tmp = values[i];
+                swap_body(&points[i], &points[j]);
+                values[i] = values[j];
+                values[j] = tmp;
+                i++;
+                j--;
+            }
+        }
+        if (target <= j) hi = j;
+        else if (target >= i) lo = i;
+        else return;
+    }
+}
+
 static int fcfc_shear_build_node(struct cmdline_data *cmd,
                                  fcfc_balltreeptr tree, INTEGER first,
                                  INTEGER last, int leaf_capacity, INTEGER index,
@@ -1527,7 +1590,12 @@ static int fcfc_shear_build_node(struct cmdline_data *cmd,
         const INTEGER middle = first + (last - first + 1)/2;
         int left_status = FAILURE, right_status = FAILURE;
 
-        select_median(tree->bptr, first, last, middle, axes[0]);
+        if (cache->projections != NULL
+            && last - first + 1 >= FCFC_SHEAR_PROJECTION_CUTOFF)
+            fcfc_shear_select_median(tree->bptr, cache->projections,
+                                    first, last, middle);
+        else
+            select_median(tree->bptr, first, last, middle, axes[0]);
         /* Preorder ranges preserve the serial layout. Siblings only mutate
          * disjoint point/node ranges, with fixed-chunk summation order. */
         node->left = index + 1;
@@ -1562,9 +1630,11 @@ int fcfc_balltree_build_shear_sphere(
 {
     fcfc_balltreeptr tree = NULL;
     INTEGER valid_count = 0;
-    INTEGER source;
     int build_status = FAILURE;
-    fcfc_shear_member_cache cache = {body_table, NULL};
+    bool parallel_build = FALSE;
+    INTEGER selected[FCFC_SHEAR_RANGE_PARTS] = {0};
+    INTEGER offsets[FCFC_SHEAR_RANGE_PARTS] = {0};
+    fcfc_shear_member_cache cache = {body_table, NULL, NULL};
 #ifdef LONGINT
     const uintmax_t integer_max = (uintmax_t)LONG_MAX;
 #else
@@ -1578,9 +1648,24 @@ int fcfc_balltree_build_shear_sphere(
         return FAILURE;
     }
     *result = NULL;
-    for (source = 0; source < body_count; source++)
-        if (fcfc_shear_valid(cmd, nthBody(body_table, source), pivot_role))
-            valid_count++;
+#ifdef OPENMPCODE
+    parallel_build = body_count >= 2*FCFC_SHEAR_PARALLEL_BUILD_CUTOFF
+        && cmd->numthreads > 1 && !omp_in_parallel()
+        && !scanopt(cmd->options, "no-balltree-parallel-build");
+#pragma omp parallel for if(parallel_build) num_threads(cmd->numthreads) schedule(static)
+#endif
+    for (int chunk = 0; chunk < FCFC_SHEAR_RANGE_PARTS; chunk++) {
+        INTEGER first, last;
+        fcfc_balltree_chunk_bounds(0, body_count, FCFC_SHEAR_RANGE_PARTS,
+                                   chunk, &first, &last);
+        for (INTEGER source = first; source <= last; source++)
+            if (fcfc_shear_valid(cmd, nthBody(body_table, source), pivot_role))
+                selected[chunk]++;
+    }
+    for (int chunk = 0; chunk < FCFC_SHEAR_RANGE_PARTS; chunk++) {
+        offsets[chunk] = valid_count;
+        valid_count += selected[chunk];
+    }
     if (valid_count <= 0) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "balltree-shear-sphere-2balls-omp: mask/smoothing selected no bodies");
@@ -1606,42 +1691,47 @@ int fcfc_balltree_build_shear_sphere(
     if (tree->bptr == NULL || tree->nodes == NULL)
         goto allocation_failure;
 
-    valid_count = 0;
-    for (source = 0; source < body_count; source++) {
-        bodyptr body = nthBody(body_table, source);
-        if (fcfc_shear_valid(cmd, body, pivot_role))
-            tree->bptr[valid_count++] = body;
-    }
     /* Transient source frames remove repeated normalizations at every level.
      * Cap scratch at 256 MiB; allocation failure uses the identical direct
      * source-frame calculation. Nothing survives this construction call. */
     if (!scanopt(cmd->options, "no-balltree-shear-member-cache")
         && (uintmax_t)body_count <= ((size_t)256 << 20)/sizeof(*cache.members))
         cache.members = malloc((size_t)body_count*sizeof(*cache.members));
+    /* Projection scratch is independent of the larger tangent-frame cache.
+     * It still fits a 23-million-object catalogue in double precision. Either
+     * optional allocation may fail without changing the calculation. */
+    if (!scanopt(cmd->options, "no-balltree-shear-projection-cache")
+        && valid_count >= FCFC_SHEAR_PROJECTION_CUTOFF
+        && (uintmax_t)valid_count <= ((size_t)256 << 20)/sizeof(*cache.projections))
+        cache.projections = malloc((size_t)valid_count*sizeof(*cache.projections));
 #ifdef OPENMPCODE
-    if (valid_count >= 2*FCFC_SHEAR_PARALLEL_BUILD_CUTOFF
-        && cmd->numthreads > 1
-        && !scanopt(cmd->options, "no-balltree-parallel-build")) {
-#pragma omp parallel num_threads(cmd->numthreads)
-        {
-            if (cache.members != NULL) {
-#pragma omp for schedule(static)
-                for (INTEGER i = 0; i < valid_count; i++)
-                    fcfc_shear_prepare_member(cmd, tree->bptr[i], pivot_role, &cache);
-            }
-#pragma omp single nowait
-            build_status = fcfc_shear_build_node(cmd, tree, 0, valid_count - 1,
-                leaf_capacity, FCFC_BALLTREE_ROOT, pivot_role, TRUE, &cache);
-        }
-    } else
+#pragma omp parallel if(parallel_build) num_threads(cmd->numthreads)
 #endif
     {
-        if (cache.members != NULL)
-            for (INTEGER i = 0; i < valid_count; i++)
-                fcfc_shear_prepare_member(cmd, tree->bptr[i], pivot_role, &cache);
+        /* Stable compaction: fixed source chunks publish into disjoint prefix
+         * ranges, preserving input order for masks and smoothed pivots. */
+#ifdef OPENMPCODE
+#pragma omp for schedule(static)
+#endif
+        for (int chunk = 0; chunk < FCFC_SHEAR_RANGE_PARTS; chunk++) {
+            INTEGER first, last, dest = offsets[chunk];
+            fcfc_balltree_chunk_bounds(0, body_count, FCFC_SHEAR_RANGE_PARTS,
+                                       chunk, &first, &last);
+            for (INTEGER source = first; source <= last; source++) {
+                bodyptr body = nthBody(body_table, source);
+                if (!fcfc_shear_valid(cmd, body, pivot_role)) continue;
+                tree->bptr[dest++] = body;
+                if (cache.members != NULL)
+                    fcfc_shear_prepare_member(cmd, body, pivot_role, &cache);
+            }
+        }
+#ifdef OPENMPCODE
+#pragma omp single nowait
+#endif
         build_status = fcfc_shear_build_node(cmd, tree, 0, valid_count - 1,
-            leaf_capacity, FCFC_BALLTREE_ROOT, pivot_role, FALSE, &cache);
+            leaf_capacity, FCFC_BALLTREE_ROOT, pivot_role, parallel_build, &cache);
     }
+    free(cache.projections);
     free(cache.members);
     if (build_status == FAILURE) {
         /* Report only after workers join; error paths must not race on cmd. */
