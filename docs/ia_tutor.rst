@@ -77,7 +77,7 @@ Knowledge and updates
 The index includes the main README, documentation, public benchmark/regression
 README files, enabled-addon README files, the engine capability table, and
 ``tutor/notes``. Reviewed explanations in ``tutor/knowledge/questions.json``
-cover shear, kappa, Lyα, timing, approximation penalties, count multipoles,
+cover shear, kappa, Lyman-alpha, timing, approximation penalties, count multipoles,
 normalization, binning, MPI, plotting and engine selection. They incorporate
 scientific questions visible during development of this feature. The tutor
 does not automatically access other chats, private catalogues, or directories

@@ -23,6 +23,21 @@ Other builders::
 external sites and may report network restrictions independently of source
 errors. The strict HTML build resolves internal references without networking.
 
+The default PDF builder uses pdfLaTeX and latexmk. Write scientific symbols
+with the Sphinx math role, for example :math:`\alpha`, or spell out
+``Lyman-alpha`` in prose. A literal Unicode Greek letter in ordinary text can
+pass the HTML build and still fail the PDF build. The documentation workflow
+checks both formats.
+
+After correcting a source error, rebuild from a clean documentation directory::
+
+   make -C docs clean
+   make -C docs latexpdf SPHINXOPTS="-W --keep-going"
+
+The final PDF is ``docs/_build/latex/ctreeballs.pdf``. A missing ``.toc`` on the
+first LaTeX pass is normal; latexmk creates it on subsequent passes. A nonzero
+build exit means any PDF already present may be incomplete or outdated.
+
 The API reference is maintained from the Cython source rather than importing
 a machine-specific extension. Update it whenever public methods change.
 Keep the root README, active addon READMEs, and the Sphinx pages consistent.
