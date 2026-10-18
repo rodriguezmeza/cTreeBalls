@@ -259,7 +259,6 @@ typedef struct {
 
 typedef struct {
     kdtree_2balls_shape entries[KDTREE_2BALLS_SHAPE_CACHE_SIZE];
-    INTEGER *nodes_by_points;
     int count;
     int leaf_capacity;
 } kdtree_2balls_shape_cache;
@@ -296,14 +295,16 @@ static int kdtree_2balls_shape_add(
     cache->entries[found].points = points;
     cache->entries[found].nodes = nodes;
     cache->entries[found].depth = depth;
-    cache->nodes_by_points[points] = nodes;
     return found;
 }
 
 static INTEGER kdtree_2balls_shape_nodes(
         const kdtree_2balls_shape_cache *cache, INTEGER points)
 {
-    return cache->nodes_by_points[points];
+    /* Median splits generate at most two distinct counts per tree level.
+     * Reuse the bounded shape cache instead of an O(npoint) sparse table. */
+    const int found = kdtree_2balls_shape_find(cache, points);
+    return found < 0 ? 0 : cache->entries[found].nodes;
 }
 
 static int kdtree_2balls_build_node(
@@ -439,29 +440,19 @@ static int kdtree_2balls_tree_build(
     parallel_build = valid_count >= KDTREE_2BALLS_PARALLEL_BUILD_MIN
                   && omp_get_max_threads() > 1;
 #endif
-    if (parallel_build) {
-        shape.leaf_capacity = leaf_capacity;
-        shape.nodes_by_points = calloc(
-            (size_t)valid_count + 1, sizeof(*shape.nodes_by_points));
-        if (shape.nodes_by_points == NULL) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "kdtree-2balls: tree-shape allocation failed");
-            return FAILURE;
-        }
-        root_shape = kdtree_2balls_shape_add(&shape, valid_count);
-        if (root_shape < 0 || shape.entries[root_shape].nodes <= 0) {
-            snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                     "kdtree-2balls: tree-shape construction failed");
-            free(shape.nodes_by_points);
-            return FAILURE;
-        }
+    shape.leaf_capacity = leaf_capacity;
+    root_shape = kdtree_2balls_shape_add(&shape, valid_count);
+    if (root_shape < 0 || shape.entries[root_shape].nodes <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "kdtree-2balls: tree-shape construction failed");
+        return FAILURE;
     }
 
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
     tree->npoint = valid_count;
     tree->nnode = parallel_build ? shape.entries[root_shape].nodes : 0;
-    tree->capacity = parallel_build ? tree->nnode : 2 * valid_count;
+    tree->capacity = shape.entries[root_shape].nodes;
     tree->max_depth = parallel_build ? shape.entries[root_shape].depth : 0;
     tree->bptr = malloc((size_t)valid_count * sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
@@ -494,16 +485,13 @@ static int kdtree_2balls_tree_build(
             role, &root);
         if (root != KDTREE_2BALLS_ROOT) build_status = FAILURE;
     }
-    if (build_status == FAILURE) {
+    if (build_status == FAILURE || tree->nnode != tree->capacity) {
         if (cmd->error_message[0] == '\0')
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "kdtree-2balls: node construction failed");
         kdtree_2balls_tree_free(tree);
-        free(shape.nodes_by_points);
         return FAILURE;
     }
-    free(shape.nodes_by_points);
-    shape.nodes_by_points = NULL;
 
     for (source = 0; source < valid_count; source++) {
         real field;
@@ -530,7 +518,6 @@ allocation_failure:
     snprintf(cmd->error_message, _ERRORMSGSIZE_,
              "kdtree-2balls: memory allocation failed");
     kdtree_2balls_tree_free(tree);
-    free(shape.nodes_by_points);
     return FAILURE;
 }
 

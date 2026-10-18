@@ -24,3 +24,16 @@ The executable reports the active methods with `options=print-search-methods`.
 Native C tests, fixtures and shell launchers keep their locations under `tests/`.
 Historical plotting examples may require their original input catalogues;
 `example_scalar_catalog.py` resolves its catalogue relative to the repository.
+
+## Organización de los programas
+
+The maintained CPU-time drivers are `lya_corr_all_engines.py`,
+`kappa_corr_all_engines.py` and `shear_corr_all_engines.py`. Their helpers,
+benchmarks, regression programs and README files are kept in this directory.
+The Cython declaration and binding sources remain in `python/`; the binding
+includes the shared `tests/python/lya_projection.py` implementation directly.
+
+The external reference is described as **dual node** in project documentation;
+`dual_node` is used in program and file identifiers. Native runtime discovery
+lists only engines enabled by the selected Makefile profile. See
+[run controls](README_run_controls.md) for the timing and accuracy conventions.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run active cTreeBalls Ly-alpha forest engines on one retained catalog.
 
-DESI and eBOSS/PICCA FITS, six-column lya-ascii, NPZ and synthetic input are supported.
+DESI, eBOSS/PICCA, Cartesian and RA-DEC-R FITS, lya-ascii, NPZ and synthetic input are supported.
 MPI rank zero reads once, broadcasts arrays once, and all ranks register a
 forest catalog with cyballs. Radial, anisotropic 3D, and multipole estimators
 are distinct.
@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 
 import argparse
+from run_guidance import add_run_guidance
 from dataclasses import dataclass, field
 import glob
 from importlib.machinery import EXTENSION_SUFFIXES
@@ -29,6 +30,7 @@ import subprocess
 import time
 
 import numpy as np
+from catalog_memory import (add_memory_arguments, register_forest_catalog, preflight_transfer, memory_metadata)
 
 from kappa_corr_all_engines import (
     broadcast_array, discover_cython_methods, get_mpi_comm,
@@ -54,6 +56,7 @@ DESI_BASE = ("https://data.desi.lbl.gov/public/dr1/vac/dr1/lya-deltas/"
              "v1.0/delta-lya-0-0/Delta/")
 DESI_EXAMPLE = DESI_BASE + "delta-1019.fits.gz"
 LYA_WAVELENGTH = 1215.67
+ANISOTROPIC_MULTIPOLE = "lya-anisotropic-multipole-3pcf-omp"
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,7 @@ class EngineSpec:
     tree: bool = False
     family: str = "lya"
     supports_smooth_pivot: bool = False
+    explicit_only: bool = False
 
 
 LYA_ENGINES = {
@@ -81,6 +85,9 @@ LYA_ENGINES = {
     )
 }
 LYA_ENGINES.update({
+    ANISOTROPIC_MULTIPOLE: EngineSpec(False, (3,), False, tree=True,
+                                    family="anisotropic_multipole", explicit_only=True),
+    "lya-rprt-quadtree-2pcf-omp": EngineSpec(False, (2,), False, tree=True),
     "lya-los-tree-2pcf-omp": EngineSpec(False, (2,), False, tree=True),
     "lya-los-tree-3pcf-omp": EngineSpec(False, (3,), False, tree=True),
     "lya-los-tree-2pcf-3pcf-omp": EngineSpec(False, (2, 3), False, tree=True),
@@ -113,10 +120,6 @@ INCOMPATIBLE_ENGINE_REASONS = {
         "balltree-shear-sphere-2balls-omp",
     )
 }
-INCOMPATIBLE_ENGINE_REASONS["lya-anisotropic-multipole-3pcf-omp"] = (
-    "uses exact anisotropic moments and approximate mu reconstruction; "
-    "use tests/python/benchmark_lya_triplet_kernels.py for accuracy calibration"
-)
 PRODUCTS = {
     "3d_2pcf": ("histXi2pcf_lya.txt", 2, 7),
     "3d_3pcf": ("histZetaM_lya5d.txt", 5, 13),
@@ -133,6 +136,8 @@ class ForestCatalog:
     weights: np.ndarray
     forest_ids: np.ndarray
     metadata: dict = field(default_factory=dict)
+    log_lambda: np.ndarray | None = None
+    distortion_domain: dict | None = None
 
     def normalized(self):
         pos = np.ascontiguousarray(self.positions, dtype=np.float64)
@@ -154,8 +159,13 @@ class ForestCatalog:
         distances = np.hypot(np.hypot(pos[:, 0], pos[:, 1]), pos[:, 2])
         if not np.all(np.isfinite(distances) & (distances > 0)):
             raise ValueError("positions need positive finite observer distances")
-        return ForestCatalog(pos, delta, weights, np.ascontiguousarray(ids, dtype=np.int64),
-                             dict(self.metadata))
+        ids = np.ascontiguousarray(ids, dtype=np.int64)
+        lam = None if self.log_lambda is None else np.ascontiguousarray(self.log_lambda,dtype=np.float64)
+        if lam is not None and (lam.shape != (len(pos),) or not np.isfinite(lam).all()):
+            raise ValueError("log_lambda must be a finite (N,) array")
+        from lya_distortion import normalize_domain
+        domain = normalize_domain(self.distortion_domain,pos,ids,lam)
+        return ForestCatalog(pos, delta, weights, ids, dict(self.metadata),lam,domain)
 
     @property
     def nbody(self):
@@ -182,13 +192,19 @@ class RunConfig:
     theta_bins: int = 4
     mu_bins: int = 4
     lya2_kernel: int = 0
+    lya2_rp_slop: float = 0.0
+    lya2_rt_slop: float = 0.0
     lya3_kernel: int = 0
     lya3_pivot_cell_max: int = 8
+    lya3_lmax: int = 8
+    lya3_mu_mode: str = "exact"
+    lya3_multipole_kernel: int = 0
     multipole_lmax: int = 3
     multipole_rmin: float = 0.0
     max_hist_mib: float = 1024.0
     plots: bool = True
     flatten_plots: bool = True
+    plot_multipole_orders: tuple[int, ...] | None = None
     lya2pcf_source: Path | None = None
     reference_covariance: bool = False
     reference_nside: int = 32
@@ -201,10 +217,14 @@ class RunConfig:
     covariance: Path | None = None
     distortion_matrix: Path | None = None
     model_correlation: Path | None = None
+    compute_distortion: bool = False
+    distortion_projection_order: int = 1
+    distortion_max_mib: float = 512.
     wedge_bins: int = 50
     wedge_mu_edges: tuple[float, ...] = (0., .5, .8, .95, 1.)
     wedge_subsamples: int = 10
     wedge_r_max: float | None = None
+    transfer_catalog_ownership: bool = False
 
     def validate(self):
         if not self.engines or any(e not in LYA_ENGINES for e in self.engines):
@@ -217,8 +237,45 @@ class RunConfig:
             raise ValueError("verbose and verbose_log must be in [0,3]")
         if self.lya2_kernel not in (0,1) or self.lya3_kernel not in range(6):
             raise ValueError("require lya2_kernel=0..1 and lya3_kernel=0..5")
+        for name in ("lya2_rp_slop", "lya2_rt_slop"):
+            if not math.isfinite(getattr(self, name)) or not 0 <= getattr(self, name) <= 1:
+                raise ValueError(f"{name} must be finite in [0,1]")
+        if self.lya2_rp_slop or self.lya2_rt_slop:
+            pair_engines = [e for e in self.engines if LYA_ENGINES[e].family == "lya"
+                            and not LYA_ENGINES[e].radial and 2 in LYA_ENGINES[e].orders]
+            if not pair_engines:
+                raise ValueError("pair bin slop requires a distinct-forest 3D 2PCF engine")
+            if self.lya2_kernel != 1 and any(e != "lya-rprt-quadtree-2pcf-omp" for e in pair_engines):
+                raise ValueError("pair bin slop requires --lya2-kernel 1 (automatic for the rp-rt quadtree)")
+            if self.compute_distortion or self.distortion_matrix:
+                raise ValueError("nonzero pair bin slop cannot use an exact hard-bin distortion matrix; use zero pair slops for distortion modelling")
         if not isinstance(self.lya3_pivot_cell_max,int) or not 1<=self.lya3_pivot_cell_max<=64:
             raise ValueError("lya3_pivot_cell_max must be in [1,64]")
+        if self.plot_multipole_orders is not None:
+            from lya_multipole_plots import selected_orders
+            selected_orders(self, range(33))
+            if self.plots:
+                for engine in self.engines:
+                    spec = LYA_ENGINES[engine]
+                    limit = self.lya3_lmax if engine == ANISOTROPIC_MULTIPOLE else self.multipole_lmax
+                    if spec.family in ('anisotropic_multipole', 'multipole') and not selected_orders(self, range(limit+1)):
+                        raise ValueError(f'{engine}: none of --plot-multipole-orders are available')
+        if not isinstance(self.lya3_lmax, int) or not 0 <= self.lya3_lmax <= 32:
+            raise ValueError("lya3_lmax must be an integer in [0,32]")
+        if self.lya3_mu_mode not in ("exact", "finite-multipole"):
+            raise ValueError("lya3_mu_mode must be exact or finite-multipole")
+        if self.lya3_multipole_kernel not in (0, 1, 2):
+            raise ValueError("lya3_multipole_kernel must be 0, 1 or 2")
+        if ANISOTROPIC_MULTIPOLE in self.engines:
+            hard_3pcf = any(LYA_ENGINES[e].family == "lya" and not LYA_ENGINES[e].radial
+                            and 3 in LYA_ENGINES[e].orders for e in self.engines)
+            if self.lya3_kernel and not hard_3pcf:
+                raise ValueError("--lya3-kernel applies to hard-bin forest engines; for anisotropic "
+                                 "multipoles use --lya3-multipole-kernel 0, 1 or 2")
+            if self.qualification_reference:
+                raise ValueError("anisotropic moment packets cannot use --qualification-reference; "
+                                 "use the calibration script for raw moments, or select an exact "
+                                 "hard-bin engine alongside this engine to compare its exact bins")
         if not isinstance(self.multipole_lmax, int) or not 0 <= self.multipole_lmax <= 10:
             raise ValueError("multipole_lmax must be an integer in [0, 10]")
         for name in ("rp_max", "rt_max", "r3_max", "max_hist_mib"):
@@ -253,8 +310,18 @@ class RunConfig:
                     raise ValueError(f"--lya2pcf-source is missing {name}")
         if self.reference_covariance and (not self.lya2pcf_source or not has_3d_2pcf):
             raise ValueError("reference covariance requires --lya2pcf-source and a 3D 2PCF engine")
-        if bool(self.distortion_matrix) != bool(self.model_correlation):
+        if self.compute_distortion and self.distortion_matrix:
+            raise ValueError("choose --compute-distortion or --distortion-matrix")
+        if self.distortion_projection_order not in (0,1):
+            raise ValueError("distortion_projection_order must be 0 or 1")
+        if not math.isfinite(self.distortion_max_mib) or self.distortion_max_mib <= 0:
+            raise ValueError("distortion_max_mib must be positive and finite")
+        if self.compute_distortion and not has_3d_2pcf:
+            raise ValueError("--compute-distortion requires a distinct-forest 3D 2PCF engine")
+        if not self.compute_distortion and bool(self.distortion_matrix) != bool(self.model_correlation):
             raise ValueError("use --distortion-matrix together with --model-correlation (forward modelling)")
+        if self.model_correlation and not self.analysis:
+            raise ValueError("model comparison requires enabled analysis")
         if (self.covariance or self.distortion_matrix or self.reference_covariance) and (not self.analysis or not has_3d_2pcf):
             raise ValueError("covariance/distortion analysis requires a 3D 2PCF engine and enabled analysis")
         if self.analysis and has_3d_2pcf:
@@ -272,6 +339,9 @@ class RunConfig:
             bins2 = self.rp_bins * (1 if spec.radial else self.rt_bins)
             if spec.family == "multipole":
                 bins3 = (self.multipole_lmax + 1)*self.r3_bins**2
+            elif spec.family == "anisotropic_multipole":
+                bins3 = self.r3_bins**2 * self.theta_bins**2 * (
+                    self.lya3_lmax + 1 + (self.mu_bins if self.lya3_mu_mode == "exact" else 0))
             else:
                 bins3 = ((2 * self.r3_bins)**2 if spec.radial else
                          self.r3_bins**2 * self.theta_bins**2 * self.mu_bins)
@@ -292,6 +362,7 @@ def resolve_engines(tokens, available, statistics="2pcf"):
                      "all-multipole"):
             candidates = [name for name, spec in LYA_ENGINES.items()
                           if name in available
+                          and not spec.explicit_only
                           and (token != "all-omp" or not spec.mpi)
                           and (token != "all-mpi" or spec.mpi)
                           and (token != "all-1d" or spec.radial)
@@ -350,7 +421,7 @@ def expand_inputs(patterns):
 
 def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
               max_forests=None, pixel_stride=1, delta_field="auto", project_delta=False,
-              redshift_weight_exponent=0., weight_z_ref=2.25):
+              redshift_weight_exponent=0., weight_z_ref=2.25, retain_projection_domain=False):
     """Read the DESI DR1 image layout; preserve delta and supplied weights.
 
     Flat LambdaCDM with Tcmb0=0 converts absorption redshift to Mpc/h. This is
@@ -369,7 +440,7 @@ def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
     if pixel_stride < 1 or (max_forests is not None and max_forests < 1):
         raise ValueError("pixel_stride and max_forests must be positive")
     cosmology = FlatLambdaCDM(H0=100*h, Om0=omega_m, Tcmb0=0)
-    pieces, seen, provenance = [], set(), []
+    pieces, seen, provenance, domains, wavelengths = [], set(), [], [], []
     for path in expand_inputs(paths):
         if max_forests is not None and len(pieces) >= max_forests:
             break
@@ -401,7 +472,9 @@ def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
             z_abs = wave / LYA_WAVELENGTH - 1
             good_wave = (z_abs > 0) & (z_abs >= z_min) & (z_abs < z_max)
             chi = np.zeros(len(wave))
-            chi[good_wave] = cosmology.comoving_distance(z_abs[good_wave]).value * h
+            fit_wave = z_abs > 0
+            distance_wave = fit_wave if retain_projection_domain and not project_delta else good_wave
+            chi[distance_wave] = cosmology.comoving_distance(z_abs[distance_wave]).value * h
             ra_unit = u.Unit(meta.columns["RA"].unit or "rad")
             dec_unit = u.Unit(meta.columns["DEC"].unit or "rad")
             loaded = 0
@@ -428,23 +501,38 @@ def read_desi(paths, *, omega_m=0.315, h=0.674, z_min=0.0, z_max=10.0,
                     weight_z_ref=weight_z_ref)
                 pieces.append((chi[indices, None]*los, retained_delta, retained_weight,
                                np.full(len(indices), identifier, dtype=np.int64)))
+                wavelengths.append(np.log10(wave[indices]))
+                if retain_projection_domain and not project_delta:
+                    full = np.flatnonzero(fit_wave & np.isfinite(data) & np.isfinite(weight) & (weight>0))
+                    domains.append(dict(positions=chi[full,None]*los,
+                        forest_ids=np.full(len(full),identifier,dtype=np.int64),
+                        log_lambda=np.log10(wave[full]),projection_weights=weight[full],
+                        data_indices=np.searchsorted(full,indices)))
                 loaded += 1
             provenance.append(dict(path=str(path), delta_field=field_name,
                                    blinding=str(meta.header.get("BLINDING", "unknown")),
                                    accepted_forests=loaded))
     if not pieces:
         raise ValueError("no valid forest pixels survived the selection")
-    arrays = [np.concatenate([piece[i] for piece in pieces]) for i in range(4)]
+    pieces = [list(piece) for piece in pieces]
+    arrays = []
+    for i in range(4):
+        arrays.append(np.concatenate([piece[i] for piece in pieces]))
+        for piece in pieces:
+            piece[i] = None
+    pieces.clear()
+    from lya_distortion import concatenate_domains
     return ForestCatalog(*arrays, metadata=dict(
         input_format="DESI/PICCA images", files=provenance, distance_unit="Mpc/h",
         cosmology=dict(model="FlatLambdaCDM", omega_m=omega_m, h=h, Tcmb0=0),
         wavelength_lya_angstrom=LYA_WAVELENGTH, z_min=z_min, z_max=z_max,
         max_forests=max_forests, pixel_stride=pixel_stride,
-        project_delta=project_delta, projection_domain="retained pixels after cuts/stride",
+        project_delta=project_delta, projection_domain=("retained pixels after cuts/stride" if project_delta else "input projection unchanged; original valid forest assumed for response"),
         redshift_weight_exponent=redshift_weight_exponent, weight_z_ref=weight_z_ref,
         weights=("input WEIGHT unchanged; zero/negative/nonfinite pixels excluded" if redshift_weight_exponent == 0
                  else "input WEIGHT times ((1+z)/(1+z_ref))**exponent"),
-    )).normalized()
+    ), log_lambda=np.concatenate(wavelengths),
+        distortion_domain=concatenate_domains(domains)).normalized()
 
 
 def read_ascii(path):
@@ -458,14 +546,25 @@ def read_ascii(path):
 def read_npz(path):
     with np.load(path, allow_pickle=False) as data:
         metadata = json.loads(str(data["metadata"])) if "metadata" in data else {}
+        from lya_distortion import DOMAIN_FIELDS
+        keys = ['distortion_'+k for k in DOMAIN_FIELDS]
+        if any(k in data for k in keys+['distortion_log_lambda']) and not all(k in data for k in keys):
+            raise ValueError("incomplete continuum-fitting domain in NPZ cache")
+        domain = {k: data['distortion_'+k] for k in DOMAIN_FIELDS} if all(k in data for k in keys) else None
+        if domain is not None and 'distortion_log_lambda' in data:
+            domain['log_lambda'] = data['distortion_log_lambda']
         return ForestCatalog(*(data[n] for n in ("positions", "delta", "weights", "forest_ids")),
-                             metadata=metadata).normalized()
+                             metadata=metadata, log_lambda=data['log_lambda'] if 'log_lambda' in data else None,
+                             distortion_domain=domain).normalized()
 
 
 def save_catalog(path, catalog):
+    extra = {} if catalog.log_lambda is None else dict(log_lambda=catalog.log_lambda)
+    if catalog.distortion_domain is not None:
+        extra.update({'distortion_'+k: v for k,v in catalog.distortion_domain.items()})
     np.savez_compressed(path, positions=catalog.positions, delta=catalog.delta,
                         weights=catalog.weights, forest_ids=catalog.forest_ids,
-                        metadata=json.dumps(catalog.metadata))
+                        metadata=json.dumps(catalog.metadata),**extra)
 
 
 def synthetic_catalog(forests=8, pixels=12, seed=1234):
@@ -500,7 +599,12 @@ def broadcast_catalog(comm, catalog):
     meta = comm.bcast(catalog.metadata if comm.rank == 0 else None, root=0)
     arrays = [broadcast_array(comm, getattr(catalog, name) if comm.rank == 0 else None)
               for name in ("positions", "delta", "weights", "forest_ids")]
-    return collective(comm, lambda: ForestCatalog(*arrays, metadata=meta).normalized())
+    # The distortion calculation runs once on rank zero; its fitting metadata
+    # need not be duplicated on the other MPI ranks.
+    lam = catalog.log_lambda if comm.rank == 0 else None
+    domain = catalog.distortion_domain if comm.rank == 0 else None
+    return collective(comm, lambda: ForestCatalog(*arrays, metadata=meta,
+                       log_lambda=lam,distortion_domain=domain).normalized())
 
 
 def engine_parameters(config, engine, root):
@@ -512,12 +616,14 @@ def engine_parameters(config, engine, root):
                     rminHist=config.multipole_rmin,
                     sizeHistN=config.r3_bins, mChebyshev=config.multipole_lmax,
                     verbose=config.verbose, verbose_log=config.verbose_log,
+                    lya3MuMode=0, lya2Kernel=0, lya2RpSlop=0.0, lya2RtSlop=0.0,
                     options="only-3pcf-3d,exclude-all-same-los,no-smooth-pivot")
     # set() merges overrides: reset the order after a rank-zero-only
     # multipole run so later MPI startup controls agree on every rank.
     return dict(searchMethod=engine, rootDir=str(root), iCatalogs="1",
                 numberThreads=config.threads, usePeriodic=False, useLogHist=False,
-                rangeN=max(config.rp_max, config.rt_max, config.r3_max),
+                rangeN=(config.r3_max if engine == ANISOTROPIC_MULTIPOLE
+                        else max(config.rp_max, config.rt_max, config.r3_max)),
                 rminHist=0.0, sizeHistN=4, mChebyshev=config.multipole_lmax,
                 verbose=config.verbose, verbose_log=config.verbose_log,
                 options="no-smooth-pivot",
@@ -525,13 +631,25 @@ def engine_parameters(config, engine, root):
                 lya2RpBins=config.rp_bins, lya2RtBins=config.rt_bins,
                 lya3RMax=config.r3_max, lya3RBins=config.r3_bins,
                 lya3ThetaBins=config.theta_bins, lya3MuBins=config.mu_bins,
-                lya2Kernel=config.lya2_kernel if not spec.radial and 2 in spec.orders else 0,
-                lya3Kernel=config.lya3_kernel if not spec.radial and 3 in spec.orders else 0,
+                lya2Kernel=1 if engine == "lya-rprt-quadtree-2pcf-omp" else (config.lya2_kernel if not spec.radial and 2 in spec.orders else 0),
+                lya2RpSlop=config.lya2_rp_slop if spec.family == "lya" and not spec.radial and 2 in spec.orders else 0.0,
+                lya2RtSlop=config.lya2_rt_slop if spec.family == "lya" and not spec.radial and 2 in spec.orders else 0.0,
+                lya3Kernel=(config.lya3_multipole_kernel if engine == ANISOTROPIC_MULTIPOLE
+                            else config.lya3_kernel if not spec.radial and 3 in spec.orders else 0),
+                lya3LMax=config.lya3_lmax,
+                lya3MuMode=int(engine == ANISOTROPIC_MULTIPOLE and config.lya3_mu_mode == "exact"),
                 lya3PivotCellMax=config.lya3_pivot_cell_max)
 
 
-def read_products(root, engine):
+def read_products(root, engine, config=None):
     spec, result = LYA_ENGINES[engine], {}
+    if engine == ANISOTROPIC_MULTIPOLE:
+        if config is None:
+            raise ValueError("anisotropic products require the requested RunConfig, including mu mode")
+        if config.lya3_mu_mode == "finite-multipole":
+            # Signed raw moments and reconstructed bins have distinct contracts;
+            # neither is inserted into the exact-ratio comparison pipeline.
+            return result
     for order in spec.orders:
         key = (f"multipole_{order}pcf" if spec.family == "multipole"
                else (f"1d_same_los_{order}pcf" if spec.family == "same_los"
@@ -677,7 +795,52 @@ def make_plots(results, config):
             fig.savefig(flat_path, dpi=150)
             plt.close(fig)
             paths.append(str(flat_path))
+    from lya_multipole_plots import write_scalar_plots
+    for name, result in results.items():
+        if "multipole_3pcf" in result["products"]:
+            paths.extend(write_scalar_plots(config.output_dir/name,
+                                            result["products"]["multipole_3pcf"], config))
     return paths
+
+
+def replot_multipoles(source, output=None, orders=None):
+    """Read saved histograms without loading a catalog or running an engine."""
+    source = Path(source).expanduser().resolve()
+    summary_path = source/'summary.json'
+    saved = json.loads(summary_path.read_text())
+    settings = {key: value for key, value in saved['config'].items()
+                if key in RunConfig.__dataclass_fields__}
+    settings.update(output_dir=Path(output).expanduser().resolve() if output else source/'multipole_plots',
+                    plots=True, plot_multipole_orders=tuple(orders) if orders is not None else None)
+    config = RunConfig(**settings)
+    if (config.r3_bins < 1 or config.theta_bins < 1 or config.mu_bins < 1
+            or not math.isfinite(config.r3_max) or config.r3_max <= 0
+            or not 0 <= config.lya3_lmax <= 32 or not 0 <= config.multipole_lmax <= 10):
+        raise ValueError('saved summary has an invalid multipole grid')
+    from lya_multipole_plots import selected_orders, write_scalar_plots
+    selected_orders(config, range(33))
+    report = dict(source_summary=str(summary_path), native_search_run=False, plots=[], engines={})
+    for engine in saved['engines']:
+        if engine not in LYA_ENGINES:
+            continue
+        target = config.output_dir/engine
+        if engine == ANISOTROPIC_MULTIPOLE:
+            from lya_anisotropic_multipoles import inspect_outputs
+            exact = read_products(source/engine, engine, config).get('3d_3pcf')
+            item = inspect_outputs(source/engine, config, exact, plot_root=target)
+            report['engines'][engine] = item
+            report['plots'].extend(item['plots'])
+        elif LYA_ENGINES[engine].family == 'multipole':
+            table = read_products(source/engine, engine, config)['multipole_3pcf']
+            paths = write_scalar_plots(target, table, config)
+            report['engines'][engine] = dict(plots=paths, normalization='native scalar numerator / denominator')
+            report['plots'].extend(paths)
+    if not report['engines']:
+        raise ValueError('the saved summary contains no supported 3PCF multipole engine')
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    path = config.output_dir/'plot_summary.json'
+    path.write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
+    return path
 
 
 def run_engine_suite(catalog, config, comm=None):
@@ -698,6 +861,13 @@ def run_engine_suite(catalog, config, comm=None):
         raise ValueError(f"selected statistics need at least {required} distinct forests")
     config.output_dir = Path(config.output_dir).expanduser().resolve()
     collective(comm, lambda: config.output_dir.mkdir(parents=True, exist_ok=True), root_only=True)
+    distortion_report = None
+    if config.compute_distortion:
+        def compute_response():
+            from lya_distortion import compute_catalog_distortion, save_distortion
+            print("Computing continuum distortion matrix (rank 0, OpenMP)",flush=True)
+            return save_distortion(config.output_dir/'distortion',compute_catalog_distortion(catalog,config))
+        distortion_report = collective(comm,compute_response,root_only=True)
     balls = None
     from cyballs import cballs
     balls = collective(comm, cballs)
@@ -705,7 +875,7 @@ def run_engine_suite(catalog, config, comm=None):
     try:
         if not hasattr(balls, "set_forest_catalog"):
             raise RuntimeError("rebuild cyballs: set_forest_catalog() is required")
-        collective(comm, lambda: balls.set_forest_catalog(
+        collective(comm, lambda: register_forest_catalog(balls, config.transfer_catalog_ownership,
             catalog.positions, catalog.delta, catalog.weights, catalog.forest_ids))
         for engine in config.engines:
             root = config.output_dir / engine
@@ -732,6 +902,12 @@ def run_engine_suite(catalog, config, comm=None):
                 print(f"Running {engine}: {catalog.nbody} pixels, {forest_count} forests, "
                       f"{comm.size if spec.mpi else 1} rank(s) x {config.threads} threads",
                       flush=True)
+                if (config.lya2_rp_slop or config.lya2_rt_slop) and spec.family == "lya" and not spec.radial and 2 in spec.orders:
+                    print(f"  Approximate 2PCF bin placement: rp slop={config.lya2_rp_slop:g}, "
+                          f"rt slop={config.lya2_rt_slop:g} bin widths; outer cuts and forest exclusions remain exact.", flush=True)
+                if engine == ANISOTROPIC_MULTIPOLE:
+                    print(f"  Lmax={config.lya3_lmax}, moment kernel={config.lya3_multipole_kernel}, "
+                          f"mu output={config.lya3_mu_mode}", flush=True)
             started = time.perf_counter()
             def compute():
                 nonlocal compute_wall, compute_cpu, native_cpu, native_timings
@@ -763,7 +939,13 @@ def run_engine_suite(catalog, config, comm=None):
                     native_mainloop_cpu_time=float(native_timings["process_cpu_seconds"]))
             rows = comm.allgather(rank_timing if participates else None)
             timings = aggregate_rank_timings([row for row in rows if row is not None])
-            product = collective(comm, lambda: read_products(root, engine), root_only=True)
+            product = collective(comm, lambda: read_products(root, engine, config), root_only=True)
+            def anisotropic_outputs():
+                if engine != ANISOTROPIC_MULTIPOLE:
+                    return None
+                from lya_anisotropic_multipoles import inspect_outputs
+                return inspect_outputs(root, config, product.get("3d_3pcf"))
+            extra = collective(comm, anisotropic_outputs, root_only=True)
             if comm.rank == 0:
                 results[engine] = dict(wall_seconds=elapsed, products=product,
                                        ranks=comm.size if spec.mpi else 1,
@@ -772,6 +954,10 @@ def run_engine_suite(catalog, config, comm=None):
                                        threads_per_rank=config.threads,
                                        parameters=engine_parameters(config, engine, root))
                 results[engine].update(timings)
+                if extra is not None:
+                    results[engine]["anisotropic_multipole"] = extra
+                    print(f"  anisotropic output: {config.lya3_mu_mode}; raw moments through L={config.lya3_lmax}; "
+                          "finite-L reconstruction remains approximate", flush=True)
                 print(f"  completed: compute wall {timings['compute_wall_time']:.6f}s, "
                       f"summed process CPU {timings['compute_cpu_time']:.6f}s", flush=True)
         def finish():
@@ -790,6 +976,7 @@ def run_engine_suite(catalog, config, comm=None):
                                     "forests": forest_count},
                            config=config_json,
                            catalog_registrations_per_rank=1,
+                           memory_policy=memory_metadata(config.transfer_catalog_ownership),
                            timings=native_timings,
                            timing=("native wall_seconds includes MainLoop, output, synchronization and "
                                    "cleanup; FITS conversion is excluded. Reference wall_seconds is "
@@ -798,17 +985,28 @@ def run_engine_suite(catalog, config, comm=None):
                            selection_contract=FOREST_SELECTION_NOTE,
                            engines={e: {k: v for k, v in r.items() if k != "products"}
                                     for e, r in results.items()}, comparisons={})
+            if distortion_report is not None:
+                summary['computed_distortion'] = distortion_report
             summary["comparisons"], difference_paths = write_comparisons(results, config)
             summary["comparison_contract"] = (
                 "All pairs within each estimator family only; 3D, radial-only, same-LOS and "
                 "multipole products are not interchangeable. No upstream 3PCF reference is run.")
             summary["plots"] = (make_plots(results, config) if config.plots else []) + difference_paths
+            for row in results.values():
+                if "anisotropic_multipole" in row:
+                    summary["plots"].extend(row["anisotropic_multipole"]["plots"])
             if config.analysis:
-                summary["analysis_2pcf"], analysis_paths = analyse_2pcf(results, config)
+                from dataclasses import replace
+                analysis_config = replace(config,distortion_matrix=config.output_dir/'distortion'/'distortion.npz') if config.compute_distortion and config.model_correlation else config
+                summary["analysis_2pcf"], analysis_paths = analyse_2pcf(results, analysis_config)
                 summary["plots"].extend(analysis_paths)
             failed = [tag for tag, result in summary["comparisons"].items() if not result["passed"]]
             summary["validation"] = dict(passed=not failed, failed_comparisons=failed,
                                          comparisons=len(summary["comparisons"]))
+            if ANISOTROPIC_MULTIPOLE in results:
+                summary["validation"]["scope"] = (
+                    "Exact-ratio product comparisons only; raw anisotropic moments and approximate "
+                    "finite-L reconstruction are excluded. Zero comparisons is not an accuracy certificate.")
             with (config.output_dir / "summary.json").open("w") as stream:
                 json.dump(summary, stream, indent=2, allow_nan=False)
                 stream.write("\n")
@@ -825,14 +1023,16 @@ def run_engine_suite(catalog, config, comm=None):
 
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    add_memory_arguments(parser, healpix=False)
     parser.add_argument('--qualification-reference','--accuracy-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
-    parser.add_argument('--qualification-rtol',type=float,default=.05)
+    parser.add_argument('--qualification-rtol',type=float,default=.05, help='relative L2 target (default 0.05); does not bound every coefficient')
     parser.add_argument('--qualification-atol',type=float,default=1e-10)
     parser.add_argument('--accuracy-report-only',action='store_true',help='retain results and report penalties even above the relative L2 target')
     source = parser.add_mutually_exclusive_group()
-    source.add_argument("--fits", nargs="+", help="DESI, eBOSS/PICCA, or Cartesian forest FITS files/globs/directories")
+    source.add_argument("--fits", nargs="+", help="DESI, eBOSS/PICCA, Cartesian, or RA-DEC-R forest FITS files/globs/directories")
     source.add_argument("--catalog", type=Path, help="NPZ with positions, delta, weights, forest_ids")
     source.add_argument("--ascii", type=Path, help="six columns: x y z delta weight forest_id")
+    source.add_argument("--plot-existing", type=Path, help="plot saved multipole histograms from an output root; no catalog loading or search")
     source.add_argument("--synthetic", action="store_true", help="small generated catalog (default)")
     parser.add_argument(
         "--engine", "--engines", nargs="+", default=["lya-2pcf-omp"],
@@ -841,7 +1041,7 @@ def parse_arguments(argv=None):
     )
     parser.add_argument("--statistics", choices=["2pcf", "3pcf", "both"], default="2pcf")
     parser.add_argument("--list-engines", action="store_true")
-    parser.add_argument("--output", type=Path, default=Path("Output_lya_all_engines"))
+    parser.add_argument("--output", "--outdir", type=Path, help="output root (default Output_lya_all_engines; plot-existing: SOURCE/multipole_plots)")
     parser.add_argument("--save-catalog", type=Path, help="cache the selected input as NPZ")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--verbose", type=int, choices=range(4), default=1,
@@ -854,8 +1054,19 @@ def parse_arguments(argv=None):
                           ("theta-bins", 4), ("mu-bins", 4)):
         parser.add_argument("--"+name, type=int, default=default)
     parser.add_argument("--lya2-kernel",type=int,choices=(0,1),default=0,help="3D pair kernel: 0 pixel, 1 certified forest cells/range moments")
+    parser.add_argument("--lya2-bin-slop", "--bin-slop", type=float, default=None,
+                        help="set both 3D 2PCF bin slops in bin-width units [0,1]; default 0 (exact); per-axis options override")
+    parser.add_argument("--lya2-rp-slop", type=float, default=None,
+                        help="parallel-bin leakage [0,1]; overrides --bin-slop for rp")
+    parser.add_argument("--lya2-rt-slop", type=float, default=None,
+                        help="transverse-bin leakage [0,1]; overrides --bin-slop for rt")
     parser.add_argument("--lya3-kernel",type=int,choices=range(6),default=0,help="3D triple kernel: 5 adaptive hierarchical radial moments; 0 retains segments")
     parser.add_argument("--lya3-pivot-cell-max",type=int,default=8,help="maximum pivot-cell population for kernels 4/5 (1..64)")
+    parser.add_argument("--lya3-lmax", type=int, default=8, help="anisotropic Legendre moment order, 0..32")
+    parser.add_argument("--lya3-mu-mode", choices=("exact", "finite-multipole"), default="exact",
+                        help="anisotropic engine: exact adds exact angular bins; finite-multipole writes moments/reconstruction only")
+    parser.add_argument("--lya3-multipole-kernel", type=int, choices=(0, 1, 2), default=0,
+                        help="anisotropic moments: 0 automatic hierarchy, 1 prefix, 2 forced forest groups")
     parser.add_argument("--multipole-lmax", type=int, default=3)
     parser.add_argument("--multipole-rmin", type=float, default=0.0, help="Mpc/h")
     parser.add_argument("--omega-m", type=float, default=.315)
@@ -865,9 +1076,16 @@ def parse_arguments(argv=None):
     parser.add_argument("--max-forests", type=int, help="FITS demonstration subset")
     parser.add_argument("--pixel-stride", type=int, default=1, help="FITS subsampling, not rebinning")
     parser.add_argument("--delta-field", choices=["auto", "DELTA", "DELTA_BLIND"], default="auto")
-    parser.add_argument("--fits-layout", choices=["auto", "desi", "eboss", "cartesian"], default="auto")
+    parser.add_argument("--fits-layout", choices=["auto", "desi", "eboss", "cartesian", "radec-r"], default="auto")
     parser.add_argument("--eboss-angle-unit", choices=["rad", "deg"], default="rad")
-    parser.add_argument("--project-delta", action="store_true", help="remove weighted mean and log-wavelength slope on retained FITS pixels")
+    parser.add_argument("--radec-r-angle-unit", choices=["deg", "rad"], default="deg",
+                        help="RA/DEC unit fallback for unlabelled RA-DEC-R columns (default deg)")
+    parser.add_argument("--radec-r-distance-unit", choices=["Mpc/h", "Mpc"], default="Mpc/h",
+                        help="rcdis unit fallback for unlabelled RA-DEC-R columns; Mpc is multiplied by h")
+    parser.add_argument("--radec-r-distance-source", choices=["input", "redshift"], default="input",
+                        help="input: rcdis must be an absolute observer distance; redshift: "
+                             "compute chi(zobs) using --omega-m/--h in Mpc/h")
+    parser.add_argument("--project-delta", action="store_true", help="remove each forest weighted mean and log-wavelength slope on retained FITS pixels or an NPZ with log_lambda")
     parser.add_argument("--redshift-weight-exponent", type=float, default=0., help="optional WEIGHT multiplier ((1+z)/(1+z_ref))**exponent")
     parser.add_argument("--weight-z-ref", type=float, default=2.25)
     parser.add_argument("--lya2pcf-source", type=Path, help="enable external CPU pair-kernel references for every selected 2PCF family")
@@ -880,6 +1098,9 @@ def parse_arguments(argv=None):
     parser.add_argument("--fail-on-mismatch", action="store_true")
     parser.add_argument("--no-analysis", action="store_true", help="omit 3D 2PCF archives, wedges and covariance/model analysis")
     parser.add_argument("--covariance", type=Path, help="shared 3D 2PCF covariance: NPY/NPZ or FITS CO")
+    parser.add_argument("--compute-distortion",action="store_true",help="Compute native continuum 2PCF response once and save NPZ/FITS; optionally apply to --model-correlation")
+    parser.add_argument("--distortion-projection-order",type=int,choices=[0,1],default=1,help="0=weighted mean; 1=weighted mean+slope in true log wavelength (default)")
+    parser.add_argument("--distortion-max-mib",type=float,default=512.,help="Dense native matrix workspace budget; fewer bins/threads reduce memory")
     parser.add_argument("--distortion-matrix", type=Path, help="forward-model matrix: NPY/NPZ or FITS DM (not an inverse correction)")
     parser.add_argument("--model-correlation", type=Path, help="unprojected 3D model on matching bins: NPY/NPZ or FITS DA")
     parser.add_argument("--wedge-bins", type=int, default=50)
@@ -890,6 +1111,8 @@ def parse_arguments(argv=None):
     parser.add_argument("--synthetic-pixels", type=int, default=12)
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--max-hist-mib", type=float, default=1024.)
+    parser.add_argument("--plot-multipole-orders", type=int, nargs="+", choices=range(33),
+                        help="orders for multipole maps and radial slices (default: all available); CSVs retain all orders")
     parser.add_argument("--no-plots", action="store_true")
     parser.add_argument(
         "--no-flatten-plots", action="store_true",
@@ -899,7 +1122,36 @@ def parse_arguments(argv=None):
     parser.add_argument("--mpiexec", help="launcher built against the same MPI as cyballs/mpi4py")
     parser.add_argument("--mpi-extra-arg", action="append", default=[])
     parser.epilog = 'Native timings separate Python Run from C MainLoop: MPI wall=max participating ranks, CPU=sum participating ranks. CPU includes worker threads and may exceed wall time. --verbose 1 enables live completion counters; --verbose-log 1 records them. LOS-tree methods are included in all-tree; estimator families are compared separately. Angular shear/scalar pivot-reuse and count-window options do not apply to forest estimators.'
-    return parser.parse_args(argv)
+    add_run_guidance(parser, field='lya', benchmark=False, private=False)
+    args = parser.parse_args(argv)
+    common = args.lya2_bin_slop
+    if common is not None and (not math.isfinite(common) or not 0 <= common <= 1):
+        parser.error("--bin-slop/--lya2-bin-slop must be finite in [0,1]")
+    if args.lya2_rp_slop is None: args.lya2_rp_slop = 0.0 if common is None else common
+    if args.lya2_rt_slop is None: args.lya2_rt_slop = 0.0 if common is None else common
+    return args
+
+
+def catalog_field_diagnostics(catalog):
+    """Summarize the registered field with bounded temporary memory."""
+    scale = float(np.max(catalog.weights))
+    total_weight, weighted_delta, total_delta = 0., 0., 0.
+    radius_min, radius_max = math.inf, 0.
+    for start in range(0, catalog.nbody, 262144):
+        s = slice(start, start+262144)
+        weight = catalog.weights[s]/scale
+        total_weight += float(np.sum(weight))
+        weighted_delta += float(np.dot(weight, catalog.delta[s]))
+        total_delta += float(np.sum(catalog.delta[s]))
+        pos = catalog.positions[s]
+        radius = np.hypot(np.hypot(pos[:, 0], pos[:, 1]), pos[:, 2])
+        radius_min = min(radius_min, float(radius.min()))
+        radius_max = max(radius_max, float(radius.max()))
+    mean = weighted_delta/total_weight
+    return dict(scope="retained pixels as registered with the native engine",
+                weighted_mean_delta=mean, unweighted_mean_delta=total_delta/catalog.nbody,
+                squared_weighted_mean_delta=mean**2,
+                min_observer_distance_mpc_h=radius_min, max_observer_distance_mpc_h=radius_max)
 
 
 def load_catalog(args):
@@ -908,7 +1160,10 @@ def load_catalog(args):
                           or args.z_min != 0 or args.z_max != 10
                           or args.omega_m != .315 or args.h != .674
                           or args.delta_field != "auto" or args.fits_layout != "auto"
-                          or args.eboss_angle_unit != "rad" or args.project_delta
+                          or args.eboss_angle_unit != "rad"
+                          or getattr(args, "radec_r_angle_unit", "deg") != "deg"
+                          or getattr(args, "radec_r_distance_unit", "Mpc/h") != "Mpc/h"
+                          or getattr(args, "radec_r_distance_source", "input") != "input"
                           or args.redshift_weight_exponent != 0 or args.weight_z_ref != 2.25):
         raise ValueError("FITS selection/cosmology options require --fits; "
                          "ASCII and NPZ coordinates are already comoving")
@@ -918,14 +1173,39 @@ def load_catalog(args):
                             z_min=args.z_min, z_max=args.z_max, max_forests=args.max_forests,
                             pixel_stride=args.pixel_stride, delta_field=args.delta_field,
                             fits_layout=args.fits_layout, eboss_angle_unit=args.eboss_angle_unit,
+                            radec_r_angle_unit=getattr(args, "radec_r_angle_unit", "deg"),
+                            radec_r_distance_unit=getattr(args, "radec_r_distance_unit", "Mpc/h"),
+                            radec_r_distance_source=getattr(args, "radec_r_distance_source", "input"),
                             project_delta=args.project_delta,
-                            redshift_weight_exponent=args.redshift_weight_exponent, weight_z_ref=args.weight_z_ref)
+                            redshift_weight_exponent=args.redshift_weight_exponent, weight_z_ref=args.weight_z_ref,
+                            retain_projection_domain=getattr(args,'compute_distortion',False))
     elif args.catalog:
         catalog = read_npz(args.catalog)
     elif args.ascii:
         catalog = read_ascii(args.ascii)
     else:
         catalog = synthetic_catalog(args.synthetic_forests, args.synthetic_pixels, args.seed)
+    if args.project_delta and not args.fits:
+        if not args.catalog or catalog.log_lambda is None:
+            raise ValueError('--project-delta requires FITS wavelengths or an NPZ with true log_lambda; '
+                             'it cannot be inferred from Cartesian distance')
+        from lya_projection import project_lya_delta
+        catalog.delta, report = project_lya_delta(catalog.delta, catalog.weights,
+            catalog.forest_ids, catalog.log_lambda, return_diagnostics=True)
+        catalog.metadata.update(project_delta=True,
+            projection_domain='retained cached pixels with correlation weights',
+            continuum_projection=report)
+        # Reprojection fits the retained input; a cached earlier full-forest
+        # response domain no longer describes this operator.
+        catalog.distortion_domain = None
+    if args.project_delta:
+        from lya_projection import forest_projection_diagnostics
+        verified = forest_projection_diagnostics(catalog.delta, catalog.weights,
+                                                 catalog.forest_ids, catalog.log_lambda)
+        catalog.metadata['projection_constraints'] = verified
+    # Record the actual retained field, including any selection, stride or
+    # projection. An unweighted zero mean does not imply a weighted zero mean.
+    catalog.metadata["field_diagnostics"] = catalog_field_diagnostics(catalog)
     if args.save_catalog:
         args.save_catalog.parent.mkdir(parents=True, exist_ok=True)
         save_catalog(args.save_catalog, catalog)
@@ -935,6 +1215,14 @@ def load_catalog(args):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     args = parse_arguments(argv)
+    if args.plot_existing is not None:
+        if args.no_plots or args.mpi_ranks != 1 or mpi_environment_size() > 1:
+            raise ValueError('--plot-existing requires plotting enabled and a single Python process')
+        path = replot_multipoles(args.plot_existing, args.output, args.plot_multipole_orders)
+        print(f'Multipole plots regenerated without a native search: {path}')
+        return 0
+    if args.output is None:
+        args.output = Path('Output_lya_all_engines')
     if args.mpi_ranks < 1:
         raise ValueError("--mpi-ranks must be positive")
     if args.mpi_ranks > 1 and mpi_environment_size() == 1 and not os.environ.get(MPI_CHILD):
@@ -955,7 +1243,7 @@ def main(argv=None):
     if args.list_engines:
         if comm.rank == 0:
             for name, spec in LYA_ENGINES.items():
-                geometry = ("1D-tree" if spec.tree else
+                geometry = (("1D-tree" if spec.radial else "3D-tree") if spec.tree else
                             ("radial" if spec.radial else "3D"))
                 smooth = "unsupported"
                 print(f"{name:28s} {'available' if name in available else 'not built':10s} "
@@ -973,6 +1261,7 @@ def main(argv=None):
     if comm.size == 1 and any(LYA_ENGINES[e].mpi for e in engines):
         comm = get_mpi_comm(True)
     config = RunConfig(engines, args.output, threads=args.threads,
+            transfer_catalog_ownership=args.transfer_catalog_ownership,
                        verbose=args.verbose, verbose_log=args.verbose_log,
             qualification_reference=args.qualification_reference,
             accuracy_report_only=args.accuracy_report_only,
@@ -982,9 +1271,13 @@ def main(argv=None):
                        r3_max=args.r3_max, r3_bins=args.r3_bins, theta_bins=args.theta_bins,
                        mu_bins=args.mu_bins, multipole_lmax=args.multipole_lmax,
                        lya2_kernel=args.lya2_kernel,lya3_kernel=args.lya3_kernel,
+                       lya2_rp_slop=args.lya2_rp_slop, lya2_rt_slop=args.lya2_rt_slop,
                        lya3_pivot_cell_max=args.lya3_pivot_cell_max,
+                       lya3_lmax=args.lya3_lmax, lya3_mu_mode=args.lya3_mu_mode,
+                       lya3_multipole_kernel=args.lya3_multipole_kernel,
                        multipole_rmin=args.multipole_rmin,
                        max_hist_mib=args.max_hist_mib,
+                       plot_multipole_orders=tuple(args.plot_multipole_orders) if args.plot_multipole_orders is not None else None,
                        plots=not args.no_plots,
                        flatten_plots=not args.no_flatten_plots,
                        lya2pcf_source=args.lya2pcf_source, reference_covariance=args.reference_covariance,
@@ -993,17 +1286,34 @@ def main(argv=None):
                        fail_on_mismatch=args.fail_on_mismatch, analysis=not args.no_analysis,
                        covariance=args.covariance, distortion_matrix=args.distortion_matrix,
                        model_correlation=args.model_correlation, wedge_bins=args.wedge_bins,
+                       compute_distortion=args.compute_distortion,
+                       distortion_projection_order=args.distortion_projection_order,
+                       distortion_max_mib=args.distortion_max_mib,
                        wedge_mu_edges=tuple(float(x) for x in args.wedge_mu_edges.split(",")),
                        wedge_subsamples=args.wedge_subsamples, wedge_r_max=args.wedge_r_max)
     collective(comm, config.validate)
+    collective(comm, lambda: preflight_transfer(
+        config.transfer_catalog_ownership and any(e in LYA_ENGINES for e in config.engines), forest=True))
     catalog = collective(comm, lambda: load_catalog(args), root_only=True)
     catalog = broadcast_catalog(comm, catalog)
     if comm.rank == 0:
         print("Catalog loaded once; retained NumPy input will be reused by every engine.")
         print("Smooth-pivot: unsupported by forest/multipole engines; native runs use no-smooth-pivot.")
         print(FOREST_SELECTION_NOTE)
+        if catalog.metadata.get('project_delta'):
+            check = catalog.metadata.get('projection_constraints')
+            print('Continuum projection: per-forest weighted mean and log-wavelength slope removed before all engines.')
+            if check:
+                print(f"  maximum weighted mean residual={check['max_abs_weighted_mean_after']:.3g}; "
+                      f"normalized first-moment residual={check['max_abs_normalized_first_moment_after']:.3g}")
         for source in catalog.metadata.get("files", []):
             print(f"FITS field={source['delta_field']}, BLINDING={source['blinding']}")
+        if "distance_source" in catalog.metadata:
+            print(f"Observer distances: {catalog.metadata['distance_source']}")
+        if "field_diagnostics" in catalog.metadata:
+            diagnostic = catalog.metadata["field_diagnostics"]
+            print(f"Retained delta: weighted mean={diagnostic['weighted_mean_delta']:.8g}; "
+                  f"unweighted mean={diagnostic['unweighted_mean_delta']:.8g}")
         if any(3 in LYA_ENGINES[e].orders for e in engines):
             print("3PCF can be expensive on dense forests; start with --max-forests and --pixel-stride.")
     run_engine_suite(catalog, config, comm)

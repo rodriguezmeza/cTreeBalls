@@ -53,6 +53,7 @@ active_methods=(
     octree-3pcf-3d-omp octree-3pcf-3d-mpi
     lya-2pcf-omp lya-3pcf-omp lya-2pcf-3pcf-omp
     lya-los-tree-2pcf-omp lya-los-tree-3pcf-omp lya-los-tree-2pcf-3pcf-omp
+    lya-rprt-quadtree-2pcf-omp
     lya-1d-2pcf-omp lya-1d-3pcf-omp lya-1d-2pcf-3pcf-omp
     lya-1d-tree-2pcf-omp lya-1d-tree-same-los-2pcf-omp
     lya-1d-tree-3pcf-omp lya-anisotropic-multipole-3pcf-omp

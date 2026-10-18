@@ -1,4 +1,4 @@
-/* Octree forest discovery followed by exact per-forest radial-tree queries.
+/* Octree discovery followed by exact per-forest implicit radial-tree queries.
  * This is a neighbor backend for the 3D estimators, not a radial-only CF.
  */
 #include "globaldefs.h"
@@ -6,7 +6,6 @@
 #include "lya_forest_los_tree.h"
 #include <float.h>
 
-#define LYA_LOS_LEAF_SIZE 8
 #define LYA_LOS_MIXED SIZE_MAX
 
 typedef struct {
@@ -16,11 +15,7 @@ typedef struct {
 } lya_los_octant;
 
 typedef struct {
-    size_t first, end, escape;
-} lya_los_radial_node;
-
-typedef struct {
-    size_t root;
+    size_t first, end;
     long double direction[NDIM], origin[NDIM];
     long double deviation, scale;
 } lya_los_forest;
@@ -31,8 +26,7 @@ struct lya_los_index {
     size_t *body_forest;
     lya_los_forest *forests;
     lya_los_octant *octants;
-    lya_los_radial_node *radial;
-    size_t forest_count, octant_count, radial_count;
+    size_t forest_count, octant_count;
 };
 
 static int lya_los_compare(const void *a, const void *b)
@@ -43,27 +37,6 @@ static int lya_los_compare(const void *a, const void *b)
     if (LyaDistance(p) != LyaDistance(q))
         return LyaDistance(p) < LyaDistance(q) ? -1 : 1;
     return Id(p) < Id(q) ? -1 : Id(p) > Id(q);
-}
-
-static size_t lya_los_radial_size(size_t count)
-{
-    if (count <= LYA_LOS_LEAF_SIZE) return 1;
-    return 1 + lya_los_radial_size(count / 2)
-             + lya_los_radial_size(count - count / 2);
-}
-
-static void lya_los_build_radial(lya_los_index *index, size_t first, size_t end)
-{
-    size_t id = index->radial_count++;
-    lya_los_radial_node *node = index->radial + id;
-    node->first = first;
-    node->end = end;
-    if (end - first > LYA_LOS_LEAF_SIZE) {
-        size_t middle = first + (end - first) / 2;
-        lya_los_build_radial(index, first, middle);
-        lya_los_build_radial(index, middle, end);
-    }
-    node->escape = index->radial_count;
 }
 
 static void lya_los_pack_octree(lya_los_index *index, nodeptr q)
@@ -96,7 +69,6 @@ void lya_los_free(lya_los_index *index)
     free(index->body_forest);
     free(index->forests);
     free(index->octants);
-    free(index->radial);
     free(index);
 }
 
@@ -109,7 +81,7 @@ int lya_los_build(lya_los_index **result, bodyptr table, INTEGER count,
                   nodeptr root, ErrorMsg error_message)
 {
     lya_los_index *index = NULL;
-    size_t i, first, n, nodes = 0, radial_nodes = 0;
+    size_t i, first, n, nodes = 0;
     nodeptr q;
     *result = NULL;
     if (count <= 0 || (uintmax_t)count > SIZE_MAX || root == NULL) {
@@ -130,11 +102,8 @@ int lya_los_build(lya_los_index **result, bodyptr table, INTEGER count,
         for (i = first + 1; i < n
              && LyaForestId(index->points[i]) == LyaForestId(index->points[first]); i++);
         index->forest_count++;
-        /* With leaves of at least four pixels, the node count is <= n. */
-        radial_nodes += lya_los_radial_size(i - first);
     }
     LYA_LOS_ALLOC(index->forests, index->forest_count);
-    LYA_LOS_ALLOC(index->radial, radial_nodes);
     size_t forest = 0;
     for (first = 0; first < n; first = i, forest++) {
         lya_los_forest *f = index->forests + forest;
@@ -166,8 +135,8 @@ int lya_los_build(lya_los_index **result, bodyptr table, INTEGER count,
             }
             f->deviation = fmaxl(f->deviation, sqrtl(residual2));
         }
-        f->root = index->radial_count;
-        lya_los_build_radial(index, first, i);
+        f->first = first;
+        f->end = i;
     }
     for (q = root; q != Next(root); q = Type(q) == CELL ? More(q) : Next(q)) {
         if (nodes == SIZE_MAX) {
@@ -316,35 +285,45 @@ int lya_los_query(const lya_los_index *index, lya_los_workspace *workspace,
         if(workspace->forests[f]==own) continue;
         const lya_los_forest *forest = index->forests + workspace->forests[f];
         long double lower, upper;
-        size_t end = index->radial[forest->root].escape;
         lya_los_interval(forest, pivot, cutoff, &lower, &upper);
-        node = forest->root;
-        while (node < end) {
-            const lya_los_radial_node *entry = index->radial + node;
-            workspace->radial_nodes++;
-            if (LyaDistance(index->points[entry->end - 1]) < lower
-                || LyaDistance(index->points[entry->first]) > upper) {
-                node = entry->escape;
-                continue;
+        /* The accepted chi window is contiguous in the sorted forest. Two
+         * implicit binary-tree searches locate its inclusive bounds directly;
+         * no explicit radial nodes or repeated leaf bound checks are needed.
+         * Comparisons promote chi to long double just as the old node walk did.
+         * Visiting [first,end) retains that walk's exact pixel/summation order. */
+        size_t first = forest->first, end = forest->end;
+        if (LyaDistance(index->points[first]) < lower) {
+            size_t lo = first, hi = end;
+            while (lo < hi) {
+                size_t middle = lo + (hi-lo)/2;
+                workspace->radial_nodes++;
+                if (LyaDistance(index->points[middle]) < lower) lo = middle + 1;
+                else hi = middle;
             }
-            if (entry->end - entry->first <= LYA_LOS_LEAF_SIZE) {
-                size_t i;
-                for (i = entry->first; i < entry->end; i++) {
-                    bodyptr q = index->points[i];
-                    REAL d2, distance;
-                    compute_vector displacement;
-                    if (Id(q)<=minimum_id
-                        || LyaDistance(q) < lower || LyaDistance(q) > upper
-                        || Update(q) == FALSE || Mask(q) != MASK_NODE_VALID) continue;
-                    workspace->pixel_tests++;
-                    DOTPSUBV(d2, displacement, Pos(pivot), Pos(q));
-                    distance = rsqrt(d2);
-                    if (distance < cutoff
-                        && visit(q, distance, context, error_message) == FAILURE)
-                        return FAILURE;
-                }
+            first = lo;
+        }
+        if (first < end && LyaDistance(index->points[end-1]) > upper) {
+            size_t lo = first, hi = end;
+            while (lo < hi) {
+                size_t middle = lo + (hi-lo)/2;
+                workspace->radial_nodes++;
+                if (LyaDistance(index->points[middle]) <= upper) lo = middle + 1;
+                else hi = middle;
             }
-            node++;
+            end = lo;
+        }
+        for (size_t i = first; i < end; i++) {
+            bodyptr q = index->points[i];
+            REAL d2, distance;
+            compute_vector displacement;
+            if (Id(q) <= minimum_id || Update(q) == FALSE
+                || Mask(q) != MASK_NODE_VALID) continue;
+            workspace->pixel_tests++;
+            DOTPSUBV(d2, displacement, Pos(pivot), Pos(q));
+            distance = rsqrt(d2);
+            if (distance < cutoff
+                && visit(q, distance, context, error_message) == FAILURE)
+                return FAILURE;
         }
     }
     return SUCCESS;

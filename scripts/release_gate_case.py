@@ -41,8 +41,8 @@ def run(engine, output, threads):
     if family == 'forest':
         import test_lya_forest_mpi as forest
         same = 'same-los' in engine
-        # LOS-tree discovery preserves the original 3D estimators and oracles.
-        canonical = engine.replace('lya-los-tree-', 'lya-').rsplit('-', 1)[0]
+        # Alternative searches preserve the original 3D estimators/oracles.
+        canonical = engine.replace('lya-los-tree-', 'lya-').replace('lya-rprt-quadtree-', 'lya-').rsplit('-', 1)[0]
         kind = 1 if anisotropic else (6 if same else forest.METHODS.index(canonical))
         data = forest.three.POINTS if kind < 3 else forest.radial.WIDE_ANGLE
         p.update(forest.params(kind, '', output, threads))

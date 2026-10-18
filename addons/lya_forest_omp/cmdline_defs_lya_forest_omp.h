@@ -29,8 +29,8 @@
     "lya3PivotCellMax=8", ";Maximum pixels per pivot-cell task for kernels 4/5 (1..64)",
 
     "lya2Kernel=0", ";2PCF: 0 reference pixel traversal; 1 persistent forest cell pairs",
-    "lya2RpSlop=0", ";Parallel bin leakage in bin-width units; lya2Kernel=1 only",
-    "lya2RtSlop=0", ";Transverse bin leakage in bin-width units; lya2Kernel=1 only",
+    "lya2RpSlop=0", ";Parallel bin leakage in bin-width units [0,1]; pair kernel 1 / rp-rt quadtree",
+    "lya2RtSlop=0", ";Transverse bin leakage in bin-width units [0,1]; pair kernel 1 / rp-rt quadtree",
 
     "lyaScanLevel=0", ";Exact octree pivot frontier level (0 catalog order, 1..20 spatial tasks)",
     "lyaPivotRadius=0", ";Opt-in approximate same-forest pivot smoothing radius in catalog units (0 off)",

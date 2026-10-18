@@ -17,6 +17,12 @@
 # then, with the version parameter file:
 # time ../cballs ./In/parameters_explained
 #
+# This file retains the legacy octree-ggg-omp example values below. The compact
+# scalar two-ball engines are octree-2balls-omp, balltree-2balls-omp and
+# kdtree-2balls-omp. Select one by changing searchMethod or overriding it:
+# time ../cballs ./In/parameters_explained searchMethod=octree-2balls-omp
+# Check which engines were compiled with: ../cballs options=print-search-methods
+#
 # -------------------------
 # -------------------------
 #
@@ -26,21 +32,136 @@
 #
 searchMethod                       = octree-ggg-omp
 #
-# Parameters (next three) useful to change cBalls performance 
+# Parameters (next three) useful to change cBalls performance
+# theta controls geometric acceptance; it does not change stored coordinates
+# or allocated node capacity. Larger positive values can accept coarser cell
+# interactions. It is not a bound on the relative correlation error.
 theta                              = 1		# increases or decreases artificially size of the cells
 								# values > 1 decreases the size
 								# values < 1 increases the size
 nsmooth                            = 8		# in kd-tree methods act as the usual nbucket 
 								# 	as it is used in other codes... set it to 8
+# In compact scalar two-ball engines, nsmooth also supplies the bucket-leaf
+# capacity or its base value. The effective leaf policy depends on the engine
+# and statistic; some pair paths choose it adaptively. no-smooth-pivot disables
+# field/pivot smoothing but does not force nsmooth to 1 or disable bucket leaves.
+# Larger leaves can reduce node count while increasing work inside each leaf.
+# Keep nsmooth fixed when comparing memory allocations before/after a rebuild.
 rsmooth						= 
 #
 options                            = compute-HistN,and-CF,out-m-HistZeta	
 								# you may add 'pre-/post-processing' and 
 								# 	invoque the appropriate script 
 								# 	in 'preScript'/'posScript' option below
-								# if add 'no-one-ball' to the 'options'
-								#	cBalls will act as a direct searching method
-								#	but will be slower than the default searching method
+# no-one-ball disables one-ball aggregation. For a scalar two-ball exact
+# reference, use the full set of controls described below.
+#
+# -------------------------
+# Compact scalar two-ball engines: traversal and memory (October 2026)
+# -------------------------
+# The following native tokens belong in the comma-separated options value;
+# they are not additional parameter names or Python-style --flags.
+#   no-smooth-pivot: use unsmoothed scalar fields/pivots.
+#   scalar-pivot-reuse: enable hierarchical scalar 3PCF moment reuse on the
+#     octree, PCA balltree and KD two-ball engines. This is optional.
+#   dual-node-bin-theta: enable the bin-aware geometric acceptance policy.
+#     This affects approximation/speed, not node-array sizing.
+#
+# For an exact body-level reference with these scalar two-ball engines, use
+# theta=0 and options containing no-one-ball,no-two-balls,no-smooth-pivot;
+# omit scalar-pivot-reuse. no-one-ball alone is not a general exact reference
+# for two-ball engines. Keep the input, weights, bins and multipoles identical.
+#
+# CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA are shell environment
+# variables for scalar reuse, not entries in this native parameter file.
+# Example shell prefix: env CBALLS_SCALAR_PIVOT_TOL=3 CBALLS_SCALAR_BIN_THETA=0.5
+# These are approximation controls, not relative-error percentages. The
+# CBALLS_SHEAR_* variables control shear and do not configure scalar kappa.
+# Read recorded run settings for the effective compiled/environment defaults.
+#
+# Smaller tree allocations are AUTOMATIC after rebuilding cballs and the
+# matching cyballs extension. No option enables them. For scalar two-ball
+# builders:
+#   - Octree binary views count the required leaves and allocate 2*leaves-1
+#     nodes. The point-buffer bound is independent of node capacity.
+#   - PCA balltrees allocate exactly the nodes required by their split shape.
+#   - Serial KD construction also uses exact sizing. Parallel KD already did;
+#     its sparse O(N) node-count lookup is replaced by a bounded shape cache.
+# The existing tree splits, leaf policy, point order, field arithmetic,
+# smoothing and approximation controls are preserved. Singleton leaves still
+# need 2*N-1 nodes, where N is the number of points selected for that tree.
+# The octree skips the counting prepass for singleton leaves. Shear-specific
+# PCA and KD builders already used exact node sizing.
+#
+# Smaller node reservation is not the same as a proportional decrease in
+# process resident memory (RSS): unused calloc pages may never occupy RAM.
+# Native bodies/cells, packed points, catalog buffers and worker scratch still
+# require memory. This allocation change introduces no extra approximation;
+# it does not establish a speedup or a percentage reduction in full-run RAM.
+# The Python pre-load resource planner retains its conservative node estimate.
+#
+# Cache controls, where the selected traversal supports caching:
+#   no-native-tree-cache: disable retained native-octree compact trees in the
+#     scalar pair path.
+#   no-balltree-tree-cache: disable retained PCA balltree caching.
+# Disabling retention can reduce memory kept between calculations, but the
+# active traversal still needs its tree and repeated runs must rebuild it.
+# These cache options are independent of automatic exact node allocation.
+#
+# -------------------------
+# Accuracy, timing and binning interpretation
+# -------------------------
+# A 5% or 10% limit on EVERY nonzero coefficient requires the maximum of
+# abs(fast-exact)/abs(exact) <= 0.05 or 0.10, without a denominator floor.
+# Use complex magnitudes for complex multipoles. Exact-zero references must
+# stay zero; nonfinite/unsupported bins must be reported explicitly.
+# Relative L2 and symmetric differences are different metrics. Python
+# --qualification-rtol is an L2 target, not an every-coefficient bound.
+# Match catalog selection, seed, weights, centering, geometry, bins, multipoles
+# and correction policy. Two approximate engines agreeing does not establish
+# exact error. A no-exact benchmark alone has no exact baseline.
+#
+# Profile scalar two-ball searches with options=no-out-Hist,dual-node-profile
+# in a separate diagnostic run. Remove profiling for repeated timing trials
+# on an otherwise idle machine. CPU sums thread work; wall is elapsed time.
+# Keep loading, Python Run and native MainLoop timing scopes separate.
+# The compact scalar single-neighbor multipole-product shortcut is automatic
+# in rebuilt binaries; it does not add an approximation or require a new token.
+#
+# Angular min/max separations are outer bin EDGES, not first/last centers.
+# 20 bins with edges 8--200 arcmin have centers about 8.67036--184.53294.
+# The Sofia figure-1 grid has centers 8--200 arcmin and edges about
+# 7.35028--217.68454 arcmin. A plotting selection cannot rebin saved data.
+# Where calculation presets exist, explicit limits override preset defaults;
+# plotting-only presets do not change computation bins. Check frontend help.
+# See tests/python/README_run_controls.md for exact references, benchmark
+# error columns, memory controls, timing scope and plotting examples.
+#
+# -------------------------
+# Python FITS driver controls (NOT native parameter-file entries)
+# -------------------------
+# For python/kappa_corr_all_engines.py (tests/python/ in the source checkout):
+#   --fits-chunk-pixels 1048576 bounds field-gather and coordinate-conversion
+#     temporaries. Smaller chunks lower this temporary workspace, with possible
+#     overhead. Selected points, their order and centering are unchanged.
+#     Selection buffers are released early; final catalog/tree arrays remain.
+#   --transfer-catalog-ownership explicitly avoids the Python registration
+#     copy. Default registration still copies. Requires the rebuilt binding.
+#     Native particle and tree storage are separate and remain allocated.
+#   Python API equivalent: balls.set_catalog(positions, kappa=kappa,
+#     take_ownership=True). Supplied arrays must satisfy the binding's strict
+#     ownership/dtype/layout requirements. They become read-only; callers must
+#     stop mutating/resizing all aliases. See the driver README for the contract.
+#   --nside-down 0 retains native map resolution; a lower positive NSIDE
+#     changes map resolution. --max-points 0 retains all selected points;
+#     a positive limit thins the catalog, which is different from cell smoothing.
+#   --dual-node-bin-theta adds the native dual-node-bin-theta options token.
+#     --more-options scalar-pivot-reuse,no-smooth-pivot passes native tokens.
+# Chunking, ownership transfer and smaller node allocation preserve the input
+# sample and accuracy settings. Downsampling, thinning and looser acceptance
+# controls require a separate accuracy comparison on matching inputs/settings.
+# Reducing numberThreads can also reduce per-worker scratch at a speed cost.
+# See tests/python/README_kappa_corr_all_engines.md for the full driver options.
 # 
 # Give the name of the point catalog to analyze and its format.
 infile                             = ./catalogs/Abraham/kappa_nres12_zs9NS256r000.bin
@@ -132,4 +253,13 @@ seed                               = 123			# to init random number generator
 # lengthBox                          = 512
 #
 
-
+% Frontend memory controls (2026-10-17):
+% --fits-chunk-pixels applies to kappa/shear HEALPix drivers and benchmarks.
+% --transfer-catalog-ownership is opt-in for kappa/shear/Ly-alpha Python
+% registration, including private *_dual_node.py native paths. Default: copy.
+% Forest IDs still need private compaction; project delta before transfer.
+% Executable/file benchmarks (ENCORE) have no NumPy transfer setting.
+% These are Python CLI flags, not parameters or options= tokens.
+% Smaller compact scalar octree/PCA/KD allocations activate automatically
+% after rebuilding; selection, leaf policy and approximation are unchanged.
+% See tests/python/README_memory_controls.md for ownership, RSS and timing.

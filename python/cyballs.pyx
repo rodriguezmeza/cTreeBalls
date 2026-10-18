@@ -103,6 +103,9 @@ class CosmoComputationError(CosmoError):
     """
     pass
 
+include "lya_distortion_api.pxi"
+include "../tests/python/lya_projection.py"
+
 cdef inline void safe_copy_cstr(char *dest, size_t dest_size, bytes value, str label) except *:
     cdef size_t value_len = len(value)
 
@@ -485,36 +488,62 @@ cdef class cballs:
         self.clean()
         self._memory_catalogs = []
 
+    cdef object _transfer_catalog_array(self, object values, object dtype,
+                                        str name):
+        # Do not silently turn an ownership transfer into a large allocation.
+        if (type(values) is not np.ndarray or values.dtype != np.dtype(dtype)
+                or not values.dtype.isnative or not values.flags.c_contiguous
+                or not values.flags.aligned or not values.flags.owndata):
+            raise CosmoSevereError(
+                f"{name}: take_ownership=True requires an owning, aligned, "
+                f"C-contiguous NumPy array with native {np.dtype(dtype)} dtype; "
+                "views and implicit conversions are not supported"
+            )
+        return values
+
+    cdef bint _catalog_values_finite(self, object values):
+        cdef Py_ssize_t start
+        # Bound validation scratch even for a full-resolution sky catalog.
+        for start in range(0, values.shape[0], 1 << 20):
+            if not np.isfinite(values[start:start + (1 << 20)]).all():
+                return False
+        return True
+
     cdef object _prepare_catalog_vector(self, object values,
-                                        Py_ssize_t nbody, str name):
+                                        Py_ssize_t nbody, str name,
+                                        bint take_ownership=False):
         cdef object result
 
         if values is None:
             return None
-        try:
-            result = np.array(values, dtype=np.float64, order="C", copy=True)
-        except (TypeError, ValueError) as exc:
-            raise CosmoSevereError(
-                f"{name} must be convertible to float64"
-            ) from exc
+        if take_ownership:
+            result = self._transfer_catalog_array(values, np.float64, name)
+        else:
+            try:
+                result = np.array(values, dtype=np.float64, order="C", copy=True)
+            except (TypeError, ValueError) as exc:
+                raise CosmoSevereError(
+                    f"{name} must be convertible to float64"
+                ) from exc
         if result.ndim != 1 or result.shape[0] != nbody:
             raise CosmoSevereError(
                 f"{name} must have shape ({nbody},), got {result.shape}"
             )
-        if not np.isfinite(result).all():
+        if not self._catalog_values_finite(result):
             raise CosmoSevereError(f"{name} contains non-finite values")
         return result
 
     def set_catalog(self, positions, kappa=None, weights=None, mask=None,
-                    gamma1=None, gamma2=None, int catalog=0):
+                    gamma1=None, gamma2=None, int catalog=0, *,
+                    take_ownership=False):
         """Register one NumPy catalog for the next run.
 
         Parameters
         ----------
         positions : array_like, shape (N, compiled_ndim)
-            Cartesian positions. Registration owns a copy; :meth:`Run` then
-            copies it into C-owned storage. To change data, call set_catalog
-            again. Mutating the caller's arrays never changes a registration.
+            Cartesian positions. By default registration owns a copy and
+            caller mutations never change it. :meth:`Run` copies registered
+            arrays into C-owned particle storage in either mode.
         kappa, weights : array_like, shape (N,), optional
             Scalar field and statistical weights. Omitted arrays default to 1.
         mask : array_like, shape (N,), optional
@@ -523,6 +552,17 @@ cdef class cballs:
             Shear components for a THREEPCFSHEAR build. Supply both or neither.
         catalog : int, optional
             Zero-based catalog slot. Catalogs must be contiguous from zero.
+        take_ownership : bool, keyword-only, optional
+            If True, retain the supplied arrays without copying and mark them
+            read-only after validation. All supplied arrays must be owning,
+            aligned, C-contiguous NumPy arrays with native float64 dtype
+            (uint8 for mask). Views and conversions are rejected. The caller
+            gives up mutation/resizing through every alias, including existing
+            writable views: NumPy cannot revoke those aliases. Strong
+            references keep buffers alive until replacement, clear_catalogs,
+            clean_all, or object destruction. struct_cleanup retains the
+            registration for reuse. Arrays remain read-only after release.
+            Validation failures leave input flags and registration unchanged.
         """
         cdef object positions_array
         cdef object kappa_array
@@ -531,8 +571,11 @@ cdef class cballs:
         cdef object gamma1_array
         cdef object gamma2_array
         cdef Py_ssize_t nbody
+        cdef Py_ssize_t start
         cdef int ndim = cballs_compiled_ndim()
 
+        if type(take_ownership) is not bool:
+            raise CosmoSevereError("take_ownership must be True or False")
         if catalog < 0:
             raise CosmoSevereError("catalog must be non-negative")
         if catalog >= cballs_max_memory_catalogs():
@@ -548,12 +591,15 @@ cdef class cballs:
                 "gamma1 and gamma2 must either both be supplied or both omitted"
             )
 
-        try:
-            positions_array = np.array(positions, dtype=np.float64, order="C", copy=True)
-        except (TypeError, ValueError) as exc:
-            raise CosmoSevereError(
-                "positions must be convertible to a float64 array"
-            ) from exc
+        if take_ownership:
+            positions_array = self._transfer_catalog_array(positions, np.float64, "positions")
+        else:
+            try:
+                positions_array = np.array(positions, dtype=np.float64, order="C", copy=True)
+            except (TypeError, ValueError) as exc:
+                raise CosmoSevereError(
+                    "positions must be convertible to a float64 array"
+                ) from exc
         if positions_array.ndim != 2 or positions_array.shape[1] != ndim:
             raise CosmoSevereError(
                 f"positions must have shape (N, {ndim}), got {positions_array.shape}"
@@ -561,39 +607,49 @@ cdef class cballs:
         nbody = positions_array.shape[0]
         if nbody < 3:
             raise CosmoSevereError("an in-memory catalog needs at least 3 bodies")
-        if not np.isfinite(positions_array).all():
+        if not self._catalog_values_finite(positions_array):
             raise CosmoSevereError("positions contains non-finite values")
 
-        kappa_array = self._prepare_catalog_vector(kappa, nbody, "kappa")
-        weights_array = self._prepare_catalog_vector(weights, nbody, "weights")
-        gamma1_array = self._prepare_catalog_vector(gamma1, nbody, "gamma1")
-        gamma2_array = self._prepare_catalog_vector(gamma2, nbody, "gamma2")
+        kappa_array = self._prepare_catalog_vector(kappa, nbody, "kappa", take_ownership)
+        weights_array = self._prepare_catalog_vector(weights, nbody, "weights", take_ownership)
+        gamma1_array = self._prepare_catalog_vector(gamma1, nbody, "gamma1", take_ownership)
+        gamma2_array = self._prepare_catalog_vector(gamma2, nbody, "gamma2", take_ownership)
 
         if mask is None:
             mask_array = None
         else:
-            try:
-                mask_array = np.ascontiguousarray(mask)
-            except (TypeError, ValueError) as exc:
-                raise CosmoSevereError(
-                    "mask must be convertible to a one-dimensional array"
-                ) from exc
+            if take_ownership:
+                mask_array = self._transfer_catalog_array(mask, np.uint8, "mask")
+            else:
+                try:
+                    mask_array = np.ascontiguousarray(mask)
+                except (TypeError, ValueError) as exc:
+                    raise CosmoSevereError(
+                        "mask must be convertible to a one-dimensional array"
+                    ) from exc
             if mask_array.ndim != 1 or mask_array.shape[0] != nbody:
                 raise CosmoSevereError(
                     f"mask must have shape ({nbody},), got {mask_array.shape}"
                 )
-            if not np.all((mask_array == 0) | (mask_array == 1)):
-                raise CosmoSevereError("mask values must be boolean or 0/1")
-            mask_array = np.array(mask_array, dtype=np.uint8, order="C", copy=True)
+            for start in range(0, nbody, 1 << 20):
+                chunk = mask_array[start:start + (1 << 20)]
+                if not np.all((chunk == 0) | (chunk == 1)):
+                    raise CosmoSevereError("mask values must be boolean or 0/1")
+            if not take_ownership:
+                mask_array = np.array(mask_array, dtype=np.uint8, order="C", copy=True)
 
-        if self.allocated:
-            self.struct_cleanup()
         entry = (positions_array, kappa_array, weights_array, mask_array,
                  gamma1_array, gamma2_array, None)
+        if self.allocated:
+            self.struct_cleanup()
         if catalog == len(self._memory_catalogs):
             self._memory_catalogs.append(entry)
         else:
             self._memory_catalogs[catalog] = entry
+        if take_ownership:
+            for array in entry[:6]:
+                if array is not None:
+                    array.setflags(write=False)
         self.computed = False
         self.gd.histogram_results_ready = False
         self._qualification = None
@@ -601,31 +657,61 @@ cdef class cballs:
         self.ncp = set()
         return True
 
-    def set_forest_catalog(self, positions, delta, weights, forest_ids):
+    def set_forest_catalog(self, positions, delta, weights, forest_ids, *,
+                           project_delta=False, log_lambda=None, take_ownership=False):
         """Register observer-centered Ly-alpha pixels without reading a file.
 
         Coordinates are comoving Cartesian distances. IDs must be integer
         arrays, never floating point (DESI IDs can exceed 2**53). Equal IDs
         denote the same quasar. IDs are compacted internally to fit INTEGER;
         original arrays remain unchanged. Requires a 3D Ly-alpha addon build.
+
+        With project_delta=True, provide true log_lambda for every pixel.
+        Weighted mean and first moment are removed separately per forest
+        before registration, shared by all searching engines. Weights remain
+        unchanged; native engines multiply by projected delta exactly once.
+        The default preserves the supplied field.
+
+        take_ownership=True has the set_catalog ownership contract for
+        positions, delta and weights; forest IDs are still compacted into
+        private storage. Project delta before registration when transferring
+        ownership (project_delta=True and take_ownership=True are incompatible).
         """
+        if type(take_ownership) is not bool:
+            raise CosmoSevereError("take_ownership must be True or False")
+        if take_ownership and project_delta:
+            raise CosmoSevereError("project delta before transferring catalog ownership")
         ids = np.asarray(forest_ids)
         pos = np.asarray(positions)
         if ids.dtype.kind not in "iu" or ids.ndim != 1:
             raise CosmoSevereError("forest_ids must be a one-dimensional integer array")
         if pos.ndim != 2 or pos.shape[1] != 3 or ids.size != pos.shape[0]:
             raise CosmoSevereError("positions must be (N, 3) with N forest IDs")
-        distance = np.hypot(np.hypot(pos[:, 0], pos[:, 1]), pos[:, 2])
-        if not np.all(np.isfinite(distance) & (distance > 0)):
-            raise CosmoSevereError("forest coordinates need positive finite observer distances")
+        for start in range(0, pos.shape[0], 1 << 20):
+            chunk = pos[start:start + (1 << 20)]
+            distance = np.hypot(np.hypot(chunk[:, 0], chunk[:, 1]), chunk[:, 2])
+            if not np.all(np.isfinite(distance) & (distance > 0)):
+                raise CosmoSevereError("forest coordinates need positive finite observer distances")
+        if pos.shape[0]:
+            del distance
         w = np.asarray(weights)
-        if w.ndim != 1 or w.size != ids.size or not np.all(np.isfinite(w) & (w >= 0)):
+        if w.ndim != 1 or w.size != ids.size:
             raise CosmoSevereError("forest weights must be finite non-negative values")
+        for start in range(0, w.size, 1 << 20):
+            chunk = w[start:start + (1 << 20)]
+            if not np.all(np.isfinite(chunk) & (chunk >= 0)):
+                raise CosmoSevereError("forest weights must be finite non-negative values")
         if len(self._memory_catalogs) > 1:
             raise CosmoSevereError("forest input requires exactly one catalog")
         dense_ids = np.ascontiguousarray(np.unique(ids, return_inverse=True)[1],
                                         dtype=np.int64)
-        self.set_catalog(positions, kappa=delta, weights=weights)
+        if not isinstance(project_delta, (bool, np.bool_)):
+            raise CosmoSevereError('project_delta must be boolean')
+        if project_delta:
+            if log_lambda is None:
+                raise CosmoSevereError('project_delta requires true log_lambda; it cannot be inferred from distance')
+            delta = project_lya_delta(delta, weights, ids, log_lambda)
+        self.set_catalog(positions, kappa=delta, weights=weights, take_ownership=take_ownership)
         self._memory_catalogs[0] = self._memory_catalogs[0][:6] + (dense_ids,)
         return True
 
@@ -1139,9 +1225,10 @@ cdef class cballs:
                 if cballs_start_run_common_guarded(&(self.cmd), &(self.gd)) == FAILURE:
                     raise CosmoComputationError((<char *> self.cmd.error_message).decode("utf-8", "replace"))
                 self.ncp.add("StartRun_Common")
-                # Saved-prefix preprocessing has already completed. It has no
-                # loaded catalogs or in-memory histogram products to fingerprint.
-                if self.gd.stopflag and "edge-corrections-from-files" in _parameter_text(self.cmd.options).split(','):
+                # Informational and saved-prefix startup paths can stop
+                # successfully before any catalog/histogram exists. Honor the
+                # native stop flag before attempting to fingerprint inputs.
+                if self.gd.stopflag:
                     if cballs_end_run_guarded(&self.cmd, &self.gd) == FAILURE:
                         raise CosmoComputationError((<bytes>self.cmd.error_message).decode("utf-8", "replace"))
                     self.allocated = False

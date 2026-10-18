@@ -56,6 +56,13 @@
   <dt id="options=print-search-methods"><a class="permalink" href="#options=print-search-methods"><b>options=print-search-methods</b></a></dt>
   <dd>Print only search methods registered in this executable, with geometry,
       statistics, build switch, and usage notes.</dd>
+  <dt id="options=print-environment"><a class="permalink" href="#options=print-environment"><b>options=print-environment</b></a></dt>
+  <dd>Print allowlisted environment controls, compiled defaults, scope and reset
+      commands. The alias is print-env. The report does not start a
+    calculation.</dd>
+  <dt id="options=IA-tutor"><a class="permalink" href="#options=IA-tutor"><b>options=IA-tutor</b></a></dt>
+  <dd>Open the local scientific tutor. The tutor reads the current documentation
+      and active build; it does not launch a survey calculation.</dd>
   <dt id="options=build-fingerprint"><a class="permalink" href="#options=build-fingerprint"><b>options=build-fingerprint</b></a></dt>
   <dd>Print the source/profile/toolchain JSON identity. The Python extension
       exposes the corresponding identity through cyballs.build_info().</dd>
@@ -64,7 +71,7 @@
 <section class="Sh">
 <h1 class="Sh" id="ACTIVE_SEARCH_METHODS"><a class="permalink" href="#ACTIVE_SEARCH_METHODS">ACTIVE
   SEARCH METHODS</a></h1>
-<p class="Pp">The maintained Makefile profile enables exactly these 41
+<p class="Pp">The maintained Makefile profile enables exactly these 42
   methods.</p>
 <dl class="Bl-tag">
   <dt id="octree-sincos-omp"><a class="permalink" href="#octree-sincos-omp"><b>octree-sincos-omp</b></a></dt>
@@ -91,8 +98,8 @@
   <dd>scalar; native octree; deterministic MPI+OpenMP frontier. distributed 2PCF
       and LogMultipole angular-multipole 3PCF.</dd>
   <dt id="octree-shear-sphere-2balls-omp"><a class="permalink" href="#octree-shear-sphere-2balls-omp"><b>octree-shear-sphere-2balls-omp</b></a></dt>
-  <dd>full-sky spin-2 shear; dual-node dual-node octree; OpenMP. xi+/xi- and
-      four Gamma-x shear 3PCF components.</dd>
+  <dd>full-sky spin-2 shear; dual-node octree; OpenMP. xi+/xi- and four Gamma-x
+      shear 3PCF components.</dd>
   <dt id="octree-shear-sphere-2balls-mpi"><a class="permalink" href="#octree-shear-sphere-2balls-mpi"><b>octree-shear-sphere-2balls-mpi</b></a></dt>
   <dd>full-sky spin-2 shear; native octree; adaptive MPI+OpenMP frontier.
       distributed xi+/xi- and four Gamma-x shear 3PCF components.</dd>
@@ -123,6 +130,9 @@
   <dt id="lya-2pcf-omp"><a class="permalink" href="#lya-2pcf-omp"><b>lya-2pcf-omp</b></a></dt>
   <dd>3D observer-centered forest pixels; exact default, opt-in forest cell
       pairs; OpenMP. weighted anisotropic 2PCF.</dd>
+  <dt id="lya-rprt-quadtree-2pcf-omp"><a class="permalink" href="#lya-rprt-quadtree-2pcf-omp"><b>lya-rprt-quadtree-2pcf-omp</b></a></dt>
+  <dd>observer-centered forest pixels; 2D separation-bin quadtree; OpenMP.
+      weighted anisotropic 2PCF (exact default; optional bin slop).</dd>
   <dt id="lya-3pcf-omp"><a class="permalink" href="#lya-3pcf-omp"><b>lya-3pcf-omp</b></a></dt>
   <dd>3D observer-centered forest pixels; exact default, opt-in bounded cell-bin
       approximation; OpenMP. weighted five-dimensional 3PCF.</dd>
@@ -439,11 +449,35 @@
     node reference is separate from the native engine registry. The make-info,
     print-options and print-search-methods options report the compiled active
     profile.</p>
+<p class="Pp"></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="MEMORY_AND_ACCURACY"><a class="permalink" href="#MEMORY_AND_ACCURACY">MEMORY
+  AND ACCURACY</a></h1>
+<p class="Pp">The Python drivers accept --transfer-catalog-ownership to avoid an
+    extra registration copy. Coordinate construction uses bounded chunks and
+    temporary arrays are released early. Compact scalar tree nodes use the
+    required capacity automatically. These choices preserve the sample and do
+    not guarantee a speedup or a fixed decrease in peak resident memory.</p>
+<p class="Pp">For every nonzero coefficient, the relative error is
+    abs(fast-exact)/abs(exact), with complex magnitudes for complex multipoles.
+    Zero reference coefficients must remain zero. Relative L2 and symmetric
+    relative differences are different metrics. Phase/bin tolerances are not
+    percentage error guarantees. Match input, weights, bins, normalization and
+    multipole orders when making an exact-reference comparison.</p>
+<p class="Pp">Angular min/max separations are outer bin edges. The Sofia
+    figure-1 layout uses 20 nominal centers from 8 to 200 arcmin, rather than
+    edges at those values. A plotting selection does not rebin saved
+    coefficients.</p>
+<p class="Pp">Use options=no-out-Hist,dual-node-profile in a separate scalar
+    diagnostic run; remove profiling for repeated timing trials on an otherwise
+    idle machine. See tests/python/README_run_controls.md for the complete
+    conventions.</p>
 </section>
 </div>
 <table class="foot">
   <tr>
-    <td class="foot-date">October 3, 2026</td>
+    <td class="foot-date">October 18, 2026</td>
     <td class="foot-os">cTreeBalls 1.1.0</td>
   </tr>
 </table>

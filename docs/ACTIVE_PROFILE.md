@@ -67,6 +67,7 @@ The development checkout includes the enabled bundled GSL and CFITSIO sources. A
 | `octree-3pcf-3d-omp` | 166 | 3D scalar; exact octree leaves; OpenMP; spherical-harmonic 2PCF/3PCF multipoles |
 | `octree-3pcf-3d-mpi` | 192 | 3D scalar; exact octree leaves; MPI+OpenMP pivot blocks; spherical-harmonic 2PCF/3PCF; data/random survey estimator and edge correction |
 | `lya-2pcf-omp` | 169 | 3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP; weighted anisotropic 2PCF |
+| `lya-rprt-quadtree-2pcf-omp` | 213 | observer-centered forest pixels; 2D separation-bin quadtree; OpenMP; weighted anisotropic 2PCF (exact default; optional bin slop) |
 | `lya-3pcf-omp` | 170 | 3D observer-centered forest pixels; exact default, opt-in bounded cell-bin approximation; OpenMP; weighted five-dimensional 3PCF |
 | `lya-2pcf-3pcf-omp` | 171 | 3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP; weighted 2PCF and 3PCF; shared discovery or independently optimized passes |
 | `lya-los-tree-2pcf-omp` | 206 | 3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP; exact weighted anisotropic 2PCF |

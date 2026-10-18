@@ -68,8 +68,9 @@ The schematic is illustrative, not to scale; the equations below define the
 actual conservative interval used by the implementation.
 
 1. Build the native 3D octree, a compact threaded view tagged with homogeneous
-   forest IDs, and balanced radial interval trees for all forests. Each radial
-   leaf holds at most eight pixels. Trees are immutable during the search.
+   forest IDs, and an array sorted by forest ID and radial distance. Balanced
+   radial trees are implicit in the sorted arrays; no radial-node allocation
+   is needed. The index is immutable during the search.
 2. For each pivot, walk the octree until one valid pixel inside the search
    sphere witnesses a forest. Record that forest once. Skip homogeneous
    branches of the pivot forest and already-discovered forests. Mixed-forest
@@ -82,8 +83,10 @@ actual conservative interval used by the implementation.
    `chi_min,max = a +/- sqrt(R^2 - b^2)`. The radial coordinate `chi` is
    measured from the observer, not from the pivot. The forest tree automatically
    clips this interval to the pixel support.
-4. Query each discovered forest's radial tree, apply the exact 3D distance cut
-   to each candidate pixel, and feed the original 2PCF/3PCF accumulators.
+4. Use two binary bounds in each discovered forest to locate the inclusive
+   radial window, apply the exact 3D distance cut to each candidate pixel, and
+   feed the original 2PCF/3PCF accumulators. Comparisons use the same conservative
+   long-double bounds; tied radial distances and endpoint candidates are kept.
 
 The 2PCF discovery radius is `hypot(lya2RpMax, lya2RtMax)`, which encloses the
 full rectangular pair domain. It is **not** either axis maximum alone. The
@@ -105,10 +108,12 @@ The original three 3D OpenMP methods use the same fixed publication policy;
 their MPI counterparts retain the existing per-pivot rank ownership and order.
 
 LOS pixel kernels share a conservatively enlarged forest-discovery sphere
-inside compact, fixed pivot blocks. Each pivot still applies its own exact
-radial interval, distance cuts, and forest exclusion. Wide blocks retain
-independent discovery. Sorted forest frontiers keep the accumulation order
-independent of which pivot first discovered a forest.
+inside compact prefixes of fixed pivot blocks. A prefix ends before the next
+pivot lies farther than one quarter of the search cutoff from its first pivot.
+Thus a distant pivot no longer disables reuse in all shorter prefixes of a
+wide task. Isolated pivots retain individual discovery. Each pivot still applies
+its own exact radial interval, distance cuts, and forest exclusion. Sorted forest
+frontiers keep the accumulation order independent of discovery and thread count.
 
 `lya2Kernel=1 lya3Kernel=5` additionally enables certified pair-range moments,
 persistent triple moments and a hierarchy above per-forest radial/polar
@@ -120,7 +125,9 @@ triangle work. Index memory is linear in pixels and
 native octree nodes, with `O(forests * threads)` discovery scratch. Trees are
 rebuilt per correlation call and do not retain Python pointers after cleanup.
 With `verbose=2`, `LOS-tree:` reports index-build CPU time and discovery/radial
-visit counters. `build_CPU` excludes the preceding native octree construction.
+visit counters. `radial_nodes` now counts binary-bound comparisons rather than
+explicit radial-node visits. `build_CPU` excludes the preceding native octree
+construction. Scientific pair/triplet counters retain their original meaning.
 
 Example using a six-column forest catalog in comoving units:
 
@@ -445,3 +452,82 @@ histogram memory and angular computation. Default mode 0 is unchanged.
 The Python getter returns both moment and exact triple arrays even with
 `no-out-Hist`; metadata records their separate meanings. See
 [the reconstruction guide](../../docs/LYA_MULTIPOLE_RECONSTRUCTION.md) for use, resource costs and validation.
+
+
+## Exact separation-plane quadtree
+
+`lya-rprt-quadtree-2pcf-omp` partitions the `(abs(r_parallel), r_transverse)`
+bin plane and projects complete forest-segment products into it. Certified
+single-bin products aggregate raw weighted-delta and weight sums. The search
+now streams a compact radial pixel cache at unresolved leaves, retains exact
+pixel arithmetic at ambiguous edges, reuses ancestor geometry certificates,
+and avoids bin-tree queries for rectangles too wide to fit a single bin.
+These changes require no new runtime options. The additional cache costs
+`3*sizeof(REAL)` bytes per retained pixel and is included in memory preflight.
+See [the quadtree optimization guide](../../docs/LYA_RPRT_OPTIMIZATION.md)
+for its exactness contract, legacy controls and reproducible comparisons.
+
+
+### Optional pair-bin slop
+
+The quadtree now accepts native `lya2RpSlop` and `lya2RtSlop` in `[0,1]`,
+independently, with exact zero defaults. In the Python forest driver, use
+`--bin-slop 0.1` (alias `--lya2-bin-slop`) for both axes, or
+`--lya2-rp-slop 0.1 --lya2-rt-slop 0` for approximate parallel and exact
+transverse placement. Per-axis values override the common shorthand.
+
+Only complete products inside the original histogram rectangle and discovery
+sphere are eligible. A conservative enclosure must fit the chosen bin expanded
+by each slop times its bin width. Signed-field moments do not define geometry.
+Raw weighted sums and total eligible pair counts are retained; bin assignment
+is approximate. Metadata records this and `verbose=2` reports slop products and
+represented approximate pairs. Zero slop retains the existing exact path.
+
+Use a zero-slop run on the same catalog for accuracy calibration. Bin slop is
+not a bound on relative correlation error, especially at zero crossings.
+Continuum `--project-delta` remains supported. Exact hard-bin distortion
+modelling requires zero slop. See the optimization guide for an example.
+
+
+### Two-ball traversal and packed cell products
+
+The quadtree uses the sum-of-radii support bound from Jarvis, Bernstein & Jain
+(2004, section 4.1, equations 62-63 and figure 3), adapted to both linear
+separation coordinates. The split policy follows the one-or-both-cell idea
+in dual node's `src/Corr2.cpp` and `include/Split.h`: split the larger projected
+radial ball alone when its partner is much smaller, and split both when both
+contribute appreciably in bin units. The factor 0.585 schedules subdivision;
+it never relaxes a bin or outer-cut certificate.
+
+At unresolved dense leaves, scan products of up to two pixels per ball from
+the compact radial cache. A complete product fitting one exact rp/rt bin can
+use its weighted-field and weight moments. Other products use the pixel path.
+A sampling heuristic bypasses these extra tests for sparse tiles. This uses
+constant stack storage, with no quadratic catalog or additional per-pixel
+allocation. Immutable bin scales are computed once per run.
+
+Zero slop remains exact; existing positive-slop controls and continuum
+projection remain supported. No `theta`, `THETA`, or smooth-pivot option is
+needed. `verbose=2` reports `two_ball_tests`, `two_ball_products`,
+`two_ball_pairs`, `split_one`, and `split_both`; metadata records the traversal.
+Moment grouping can change floating-point reduction roundoff compared with
+previous versions. Thread-count repeatability is retained. See the optimization
+guide for the geometric contract and benchmark command.
+
+
+### Parallel quadtree preparation
+
+The quadtree's existing thread count also controls chunk sorting/co-ranked
+merges, independent forest hierarchy construction, compact pixel-cache filling,
+and large Rp/Rt bin-tree construction. Bin subtrees reserve deterministic
+compact node ranges; workers construct their physical Rp/Rt cuts and optional
+slop leaf directories without shared allocation counters. Source-cell moment
+sums keep their serial arithmetic order. Pair-dependent Rp/Rt coordinates are
+already projected in the OpenMP search workers.
+
+Small workloads retain serial preparation. Parallel sort scratch costs one
+pointer per retained pixel temporarily, with a checked peak memory plan.
+Construction logs expose elapsed phase times and actual team sizes. Native
+`options=...,lya-serial-build` provides a serial-preparation comparison with
+identical threaded pair searching. No new driver flag is needed: continue using
+`--threads N`. See the optimization guide for thresholds and measurement.

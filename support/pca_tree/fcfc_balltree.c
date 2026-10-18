@@ -910,9 +910,15 @@ static int fcfc_balltree_build_internal(
         return FAILURE;
     }
 
+    required_nodes = fcfc_balltree_subtree_nodes(valid_count, nleaf);
+    if (required_nodes <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "fcfc_balltree_build: invalid deterministic node layout");
+        return FAILURE;
+    }
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
-    tree->capacity = 2 * valid_count;
+    tree->capacity = required_nodes;
     tree->npoint = valid_count;
     tree->bptr = malloc((size_t)valid_count * sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
@@ -926,13 +932,6 @@ static int fcfc_balltree_build_internal(
             tree->bptr[valid_count++] = body;
     }
 
-    required_nodes = fcfc_balltree_subtree_nodes(valid_count, nleaf);
-    if (required_nodes <= 0 || required_nodes > tree->capacity) {
-        snprintf(cmd->error_message, _ERRORMSGSIZE_,
-                 "fcfc_balltree_build: invalid deterministic node layout");
-        fcfc_balltree_free(tree);
-        return FAILURE;
-    }
     tree->nnode = required_nodes;
     tree->max_depth = fcfc_balltree_depth_for_count(valid_count, nleaf);
 #ifdef OPENMPCODE

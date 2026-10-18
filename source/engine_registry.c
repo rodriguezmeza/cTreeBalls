@@ -122,6 +122,7 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
         if (strstr(cballs_engine_registry[i].name, "2balls") != NULL
             && strstr(cballs_engine_registry[i].name, "shear") == NULL)
             verb_print_zero(cmd->verbose,
+                "  scalar reference: theta=0 and no-one-ball,no-two-balls,no-smooth-pivot; omit scalar-pivot-reuse and retain the same catalog, weights, bins and multipoles. Scalar reuse is opt-in; CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA do not control shear or forest estimators.\n"
                 "  edge correction: add edge-corrections,no-normalize-HistZeta "
                 "for complex scalar 3PCF window deconvolution; ordinary scalar dual-node runs "
                 "skip higher count modes. Window modes "
@@ -141,5 +142,11 @@ global int cballs_print_search_methods(struct cmdline_data* cmd,
                     "the corresponding forest workflow and rejects spin-2 engines explicitly.\n"
                     "Use options=make-info to inspect the build profile and "
                     "options=print-options for the full option list.\n\n");
+    verb_print_zero(cmd->verbose,
+        "Accuracy: theta and pivot phase/bin tolerances are geometric controls, not 5%% or 10%% error guarantees. Compare every nonzero coefficient with abs(fast-exact)/abs(exact), using complex magnitudes; exact-zero coefficients must stay zero. L2 and symmetric differences are different metrics.\n"
+        "Speed: measure repeated wall times on an otherwise idle host at matching input, bins, multipoles and measured accuracy. Profile scalar two-ball runs separately with options=no-out-Hist,dual-node-profile; remove profiling for timing trials. CPU time sums worker work.\n"
+        "Memory: compact scalar octree/PCA/KD tree node capacity is sized automatically from the required tree shape; this is allocation policy, not smoothing, and does not guarantee lower peak RSS or faster traversal.\n"
+        "Python kappa/shear HEALPix inputs: --fits-chunk-pixels bounds coordinate scratch (default 1048576); DES tables use --fits-chunk-rows. Kappa/shear/Ly-alpha drivers and native Python benchmarks accept --transfer-catalog-ownership (opt-in; default copies). Native particle storage and per-rank MPI copies remain.\n"
+        "These are Python arguments, not native options or environment controls. See tests/python/README_memory_controls.md.\n");
     return SUCCESS;
 }

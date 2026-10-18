@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "reviewed_on": "2026-10-11",
+  "reviewed_on": "2026-10-18",
   "scope": "Reviewed synthesis of the visible cTreeBalls discussion and the current cited source documents; not a raw chat archive or access to other conversations.",
   "questions": [
     {
@@ -55,7 +55,7 @@
       "source_sha256": {
         "docs/search_methods.rst": "59e23172371fe5ada7bb1818f7ab838defc5f90bcb83fa5007631eece039bbda",
         "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
-        "capabilities/engines.json": "35513f929df466900c81ebe5532049de4782808dd07f454ea87e32ca01edf3f6"
+        "capabilities/engines.json": "c3ad40bdb24d7757667cdded1c71d2fadd102957b88789075fdc3289e5a98842"
       }
     },
     {
@@ -147,7 +147,8 @@
         "Can you guarantee at most 5 percent relative L2 error?",
         "How do I measure numerical errors?",
         "How can I keep faster engines while reporting the penalty?",
-        "What error does theta 0.7 produce?"
+        "What error does theta 0.7 produce?",
+        "How do I require 10 percent error for every nonzero coefficient?"
       ],
       "keywords": [
         "error",
@@ -158,16 +159,18 @@
         "guarantee",
         "tolerance"
       ],
-      "answer": "Use relative L2 = norm(fast - reference) / norm(reference), separately for each observable. Report raw moments, normalization/window quantities, corrected results, and every shear component. An aggregate L2 bound does not bound every individual bin. A zero reference norm has undefined relative error; retain the absolute error and validity masks.\n\nCreate an exact run with identical catalogue selection, weights, bins, estimator and multipoles. For angular kappa/shear use --tree-theta 0 --no-smooth-pivot --more-options no-one-ball,no-two-balls. Then add --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only to your fast comparison-driver run. The root must contain ENGINE/qualification for each engine. The default reporting target is 5%; results above it remain available in report-only mode. Each run saves ENGINE/qualification/approximation-penalty.json. Without a reference the penalty is UNMEASURED, not zero.\n\nA geometric tolerance cannot predict a catalogue-independent percentage error. No measured reference means no justified numerical percentage. A subsample comparison measures that subsample, not a different full-catalogue result.\n\nA software release gate and a scientific acceptance decision are separate. The current default-survey campaign remains rejected where its measured error exceeds the fixed threshold. Matching source and policy receipts are required; a timing result alone cannot qualify an approximation.",
+      "answer": "Use relative L2 = norm(fast - reference) / norm(reference), separately for each observable. Report raw moments, normalization/window quantities, corrected results, and every shear component. An aggregate L2 bound does not bound every individual bin. A zero reference norm has undefined relative error; retain the absolute error and validity masks.\n\nCreate an exact run with identical catalogue selection, weights, bins, estimator and multipoles. For angular kappa/shear use --tree-theta 0 --no-smooth-pivot --more-options no-one-ball,no-two-balls. Then add --accuracy-reference EXACT_OUTPUT_ROOT --accuracy-report-only to your fast comparison-driver run. The root must contain ENGINE/qualification for each engine. The default reporting target is 5%; results above it remain available in report-only mode. Each run saves ENGINE/qualification/approximation-penalty.json. Without a reference the penalty is UNMEASURED, not zero.\n\nA geometric tolerance cannot predict a catalogue-independent percentage error. No measured reference means no justified numerical percentage. A subsample comparison measures that subsample, not a different full-catalogue result.\n\nA software release gate and a scientific acceptance decision are separate. The current default-survey campaign remains rejected where its measured error exceeds the fixed threshold. Matching source and policy receipts are required; a timing result alone cannot qualify an approximation.\n\nFor an every-coefficient limit, instead use abs(fast-exact)/abs(exact) for every nonzero coefficient, using complex magnitudes for complex multipoles. Require zero references to remain zero and report nonfinite bins. A 10% bound means a maximum ratio <= 0.10 with no denominator floor. --qualification-rtol remains an L2 target. Kappa/Ly-alpha benchmark max_reference_relative and coefficient_status provide supplemental per-coefficient diagnostics against the named reference; legacy max_relative is a symmetric difference. With --no-exact, engine agreement alone does not establish exact error.",
       "sources": [
         "docs/APPROXIMATION_DEFAULTS.md",
         "tests/python/README_shear_corr_all_engines.md",
-        "tests/python/README_kappa_corr_all_engines.md"
+        "tests/python/README_kappa_corr_all_engines.md",
+        "tests/python/README_run_controls.md"
       ],
       "source_sha256": {
         "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
         "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5",
+        "tests/python/README_run_controls.md": "500a56753c39f5549156b70db36673bee23a3281d63777fa3b0cc7200f91c601"
       }
     },
     {
@@ -210,14 +213,16 @@
         "CBALLS_SCALAR_BIN_THETA",
         "corrected"
       ],
-      "answer": "Kappa reuse uses CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA, not the shear variables. The shipped reuse controls are phase 0.1 and bin allowance 0, selected with scalar-pivot-reuse and no-smooth-pivot. Runtime theta must be positive.\n\nOn an actual 100,000-object DES KAPPA sample with nsmooth=1, ordinary theta=1 traversal gave raw 3PCF L2 errors of 23.41%, 19.69% and 27.53% for octree, KD-tree and ball-tree; corrected errors were 19.18%, 15.39% and 10.81%. Shipped scalar reuse controls reduced raw errors below 0.014% and corrected errors below 0.00053%, but were slower than exact traversal on that sample.\n\nA poorly conditioned window can strongly amplify a small raw perturbation. Check corrected output and its finite-bin support independently. Reuse is an option to benchmark, not an unconditional acceleration.",
+      "answer": "Kappa reuse uses CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA, not the shear variables. The shipped reuse controls are phase 0.1 and bin allowance 0, selected with scalar-pivot-reuse and no-smooth-pivot. Runtime theta must be positive.\n\nOn an actual 100,000-object DES KAPPA sample with nsmooth=1, ordinary theta=1 traversal gave raw 3PCF L2 errors of 23.41%, 19.69% and 27.53% for octree, KD-tree and ball-tree; corrected errors were 19.18%, 15.39% and 10.81%. Shipped scalar reuse controls reduced raw errors below 0.014% and corrected errors below 0.00053%, but were slower than exact traversal on that sample.\n\nA poorly conditioned window can strongly amplify a small raw perturbation. Check corrected output and its finite-bin support independently. Reuse is an option to benchmark, not an unconditional acceleration.\n\nCBALLS_SCALAR_PIVOT_TOL=3 and CBALLS_SCALAR_BIN_THETA=0.5 are geometric budgets, not a validated 10% setting. Recalibrate against a matching exact run and inspect every required coefficient. A small overall L2 can coexist with large errors in small nonzero coefficients. nsmooth changes leaf work; no-smooth-pivot does not force singleton leaves. dual-node-bin-theta is a separate native token. Chunking and explicit catalog ownership transfer preserve the sample, while thinning or lowering NSIDE changes it.",
       "sources": [
         "docs/APPROXIMATION_DEFAULTS.md",
-        "docs/SCALAR_HIERARCHICAL_REUSE.md"
+        "docs/SCALAR_HIERARCHICAL_REUSE.md",
+        "tests/python/README_run_controls.md"
       ],
       "source_sha256": {
         "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
-        "docs/SCALAR_HIERARCHICAL_REUSE.md": "53563d30c3043628076b79905575a514026c8ef4cce53fd1ee1ee478255ba9a5"
+        "docs/SCALAR_HIERARCHICAL_REUSE.md": "53563d30c3043628076b79905575a514026c8ef4cce53fd1ee1ee478255ba9a5",
+        "tests/python/README_run_controls.md": "500a56753c39f5549156b70db36673bee23a3281d63777fa3b0cc7200f91c601"
       }
     },
     {
@@ -286,24 +291,28 @@
         "What is the role of CBALLS_SHEAR_PROFILE=1?",
         "Does it only print information?",
         "Is it the same as verbose?",
-        "Does profiling slow the code?"
+        "Does profiling slow the code?",
+        "How do I profile scalar two-ball computation?"
       ],
       "keywords": [
         "CBALLS_SHEAR_PROFILE",
         "profile",
         "profiling",
-        "verbose"
+        "verbose",
+        "dual-node-profile"
       ],
-      "answer": "CBALLS_SHEAR_PROFILE enables additional timing/counter instrumentation for the spherical shear engines. It reports internal phases and reuse activity; it does not choose an approximation tolerance. It is different from verbose, which controls normal messages and available progress counters.\n\nThe profiling environment variable is enabled by its presence, including CBALLS_SHEAR_PROFILE=0. Disable it with env -u CBALLS_SHEAR_PROFILE before the command. Instrumentation and printing can have overhead, so benchmark with profiling unset and use separate diagnostic runs when needed.\n\nIn the supplied approximately nine-minute run, removing profiling changed wall time only slightly (535.365 to 533.647 seconds in single measurements). That does not establish a repeatable speedup and suggests profiling was not the main bottleneck in that example.",
+      "answer": "CBALLS_SHEAR_PROFILE enables additional timing/counter instrumentation for the spherical shear engines. It reports internal phases and reuse activity; it does not choose an approximation tolerance. It is different from verbose, which controls normal messages and available progress counters.\n\nThe profiling environment variable is enabled by its presence, including CBALLS_SHEAR_PROFILE=0. Disable it with env -u CBALLS_SHEAR_PROFILE before the command. Instrumentation and printing can have overhead, so benchmark with profiling unset and use separate diagnostic runs when needed.\n\nIn the supplied approximately nine-minute run, removing profiling changed wall time only slightly (535.365 to 533.647 seconds in single measurements). That does not establish a repeatable speedup and suggests profiling was not the main bottleneck in that example.\n\nFor scalar two-ball engines use native options=no-out-Hist,dual-node-profile, or --more-options no-out-Hist,dual-node-profile in the all-engine driver. Inspect tree build, traversal, scratch, multipole products and reductions. Remove profiling for timing trials and keep the machine otherwise idle. Compare repeated wall times at matching measured accuracy; catalog loading and native MainLoop are separate scopes.",
       "sources": [
         "tests/python/README_shear_corr_all_engines.md",
         "docs/shear.rst",
-        "tutor/notes/discussion_measurements.md"
+        "tutor/notes/discussion_measurements.md",
+        "tests/python/README_run_controls.md"
       ],
       "source_sha256": {
         "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
         "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
-        "tutor/notes/discussion_measurements.md": "1b3cf31c51c393862612605c10f3c10ec2d55585ae1821a93007c0cee30960d7"
+        "tutor/notes/discussion_measurements.md": "1b3cf31c51c393862612605c10f3c10ec2d55585ae1821a93007c0cee30960d7",
+        "tests/python/README_run_controls.md": "500a56753c39f5549156b70db36673bee23a3281d63777fa3b0cc7200f91c601"
       }
     },
     {
@@ -360,7 +369,7 @@
       "source_sha256": {
         "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
         "docs/3pcf.rst": "f305a703d374dd68698ef30b1303cc6049331bf6751dfb4ddb16928d2f226e6f",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff",
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5",
         "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
       }
     },
@@ -388,7 +397,7 @@
       ],
       "source_sha256": {
         "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5"
       }
     },
     {
@@ -413,7 +422,7 @@
       ],
       "source_sha256": {
         "docs/shear.rst": "43925f45cf8b6ac97caa0fb6939139a00cffc5340d382def297c70d6a57e9de5",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5"
       }
     },
     {
@@ -451,7 +460,8 @@
         "Do plots respect min-sep and max-sep?",
         "How does sofia-fig1 binning work?",
         "What about 3pcf bin limits?",
-        "Why do Sofia edges differ from 8 and 200?"
+        "Why do Sofia edges differ from 8 and 200?",
+        "Why does --selection sofia-fig1 fail for 8 to 200 arcmin edges?"
       ],
       "keywords": [
         "min-sep",
@@ -462,16 +472,18 @@
         "edges",
         "binning"
       ],
-      "answer": "Explicit --min-sep, --max-sep, --nbins and --sep-units override binning-preset defaults in the current comparison workflows. Plotting should use the saved effective edges/centers from that run. Existing output files are not recomputed by changing a plotting command or a later run's arguments.\n\nThe sofia-fig1 preset describes nominal logarithmic centers from 8 to 200 arcmin: its outer edges are approximately 7.35028 and 217.68454 arcmin. If you require outer limits exactly 8 and 200, specify them explicitly or use the documented edge-based preset. Native spherical distances are chords, converted from angular separation.\n\nFor 2PCF, check the separation axis. For 3PCF, both radial axes must reflect the effective limits; angular reconstruction and multipole order are separate settings. Keep units and geometry with saved histogram metadata.",
+      "answer": "Explicit --min-sep, --max-sep, --nbins and --sep-units override binning-preset defaults in the current comparison workflows. Plotting should use the saved effective edges/centers from that run. Existing output files are not recomputed by changing a plotting command or a later run's arguments.\n\nThe sofia-fig1 preset describes nominal logarithmic centers from 8 to 200 arcmin: its outer edges are approximately 7.35028 and 217.68454 arcmin. If you require outer limits exactly 8 and 200, specify them explicitly or use the documented edge-based preset. Native spherical distances are chords, converted from angular separation.\n\nFor 2PCF, check the separation axis. For 3PCF, both radial axes must reflect the effective limits; angular reconstruction and multipole order are separate settings. Keep units and geometry with saved histogram metadata.\n\nTwenty bins with outer edges 8 and 200 arcmin have centers near 8.67036 and 184.53294, so they do not satisfy a Sofia centers-8-to-200 check. In the separate DES flattening plotter, --selection index-45 selects the same index pattern on another 20-bin grid without rebinning. Use a new output directory to avoid mistaking old plots for a failed new command. Some shear/private frontends use --binning only for plot selection; read their help, because such presets never alter computation bins. Native driver --multipoles 7 retains orders 0..7; the DES flattening plotter --multipoles 8 is a count of eight modes.",
       "sources": [
         "tests/python/README_shear_corr_all_engines.md",
         "tests/python/README_kappa_corr_all_engines.md",
-        "docs/APPROXIMATION_DEFAULTS.md"
+        "docs/APPROXIMATION_DEFAULTS.md",
+        "tests/python/README_run_controls.md"
       ],
       "source_sha256": {
         "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff",
-        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89"
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5",
+        "docs/APPROXIMATION_DEFAULTS.md": "6b1340a01a29c020b5970f3e962a4dcc6842b85713229a2b8f95228940bebf89",
+        "tests/python/README_run_controls.md": "500a56753c39f5549156b70db36673bee23a3281d63777fa3b0cc7200f91c601"
       }
     },
     {
@@ -648,7 +660,7 @@
         "docs/LYA_MULTIPOLE_RECONSTRUCTION.md"
       ],
       "source_sha256": {
-        "docs/lyman_alpha.rst": "600b93b8ff2b518c5f6e77e757ec7d7e6d0de70f4853a7e33db1a2147c1624b0",
+        "docs/lyman_alpha.rst": "379879dd876b138f9c86cb89a05e99f2e9544da46473337c4c29f20692ff4f9d",
         "docs/LYA_HIERARCHICAL_REUSE.md": "028f66d509b85bccb403893841848979d2fb9de4d384570bb16a510b182ac443",
         "docs/LYA_LOS_HIERARCHICAL_REUSE.md": "ce01ae1f6ba23ef5a64d937c1c515b6508153d734b9df48d0062f311f9865b24",
         "docs/LYA_MULTIPOLE_RECONSTRUCTION.md": "b870b1c808a3cd25886743806b9a7174ed6347ff4a1c4350ae4b838aef481330"
@@ -679,7 +691,7 @@
       "source_sha256": {
         "docs/performance.rst": "436d081aa8ec1132acb823461d88bbde657f1534b6574d75a478562ac160b72e",
         "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff"
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5"
       }
     },
     {
@@ -705,7 +717,7 @@
       ],
       "source_sha256": {
         "tests/python/README_shear_corr_all_engines.md": "338900cdd4a480145355b1eb405adf1cc4f4cfc5e6def77602a340cdadb5dfd0",
-        "tests/python/README_kappa_corr_all_engines.md": "d6440b38bff08bf7385a4b9a7ea8abb3e0e7a4725ad3dd4079eb16c524905bff",
+        "tests/python/README_kappa_corr_all_engines.md": "432f475d29899a98c97e8f6c6414b07ec3e9620fdad654df792db45ff1f018d5",
         "docs/RESULT_AVAILABILITY_AND_IDENTITY.md": "8d5adbc723032895119b8ddfe3dca52997c8caec48a8cbe0bb0d7f2c515696a7"
       }
     },
@@ -768,7 +780,7 @@
         "README.md": "15fa5af22e754b75eebaaef6c034e5feb599ad38bd68f85d63d4f2eae4114ec7",
         "tests/python/README_benchmark_suite.md": "63d6fbbbff04f707735366e43804fe059d8249ebd3b6e67efc1fb1d3ba3cd82f",
         "tests/python/README_regression_tests.md": "618a88c165a177eac9187ef047e36405026fb73828207f8727e7702548312bc3",
-        "tests/python/README.md": "6516a6aaa4b6584da47fc6d36731fe0ed4e0843af40c944f48605ce442f630c3"
+        "tests/python/README.md": "45c17f2792a2c7cfbdb1b9e451f44e11cce0ac235b7872876c9fe3ca543f06b1"
       }
     },
     {
@@ -823,6 +835,32 @@
       ],
       "source_sha256": {
         "docs/ia_tutor.rst": "55cc597c19ae5848d20e973a31397f0d9036adf18ee588454e486889f481cd1f"
+      }
+    },
+    {
+      "id": "catalog-memory",
+      "title": "Reduce catalog and tree allocation pressure",
+      "questions": [
+        "How can I reduce memory pressure?",
+        "Does smaller tree allocation change the relative error?",
+        "How do I transfer catalog ownership?",
+        "What does fits-chunk-pixels do?"
+      ],
+      "keywords": [
+        "memory pressure",
+        "RAM",
+        "ownership",
+        "transfer-catalog-ownership",
+        "fits-chunk-pixels",
+        "smaller tree allocations",
+        "peak RSS"
+      ],
+      "answer": "Use --fits-chunk-pixels to bound coordinate scratch in kappa/shear HEALPix frontends. The default is 1048576 pixels. Chunking preserves selection and pixel order; it does not smooth cells. Downsampling can still allocate full maps. DES shear tables have --fits-chunk-rows.\n\nKappa, shear and Ly-alpha drivers and native Python benchmarks accept --transfer-catalog-ownership. Default registration copies. Transfer retains owning aligned contiguous float64 arrays, makes them read-only, and requires the caller to stop mutating all aliases. Frontends materialize views during setup if necessary. Native particle storage is still allocated; forest IDs are still compacted. Project forest delta before transfer. External backends and file-based ENCORE benchmarks keep their own input contracts.\n\nCompact scalar octree/PCA/KD node allocations use required capacity automatically in rebuilt binaries. This does not change leaf policy or approximation, and it does not affect every engine tree. Reserved bytes are not measured RSS, and there is no guaranteed speedup. CBALLS_MEMORY_BUDGET_MB is not a process RSS cap. MPI replicates catalogs/trees per rank. Compare setup and compute separately in fresh processes at the same input and accuracy settings. --max-points and lower NSIDE change the scientific input and need separate accuracy checks.",
+      "sources": [
+        "tests/python/README_memory_controls.md"
+      ],
+      "source_sha256": {
+        "tests/python/README_memory_controls.md": "d0eaa0692fb8061066b7e937a756a8e6b1c6eaaf51eca444953d20d81b1e60c1"
       }
     }
   ]

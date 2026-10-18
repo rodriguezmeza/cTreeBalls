@@ -24,7 +24,7 @@ METHODS = [
     for prefix in ("", "los-tree-")
     for parallel in ("omp", "mpi")
     for stat in ("2pcf", "3pcf", "2pcf-3pcf")
-] + ["lya-anisotropic-multipole-3pcf-omp"]
+] + ["lya-anisotropic-multipole-3pcf-omp", "lya-rprt-quadtree-2pcf-omp"]
 
 
 def sha(path):

@@ -26,7 +26,8 @@ import time
 import numpy as np
 
 
-METHODS = ("lya-2pcf-omp", "lya-3pcf-omp", "lya-2pcf-3pcf-omp")
+METHODS = tuple(f"lya-{prefix}{statistic}-omp" for prefix in ("", "los-tree-")
+                for statistic in ("2pcf", "3pcf", "2pcf-3pcf"))
 PRODUCTS = (("histXi2pcf_lya.txt", 2, 5), ("histZetaM_lya5d.txt", 5, 11))
 
 
@@ -50,19 +51,19 @@ def catalog(path, shape, seed):
                 sha256=digest(path))
 
 
-def command(binary, input_path, directory, method, threads, write):
+def command(binary, input_path, directory, method, threads, write, extra=()):
     return [str(binary), f"search={method}", f"infile={input_path}",
             "infileformat=lya-ascii", "iCatalogs=1", f"rootDir={directory}",
             f"numberThreads={threads}", "usePeriodic=false", "useLogHist=false",
             "rangeN=80", "rminHist=0.1", "sizeHistN=8", "theta=0",
             "lya2RpMax=40", "lya2RtMax=40", "lya2RpBins=20", "lya2RtBins=20",
             "lya3RMax=25", "lya3RBins=8", "lya3ThetaBins=8", "lya3MuBins=10",
-            "verbose=2", "verbose_log=0", "options=" + ("" if write else "no-out-Hist")]
+            "verbose=2", "verbose_log=0", "options=" + ("" if write else "no-out-Hist"), *extra]
 
 
-def run(binary, input_path, directory, method, threads, write):
+def run(binary, input_path, directory, method, threads, write, extra=()):
     directory.mkdir()
-    native_command = command(binary, input_path, directory, method, threads, write)
+    native_command = command(binary, input_path, directory, method, threads, write, extra)
     mac = platform.system() == "Darwin"
     start = time.perf_counter()
     with (directory / "process.log").open("w") as stream:
@@ -91,8 +92,8 @@ def run(binary, input_path, directory, method, threads, write):
 def compare(left, right, method):
     results = {}
     for name, keys, col in PRODUCTS:
-        if (name.startswith("histXi") and method == "lya-3pcf-omp") or (
-            name.startswith("histZeta") and method == "lya-2pcf-omp"):
+        if (name.startswith("histXi") and '2pcf' not in method) or (
+            name.startswith("histZeta") and '3pcf' not in method):
             continue
         def load(path):
             lines = [line for line in path.read_text().splitlines()
@@ -132,17 +133,28 @@ def main():
     parser.add_argument("--seed", type=int, default=9252026)
     parser.add_argument("--threads", type=int, nargs="+", default=[1, 4])
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--methods", nargs='+', choices=METHODS, default=METHODS)
+    parser.add_argument("--native-arg", action='append', default=[], metavar='KEY=VALUE',
+                        help='Ly-alpha or legacy tuning parameter for both executables; repeatable')
+    parser.add_argument("--candidate-arg", action='append', default=[], metavar='KEY=VALUE',
+                        help='additional candidate tuning parameter, also checked against baseline')
     args = parser.parse_args()
     if args.repeats < 1 or min(args.threads) < 1:
         parser.error("repeats and threads must be positive")
     if args.catalog and (args.pair_input or args.triple_input):
         parser.error("use --catalog or the per-statistic input options, not both")
+    for arg in args.native_arg + args.candidate_arg:
+        if '=' not in arg or not (arg.split('=', 1)[0].startswith('lya')
+                                 or arg.split('=', 1)[0] in ('theta', 'rsmooth', 'nsmooth')):
+            parser.error('--native-arg and --candidate-arg accept only lya*, theta, rsmooth, nsmooth')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     binaries = {k: getattr(args, k).resolve() for k in ("baseline", "candidate")}
     report = dict(runtime_environment=runtime_environment(dict(os.environ, OMP_DYNAMIC="FALSE", OMP_WAIT_POLICY="PASSIVE")), status="RUNNING", platform=platform.platform(), cpu_count=os.cpu_count(),
                   numpy=np.__version__, binaries={k: dict(path=str(v), sha256=digest(v)) for k, v in binaries.items()},
-                  threads=args.threads, repeats=args.repeats, catalogs={}, accuracy=[], samples=[], summary=[],
+                  threads=args.threads, repeats=args.repeats, methods=list(args.methods),
+                  native_args=args.native_arg, candidate_args=args.candidate_arg,
+                  catalogs={}, accuracy=[], samples=[], summary=[],
                   methodology="Fresh processes, paired alternating execution order, OMP_WAIT_POLICY=PASSIVE. "
                   "Accuracy/warmup runs write histograms; timed runs suppress them. Search CPU is summed process "
                   "CPU from clock(); wall includes input, tree construction and process startup. Peak RSS is whole process.")
@@ -161,8 +173,8 @@ def main():
         (root / "benchmark.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     save()
     try:
-        for method in METHODS:
-            input_path = paths["pair" if method == METHODS[0] else "triple"]
+        for method in args.methods:
+            input_path = paths["pair" if '3pcf' not in method else "triple"]
             first_accuracy = {}
             for threads in args.threads:
                 prefix = f"{method}-t{threads}"
@@ -170,7 +182,8 @@ def main():
                 validations = {}
                 for label, binary in binaries.items():
                     dirs[label] = root / f"{prefix}-{label}-accuracy"
-                    validations[label] = run(binary, input_path, dirs[label], method, threads, True)
+                    extra = args.native_arg + (args.candidate_arg if label == 'candidate' else [])
+                    validations[label] = run(binary, input_path, dirs[label], method, threads, True, extra)
                     if label in first_accuracy:
                         for name, _, _ in PRODUCTS:
                             if (dirs[label]/name).exists():
@@ -187,7 +200,8 @@ def main():
                 save()
                 for repeat in range(args.repeats):
                     for label in (("baseline", "candidate") if repeat % 2 == 0 else ("candidate", "baseline")):
-                        row = run(binaries[label], input_path, root / f"{prefix}-{label}-{repeat}", method, threads, False)
+                        extra = args.native_arg + (args.candidate_arg if label == 'candidate' else [])
+                        row = run(binaries[label], input_path, root / f"{prefix}-{label}-{repeat}", method, threads, False, extra)
                         for counter in ("accepted", "pairs", "ordered_triplets"):
                             if not (row[counter] == validations[label][counter]):
                                 raise AssertionError(counter)

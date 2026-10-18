@@ -38,6 +38,7 @@ def unavailable(model, names=GETTERS):
     ('octree-shear-sphere-2balls-omp', 'only-2pcf'),
     ('octree-3pcf-3d-omp', 'only-2pcf'),
     ('lya-2pcf-omp', 'only-2pcf'),
+    ('lya-rprt-quadtree-2pcf-omp', 'only-2pcf'),
 ])
 def test_uncomputed_products_reject_even_after_success(tmp_path, method, options):
     m, _ = make_model(tmp_path, method, options)

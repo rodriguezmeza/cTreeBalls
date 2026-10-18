@@ -175,7 +175,8 @@ def add_fits_table_arguments(parser):
                         help="auto uses G2CONV; Takahashi gamma2 is negated exactly once")
     parser.add_argument("--sampling-seed", type=int, default=8675309,
                         help="uint64 seed for deterministic DES bottom-k row selection")
-    parser.add_argument("--fits-chunk-rows", "--fits-chunk-pixels", dest="fits_chunk_rows", type=int, default=1 << 20)
+    parser.add_argument("--fits-chunk-rows", "--fits-chunk-pixels", dest="fits_chunk_rows", type=int, default=1 << 20,
+                        help="positive input/coordinate chunk size (default 1048576); rows for DES, pixels for HEALPix; no smoothing or thinning")
 
 
 def validate_des_controls(*, geometry="sphere", mask=None, weight_field=None,

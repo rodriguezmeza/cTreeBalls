@@ -113,6 +113,10 @@ REQUIRED = {
     'tests/python/test_effective_catalog_identity.py',
     'docs/RESULT_AVAILABILITY_AND_IDENTITY.md',
     'tests/python/test_release_packaging.py',
+    'tests/python/lya_projection.py', 'python/lya_distortion_api.pxi',
+    'include/lya_distortion.h', 'source/lya_distortion.c',
+    'include/environment_info.h', 'source/runtime_environment.c',
+    'addons/lya_forest_omp/lya_rprt_quadtree.h',
 }
 
 # Every registered engine has a packaged batch entry point.

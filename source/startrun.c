@@ -22,6 +22,7 @@
 
 #include "globaldefs.h"
 #include "cballs_make_info.h"
+#include "environment_info.h"
 //B
 #include <limits.h>
 #include <errno.h>
@@ -768,6 +769,14 @@ local int startup_setup_local(struct cmdline_data *cmd, struct global_data *gd)
     double cpustartMiddle;
     const int memory_ninfiles = gd->bodytable_allocated ? gd->ninfiles : 0;
     const bool input_catalogs_in_memory = memory_ninfiles > 0;
+    if (scanopt(cmd->options, "print-environment") || scanopt(cmd->options, "print-env")) {
+        cballs_print_environment();
+        if (!scanopt(cmd->options, "no-stop")) {
+            gd->flagPrint = FALSE;
+            gd->stopflag = TRUE;
+            return SUCCESS;
+        }
+    }
     if (scanopt(cmd->options, "build-fingerprint")) {
         printf("%s\n", cballs_build_json());
         if (!scanopt(cmd->options, "no-stop")) {
@@ -2763,6 +2772,7 @@ local int print_make_info(struct cmdline_data* cmd,
         "shear reuse compiled defaults: phase budget=%s radians; bin slop=%s bin widths. "
         "CBALLS_SHEAR_PIVOT_TOL and CBALLS_SHEAR_BIN_THETA environment values override "
         "these only for options=shear-pivot-reuse; bin slop does not replace theta.\n"
+        "scalar reuse compiled defaults: phase budget=" CBALLS_MAKE_CBALLS_SCALAR_PIVOT_TOL " radians; bin allowance=" CBALLS_MAKE_CBALLS_SCALAR_BIN_THETA " bin widths. CBALLS_SCALAR_* overrides apply only to eligible scalar-pivot-reuse 3PCF; use no-smooth-pivot and positive theta. dual-node-bin-theta is a separate native options token.\n"
         "shear frontier controls: CBALLS_SHEAR_TASKS=0 means automatic global target; "
         "CBALLS_SHEAR_TASK_MEMORY_MB defaults to 256 MiB per rank. Controls must agree across ranks.\n"
         "count multipoles: shear retains its full window by default; no-count-multipoles "
@@ -2779,6 +2789,13 @@ local int print_make_info(struct cmdline_data* cmd,
         "Python Run timings and native MainLoop timings have separate scopes.\n\n",
         CBALLS_MAKE_CBALLS_SHEAR_PIVOT_TOL,
         CBALLS_MAKE_CBALLS_SHEAR_BIN_THETA);
+
+    verb_print_zero(cmd->verbose,
+        "Accuracy: theta and pivot phase/bin tolerances are geometric controls, not 5%% or 10%% error guarantees. Compare every nonzero coefficient with abs(fast-exact)/abs(exact), using complex magnitudes; exact-zero coefficients must stay zero. L2 and symmetric differences are different metrics.\n"
+        "Speed: measure repeated wall times on an otherwise idle host at matching input, bins, multipoles and measured accuracy. Profile scalar two-ball runs separately with options=no-out-Hist,dual-node-profile; remove profiling for timing trials. CPU time sums worker work.\n"
+        "Memory: compact scalar octree/PCA/KD tree node capacity is sized automatically from the required tree shape; this is allocation policy, not smoothing, and does not guarantee lower peak RSS or faster traversal.\n"
+        "Python kappa/shear HEALPix inputs: --fits-chunk-pixels bounds coordinate scratch (default 1048576); DES tables use --fits-chunk-rows. Kappa/shear/Ly-alpha drivers and native Python benchmarks accept --transfer-catalog-ownership (opt-in; default copies). Native particle storage and per-rank MPI copies remain.\n"
+        "These are Python arguments, not native options or environment controls. See tests/python/README_memory_controls.md.\n");
 
     verb_print_zero(cmd->verbose,
                     "[effective compile-time features (enabled)]\n");
@@ -3328,7 +3345,7 @@ local int print_options(struct cmdline_data* cmd,
         {"no-two-ball", "legacy ball/octree searches",
          "disable the older singular two-ball branch; prefer no-two-balls for current dual-node engines"},
         {"no-stop", "startup",
-         "continue after make-info, print-options, or print-search-methods"},
+         "continue after make-info, print-options, print-search-methods, or print-environment"},
         {"no-two-balls", "two-node tree searches",
          "disable two-ball cell aggregation where supported; spherical shear 3PCF still accepts neighbor nodes, so use no-one-ball,no-smooth-pivot for an exact body reference"},
         {"no-balltree-tree-cache", "balltree-2balls-omp auto-correlations",
@@ -3384,6 +3401,10 @@ local int print_options(struct cmdline_data* cmd,
          "run preScript before reading data"},
         {"print-options", "startup",
          "print this list of recognized options"},
+        {"print-environment", "startup",
+         "print current environment controls, defaults, scope and unset commands; no-stop continues"},
+        {"print-env", "startup",
+         "alias for print-environment"},
         {"build-fingerprint", "startup",
          "print the resolved source/profile/toolchain JSON identity; no-stop continues"},
         {"print-search-methods", "startup",
@@ -3444,7 +3465,8 @@ local int print_options(struct cmdline_data* cmd,
     (void)gd;
 
     verb_print_zero(cmd->verbose,
-        "\nRelated parameters: theta=1 default, numberThreads=threads per rank, "
+        "\nUse options=print-environment (alias print-env) for current environment values, defaults and reset commands.\n"
+        "Related parameters: theta=1 default, numberThreads=threads per rank, "
         "verbose=1 for live completion counters, verbose_log=1 for log counters.\n"
         "Environment controls (not options tokens): CBALLS_SHEAR_PIVOT_TOL, "
         "CBALLS_SHEAR_BIN_THETA, CBALLS_SHEAR_TASKS, CBALLS_SHEAR_TASK_MEMORY_MB; "
@@ -3468,6 +3490,13 @@ local int print_options(struct cmdline_data* cmd,
         "--des-shear-convention auto|takahashi|local-east-north, --sampling-seed, "
         "--fits-chunk-rows, and --binning custom|sofia-fig1|paper-8-200-edges. "
         "See tests/python/README_shear_corr_all_engines.md.\n");
+
+    verb_print_zero(cmd->verbose,
+        "Accuracy: theta and pivot phase/bin tolerances are geometric controls, not 5%% or 10%% error guarantees. Compare every nonzero coefficient with abs(fast-exact)/abs(exact), using complex magnitudes; exact-zero coefficients must stay zero. L2 and symmetric differences are different metrics.\n"
+        "Speed: measure repeated wall times on an otherwise idle host at matching input, bins, multipoles and measured accuracy. Profile scalar two-ball runs separately with options=no-out-Hist,dual-node-profile; remove profiling for timing trials. CPU time sums worker work.\n"
+        "Memory: compact scalar octree/PCA/KD tree node capacity is sized automatically from the required tree shape; this is allocation policy, not smoothing, and does not guarantee lower peak RSS or faster traversal.\n"
+        "Python kappa/shear HEALPix inputs: --fits-chunk-pixels bounds coordinate scratch (default 1048576); DES tables use --fits-chunk-rows. Kappa/shear/Ly-alpha drivers and native Python benchmarks accept --transfer-catalog-ownership (opt-in; default copies). Native particle storage and per-rank MPI copies remain.\n"
+        "These are Python arguments, not native options or environment controls. See tests/python/README_memory_controls.md.\n");
 
     return SUCCESS;
 }

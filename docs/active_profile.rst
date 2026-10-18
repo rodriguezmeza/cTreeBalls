@@ -12,7 +12,7 @@ Runtime discovery
    ./cballs options=print-options
    ./cballs options=print-search-methods
 
-The selected profile has 41 registered methods. The executable reports only methods actually compiled; unsupported standalone-addon overrides fail explicitly. The development profile uses bundled GSL/CFITSIO, while the public source archive uses external libraries.
+The selected profile has 42 registered methods. The executable reports only methods actually compiled; unsupported standalone-addon overrides fail explicitly. The development profile uses bundled GSL/CFITSIO, while the public source archive uses external libraries.
 
 Enabled methods
 ---------------
@@ -70,6 +70,9 @@ Enabled methods
 
 ``lya-2pcf-omp`` (ID 169)
     3D observer-centered forest pixels; exact default, opt-in forest cell pairs; OpenMP. weighted anisotropic 2PCF.
+
+``lya-rprt-quadtree-2pcf-omp`` (ID 213)
+    observer-centered forest pixels; 2D separation-bin quadtree; OpenMP. weighted anisotropic 2PCF (exact default; optional bin slop).
 
 ``lya-3pcf-omp`` (ID 170)
     3D observer-centered forest pixels; exact default, opt-in bounded cell-bin approximation; OpenMP. weighted five-dimensional 3PCF.

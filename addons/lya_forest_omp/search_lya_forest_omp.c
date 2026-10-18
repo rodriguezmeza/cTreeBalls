@@ -360,8 +360,9 @@ local int lya_walktree(struct cmdline_data *cmd, bodyptr p, nodeptr q,
     /* Pair ownership and forest exclusion do not depend on geometry. Do not
      * spend a distance calculation on the reverse orientation. Smoothed
      * groups retain their original per-member ownership check. */
-    if(Type(q)!=CELL && !compute_3pcf && !worker->pivot_multiplicity
-        && (Id(q)<=Id(p) || LyaForestId((bodyptr)q)==LyaForestId(p))) return SUCCESS;
+    if (Type(q) != CELL
+        && (LyaForestId((bodyptr)q) == LyaForestId(p)
+            || (!compute_3pcf && !worker->pivot_multiplicity && Id(q) <= Id(p)))) return SUCCESS;
     DOTPSUBV(distance2, displacement, Pos(p), Pos(q));
     distance = rsqrt(distance2);
 
@@ -805,13 +806,15 @@ setup_done:
 
     if (pair_cells && !persistent) {
         lya_cells pair_tree;
-        double start=CPUTIME;
+        double start=CPUTIME,build_wall_start=lya_progress_wall_time();
         allocation_failed=lya_cells_build(&pair_tree,cmd,btable[cat],nbody[cat],
             ipmin-1,ipmax[cat],all_bytes,cmd->error_message)==FAILURE;
         if(!allocation_failed) {
             verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
-                "Ly-alpha 2PCF forest build: nodes=%zu build_CPU=%g shared_with_3pcf=0\n",
-                pair_tree.nodes_count,CPUTIME-start);
+                "Ly-alpha 2PCF forest build: nodes=%zu build_CPU=%g build_wall=%g sort_wall=%g nodes_wall=%g sort_threads=%d node_threads=%d sort_scratch_bytes=%zu shared_with_3pcf=0\n",
+                pair_tree.nodes_count,CPUTIME-start,lya_progress_wall_time()-build_wall_start,
+                pair_tree.sort_wall,pair_tree.nodes_wall,pair_tree.sort_threads,pair_tree.build_threads,
+                pair_tree.sort_scratch_bytes);
             allocation_failed=lya_pairs_run(&pair_tree,cmd,gd,btable[cat],ipmin-1,ipmax[cat],
                 bins2,pair_tree.plan,num2,den2,&pair_count,&accepted_visits)==FAILURE;
             lya_cells_free(&pair_tree);
@@ -898,23 +901,7 @@ setup_done:
             INTEGER first = use_frontier?(INTEGER)frontier.offsets[block]:ipmin-1+block*pivot_block;
             INTEGER end = use_frontier?(INTEGER)frontier.offsets[block+1]:first+MIN(pivot_block,ipmax[cat]-first);
             INTEGER pivot;
-            if(worker_ready && use_los_tree) {
-                /* Fixed blocks reuse forest discovery only when all actual
-                 * pivots fit a modest enlarged sphere. Wide blocks retain
-                 * individual queries and pay no expanded traversal cost. */
-                bodyptr center=NULL;long double radius=0;
-                for(INTEGER j=first;j<end;j++) {
-                    const lya_pivot_group *g=frontier.groups?&frontier.groups[frontier.order[j]]:NULL;
-                    bodyptr q=g?g->pivot:btable[cat]+(use_frontier?(INTEGER)frontier.order[j]:j);
-                    if(!center) center=q;
-                    long double d2=0;
-                    for(int k=0;k<NDIM;k++) {long double d=(long double)Pos(q)[k]-Pos(center)[k];d2+=d*d;}
-                    radius=fmaxl(radius,sqrtl(d2));
-                }
-                REAL bound=nextafter((REAL)radius,INFINITY);
-                lya_los_begin_block(&los_workspace,center,
-                    end-first>1 && sizeof(REAL)==sizeof(double) && isfinite(bound) && bound<=cutoff*.25 ? bound : -1);
-            }
+            INTEGER los_group_end = first;
             worker.accepted_visits = 0;
             worker.pair_count = 0;
             worker.ordered_triplet_count = 0;
@@ -925,6 +912,34 @@ setup_done:
                 if(worker.pivot_multiplicity) {
                     worker.pivot_weight=group->weight;worker.pivot_field=group->field;
                     worker.pivot_members=group->members;worker.pivot_idlo=group->idlo;worker.pivot_idhi=group->idhi;
+                }
+                if (worker_ready && use_los_tree && pivot == los_group_end) {
+                    /* Partition a wide task into coherent prefixes. Previously
+                     * one far pivot disabled discovery sharing for the entire
+                     * task, even when its shorter prefixes fit the reuse sphere.
+                     * This changes candidate discovery only; exact per-pixel
+                     * distances, forest exclusions and visit order are retained. */
+                    bodyptr center = p;
+                    long double radius = 0;
+                    los_group_end = pivot + 1;
+                    if (sizeof(REAL) == sizeof(double)) {
+                        for (INTEGER j = pivot + 1; j < end; j++) {
+                            const lya_pivot_group *g = frontier.groups ? &frontier.groups[frontier.order[j]] : NULL;
+                            bodyptr q = g ? g->pivot : btable[cat] + (use_frontier ? (INTEGER)frontier.order[j] : j);
+                            long double d2 = 0;
+                            for (int k = 0; k < NDIM; k++) {
+                                long double d = (long double)Pos(q)[k] - Pos(center)[k];
+                                d2 += d*d;
+                            }
+                            long double bound = sqrtl(d2);
+                            if (!isfinite(bound) || bound > (long double)cutoff*.25L) break;
+                            radius = fmaxl(radius, bound);
+                            los_group_end = j + 1;
+                        }
+                    }
+                    REAL bound = nextafter((REAL)radius, INFINITY);
+                    lya_los_begin_block(&los_workspace, center,
+                        los_group_end - pivot > 1 && isfinite(bound) && bound <= cutoff*.25 ? bound : -1);
                 }
                 worker.neighbor_count = 0;
                 worker.neighbors_sorted = FALSE;

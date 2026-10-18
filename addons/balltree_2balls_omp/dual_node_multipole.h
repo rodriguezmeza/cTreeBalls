@@ -278,6 +278,66 @@ static void dual_node_multipole_add(
     }
 }
 
+/* Individual neighbors have no internal distinct pairs. Keep this hot path
+ * separate from aggregate-node/window accumulation, and expose the disjoint
+ * scratch arrays to the compiler. The ordered distinct-product recurrence and
+ * checked multiplications are unchanged. */
+static inline void dual_node_multipole_add_singleton(
+        dual_node_multipole_scratch *scratch, int radial_bin,
+        real field, real normalization, real cosphi1, real sinphi1)
+{
+    if (scratch->window_orders > 0) {
+        dual_node_multipole_add(scratch, radial_bin, field, 0.0,
+                               normalization, 0.0, 1, cosphi1, sinphi1);
+        return;
+    }
+    const size_t stride = scratch->stride;
+    size_t index = (size_t)radial_bin;
+    real *restrict field_cos = scratch->field_cos;
+    real *restrict field_sin = scratch->field_sin;
+    real *restrict distinct_coscos = scratch->distinct_coscos;
+    real *restrict distinct_sinsin = scratch->distinct_sinsin;
+    real *restrict distinct_sincos = scratch->distinct_sincos;
+    real cosphi = cosphi1, sinphi = sinphi1;
+
+    scratch->normalization_distinct[index] = cballs_distinct_merge(
+        scratch->normalization_distinct[index], 0.0,
+        scratch->normalization[index], normalization);
+    scratch->normalization[index] += normalization;
+    scratch->neighbor_count[index] = MIN(2.0, scratch->neighbor_count[index]+1.0);
+    if (scratch->orders == 0) return;
+
+    /* The monopole phase is exactly (1,0). Its sine components stay zero;
+     * the cosine recurrence still detects overflow/underflow of products. */
+    distinct_coscos[index] = cballs_distinct_merge(
+        distinct_coscos[index], 0.0, field_cos[index], field);
+    field_cos[index] += field;
+    index += stride;
+    for (int order = 1; order < scratch->orders; order++, index += stride) {
+        const real px = field_cos[index], py = field_sin[index];
+        real x = field*cosphi, y = field*sinphi;
+        real xx = px*x, yy = py*y, xy = px*y, yx = py*x;
+        /* A nonzero product needs no underflow-to-zero handling. Collect the
+         * rare zero cases before checking their operands, retaining the same
+         * checked arithmetic (including NaN propagation) on that path. */
+        if (x == 0.0 || y == 0.0 || xx == 0.0 || yy == 0.0
+            || xy == 0.0 || yx == 0.0) {
+            x = cballs_product(field, cosphi);
+            y = cballs_product(field, sinphi);
+            xx = cballs_product(px,x); yy = cballs_product(py,y);
+            xy = cballs_product(px,y); yx = cballs_product(py,x);
+        }
+        distinct_coscos[index] = distinct_coscos[index]+0.0+2.0*xx;
+        distinct_sinsin[index] = distinct_sinsin[index]+0.0+2.0*yy;
+        distinct_sincos[index] += xy+yx;
+        field_cos[index] += x;
+        field_sin[index] += y;
+        const real next_cos = cosphi*cosphi1-sinphi*sinphi1;
+        sinphi = sinphi*cosphi1+cosphi*sinphi1;
+        cosphi = next_cos;
+    }
+}
+
 static int dual_node_multipole_pair_status_limited(
         const dual_node_search_context *context,
         const dual_node_multipole_pivot *pivot,
@@ -349,12 +409,14 @@ static int dual_node_multipole_add_body(
     } else {
         distance = dual_node_position_distance(
             context, pivot->position, neighbor->pos, dr);
-        if (!(distance > 0.0)
-            || !dual_node_multipole_angular_phase(
-                pivot, dr, &cosphi, &sinphi))
-            return SUCCESS;
+        if (!(distance > 0.0)) return SUCCESS;
         radial_bin = dual_node_bin_index(context, distance);
         if (radial_bin < 0) return SUCCESS;
+        /* Out-of-range neighbors contribute no moment: avoid constructing
+         * their angular phase, without changing the bin or phase formulas. */
+        if (!dual_node_multipole_angular_phase(
+                pivot, dr, &cosphi, &sinphi))
+            return SUCCESS;
     }
     {
         const real field = context->weighted
@@ -362,10 +424,8 @@ static int dual_node_multipole_add_body(
         const real normalization = context->weighted
             ? (real)neighbor->weight : 1.0;
 
-        dual_node_multipole_add(
-            scratch, radial_bin, field, 0.0,
-            normalization, 0.0,
-            1, cosphi, sinphi);
+        dual_node_multipole_add_singleton(
+            scratch, radial_bin, field, normalization, cosphi, sinphi);
     }
     scratch->body_visits++;
     return SUCCESS;
@@ -1418,4 +1478,3 @@ static void dual_node_initialize_multipole_scratch(
     scratch->scratch_clear_seconds = 0.0;
     scratch->multipole_product_seconds = 0.0;
 }
-

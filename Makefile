@@ -40,9 +40,9 @@ PROFILE_LIB = $(WRKDIR)/lib$(EXEC).a
 
 OBJS = main.o cballsio.o cballs.o startrun.o testdata.o treeload.o \
 	cballsutils.o search.o abi_check.o run_metadata.o engine_registry.o \
-	runtime_context.o memory_catalog.o common_histogram.o smooth_pivots.o mpi_runtime.o scalar_window_io.o
+	runtime_context.o memory_catalog.o common_histogram.o smooth_pivots.o mpi_runtime.o scalar_window_io.o lya_distortion.o runtime_environment.o
 
-PYTHON_FILES = python/cyballs.pyx python/resource_api.pxi python/qualification_api.pxi setup.py python/ccyballs.pxd.in
+PYTHON_FILES = python/cyballs.pyx tests/python/lya_projection.py python/resource_api.pxi python/qualification_api.pxi python/lya_distortion_api.pxi setup.py python/ccyballs.pxd.in
 CBALLS_OBJECTS = $(sort $(OBJS) $(TOOLS) $(SOURCE) $(EXTERNAL) $(EXTERNALCXX))
 CBALLS_COMPILE_CONFIG = $(WRKDIR)/compile-settings.json
 CBALLS_LINK_CONFIG = $(WRKDIR)/link-settings.json
@@ -51,7 +51,7 @@ export CBALLS_OBJECTS VENDORED_SOURCE_PATTERNS
 all: $(EXEC) lib$(EXEC).a cyballs
 
 # Reader headers may be dropped by later legacy HEADERFILES assignments.
-main.o: $(MDIR)/include/cli_validation.h $(MDIR)/include/ia_tutor_cli.h
+main.o: $(MDIR)/include/cli_validation.h $(MDIR)/include/ia_tutor_cli.h $(MDIR)/include/environment_info.h
 
 cballsio.o: $(wildcard $(MDIR)/addons/iolib/*.h) \
             $(wildcard $(MDIR)/addons/cfitsio/*.h)
@@ -178,6 +178,7 @@ $(CBALLS_BUILD_HEADER): cballs-fingerprint-force scripts/build_fingerprint.py $(
 # Source provenance belongs to the metadata unit, not every engine.
 run_metadata.o: $(CBALLS_BUILD_HEADER)
 startrun.o: $(CBALLS_MAKE_INFO_HEADER)
+runtime_environment.o: $(CBALLS_MAKE_INFO_HEADER) $(MDIR)/include/environment_info.h
 
 .PHONY: cballs-config-force cballs-dependency-force
 cballs-config-force cballs-dependency-force:

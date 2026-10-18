@@ -184,6 +184,16 @@ Requires one forest catalog, non-periodic geometry, and forest IDs; see input be
 
 Reference calculation: `forest`; tests: `tests/python/test_lya_forest_mpi.py`, `tests/python/test_lya_forest_los_tree.py`, `tests/python/test_lya_pair_cells.py`, `tests/python/test_lya_pivot_frontier.py`, `tests/python/test_owned_results_resources.py`, `tests/python/test_scientific_qualification.py`, `tests/python/test_lya_hierarchy.py`.
 
+## lya-rprt-quadtree-2pcf-omp (ID 213)
+
+Build condition: `(defined(ADDONS)) && (defined(LYAFORESTOMP))`. Aliases: none.
+
+observer-centered forest pixels; 2D separation-bin quadtree; OpenMP. weighted anisotropic 2PCF (exact default; optional bin slop).
+
+A quadtree partitions the (r_parallel,r_transverse) bin plane. Complete products of radial forest segments are projected into conservative rectangles; wholly single-bin products add weighted moments, otherwise subdivide or evaluate exact pixels. No global pair-coordinate catalog and no global Cartesian pixel octree are built. Complete-forest bounds kdtree rejects distant groups. Distinct-forest unordered pairs and strict physical cutoffs; intrinsic lya2Kernel=1. Zero slop is exact. Optional lya2RpSlop/lya2RtSlop in [0,1] allow certified expanded-bin placement in units of each bin width; signed sums and eligible pair counts are retained. The forest driver exposes --bin-slop (both axes), --lya2-rp-slop and --lya2-rt-slop. Nonzero slop needs accuracy calibration and cannot share the exact hard-bin distortion response. Rejects pivot frontier/smoothing. Same input/output bins as lya-2pcf-omp. Enable LYAFORESTOMPON=1; no MPI variant. See docs/lyman_alpha.rst.
+
+Reference calculation: `forest`; tests: `tests/python/test_lya_rprt_quadtree.py`, `tests/python/test_lya_corr_all_engines.py`.
+
 ## lya-3pcf-omp (ID 170)
 
 Build condition: `(defined(ADDONS)) && (defined(LYAFORESTOMP))`. Aliases: none.

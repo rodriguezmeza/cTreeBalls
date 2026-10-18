@@ -57,7 +57,7 @@ def test_live_help_and_registry_match_shipped_profile(tmp_path):
     sys.path.insert(0,str(ROOT/'scripts'))
     from capabilities_generated import expected_registry
     expected=expected_registry(build_info()['resolved_settings'])
-    assert len(expected)==41
+    assert len(expected)==42
     assert all(search_method_id(e['name'])==e['id'] for e in data['engines'])
     outputs={}
     for option in ('make-info','print-options','print-search-methods'):
@@ -74,3 +74,31 @@ def test_live_help_and_registry_match_shipped_profile(tmp_path):
         assert not re.search(r'^- '+option+r' \[',outputs['print-options'],re.M)
     gsl=build_info()['resolved_settings']['GSLINTERNAL']
     assert ('using internal GSL' in outputs['make-info'])==(gsl=='1')
+
+
+def test_public_documentation_uses_project_terminology():
+    import re
+    forbidden = re.compile('treecorr', re.I)
+    for directory in ('docs', 'tutor', 'tests/python', 'support', 'addons'):
+        for path in (ROOT/directory).rglob('*'):
+            if not path.is_file() or any(x in ('_build', 'build', '__pycache__') for x in path.parts):
+                continue
+            if path.suffix in ('.md', '.rst') or path.name.lower().startswith('readme'):
+                text = path.read_text(errors='replace')
+                assert not forbidden.search(text), path.relative_to(ROOT)
+                for name in re.findall(r'(?<![\w/])python/([\w.-]+\.py)\b', text):
+                    assert not (ROOT/'tests/python'/name).is_file(), (path.relative_to(ROOT), name)
+    body, acknowledgments = (ROOT/'README.md').read_text().split('## Acknowledgments', 1)
+    assert not forbidden.search(body)
+    assert forbidden.search(acknowledgments)
+
+
+def test_man_inventory_and_projection_include_match_the_profile():
+    import re
+    engines = json.loads((ROOT/'capabilities/engines.json').read_text())['engines']
+    manual = (ROOT/'docs/man/cballs.m').read_text()
+    assert manual == (ROOT/'docs/man/cballs.1').read_text()
+    inventory = manual.split('.SH ACTIVE SEARCH METHODS\n', 1)[1].split('.SH COMMON PARAMETERS', 1)[0]
+    assert set(re.findall(r'^\.B (\S+)$', inventory, re.M)) == {e['name'] for e in engines}
+    assert 'include "../tests/python/lya_projection.py"' in (ROOT/'python/cyballs.pyx').read_text()
+    assert not (ROOT/'python/lya_projection.py').exists()

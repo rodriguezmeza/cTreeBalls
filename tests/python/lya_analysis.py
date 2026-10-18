@@ -77,7 +77,7 @@ def write_comparisons(results, config):
 
 def analysis_workspace_bytes(config):
     cells = config.rp_bins*config.rt_bins
-    dense = 48*cells*cells if (config.covariance or config.distortion_matrix or config.reference_covariance) else 0
+    dense = 48*cells*cells if (config.covariance or config.distortion_matrix or config.reference_covariance or (getattr(config,'compute_distortion',False) and config.model_correlation)) else 0
     return dense + 32*cells*config.wedge_bins*(len(config.wedge_mu_edges)-1)
 
 

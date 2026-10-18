@@ -134,6 +134,44 @@ file containing `positions`, `kappa`, and optional `weights` and `mask` arrays.
 useful for smoke tests but changes the measured catalog. `--nside-down 0`
 retains native resolution.
 
+`--fits-chunk-pixels` (default `1048576`) also bounds field-gather and
+coordinate-conversion temporaries, for both native-resolution and downgraded
+FITS input. The loader fills one final `(N, 3)` position array in chunks,
+releases selection buffers before coordinate construction, and centers its
+owned kappa array in place. Chunk size does not change selected pixels,
+their order, sampling, or field centering. The selected catalog and native
+engine trees still reside in memory; this is not an out-of-core engine.
+
+
+
+### Optional ownership transfer
+
+Add `--transfer-catalog-ownership` to avoid the registration copy of the
+selected NumPy catalog. The default remains copy registration. The option
+requires a rebuilt `cyballs` binding; the CLI checks support before loading
+FITS data. `summary.json` records `catalog_registration` as `transfer` or
+`copy`. For a full NSIDE 4096 map, transferring positions and kappa avoids
+approximately 6 GiB of duplicate arrays. Native particle and tree allocations
+are separate and are not removed by this option.
+
+Python callers can use:
+
+```python
+balls.set_catalog(positions, kappa=kappa, take_ownership=True)
+```
+
+Every supplied buffer must be an owning, aligned, C-contiguous NumPy array
+with native float64 dtype (uint8 for mask). Views, lists, byte-swapped arrays,
+and conversions are rejected rather than copied. Validation finishes before
+any input is frozen or an existing registration is replaced. Successful
+transfer marks the arrays read-only and retains strong references for repeat
+runs, including after `struct_cleanup()`. Replacement, `clear_catalogs()`,
+`clean_all()`, or object destruction releases those references; arrays remain
+read-only if the caller still holds them. The caller must stop mutating or
+resizing all aliases, including existing writable views, because NumPy cannot
+revoke those views. This is an explicit ownership contract, not immutable
+storage enforced against deliberate alias mutation.
+
 All active scalar engines support masks and edge correction. Masking controls
 which bodies enter the estimator. Edge correction is a separate 3PCF window
 deconvolution and cannot be combined with `--statistics 2pcf`.
@@ -145,6 +183,28 @@ matrices; use `--no-plots` or `--no-flatten-plots` to disable them.
 
 The catalog is read once and retained between runs, but every engine still
 builds its own C-owned tree and histograms.
+
+### Compact scalar tree allocation
+
+Rebuilt scalar octree, PCA balltree and KD two-ball engines allocate their
+compact node arrays to the required node count. This is automatic: no new CLI
+option is needed. The octree counts leaves using its existing stopping rule;
+median-split trees use their deterministic split shape. KD construction also
+uses a bounded shape cache instead of a sparse table with one entry per point.
+
+This does not change leaf sizes, tree splits, point order, smoothing, or
+approximation settings. Node reservation falls most when leaves contain several
+points; singleton leaves still require `2*N - 1` nodes. Native octree cells,
+bodies, packed points and estimator scratch remain allocated as before.
+
+Allocated bytes and peak resident memory are different: unused `calloc` pages
+may never have occupied RAM. Reduced reservation and cache accounting therefore
+do not imply the same percentage reduction in process RSS. The octree adds a
+leaf-count traversal during construction; counting speed is workload dependent.
+The pre-load resource planner retains its conservative two-nodes-per-point
+estimate. Rebuild the native library and Python extension together to activate
+the change. `make test-compact-tree-allocation` checks exact node capacities,
+point coverage, masks, irregular native cells and serial/parallel construction.
 
 ## Optional external dual-node API
 
@@ -171,7 +231,7 @@ The native `theta` parameter retains its existing meaning.
 For the scalar `octree-2balls`, `kdtree-2balls`, and `balltree-2balls` engines
 (OpenMP or MPI), append `--more-options scalar-pivot-reuse --no-smooth-pivot`.
 Select these engines explicitly; other engine families reject this option.
-`CBALLS_SCALAR_PIVOT_TOL` (default 0 radians) and
+`CBALLS_SCALAR_PIVOT_TOL` (default 0.1 radians) and
 `CBALLS_SCALAR_BIN_THETA` (default 0 bin widths) are runtime environment
 variables; MPI ranks must receive matching values. Benchmark and qualify
 the actual scalar products before choosing looser values.

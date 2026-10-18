@@ -36,6 +36,7 @@ Discovery Commands
    ./cballs options=make-info
    ./cballs options=print-options
    ./cballs options=print-search-methods
+   ./cballs options=print-environment
 
 These report compiled build settings, registered option descriptions, and
 method availability/usage respectively. Help-only paths currently may return
@@ -45,6 +46,16 @@ treating them as a computation smoke test.
 The available defaults depend on ``Makefile_settings`` and enabled add-ons, so
 the help output from the compiled executable takes precedence over copied
 examples.
+
+``options=print-environment`` (alias ``print-env``) reports current environment
+values, defaults, engine scope, and commands to clear definitions. It returns
+success without starting MPI or a calculation when used as the sole argument,
+even if a memory override is invalid. See :doc:`environment` for examples.
+
+.. toctree::
+   :hidden:
+
+   environment
 
 Common Parameters
 -----------------

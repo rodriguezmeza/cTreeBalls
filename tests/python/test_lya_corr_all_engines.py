@@ -110,9 +110,9 @@ def test_catalog_validation(mutation):
 
 def test_engine_contracts():
     available = list(driver.LYA_ENGINES)
-    assert len(available) == 25
-    assert len(driver.resolve_engines(["all"], available, "both")) == 25
-    assert len(driver.resolve_engines(["all-omp"], available, "2pcf")) == 5
+    assert len(available) == 27
+    assert len(driver.resolve_engines(["all"], available, "both")) == 26
+    assert len(driver.resolve_engines(["all-omp"], available, "2pcf")) == 6
     assert len(driver.resolve_engines(["all-mpi"], available, "3pcf")) == 5
     assert driver.resolve_engines(["all-multipole"], available, "3pcf") == (
         "octree-3pcf-3d-omp", "octree-3pcf-3d-mpi",
@@ -120,7 +120,7 @@ def test_engine_contracts():
     assert driver.resolve_engines(["all-tree"], available, "both") == (
         "lya-1d-tree-2pcf-omp", "lya-1d-tree-3pcf-omp",
         "lya-1d-tree-2pcf-mpi", "lya-1d-tree-3pcf-mpi",
-        "lya-los-tree-2pcf-omp", "lya-los-tree-3pcf-omp",
+        "lya-rprt-quadtree-2pcf-omp", "lya-los-tree-2pcf-omp", "lya-los-tree-3pcf-omp",
         "lya-los-tree-2pcf-3pcf-omp",
         "lya-los-tree-2pcf-mpi", "lya-los-tree-3pcf-mpi",
         "lya-los-tree-2pcf-3pcf-mpi",
@@ -400,6 +400,10 @@ def test_hierarchy_driver_selection(tmp_path):
         params=driver.engine_parameters(config,engine,tmp_path/engine)
         if spec.family=="multipole":
             assert "lya3Kernel" not in params
+        elif spec.family=="anisotropic_multipole":
+            assert params["lya3Kernel"] == 0
+            assert params["lya3MuMode"] == 1
+            assert params["lya3LMax"] == 8
         else:
             assert params["lya2Kernel"]==(1 if not spec.radial and 2 in spec.orders else 0)
             assert params["lya3Kernel"]==(5 if not spec.radial and 3 in spec.orders else 0)
@@ -412,3 +416,35 @@ def test_forest_controls_reset_multipole_order_between_engines(tmp_path):
     for engine in ('octree-3pcf-3d-omp', 'lya-2pcf-omp',
                    'lya-los-tree-2pcf-3pcf-mpi'):
         assert driver.engine_parameters(cfg, engine, tmp_path)['mChebyshev'] == 5
+
+
+@pytest.mark.parametrize("args,expected",[((),(0.,0.)),(("--bin-slop",".1"),(.1,.1)),
+    (("--lya2-bin-slop",".2","--lya2-rt-slop","0"),(.2,0.)),
+    (("--lya2-rp-slop",".15"),(.15,0.))])
+def test_pair_slop_cli_defaults_and_axis_overrides(args,expected):
+    parsed=driver.parse_arguments(args)
+    assert (parsed.lya2_rp_slop,parsed.lya2_rt_slop)==expected
+
+
+@pytest.mark.parametrize("bad",[-.1,1.01,float("nan"),float("inf")])
+def test_pair_slop_config_validation(tmp_path,bad):
+    with pytest.raises(ValueError,match="lya2_rp_slop"):
+        driver.RunConfig(("lya-rprt-quadtree-2pcf-omp",),tmp_path,lya2_rp_slop=bad).validate()
+    with pytest.raises(SystemExit):driver.parse_arguments(["--bin-slop",str(bad)])
+
+
+def test_pair_slop_native_mapping_and_reset(tmp_path):
+    engines=("lya-rprt-quadtree-2pcf-omp","lya-1d-2pcf-omp","octree-3pcf-3d-omp")
+    cfg=driver.RunConfig(engines,tmp_path,lya2_rp_slop=.1,lya2_rt_slop=.2)
+    cfg.validate()
+    p=driver.engine_parameters(cfg,engines[0],tmp_path)
+    assert (p["lya2Kernel"],p["lya2RpSlop"],p["lya2RtSlop"])==(1,.1,.2)
+    for engine in engines[1:]:
+        p=driver.engine_parameters(cfg,engine,tmp_path)
+        assert (p["lya2Kernel"],p["lya2RpSlop"],p["lya2RtSlop"])==(0,0.,0.)
+    with pytest.raises(ValueError,match="requires --lya2-kernel 1"):
+        driver.RunConfig(("lya-2pcf-omp",),tmp_path,lya2_rp_slop=.1).validate()
+    with pytest.raises(ValueError,match="requires a distinct-forest"):
+        driver.RunConfig(("lya-3pcf-omp",),tmp_path,lya2_rp_slop=.1).validate()
+    with pytest.raises(ValueError,match="distortion matrix"):
+        driver.RunConfig((engines[0],),tmp_path,lya2_rp_slop=.1,compute_distortion=True).validate()

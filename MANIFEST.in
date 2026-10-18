@@ -87,7 +87,6 @@ include RESOURCE_AND_NUMERICAL_CHECKS.md
 recursive-include capabilities *.json
 include ENGINE_CAPABILITIES.md
 include DEVELOPMENT_GUIDELINES.md
-include addons/*/startrun_*.h
 
 include RELEASE_WORK_SEQUENCE.md
 

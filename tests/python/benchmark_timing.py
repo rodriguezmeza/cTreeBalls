@@ -15,7 +15,7 @@ def runtime_environment(environ=None):
     its instrumentation. Effective native settings live in run provenance.
     """
     environ = os.environ if environ is None else environ
-    names = {"OMP_NUM_THREADS", "OMP_DYNAMIC", "OMP_PROC_BIND", "OMP_PLACES",
+    names = {"CBALLS_MEMORY_BUDGET_MB", "OMP_NUM_THREADS", "OMP_DYNAMIC", "OMP_PROC_BIND", "OMP_PLACES",
              "OMP_WAIT_POLICY", "GOMP_CPU_AFFINITY", "KMP_AFFINITY",
              "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"}
     return {key: value for key, value in sorted(environ.items())

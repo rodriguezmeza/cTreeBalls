@@ -134,6 +134,10 @@ int cballs_run_metadata(struct cmdline_data *cmd, struct global_data *gd, char *
         append(&b,",\"lya_los_tree\":{\"discoveries\":%llu,\"reuses\":%llu,\"pixel_tests\":%llu}",
             (unsigned long long)gd->lyaLOSCounts[0],(unsigned long long)gd->lyaLOSCounts[1],
             (unsigned long long)gd->lyaLOSCounts[2]);
+        if(lya_forest_is_rprt_method(method))
+            append(&b,",\"lya_rprt_quadtree\":{\"dimensions\":2,\"coordinate_scope\":\"pixel pairs, not absolute pixel positions\",\"partition\":\"rp-rt bin quadtree\",\"exact_bin_containment\":%s,\"pair_catalog_materialized\":false,\"global_pixel_octree\":false,\"slop_supported\":true,\"outer_cuts_exact\":true,\"parallel_construction\":true,\"construction_mode\":\"%s\",\"implicit_rp_rt_projection\":true,\"two_ball_traversal\":true,\"two_ball_leaf_block_max\":2,\"split_policy\":\"projected bin radii, one or both cells\"}",
+                (cmd->lya2RpSlop>0 || cmd->lya2RtSlop>0)?"false":"true",
+                scanopt(cmd->options,"lya-serial-build")?"serial override":"automatic");
         if(lya_forest_is_multipole_method(method))
             append(&b,",\"lya_multipole_reuse\":{\"hierarchical_pivots\":%llu,\"prefix_pivots\":%llu,\"blocks\":%llu,\"products\":%llu,\"prefix_products\":%llu}",
                 (unsigned long long)gd->lyaMultipoleCounts[0],(unsigned long long)gd->lyaMultipoleCounts[1],

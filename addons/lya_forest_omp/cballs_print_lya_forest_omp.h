@@ -1,6 +1,7 @@
 #ifndef _cballs_print_lya_forest_omp_h
 #define _cballs_print_lya_forest_omp_h
 
+case LYARPRTQUADTREE2PCFMETHOD:
 case 169:
 case 170:
 case 171:

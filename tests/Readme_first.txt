@@ -44,11 +44,11 @@ $ time ../cballs ./In/parameters_to-test_nside256_octree-2balls-omp
 
 to plot results (vs reference results):
 
-$ python python/compare_xi2pcf_curves.py --scale loglog --xscale radian --plot-mul-theta --ref b --file-a Output/histXi2pcf.txt --file-b Outputs_to_compare_with/Output_nside256_octree-2balls-omp/histXi2pcf.txt --outdir ./
+$ python tests/python/compare_xi2pcf_curves.py --scale loglog --xscale radian --plot-mul-theta --ref b --file-a Output/histXi2pcf.txt --file-b Outputs_to_compare_with/Output_nside256_octree-2balls-omp/histXi2pcf.txt --outdir ./
 
 and for 3pcf
 
-$ python python/compare_xi3pcf_flatten_curves.py --file-a Output/ --file-b Outputs_to_compare_with/Output_nside256_octree-2balls-omp/ --ref b --bin-min 40 --bin-max 150
+$ python tests/python/compare_xi3pcf_flatten_curves.py --file-a Output/ --file-b Outputs_to_compare_with/Output_nside256_octree-2balls-omp/ --ref b --bin-min 40 --bin-max 150
 
 2. To test vs cute_box:
 

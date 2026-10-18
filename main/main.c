@@ -28,6 +28,7 @@
 #include "globaldefs.h"
 #include "cmdline_defs.h"
 #include "ia_tutor_cli.h"
+#include "environment_info.h"
 #ifdef CLASSLIB
 #include "cli_validation.h"
 #endif
@@ -46,6 +47,14 @@
  */
 int main(int argc, string argv[])
 {
+    /* A bare report must work even if a malformed memory limit or stale MPI
+     * launcher variable prevents normal startup. Other arguments still go
+     * through the checked parser; never silently discard a computation. */
+    if (argc == 2 && (!strcmp(argv[1], "options=print-environment")
+                     || !strcmp(argv[1], "options=print-env"))) {
+        cballs_print_environment();
+        return SUCCESS;
+    }
     int tutor_status = 0;
     if (cballs_ia_tutor_cli(argc, argv, &tutor_status)) return tutor_status;
 

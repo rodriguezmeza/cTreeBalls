@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 
 import argparse
+from run_guidance import add_run_guidance
 from dataclasses import dataclass, field
 import json
 import math
@@ -31,6 +32,7 @@ import time
 from typing import Any, Iterable, Optional, Sequence
 
 import numpy as np
+from catalog_memory import (add_memory_arguments, healpix_positions, gather_field, register_catalog, preflight_transfer, memory_metadata)
 from benchmark_timing import timing_metadata as _timing_metadata, aggregate_rank_timings, runtime_environment
 from used_parameters import save_native_parameters, save_native_startup, save_dual_node_parameters
 
@@ -202,6 +204,7 @@ class RunConfig:
     verbose: int = 1
     verbose_log: int = 0
     continue_on_error: bool = False
+    transfer_catalog_ownership: bool = False
 
     def normalized(self) -> "RunConfig":
         if self.statistics not in {"2pcf", "3pcf", "both"}:
@@ -333,7 +336,7 @@ def _healpix_layout(path: Path) -> tuple[int, bool, list[str]]:
 
 
 def _read_healpix_pixels(path: Path, field: str | int,
-                         pixels: np.ndarray) -> np.ndarray:
+                         pixels: np.ndarray, chunk_pixels: int = 1 << 20) -> np.ndarray:
     """Read selected implicit HEALPix pixels without materializing the full map."""
     try:
         from astropy.io import fits
@@ -355,7 +358,7 @@ def _read_healpix_pixels(path: Path, field: str | int,
         flat = np.asarray(column).reshape(-1)
         if pixels.size and int(pixels[-1]) >= flat.size:
             raise ValueError(f"HEALPix field {field!r} is shorter than NSIDE declares")
-        return np.ascontiguousarray(flat[pixels], dtype=np.float64)
+        return gather_field(flat, pixels, chunk_pixels)
 
 
 def _masked_healpix_pixels(path: Path, field: str | int, npix: int,
@@ -482,6 +485,7 @@ def catalog_from_healpix_patch(
     max_points: int = 512,
     input_shear_frame: str = "local-east-north",
     conjugate_input: bool = False,
+    chunk_pixels: int = 1 << 20,
 ) -> ShearCatalog:
     try:
         import healpy as hp
@@ -508,7 +512,7 @@ def catalog_from_healpix_patch(
         mask_nside, mask_nested, _ = _healpix_layout(mask_path)
         if mask_nside != nside or mask_nested != nested:
             raise ValueError("the mask must have the same NSIDE and ORDERING as the shear map")
-        mask_values = _read_healpix_pixels(mask_path, mask_field, pixels)
+        mask_values = _read_healpix_pixels(mask_path, mask_field, pixels, chunk_pixels=chunk_pixels)
         keep = _valid_healpix(mask_values) & (mask_values > mask_threshold)
         pixels = pixels[keep]
         if pixels.size < 3:
@@ -519,12 +523,12 @@ def catalog_from_healpix_patch(
         indices = np.linspace(0, pixels.size, max_points, endpoint=False, dtype=np.int64)
         pixels = pixels[indices]
 
-    gamma1 = _read_healpix_pixels(fits_path, gamma1_field, pixels)
-    gamma2 = _read_healpix_pixels(fits_path, gamma2_field, pixels)
+    gamma1 = _read_healpix_pixels(fits_path, gamma1_field, pixels, chunk_pixels=chunk_pixels)
+    gamma2 = _read_healpix_pixels(fits_path, gamma2_field, pixels, chunk_pixels=chunk_pixels)
     if weight_field is None:
         weights = np.ones(pixels.size, dtype=np.float64)
     else:
-        weights = _read_healpix_pixels(fits_path, weight_field, pixels)
+        weights = _read_healpix_pixels(fits_path, weight_field, pixels, chunk_pixels=chunk_pixels)
     valid = _valid_healpix(gamma1) & _valid_healpix(gamma2)
     valid &= np.isfinite(weights) & (weights >= 0.0)
     pixels, gamma1, gamma2, weights = (
@@ -532,8 +536,8 @@ def catalog_from_healpix_patch(
     )
     if pixels.size < 3:
         raise ValueError("the selected patch has fewer than three valid shear pixels")
-    x, y, z = hp.pix2vec(nside, pixels, nest=nested)
-    vectors = np.column_stack((x, y, z))
+    vectors = healpix_positions(hp, nside, pixels, nested=nested, chunk_pixels=chunk_pixels)
+    del pixels, valid
     positions, gamma1, gamma2 = stereographic_shear_patch(
         vectors, gamma1, gamma2,
         center_ra_deg=center_ra_deg,
@@ -554,6 +558,7 @@ def catalog_from_healpix_patch(
             "weight_field": weight_field,
             "mask_source": os.fspath(mask_path) if mask_path is not None else None,
             "mask_field": mask_field if mask_path is not None else None,
+            "fits_chunk_pixels": chunk_pixels,
             "nside": nside,
             "ordering": "NESTED" if nested else "RING",
             "center_ra_deg": center_ra_deg,
@@ -580,6 +585,7 @@ def catalog_from_healpix_sphere(
     max_points: int = 512,
     input_shear_frame: str = "local-east-north",
     conjugate_input: bool = False,
+    chunk_pixels: int = 1 << 20,
 ) -> ShearCatalog:
     """Load a HEALPix spin-2 map without projecting away the sky geometry."""
     try:
@@ -615,11 +621,11 @@ def catalog_from_healpix_sphere(
     if pixels.size < 3:
         raise ValueError("the full-sky selection contains fewer than three pixels")
 
-    gamma1 = _read_healpix_pixels(fits_path, gamma1_field, pixels)
-    gamma2 = _read_healpix_pixels(fits_path, gamma2_field, pixels)
+    gamma1 = _read_healpix_pixels(fits_path, gamma1_field, pixels, chunk_pixels=chunk_pixels)
+    gamma2 = _read_healpix_pixels(fits_path, gamma2_field, pixels, chunk_pixels=chunk_pixels)
     weights = (np.ones(pixels.size, dtype=np.float64)
                if weight_field is None else
-               _read_healpix_pixels(fits_path, weight_field, pixels))
+               _read_healpix_pixels(fits_path, weight_field, pixels, chunk_pixels=chunk_pixels))
     valid = _valid_healpix(gamma1) & _valid_healpix(gamma2)
     valid &= np.isfinite(weights) & (weights >= 0.0)
     pixels, gamma1, gamma2, weights = (
@@ -629,9 +635,10 @@ def catalog_from_healpix_sphere(
         raise ValueError("the full-sky selection has fewer than three valid shear pixels")
     if conjugate_input:
         gamma2 = -gamma2
-    x, y, z = hp.pix2vec(nside, pixels, nest=nested)
+    positions = healpix_positions(hp, nside, pixels, nested=nested, chunk_pixels=chunk_pixels)
+    del pixels, valid
     return ShearCatalog(
-        positions=np.column_stack((x, y, z)),
+        positions=positions,
         gamma1=gamma1,
         gamma2=gamma2,
         weights=weights,
@@ -644,6 +651,7 @@ def catalog_from_healpix_sphere(
             "weight_field": weight_field,
             "mask_source": os.fspath(mask_path) if mask_path is not None else None,
             "mask_field": mask_field if mask_path is not None else None,
+            "fits_chunk_pixels": chunk_pixels,
             "nside": nside,
             "ordering": "NESTED" if nested else "RING",
             "full_sky_points_before_thinning": available,
@@ -929,7 +937,7 @@ def run_ctreeballs(catalog: ShearCatalog, config: RunConfig,
             if config.smooth_radius is not None:
                 parameters["rsmooth"] = config.smooth_radius
             model.set(parameters)
-            model.set_catalog(
+            register_catalog(model, config.transfer_catalog_ownership,
                 catalog.positions, gamma1=catalog.gamma1,
                 gamma2=catalog.gamma2, weights=catalog.weights,
             )
@@ -1491,6 +1499,7 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
         )
     timings = timing_summary(results)
     summary = {
+        "memory_policy": memory_metadata(config.transfer_catalog_ownership, catalog.metadata.get("fits_chunk_pixels")),
         "ctreeballs_runtime": runtime_info,
         "requested_engines": list(engines),
         "failures": [name for name in engines if name not in results],
@@ -1546,11 +1555,12 @@ def run_engine_suite(catalog: ShearCatalog, engines: Sequence[str],
 
 def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    add_memory_arguments(parser)
     add_fits_table_arguments(parser)
     parser.add_argument("--binning", choices=("custom", "sofia-fig1", "paper-8-200-edges"), default="custom",
                         help="DES bin defaults; explicit --min-sep/--max-sep/--nbins/--sep-units override the preset")
     parser.add_argument('--qualification-reference','--accuracy-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
-    parser.add_argument('--qualification-rtol',type=float,default=.05)
+    parser.add_argument('--qualification-rtol',type=float,default=.05, help='relative L2 target (default 0.05); does not bound every coefficient')
     parser.add_argument('--qualification-atol',type=float,default=1e-10)
     parser.add_argument('--accuracy-report-only',action='store_true',help='retain results and report penalties even above the relative L2 target')
     sources = parser.add_mutually_exclusive_group()
@@ -1659,7 +1669,9 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--verbose-log", type=int, default=0)
     parser.add_argument("--continue-on-error", action="store_true")
     parser.epilog = 'Timing: compute_* measures Python Run; native_mainloop_* measures the C MainLoop. MPI uses max participating-rank wall and summed process CPU. --verbose 1 enables live work counters; --verbose-log 1 writes them to the log. Use --more-options shear-pivot-reuse with --no-smooth-pivot for opt-in hierarchical 3PCF. CBALLS_SHEAR_PIVOT_TOL and CBALLS_SHEAR_BIN_THETA override compiled reuse defaults (shipped 3 radians and 0.5 bin widths); they do not replace --tree-theta (default 1; approximate traversal). CBALLS_SHEAR_TASKS and CBALLS_SHEAR_TASK_MEMORY_MB control the frontier. Unset CBALLS_SHEAR_PROFILE to disable profiling; setting it to 0 still enables it. --more-options no-count-multipoles keeps N0; edge-corrections forces higher modes on.'
+    add_run_guidance(parser, field='shear', benchmark=False, private=False)
     args = parser.parse_args(argv)
+    args.fits_chunk_pixels = args.fits_chunk_rows
     args.binning_overrides = {name: getattr(args, name)
                               for name in ("min_sep", "max_sep", "nbins", "sep_units")
                               if getattr(args, name) is not None}
@@ -1718,6 +1730,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             multipoles=args.multipoles,
             phi_bins=args.phi_bins,
             threads=args.threads,
+            transfer_catalog_ownership=args.transfer_catalog_ownership,
             qualification_reference=args.qualification_reference,
             accuracy_report_only=args.accuracy_report_only,
             qualification_rtol=args.qualification_rtol,
@@ -1738,6 +1751,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verbose_log=args.verbose_log,
             continue_on_error=args.continue_on_error,
         ).normalized()
+        preflight_transfer(config.transfer_catalog_ownership and any(e != "dual_node" for e in engines))
         if args.fits is not None:
             input_keywords = {
                 "gamma1_field": _field_selector(args.gamma1_field),
@@ -1766,10 +1780,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             elif args.des_shear_convention != "auto":
                 raise ValueError("--des-shear-convention requires a DES catalog table")
             elif args.geometry == "sphere":
-                catalog = catalog_from_healpix_sphere(args.fits, **input_keywords)
+                catalog = catalog_from_healpix_sphere(args.fits, chunk_pixels=args.fits_chunk_pixels, **input_keywords)
             else:
                 catalog = catalog_from_healpix_patch(
-                    args.fits, **input_keywords,
+                    args.fits, chunk_pixels=args.fits_chunk_pixels, **input_keywords,
                     center_ra_deg=args.center_ra_deg,
                     center_dec_deg=args.center_dec_deg,
                     patch_radius_deg=args.patch_radius_deg,

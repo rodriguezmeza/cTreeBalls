@@ -284,7 +284,7 @@ class Gate:
         self.check('python-unit-contracts', lambda: self.command('python-unit-contracts', [py,'-m','pytest','-q',
             *[TESTS/name for name in ('test_p0_cython_instances.py','test_p2_cython.py',
               'test_run_information_and_window.py','test_two_ball_edge_cython.py','test_kappa_corr_all_engines.py',
-              'test_shear_corr_all_engines.py','test_lya_corr_all_engines.py','test_release_gate.py',
+              'test_shear_corr_all_engines.py','test_lya_corr_all_engines.py','test_lya_fits_radec_r.py','test_lya_distortion.py','test_release_gate.py',
               'test_cython_in_memory_catalog.py','test_p3_cython_startup.py',
               'test_physical_survey_semantics.py','test_scalar_numerical_definitions.py','test_exact_numerical_robustness.py','test_clustered_catalogs.py',
               'test_histogram_availability.py','test_effective_catalog_identity.py',
@@ -294,7 +294,7 @@ class Gate:
               'test_release_readiness.py','test_engineering_contracts.py','test_accuracy_docs.py','test_owned_results_resources.py','test_scientific_qualification.py','test_resources_and_numerical_results.py','test_engine_capabilities.py')], '-ra', '-k','not mpi']))
         if 'lya-los-tree-2pcf-omp' in active:
             self.check('los-tree-contracts', lambda: self.command('los-tree-contracts',
-                [py, '-m', 'pytest', '-q', '-ra', TESTS/'test_lya_forest_los_tree.py', TESTS/'test_lya_triplet_acceleration.py', TESTS/'test_lya_multipole_hierarchy.py', TESTS/'test_lya_multipole_reconstruction.py', TESTS/'test_lya_cell_approximation.py', TESTS/'test_lya_pivot_frontier.py', TESTS/'test_lya_pair_cells.py']))
+                [py, '-m', 'pytest', '-q', '-ra', TESTS/'test_lya_forest_los_tree.py', TESTS/'test_lya_triplet_acceleration.py', TESTS/'test_lya_multipole_hierarchy.py', TESTS/'test_lya_multipole_reconstruction.py', TESTS/'test_lya_cell_approximation.py', TESTS/'test_lya_pivot_frontier.py', TESTS/'test_lya_pair_cells.py', TESTS/'test_lya_forest_bounds_index.py', TESTS/'test_lya_rprt_quadtree.py']))
         script('test_exact_numerical_cli.py','--cballs',binary)
         if 'octree-3pcf-3d-mpi' in active:
             for ranks in (1,2,4):

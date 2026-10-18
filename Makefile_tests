@@ -25,7 +25,7 @@
 	test-parameter-file-parser test-standalone-parser test-option-cache \
 	test-sleef-vector-log \
 	test-mixed-precision-profile test-singlep-search test-singlep \
-	test-make-info test-make-info-profiles test-search-methods
+	test-make-info test-make-info-profiles test-search-methods test-environment
 
 test-default: all
 	cd tests && ./scripts/run_all_tests
@@ -94,6 +94,9 @@ endif
 test-make-info: $(EXEC)
 	CBALLS=$(CURDIR)/$(EXEC) EXPECTED_SINGLEPON=$(SINGLEPON) \
 		bash ./tests/make_tests/run_test_make_info
+
+test-environment: $(EXEC)
+	CBALLS=$(CURDIR)/$(EXEC) $(PYTHON) -m pytest -q tests/python/test_runtime_environment.py
 
 test-make-info-profiles:
 	$(MAKE) SINGLEPON=0 test-make-info
@@ -319,6 +322,15 @@ test-octree-balls4-mpi: $(EXEC)
 test-lya-forest-los-tree: $(EXEC)
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m pytest -q tests/python/test_lya_forest_los_tree.py
 
+# Exact quadtree over the two-dimensional separation-bin plane.
+.PHONY: test-lya-rprt-quadtree
+test-lya-rprt-quadtree: $(EXEC)
+	CBALLS=$(CURDIR)/$(EXEC) PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m pytest -q tests/python/test_lya_rprt_quadtree.py
+
+.PHONY: test-lya-forest-index
+test-lya-forest-index: $(EXEC)
+	CBALLS=$(CURDIR)/$(EXEC) PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m pytest -q tests/python/test_lya_forest_bounds_index.py
+
 .PHONY: test-lya-pivot-frontier
 test-lya-pivot-frontier: $(EXEC) cyballs-static-lib
 	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
@@ -333,7 +345,7 @@ test-lya-forest-omp: $(EXEC)
 test-lya-corr-all-engines: cyballs-static-lib
 	CBALLS_STATIC_LIBRARY_READY=1 $(PYTHON) setup.py build_ext --inplace
 	PYTHONPATH=$(CURDIR):$(CURDIR)/python:$(PYTHONPATH) \
-		$(PYTHON) -m pytest -q tests/python/test_lya_corr_all_engines.py
+		$(PYTHON) -m pytest -q tests/python/test_lya_corr_all_engines.py tests/python/test_lya_fits_radec_r.py
 
 .PHONY: test-lya-forest-mpi
 test-lya-forest-mpi: $(EXEC)
@@ -480,6 +492,12 @@ affected-regressions:
 	$(PYTHON) scripts/affected_regressions.py $(REGRESSION_ARGS) --output affected-regressions.json
 benchmark-accuracy-and-timing:
 	$(PYTHON) scripts/benchmark_accuracy_and_timing.py $(BENCHMARK_ARGS)
+
+.PHONY: test-compact-tree-allocation
+test-compact-tree-allocation: cyballs-static-lib
+	mkdir -p $(WRKDIR)/tests
+	$(CC) $(OPTFLAG) $(OMPFLAG) $(LDFLAG) $(CCFLAG) $(PROJECT_WARNING_FLAGS) $(INCLUDES) tests/test_compact_tree_allocation.c lib$(EXEC).a -o $(WRKDIR)/tests/test_compact_tree_allocation $(MLIBS) $(FITSIOLIBS)
+	$(WRKDIR)/tests/test_compact_tree_allocation
 
 .PHONY: test-scalar-pivot-reuse test-scalar-pivot-reuse-mpi
 test-scalar-pivot-reuse: $(EXEC) cyballs

@@ -40,6 +40,11 @@ def tutor(knowledge, monkeypatch):
 
 @pytest.mark.parametrize("question,topic", [
     ("How does cTreeBalls work?", "how-it-works"),
+    ("How do I require 10 percent error for every nonzero coefficient?", "measured-penalty"),
+    ("How do I profile scalar two-ball computation?", "profiling"),
+    ("Why does --selection sofia-fig1 fail for 8 to 200 arcmin edges?", "binning"),
+    ("How can I reduce memory pressure?", "catalog-memory"),
+    ("How do I transfer catalog ownership?", "catalog-memory"),
     ("What is a pivot?", "how-it-works"),
     ("What are the default approximation parameters?", "defaults"),
     ("Does CBALLS_SHEAR_BIN_THETA=0.1 overwrite --tree-theta 1?", "separate-controls"),

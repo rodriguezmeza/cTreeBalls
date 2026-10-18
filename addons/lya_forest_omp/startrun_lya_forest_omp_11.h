@@ -3,6 +3,9 @@
 if (strcmp(method_str, "lya-2pcf-omp") == 0) *method_int = 169;
 #endif
 #if (defined(ADDONS)) && (defined(LYAFORESTOMP))
+if (strcmp(method_str, "lya-rprt-quadtree-2pcf-omp") == 0) *method_int = 213;
+#endif
+#if (defined(ADDONS)) && (defined(LYAFORESTOMP))
 if (strcmp(method_str, "lya-3pcf-omp") == 0) *method_int = 170;
 #endif
 #if (defined(ADDONS)) && (defined(LYAFORESTOMP))

@@ -176,6 +176,45 @@ static INTEGER octree_2balls_native_count(struct cmdline_data *cmd,
     return 0;
 }
 
+/* Unary native cells are bypassed; every binary internal node has two
+ * children. Counting the leaves at the same stopping
+ * rule as build_native therefore gives exactly 2 * leaves - 1 nodes. */
+static int octree_2balls_count_leaves(struct cmdline_data *cmd,
+                                      nodeptr source, int leaf_capacity,
+                                      INTEGER point_capacity, INTEGER *leaves)
+{
+    const INTEGER count = octree_2balls_native_count(cmd, source);
+    int children = 0;
+
+    if (count <= 0) return SUCCESS;
+    if (Type(source) == BODY || Type(source) == BODY3
+        || count <= leaf_capacity) {
+        if (*leaves >= point_capacity) {
+            snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                     "octree-2balls-omp: invalid native leaf count");
+            return FAILURE;
+        }
+        (*leaves)++;
+        return SUCCESS;
+    }
+    if (Type(source) == CELL) {
+        for (int i = 0; i < NSUB; i++) {
+            nodeptr child = Subp(source)[i];
+            if (octree_2balls_native_count(cmd, child) <= 0) continue;
+            children++;
+            if (octree_2balls_count_leaves(cmd, child, leaf_capacity,
+                                           point_capacity, leaves) == FAILURE)
+                return FAILURE;
+        }
+    }
+    if (children == 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls-omp: invalid live native cell");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
 static int octree_2balls_reserve_node(struct cmdline_data *cmd,
                                       fcfc_balltreeptr tree,
                                       INTEGER *result)
@@ -367,7 +406,7 @@ static void octree_2balls_finish_subtree(struct cmdline_data *cmd,
 
 static int octree_2balls_build_native(struct cmdline_data *,
                                       fcfc_balltreeptr, nodeptr, int, int,
-                                      bool, INTEGER *);
+                                      bool, INTEGER, INTEGER *);
 
 static void octree_2balls_sort_children(octree_2balls_child *children,
                                         int child_count)
@@ -410,7 +449,7 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
                                      const octree_2balls_child *children,
                                      int first, int last, int depth,
                                      int leaf_capacity, bool finish_inline,
-                                     INTEGER *result)
+                                     INTEGER point_capacity, INTEGER *result)
 {
     INTEGER parent_index;
     INTEGER left_index;
@@ -424,7 +463,7 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
     if (first == last)
         return octree_2balls_build_native(
             cmd, tree, children[first].node, depth, leaf_capacity,
-            finish_inline, result);
+            finish_inline, point_capacity, result);
     if (octree_2balls_reserve_node(cmd, tree, &parent_index) == FAILURE)
         return FAILURE;
     if (depth > tree->max_depth) tree->max_depth = depth;
@@ -444,10 +483,10 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
 
     if (octree_2balls_build_group(cmd, tree, children, first, split,
                                   depth + 1, leaf_capacity, finish_inline,
-                                  &left_index) == FAILURE
+                                  point_capacity, &left_index) == FAILURE
         || octree_2balls_build_group(cmd, tree, children, split + 1, last,
                                      depth + 1, leaf_capacity, finish_inline,
-                                     &right_index) == FAILURE)
+                                     point_capacity, &right_index) == FAILURE)
         return FAILURE;
     octree_2balls_link_parent(tree, parent_index, left_index, right_index);
     if (finish_inline)
@@ -458,7 +497,7 @@ static int octree_2balls_build_group(struct cmdline_data *cmd,
 
 static int octree_2balls_collect_bodies(struct cmdline_data *cmd,
                                         fcfc_balltreeptr tree,
-                                        nodeptr source)
+                                        nodeptr source, INTEGER point_capacity)
 {
     int i;
 
@@ -471,7 +510,7 @@ static int octree_2balls_collect_bodies(struct cmdline_data *cmd,
                      "octree-2balls: non-valid body reached the binary tree");
             return FAILURE;
         }
-        if (tree->npoint >= tree->capacity / 2) {
+        if (tree->npoint >= point_capacity) {
             snprintf(cmd->error_message, _ERRORMSGSIZE_,
                      "octree-2balls-omp: point capacity exceeded");
             return FAILURE;
@@ -487,7 +526,7 @@ static int octree_2balls_collect_bodies(struct cmdline_data *cmd,
     }
     for (i = 0; i < NSUB; i++)
         if (octree_2balls_collect_bodies(
-                cmd, tree, Subp(source)[i]) == FAILURE)
+                cmd, tree, Subp(source)[i], point_capacity) == FAILURE)
             return FAILURE;
     return SUCCESS;
 }
@@ -495,7 +534,8 @@ static int octree_2balls_collect_bodies(struct cmdline_data *cmd,
 static int octree_2balls_build_leaf(struct cmdline_data *cmd,
                                     fcfc_balltreeptr tree, nodeptr source,
                                     INTEGER expected_count, int depth,
-                                    bool finish_inline, INTEGER *result)
+                                    bool finish_inline, INTEGER point_capacity,
+                                    INTEGER *result)
 {
     fcfc_ballnode *target;
     INTEGER index;
@@ -504,7 +544,7 @@ static int octree_2balls_build_leaf(struct cmdline_data *cmd,
         return FAILURE;
     target = &tree->nodes[index];
     target->first = tree->npoint;
-    if (octree_2balls_collect_bodies(cmd, tree, source) == FAILURE)
+    if (octree_2balls_collect_bodies(cmd, tree, source, point_capacity) == FAILURE)
         return FAILURE;
     target->last = tree->npoint - 1;
     if (target->last - target->first + 1 != expected_count) {
@@ -524,7 +564,8 @@ static int octree_2balls_build_leaf(struct cmdline_data *cmd,
 static int octree_2balls_build_native(struct cmdline_data *cmd,
                                       fcfc_balltreeptr tree, nodeptr source,
                                       int depth, int leaf_capacity,
-                                      bool finish_inline, INTEGER *result)
+                                      bool finish_inline, INTEGER point_capacity,
+                                      INTEGER *result)
 {
     octree_2balls_child children[NSUB];
     const INTEGER source_count = octree_2balls_native_count(cmd, source);
@@ -539,7 +580,8 @@ static int octree_2balls_build_native(struct cmdline_data *cmd,
     if (Type(source) == BODY || Type(source) == BODY3
         || source_count <= leaf_capacity)
         return octree_2balls_build_leaf(
-            cmd, tree, source, source_count, depth, finish_inline, result);
+            cmd, tree, source, source_count, depth, finish_inline,
+            point_capacity, result);
     if (Type(source) != CELL) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: unsupported native node type %d",
@@ -562,7 +604,7 @@ static int octree_2balls_build_native(struct cmdline_data *cmd,
     octree_2balls_sort_children(children, child_count);
     return octree_2balls_build_group(
         cmd, tree, children, 0, child_count - 1, depth,
-        leaf_capacity, finish_inline, result);
+        leaf_capacity, finish_inline, point_capacity, result);
 }
 
 int octree_2balls_tree_build(struct cmdline_data *cmd,
@@ -573,6 +615,7 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
     fcfc_balltreeptr tree = NULL;
     INTEGER root = -1;
     INTEGER live_count;
+    INTEGER leaves = 0;
     bool finish_inline;
     int catalog = -1;
     int i;
@@ -619,9 +662,21 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
         return FAILURE;
     }
 
+    /* Singleton leaves already have a known shape; avoid an extra walk. */
+    if (leaf_capacity == 1)
+        leaves = live_count;
+    else if (octree_2balls_count_leaves(cmd, (nodeptr)roottable[catalog],
+                                        leaf_capacity, live_count, &leaves) == FAILURE)
+        return FAILURE;
+    if (leaves <= 0) {
+        snprintf(cmd->error_message, _ERRORMSGSIZE_,
+                 "octree-2balls-omp: empty binary tree layout");
+        return FAILURE;
+    }
+
     tree = calloc(1, sizeof(*tree));
     if (tree == NULL) goto allocation_failure;
-    tree->capacity = 2 * live_count;
+    tree->capacity = 2 * leaves - 1;
     tree->bptr = malloc((size_t)live_count * sizeof(*tree->bptr));
     tree->nodes = calloc((size_t)tree->capacity, sizeof(*tree->nodes));
     tree->packed_points = malloc(
@@ -636,10 +691,11 @@ int octree_2balls_tree_build(struct cmdline_data *cmd,
     finish_inline = TRUE;
 #endif
     if (octree_2balls_build_native(cmd, tree, (nodeptr)roottable[catalog],
-                                   0, leaf_capacity, finish_inline,
+                                   0, leaf_capacity, finish_inline, live_count,
                                    &root) == FAILURE)
         goto failure;
-    if (root != OCTREE_2BALLS_ROOT || tree->npoint != live_count) {
+    if (root != OCTREE_2BALLS_ROOT || tree->npoint != live_count
+        || tree->nnode != tree->capacity) {
         snprintf(cmd->error_message, _ERRORMSGSIZE_,
                  "octree-2balls-omp: invalid binary octree root");
         goto failure;

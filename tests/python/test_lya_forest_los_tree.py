@@ -189,3 +189,48 @@ def test_cached_neighbors_respect_histogram_plus_scratch_budget(tmp_path, monkey
 def test_original_methods_multiblock_independent_oracle(tmp_path):
     # This module is selected automatically for changes to the shared kernel.
     reference.check_multiblock(BINARY, tmp_path)
+
+
+@pytest.mark.parametrize('order', ['2pcf', '3pcf', '2pcf-3pcf'])
+def test_coherent_prefixes_inside_a_wide_task(tmp_path, order):
+    """A far pivot must end reuse, while its close prefixes can still share."""
+    points = make_forests(5, 40, seed=741)
+    # Coherent runs within a task that is much wider than cutoff/4.
+    points = points[np.lexsort((np.linalg.norm(points[:, :3], axis=1), points[:, 5]))]
+    points[::11, 4] = 0
+    catalog = catalog_file(tmp_path, points)
+    method = f'lya-los-tree-{order}-omp'
+    a, b, c = (tmp_path / name for name in ('single', 'wide', 'many'))
+    run(catalog, a, method, radius=65, extra=('lya3PivotBlock=1',))
+    text = run(catalog, b, method, radius=65, extra=('lya3PivotBlock=512',))
+    run(catalog, c, method, threads=4, radius=65, extra=('lya3PivotBlock=512',))
+    orders = (2, 3) if order == '2pcf-3pcf' else (int(order[0]),)
+    compare_products(a, b, orders)
+    compare_products(b, c, orders)
+    assert int(re.search(r'reuses=(\d+)', text)[1]) > 0
+    for statistic in orders:
+        assert (b / PRODUCTS[statistic]).read_bytes() == (c / PRODUCTS[statistic]).read_bytes()
+
+
+def test_implicit_radial_bounds_with_ties_and_uneven_forests(tmp_path):
+    """Singletons, duplicate chi, long forests and bent LOS use the same cut."""
+    parts = []
+    for forest, count in enumerate((1, 2, 7, 8, 9, 127)):
+        data = make_forests(1, count, seed=190 + forest)
+        data[:, 5] = 2**42 + forest
+        if count > 2:
+            data[1, :3] = data[0, :3]
+            # Equal chi with a distinct position: the loader deliberately
+            # rejects coincident pixels before either searching backend runs.
+            data[1, 1] *= -1
+            data[2, 1] += 1.7
+        parts.append(data)
+    points = np.concatenate(parts)
+    np.random.default_rng(190).shuffle(points)
+    catalog = catalog_file(tmp_path, points)
+    a, b = tmp_path / 'octree', tmp_path / 'los'
+    run(catalog, a, 'lya-2pcf-3pcf-omp', radius=24, rp=19, rt=13,
+        extra=('lya3Kernel=1',))
+    run(catalog, b, 'lya-los-tree-2pcf-3pcf-omp', threads=4,
+        radius=24, rp=19, rt=13, extra=('lya3Kernel=1',))
+    compare_products(a, b)

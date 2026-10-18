@@ -9,6 +9,9 @@ typedef struct {
     unsigned long long nodes, pruned, aggregates, aggregated_pairs, approximate_pairs;
     unsigned long long leaf_pairs, angle_evaluations, angle_reuses, certified_leaf_pairs, window_skips, scan_products;
     unsigned long long range_aggregates,range_pairs;
+    unsigned long long forest_nodes,forest_pruned,forest_candidates;
+    unsigned long long quad_ball_tests,quad_ball_products,quad_ball_pairs,quad_split_one,quad_split_both;
+    unsigned long long quad_visits,quad_descents,quad_single_bins,quad_splits,quad_tiles,quad_cached_pairs,quad_slop_products;
 } lya_pair_work;
 
 static uintmax_t lya_pair_count_max(void)
@@ -58,6 +61,8 @@ static int lya_pair_box_outside(const lya_cell *p,const lya_cell *q,REAL cutoff,
     *distance_upper=sqrt(u2)+pad;
     return sqrt(d2)-pad>=cutoff;
 }
+
+#include "lya_forest_bounds_index.h"
 
 static void lya_pair_deposit(lya_worker_hist *w,size_t bin,REAL n,REAL d)
 {
@@ -352,30 +357,78 @@ static int lya_pair_visit(const lya_cells *t,struct cmdline_data *cmd,size_t ip,
     return SUCCESS;
 }
 
+#include "lya_rprt_quadtree.h"
+
 static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct global_data *gd,
                            bodyptr base,INTEGER first,INTEGER last,size_t bins,size_t plan,
                            REAL *num,REAL *den,INTEGER *pairs,INTEGER *visits)
 {
     int failed=0;ErrorMsg error="";lya_pair_work total={0};
     double start=CPUTIME;
+    int projection_threads=1;
     REAL cutoff=hypot(cmd->lya2RpMax,cmd->lya2RtMax);
     const size_t first_row=lya_parallel_first(cmd),row_stride=lya_parallel_stride(cmd);
+    lya_forest_kd forest_index;
+    lya_rprt_quad quad={0};
+    const int use_quad=lya_forest_is_rprt_method(cmd->searchMethod);
+    if(use_quad) {
+        if(lya_rprt_quad_build(&quad,t,cmd,bins,plan,error)==FAILURE) {
+            snprintf(cmd->error_message,_ERRORMSGSIZE_,"%s",error);return FAILURE;
+        }
+        plan=quad.plan;
+    }
+    double index_start=CPUTIME;
+    if(lya_forest_kd_build(&forest_index,t,cmd,plan,error)==FAILURE) {
+        free(quad.nodes);free(quad.pixels);free(quad.bin_leaves);snprintf(cmd->error_message,_ERRORMSGSIZE_,"%s",error);return FAILURE;
+    }
+    plan=forest_index.plan;
+    double index_cpu=CPUTIME-index_start;
     lya_progress progress;
     lya_progress_init(&progress,cmd,gd,"2PCF forest rows",
         lya_progress_local_tasks(t->roots_count,first_row,row_stride));
 #pragma omp parallel
     {
+#pragma omp single
+        projection_threads=lya_build_team_size();
         lya_worker_hist w;lya_pair_work work={0};ErrorMsg local_error="";
         int ready=lya_worker_init(cmd,&w,bins,0,1,0,plan,local_error)==SUCCESS;
-        int worker_failed=!ready;
+        lya_forest_kd_bits candidates;
+        int candidate_ready=lya_forest_kd_bits_init(&candidates,&forest_index,local_error)==SUCCESS;
+        int worker_failed=!ready || !candidate_ready;
         /* Rows have uneven numbers of forest partners. Dynamic claims balance
          * them; ordered row commits make histogram summation reproducible. */
 #pragma omp for schedule(dynamic,1) ordered
         for(size_t row=first_row;row<t->roots_count;row+=row_stride) {
             w.pair_count=0;
-            for(size_t j=row+1;!worker_failed && j<t->roots_count;j++)
-                if(lya_pair_visit(t,cmd,t->roots[row],t->roots[j],NULL,base,first,last,
-                                  cutoff,&w,&work,local_error)==FAILURE) worker_failed=1;
+            if(!worker_failed && forest_index.enabled) {
+                lya_forest_kd_query(&forest_index,t,t->nodes+t->roots[row],row,0,
+                    cmd,cutoff,&candidates,&work);
+                /* Hierarchical bitmaps emit forest rows in their old order.
+                 * Only touched data words are cleared. The small summary is
+                 * scanned instead of an array of every forest row, with no
+                 * candidate sorting needed to preserve summation order. */
+                for(size_t s=0;s<forest_index.summaries;s++) {
+                    uint64_t summary=candidates.summary[s];candidates.summary[s]=0;
+                    while(summary) {
+                        size_t word=64*s+lya_forest_kd_first_bit(summary);summary&=summary-1;
+                        uint64_t bits=candidates.bits[word];candidates.bits[word]=0;
+                        while(bits) {
+                            size_t j=64*word+lya_forest_kd_first_bit(bits);bits&=bits-1;
+                            if(!worker_failed) {
+                                int status=use_quad
+                                    ? lya_rprt_quad_visit(t,&quad,cmd,t->roots[row],t->roots[j],NULL,0,0,base,first,last,cutoff,&w,&work,local_error)
+                                    : lya_pair_visit(t,cmd,t->roots[row],t->roots[j],NULL,base,first,last,cutoff,&w,&work,local_error);
+                                if(status==FAILURE) worker_failed=1;
+                            }
+                        }
+                    }
+                }
+            } else for(size_t j=row+1;!worker_failed && j<t->roots_count;j++) {
+                int status=use_quad
+                    ? lya_rprt_quad_visit(t,&quad,cmd,t->roots[row],t->roots[j],NULL,0,0,base,first,last,cutoff,&w,&work,local_error)
+                    : lya_pair_visit(t,cmd,t->roots[row],t->roots[j],NULL,base,first,last,cutoff,&w,&work,local_error);
+                if(status==FAILURE) worker_failed=1;
+            }
 #pragma omp ordered
             {
                 if(!failed && !worker_failed) {
@@ -389,6 +442,15 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
 #pragma omp critical(lya_pair_work_counts)
         {
             if(worker_failed && !failed) {failed=1;snprintf(error,sizeof(error),"%s",local_error);}
+            total.quad_visits+=work.quad_visits;total.quad_descents+=work.quad_descents;
+            total.quad_slop_products+=work.quad_slop_products;
+            total.quad_ball_tests+=work.quad_ball_tests;total.quad_ball_products+=work.quad_ball_products;
+            total.quad_ball_pairs+=work.quad_ball_pairs;total.quad_split_one+=work.quad_split_one;
+            total.quad_split_both+=work.quad_split_both;
+            total.quad_tiles+=work.quad_tiles;total.quad_cached_pairs+=work.quad_cached_pairs;
+            total.quad_single_bins+=work.quad_single_bins;total.quad_splits+=work.quad_splits;
+            total.forest_nodes+=work.forest_nodes;total.forest_pruned+=work.forest_pruned;
+            total.forest_candidates+=work.forest_candidates;
             total.nodes+=work.nodes;total.pruned+=work.pruned;total.aggregates+=work.aggregates;
             total.aggregated_pairs+=work.aggregated_pairs;total.approximate_pairs+=work.approximate_pairs;
             total.leaf_pairs+=work.leaf_pairs;total.angle_evaluations+=work.angle_evaluations;total.angle_reuses+=work.angle_reuses;total.certified_leaf_pairs+=work.certified_leaf_pairs;
@@ -396,6 +458,7 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
             total.window_skips+=work.window_skips;total.scan_products+=work.scan_products;
         }
         if(ready) lya_worker_free(&w);
+        free(candidates.bits);free(candidates.summary);
     }
     lya_progress_finish(&progress,!failed);
     gd->lyaHierarchyCounts[4]+=total.range_aggregates;gd->lyaHierarchyCounts[5]+=total.range_pairs;
@@ -406,6 +469,20 @@ static int lya_pairs_run(const lya_cells *t,struct cmdline_data *cmd,struct glob
         "Ly-alpha 2PCF cells: nodes=%llu pruned=%llu aggregates=%llu aggregated_pairs=%llu approximate_pairs=%llu leaf_pairs=%llu angle_evaluations=%llu angle_reuses=%llu certified_leaf_pairs=%llu window_skips=%llu scan_products=%llu search_CPU=%g\n",
         total.nodes,total.pruned,total.aggregates,total.aggregated_pairs,total.approximate_pairs,
         total.leaf_pairs,total.angle_evaluations,total.angle_reuses,total.certified_leaf_pairs,total.window_skips,total.scan_products,CPUTIME-start);
+    verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+        "Ly-alpha 2PCF forest index: enabled=%d forests=%zu nodes=%zu node_visits=%llu pruned_nodes=%llu candidate_pairs=%llu bitmap_bytes_per_thread=%zu build_CPU=%g (work counters local to rank)\n",
+        forest_index.enabled,t->roots_count,forest_index.count,total.forest_nodes,total.forest_pruned,
+        total.forest_candidates,(forest_index.words+forest_index.summaries)*sizeof(uint64_t),index_cpu);
+    if(use_quad) verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+        "Ly-alpha rp-rt construction: pixel_wall=%g bin_wall=%g pixel_threads=%d bin_threads=%d projection_threads=%d implicit_pair_coordinates=1\n",
+        quad.pixel_wall,quad.bin_wall,quad.pixel_threads,quad.bin_threads,projection_threads);
+    if(use_quad) verb_print_normal_info(cmd->verbose,cmd->verbose_log,gd->outlog,
+        "Ly-alpha rp-rt quadtree: bin_nodes=%zu bin_visits=%llu bin_descents=%llu single_bin_products=%llu product_splits=%llu represented_pairs=%llu pixel_tests=%llu compact_tiles=%llu cached_pixel_pairs=%llu slop_products=%llu approximate_pairs=%llu two_ball_tests=%llu two_ball_products=%llu two_ball_pairs=%llu split_one=%llu split_both=%llu global_pixel_octree=0\n",
+        quad.count,total.quad_visits,total.quad_descents,total.quad_single_bins,total.quad_splits,
+        total.aggregated_pairs,total.leaf_pairs,total.quad_tiles,total.quad_cached_pairs,total.quad_slop_products,total.approximate_pairs,total.quad_ball_tests,total.quad_ball_products,
+        total.quad_ball_pairs,total.quad_split_one,total.quad_split_both);
+    free(quad.nodes);free(quad.pixels);free(quad.bin_leaves);
+    lya_forest_kd_free(&forest_index);
     if(failed) snprintf(cmd->error_message,_ERRORMSGSIZE_,"%s",error);
     return failed?FAILURE:SUCCESS;
 }

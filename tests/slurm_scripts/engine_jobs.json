@@ -204,6 +204,17 @@
       "threads_per_rank": 128
     },
     {
+      "engine": "lya-rprt-quadtree-2pcf-omp",
+      "script": "lya-rprt-quadtree-2pcf-omp.slurm",
+      "parallel": "openmp",
+      "aliases": [],
+      "geometry": "observer-centered forest pixels; 2D separation-bin quadtree; OpenMP",
+      "correlations": "weighted anisotropic 2PCF (exact default; optional bin slop)",
+      "default_nodes": 1,
+      "ranks_per_node": 1,
+      "threads_per_rank": 128
+    },
+    {
       "engine": "lya-3pcf-omp",
       "script": "lya-3pcf-omp.slurm",
       "parallel": "openmp",

@@ -15,7 +15,19 @@ typedef struct {
     lya_cell *nodes;
     size_t *roots, *tasks, *leaves;
     size_t count, nodes_count, roots_count, tasks_count, plan, max_pivots;
+    double sort_wall,nodes_wall;
+    size_t sort_scratch_bytes;
+    int sort_threads,build_threads;
 } lya_cells;
+
+static int lya_build_team_size(void)
+{
+#ifdef OPENMPCODE
+    return omp_get_num_threads();
+#else
+    return 1;
+#endif
+}
 
 static int lya_cell_point_compare(const void *aa, const void *bb)
 {
@@ -36,10 +48,11 @@ static REAL lya_cell_segment_distance(const REAL *x,const REAL *a,const REAL *b)
     return sqrt(r2);
 }
 
-static size_t lya_cell_build(lya_cells *tree,size_t begin,size_t end,
+/* A binary subtree with n pixels occupies exactly 2*n-1 preorder slots.
+ * Reserving those slots before workers run removes the shared node counter. */
+static size_t lya_cell_build(lya_cells *tree,size_t begin,size_t end,size_t index,
                               bodyptr base,INTEGER first,INTEGER last)
 {
-    size_t index=tree->nodes_count++;
     lya_cell *s=&tree->nodes[index];
     s->begin=begin;s->end=end;s->left=s->right=SIZE_MAX;
     s->forest=LyaForestId(tree->points[begin]);s->safe=1;
@@ -57,8 +70,8 @@ static size_t lya_cell_build(lya_cells *tree,size_t begin,size_t end,
         }
     } else {
         size_t mid=begin+(end-begin)/2;
-        s->left=lya_cell_build(tree,begin,mid,base,first,last);
-        s->right=lya_cell_build(tree,mid,end,base,first,last);
+        s->left=lya_cell_build(tree,begin,mid,index+1,base,first,last);
+        s->right=lya_cell_build(tree,mid,end,index+2*(mid-begin),base,first,last);
         const lya_cell *a=&tree->nodes[s->left],*b=&tree->nodes[s->right];
         s->weight=a->weight+b->weight;s->field=a->field+b->field;
         s->safe=a->safe&&b->safe;s->pivots=a->pivots+b->pivots;
@@ -107,6 +120,77 @@ static void lya_cell_tasks(lya_cells *tree,size_t node,size_t cap,REAL max_radiu
 static void lya_cells_free(lya_cells *t)
 {free(t->points);free(t->nodes);free(t->roots);free(t->tasks);free(t->leaves);memset(t,0,sizeof(*t));}
 
+/* Co-rank an output boundary in a stable merge. This lets workers merge
+ * independent output slices even at the final, whole-catalog merge level. */
+static size_t lya_cells_merge_rank(bodyptr const *a,size_t na,bodyptr const *b,size_t nb,size_t k)
+{
+    size_t lo=k>nb?k-nb:0,hi=MIN(k,na);
+    while(lo<hi) {
+        size_t i=lo+(hi-lo)/2,j=k-i;
+        if(j>0 && i<na && lya_cell_point_compare(b+j-1,a+i)>=0) lo=i+1;
+        else hi=i;
+    }
+    return lo;
+}
+
+/* Sort disjoint fixed chunks and merge disjoint runs. The comparator includes
+ * the immutable original ID, so serial and parallel layouts are identical.
+ * The pointer scratch is temporary and checked against the peak build plan. */
+static int lya_cells_sort(lya_cells *t,int threads,ErrorMsg err)
+{
+    const size_t grain=32768,count=t->count;
+    double start=lya_progress_wall_time();
+    t->sort_threads=1;
+    if(threads<=1 || count<2*grain) {
+        qsort(t->points,count,sizeof(bodyptr),lya_cell_point_compare);
+    } else {
+        bodyptr *scratch=NULL,*src=t->points,*dst;
+        size_t bytes,peak;
+        if(!cballs_size_mul(count,sizeof(*scratch),&bytes) || !cballs_size_add(t->plan,bytes,&peak)) {
+            snprintf(err,_ERRORMSGSIZE_,"Ly-alpha parallel sort dimensions overflow");return FAILURE;
+        }
+        if(cballs_memory_preflight(peak,"Ly-alpha parallel sort peak workspace",err,_ERRORMSGSIZE_)==FAILURE
+            || cballs_calloc_checked((void**)&scratch,count,sizeof(*scratch),
+                "Ly-alpha parallel sort pointers",err,_ERRORMSGSIZE_)==FAILURE) return FAILURE;
+        t->sort_scratch_bytes=bytes;dst=scratch;
+#pragma omp parallel num_threads(threads) shared(src,dst)
+        {
+#pragma omp single
+            t->sort_threads=lya_build_team_size();
+#pragma omp for schedule(static)
+            for(size_t chunk=0;chunk<(count+grain-1)/grain;chunk++) {
+                size_t begin=chunk*grain;
+                qsort(t->points+begin,MIN(grain,count-begin),sizeof(bodyptr),lya_cell_point_compare);
+            }
+            for(size_t width=grain;width<count;width=width>count/2?count:2*width) {
+                /* Pointer allocation bounds make 2*width safe. */
+                size_t stride=2*width;
+#pragma omp for schedule(static)
+                for(size_t chunk=0;chunk<(count+grain-1)/grain;chunk++) {
+                    size_t out=chunk*grain,begin=out/stride*stride;
+                    size_t mid=MIN(begin+width,count),end=MIN(begin+stride,count);
+                    size_t offset=out-begin;
+                    size_t left=lya_cells_merge_rank(src+begin,mid-begin,src+mid,end-mid,offset);
+                    size_t i=begin+left,j=mid+offset-left,stop=MIN(out+grain,count);
+                    for(size_t k=out;k<stop;k++) {
+                        if(i<mid && (j==end || lya_cell_point_compare(src+i,src+j)<=0)) dst[k]=src[i++];
+                        else dst[k]=src[j++];
+                    }
+                }
+#pragma omp single
+                {bodyptr *swap=src;src=dst;dst=swap;}
+            }
+            if(src!=t->points) {
+#pragma omp for schedule(static)
+                for(size_t i=0;i<count;i++) t->points[i]=src[i];
+            }
+        }
+        free(scratch);
+    }
+    t->sort_wall=lya_progress_wall_time()-start;
+    return SUCCESS;
+}
+
 static int lya_cells_build(lya_cells *t,struct cmdline_data *cmd,bodyptr base,
                             INTEGER count,INTEGER first,INTEGER last,size_t plan,ErrorMsg err)
 {
@@ -126,16 +210,38 @@ static int lya_cells_build(lya_cells *t,struct cmdline_data *cmd,bodyptr base,
         lya_cells_free(t);return FAILURE;
     }
     for(INTEGER i=0;i<count;i++) if(Update(base+i)!=FALSE && Mask(base+i)==MASK_NODE_VALID) t->points[t->count++]=base+i;
-    qsort(t->points,t->count,sizeof(bodyptr),lya_cell_point_compare);
+    int threads=lya_forest_is_rprt_method(cmd->searchMethod) && !scanopt(cmd->options,"lya-serial-build")
+        ?MAX(1,cmd->numthreads):1;
+    if(lya_cells_sort(t,threads,err)==FAILURE) {lya_cells_free(t);return FAILURE;}
+    double nodes_start=lya_progress_wall_time();
+    /* Discover forests and reserve disjoint preorder ranges serially. The
+     * expensive bounds, capsules and moments are then independent by forest. */
     for(size_t begin=0;begin<t->count;) {
         size_t end=begin+1;
         while(end<t->count && LyaForestId(t->points[end])==LyaForestId(t->points[begin])) end++;
-        size_t root=lya_cell_build(t,begin,end,base,first,last);
+        size_t root=t->nodes_count;t->nodes_count+=2*(end-begin)-1;
         t->roots[t->roots_count++]=root;
-        lya_cell_tasks(t,root,cmd->lya3Kernel>=4?(size_t)cmd->lya3PivotCellMax:1,
-            cmd->lya3RBins>0?.125*(cmd->lya3RMax/cmd->lya3RBins):0);
+        t->nodes[root].begin=begin;t->nodes[root].end=end;
         begin=end;
     }
+    t->build_threads=1;
+#pragma omp parallel num_threads(threads) if(threads>1 && t->count>=32768 && t->roots_count>1)
+    {
+#pragma omp single
+        t->build_threads=lya_build_team_size();
+#pragma omp for schedule(dynamic,1)
+        for(size_t row=0;row<t->roots_count;row++) {
+            size_t root=t->roots[row],begin=t->nodes[root].begin,end=t->nodes[root].end;
+            lya_cell_build(t,begin,end,root,base,first,last);
+        }
+    }
+    /* This 2PCF-only method visits forest roots directly. Its unused 3PCF
+     * pivot frontier need not be traversed and materialized after the build. */
+    if(!lya_forest_is_rprt_method(cmd->searchMethod))
+    for(size_t row=0;row<t->roots_count;row++)
+        lya_cell_tasks(t,t->roots[row],cmd->lya3Kernel>=4?(size_t)cmd->lya3PivotCellMax:1,
+            cmd->lya3RBins>0?.125*(cmd->lya3RMax/cmd->lya3RBins):0);
+    t->nodes_wall=lya_progress_wall_time()-nodes_start;
     for(size_t i=0;i<t->tasks_count;i++) {
         const lya_cell *p=&t->nodes[t->tasks[i]];
         t->max_pivots=MAX(t->max_pivots,p->end-p->begin);

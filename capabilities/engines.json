@@ -503,6 +503,29 @@
       ]
     },
     {
+      "name": "lya-rprt-quadtree-2pcf-omp",
+      "id": 213,
+      "id_symbol": "LYARPRTQUADTREE2PCFMETHOD",
+      "cpp": "(defined(ADDONS)) && (defined(LYAFORESTOMP))",
+      "registration_header": "addons/lya_forest_omp/startrun_lya_forest_omp_11.h",
+      "aliases": [],
+      "geometry": "observer-centered forest pixels; 2D separation-bin quadtree; OpenMP",
+      "correlations": "weighted anisotropic 2PCF (exact default; optional bin slop)",
+      "usage": "A quadtree partitions the (r_parallel,r_transverse) bin plane. Complete products of radial forest segments are projected into conservative rectangles; wholly single-bin products add weighted moments, otherwise subdivide or evaluate exact pixels. No global pair-coordinate catalog and no global Cartesian pixel octree are built. Complete-forest bounds kdtree rejects distant groups. Distinct-forest unordered pairs and strict physical cutoffs; intrinsic lya2Kernel=1. Zero slop is exact. Optional lya2RpSlop/lya2RtSlop in [0,1] allow certified expanded-bin placement in units of each bin width; signed sums and eligible pair counts are retained. The forest driver exposes --bin-slop (both axes), --lya2-rp-slop and --lya2-rt-slop. Nonzero slop needs accuracy calibration and cannot share the exact hard-bin distortion response. Rejects pivot frontier/smoothing. Same input/output bins as lya-2pcf-omp. Enable LYAFORESTOMPON=1; no MPI variant. See docs/lyman_alpha.rst.",
+      "family": "forest",
+      "gate": {
+        "oracle": "forest",
+        "tests": [
+          "tests/python/test_lya_rprt_quadtree.py",
+          "tests/python/test_lya_corr_all_engines.py"
+        ],
+        "parallel": "omp"
+      },
+      "sources": [
+        "addons/lya_forest_omp/*"
+      ]
+    },
+    {
       "name": "lya-3pcf-omp",
       "id": 170,
       "id_symbol": "170",

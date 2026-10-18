@@ -39,7 +39,7 @@ def parameters(root, threads=1, options=()):
         "rangeN": 2.5, "rminHist": 0.001, "sizeHistN": 4,
         "mChebyshev": 2, "lengthBox": 2, "theta": 1,
         "nsmooth": 4, "usePeriodic": False, "useLogHist": False,
-        "numberThreads": threads, "verbose": 1, "verbose_log": 0,
+        "numberThreads": threads, "verbose": 2, "verbose_log": 0,
         "stepState": 1000000, "rootDir": str(root),
         "options": ",".join(("compute-HistN", "out-m-HistZeta", *options)),
     }
@@ -187,7 +187,13 @@ def cli_suite(executable, mpi_command=None):
                 validity = data[3] if expected_mask is None else expected_mask
                 expected = f"mask keeps {int(validity.sum())} of {len(validity)} bodies"
                 assert expected in result.stdout, result.stdout
-                assert f"binary capacity={2 * int(validity.sum())} nodes" in result.stdout
+                capacities = [int(n) for n in re.findall(
+                    r"binary capacity=(\d+) nodes", result.stdout)]
+                used = [int(n) for n in re.findall(
+                    r"compact binary view has (\d+) nodes", result.stdout)]
+                assert capacities and capacities == used, result.stdout
+                assert all(0 < n <= 2 * int(validity.sum()) - 1
+                           and n % 2 == 1 for n in capacities)
             if require_aggregation:
                 counts = re.findall(r"(?:nbccalc|accepted cell orientations) = (\d+)",
                                     result.stdout)

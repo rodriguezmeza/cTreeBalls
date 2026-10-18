@@ -122,7 +122,7 @@ class MakeGraphTests(unittest.TestCase):
             names = ("main", "cballsio", "cballs", "startrun", "testdata", "treeload",
                      "cballsutils", "search", "abi_check", "run_metadata",
                      "engine_registry", "runtime_context", "memory_catalog",
-                     "common_histogram", "smooth_pivots", "mpi_runtime", "scalar_window_io",
+                     "common_histogram", "smooth_pivots", "mpi_runtime", "scalar_window_io", "lya_distortion",
                      "clib", "mathfns", "inout", "mathutil", "numrec", "getparam")
             for name in names:
                 source = "int " + name + "_fixture(void) { return 0; }\n"

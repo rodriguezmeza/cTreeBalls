@@ -25,6 +25,7 @@ and scaling runs without constructing a full-sky Cartesian catalog.
 from __future__ import annotations
 
 import argparse
+from run_guidance import add_run_guidance
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 import json
@@ -42,6 +43,7 @@ import time
 from typing import Any, Dict, Iterable, Optional, Sequence
 
 import numpy as np
+from catalog_memory import (memory_metadata)
 from benchmark_timing import timing_metadata as _timing_metadata, aggregate_rank_timings, runtime_environment
 from used_parameters import save_native_parameters, save_native_startup, save_dual_node_parameters
 
@@ -279,6 +281,7 @@ class RunConfig:
     plots: bool = True
     flatten_plots: bool = True
     patch: bool = False
+    transfer_catalog_ownership: bool = False
 
     @property
     def angular_patch(self) -> Optional[AngularPatch]:
@@ -683,6 +686,31 @@ def _retain_lowest_priorities(
     return pixels, priorities
 
 
+def _healpix_kappa(values: np.ndarray, pixels: np.ndarray,
+                   chunk_pixels: int) -> np.ndarray:
+    """Gather an owned float64 field without a full-size FITS-endian copy."""
+    kappa = np.empty(pixels.size, dtype=np.float64)
+    for start in range(0, pixels.size, chunk_pixels):
+        stop = min(start + chunk_pixels, pixels.size)
+        kappa[start:stop] = values[pixels[start:stop]]
+    return kappa
+
+
+def _healpix_positions(hp: Any, nside: int, pixels: np.ndarray,
+                       nested: bool, chunk_pixels: int) -> np.ndarray:
+    """Fill the final positions array with at most one chunk of xyz scratch."""
+    positions = np.empty((pixels.size, 3), dtype=np.float64)
+    for start in range(0, pixels.size, chunk_pixels):
+        stop = min(start + chunk_pixels, pixels.size)
+        x, y, z = hp.pix2vec(nside, pixels[start:stop], nest=nested)
+        positions[start:stop, 0] = x
+        positions[start:stop, 1] = y
+        positions[start:stop, 2] = z
+        # Release this chunk before allocating the next one.
+        del x, y, z
+    return positions
+
+
 def _native_resolution_healpix_catalog(
     fits_path: Path,
     field_index: int,
@@ -736,7 +764,9 @@ def _native_resolution_healpix_catalog(
                 mask_chunk = mask_values[start:stop]
                 selected &= _healpix_valid(mask_chunk, hp)
                 selected &= mask_chunk > mask_threshold
+                del mask_chunk
             local = np.flatnonzero(selected).astype(np.int64, copy=False)
+            del selected
             if not local.size:
                 continue
             local += start
@@ -744,6 +774,7 @@ def _native_resolution_healpix_catalog(
             if patch is not None:
                 theta, phi = hp.pix2ang(nside, local, nest=nested)
                 local = local[patch.select(theta, phi)]
+                del theta, phi
                 if not local.size:
                     continue
             eligible_count += int(local.size)
@@ -753,6 +784,7 @@ def _native_resolution_healpix_catalog(
                     retained_pixels, retained_priorities,
                     local, priorities, max_points,
                 )
+                del priorities
             else:
                 pixel_chunks.append(local)
 
@@ -762,18 +794,22 @@ def _native_resolution_healpix_catalog(
             pixels = np.concatenate(pixel_chunks)
         else:
             pixels = np.empty(0, dtype=np.int64)
+        # The concatenated/sample array now owns the selected indices.
+        pixel_chunks.clear()
+        del local, retained_pixels, retained_priorities
         pixels.sort()
         if pixels.size < 3:
             raise ValueError("the map, mask, and patch select fewer than three valid pixels")
-        kappa = np.ascontiguousarray(values[pixels], dtype=np.float64)
+        kappa = _healpix_kappa(values, pixels, chunk_pixels)
+        del values, mask_values
 
-    x, y, z = hp.pix2vec(nside, pixels, nest=nested)
-    positions = np.ascontiguousarray(np.column_stack((x, y, z)), dtype=np.float64)
+    positions = _healpix_positions(hp, nside, pixels, nested, chunk_pixels)
     selected_mask = (
         np.ones(pixels.size, dtype=np.uint8) if mask_path is not None else None
     )
+    del pixels
     if center_field:
-        kappa = kappa.copy()
+        # _healpix_kappa owns its output; centering cannot modify the FITS map.
         kappa -= np.mean(kappa, dtype=np.float64)
     return KappaCatalog(
         positions=positions,
@@ -869,9 +905,8 @@ def catalog_from_healpix(
             order_in="RING", order_out="RING", power=0.0,
         )
     nside = int(hp.get_nside(values))
-    valid = _healpix_valid(values, hp)
+    eligible = _healpix_valid(values, hp)
 
-    mask_values = None
     if mask_path is not None:
         mask_path = Path(mask_path).expanduser().resolve()
         mask_values = np.asarray(
@@ -883,13 +918,12 @@ def catalog_from_healpix(
                 mask_values, nside_out=nside,
                 order_in="RING", order_out="RING", power=0.0,
             )
-        mask_valid = _healpix_valid(mask_values, hp)
-        mask_full = mask_valid & (mask_values > mask_threshold)
-    else:
-        mask_full = np.ones(values.shape, dtype=bool)
+        eligible &= _healpix_valid(mask_values, hp)
+        eligible &= mask_values > mask_threshold
+        del mask_values
 
-    eligible = valid & mask_full
     pixels = np.flatnonzero(eligible)
+    del eligible
     before_patch = int(pixels.size)
     if patch is not None:
         keep_patch = np.empty(pixels.size, dtype=bool)
@@ -897,7 +931,9 @@ def catalog_from_healpix(
             stop = min(start + chunk_pixels, pixels.size)
             theta, phi = hp.pix2ang(nside, pixels[start:stop], nest=False)
             keep_patch[start:stop] = patch.select(theta, phi)
+            del theta, phi
         pixels = pixels[keep_patch]
+        del keep_patch
     eligible_count = int(pixels.size)
     if max_points:
         if max_points < 3:
@@ -906,21 +942,23 @@ def catalog_from_healpix(
         if pixels.size > max_points:
             keep = np.argpartition(priorities, max_points - 1)[:max_points]
             pixels = np.sort(pixels[keep])
+            del keep
+        del priorities
     if pixels.size < 3:
         raise ValueError("the map, mask, and patch select fewer than three valid pixels")
-    x, y, z = hp.pix2vec(nside, pixels, nest=False)
-    positions = np.ascontiguousarray(np.column_stack((x, y, z)), dtype=np.float64)
-    kappa = np.ascontiguousarray(values[pixels], dtype=np.float64)
+    kappa = _healpix_kappa(values, pixels, chunk_pixels)
+    del values
+    positions = _healpix_positions(hp, nside, pixels, False, chunk_pixels)
     selected_mask = (
-        np.ones(pixels.size, dtype=np.uint8) if mask_values is not None else None
+        np.ones(pixels.size, dtype=np.uint8) if mask_path is not None else None
     )
+    del pixels
     if center_field:
-        kappa = kappa.copy()
         kappa -= np.mean(kappa, dtype=np.float64)
     return KappaCatalog(
         positions=positions,
         kappa=kappa,
-        mask=selected_mask if mask_values is not None else None,
+        mask=selected_mask,
         metadata={
             "source": os.fspath(fits_path),
             "mask_source": os.fspath(mask_path) if mask_path is not None else None,
@@ -928,7 +966,7 @@ def catalog_from_healpix(
             "nside": nside,
             "field": field_index,
             "centered": center_field,
-            "mask_preselected": mask_values is not None,
+            "mask_preselected": mask_path is not None,
             "patch": patch.metadata() if patch is not None else None,
             "eligible_pixels_before_patch": before_patch,
             "eligible_pixels_before_thinning": eligible_count,
@@ -1742,6 +1780,7 @@ def run_engine_suite(
             kappa=catalog.kappa,
             weights=catalog.weights,
             mask=catalog.mask,
+            **({"take_ownership": True} if config.transfer_catalog_ownership else {}),
         )
         if balls.catalog_count != 1:
             raise RuntimeError("cyballs did not retain exactly one in-memory catalog")
@@ -1854,6 +1893,7 @@ def run_engine_suite(
     if comm.rank == 0:
         timings = timing_summary(results)
         summary = {
+            "memory_policy": memory_metadata(config.transfer_catalog_ownership, catalog.metadata.get("fits_chunk_pixels")),
             "catalog": {**catalog.metadata, "nbody": catalog.nbody},
             "requested_statistics": statistics_from_options(config.options),
             "engines": {
@@ -1885,6 +1925,7 @@ def run_engine_suite(
             "failures": failures,
             "catalog_reads": 1,
             "set_catalog_calls_per_process": 1 if native_engines else 0,
+            "catalog_registration": "transfer" if config.transfer_catalog_ownership else "copy",
             "mpi_ranks": comm.size,
             "threads_per_rank": config.threads,
             "comparisons": compare_result_arrays(results),
@@ -1921,7 +1962,7 @@ def spawn_mpi(args: argparse.Namespace) -> int:
 def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--qualification-reference','--accuracy-reference',type=Path,help='Exact driver output root containing ENGINE/qualification packets for this same catalog')
-    parser.add_argument('--qualification-rtol',type=float,default=.05)
+    parser.add_argument('--qualification-rtol',type=float,default=.05, help='relative L2 target (default 0.05); does not bound every coefficient')
     parser.add_argument('--qualification-atol',type=float,default=1e-10)
     parser.add_argument('--accuracy-report-only',action='store_true',help='retain results and report penalties even above the relative L2 target')
     sources = parser.add_mutually_exclusive_group()
@@ -1942,10 +1983,14 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--fits-chunk-pixels", type=int, default=1 << 20,
-        help="pixels per memory-mapped FITS scan chunk",
+        help="pixels per FITS scan, field-gather, and coordinate-conversion chunk",
     )
     parser.add_argument("--no-center-field", action="store_true")
     parser.add_argument("--save-catalog-npz", type=Path)
+    parser.add_argument(
+        "--transfer-catalog-ownership", action="store_true",
+        help="register owned NumPy arrays without copying; requires rebuilt cyballs",
+    )
     parser.add_argument(
         "--engine", "--engines", dest="engines", action="append", default=[],
         help="repeat or use comma lists; all, all-omp, and all-mpi select available "
@@ -2021,6 +2066,7 @@ def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="omit Figure-7-style flattened 3PCF radial-bin plots",
     )
     parser.epilog = 'Timing: compute_* measures Python Run; native_mainloop_* measures the C MainLoop. MPI uses max participating-rank wall and summed process CPU. --verbose 1 enables live work counters; --verbose-log 1 writes them to the log. Use --more-options scalar-pivot-reuse with --no-smooth-pivot for opt-in hierarchical 3PCF. CBALLS_SCALAR_PIVOT_TOL and CBALLS_SCALAR_BIN_THETA control reuse, independently of --tree-theta (default 1; approximate traversal). Scalar dual-node higher count modes are needed for edge-corrections; ggg-full-window requests the compatibility window explicitly.'
+    add_run_guidance(parser, field='kappa', benchmark=False, private=False)
     return parser.parse_args(argv)
 
 
@@ -2071,6 +2117,15 @@ def main() -> int:
         if args.list_engines:
             print_engine_table(available, smooth_pivot_compiled)
             return 0
+        if args.transfer_catalog_ownership:
+            # Fail before loading a large map when an older binding is active.
+            import inspect
+            from cyballs import cballs
+            if "take_ownership" not in inspect.signature(cballs.set_catalog).parameters:
+                raise RuntimeError(
+                    "--transfer-catalog-ownership requires a rebuilt cyballs "
+                    "with set_catalog(..., take_ownership=True)"
+                )
         config = RunConfig(
             engines=args.engines or ("octree-2balls-omp",),
             output_dir=args.outdir,
@@ -2080,6 +2135,7 @@ def main() -> int:
             bins=args.nbins,
             multipoles=args.multipoles,
             threads=args.threads,
+            transfer_catalog_ownership=args.transfer_catalog_ownership,
             qualification_reference=args.qualification_reference,
             accuracy_report_only=args.accuracy_report_only,
             qualification_rtol=args.qualification_rtol,

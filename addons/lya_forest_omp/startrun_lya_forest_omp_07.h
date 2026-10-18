@@ -26,6 +26,12 @@ if (cmd->lya2Kernel < 0 || cmd->lya2Kernel > 1
     || !isfinite(cmd->lya2RpSlop) || cmd->lya2RpSlop < 0 || cmd->lya2RpSlop > 1
     || !isfinite(cmd->lya2RtSlop) || cmd->lya2RtSlop < 0 || cmd->lya2RtSlop > 1)
     cBALLS_FAIL(cmd, "%s: require lya2Kernel=0..1 and pair slops finite in [0,1]", routineName);
+if (lya_forest_is_rprt_method(cmd->searchMethod)) {
+    if (cmd->lyaScanLevel || cmd->lyaPivotRadius>0)
+        cBALLS_FAIL(cmd, "%s: rp-rt quadtree does not support pivot frontier/smoothing", routineName);
+    cmd->lya2Kernel=1; /* intrinsic hierarchy; recorded as the effective setting */
+}
+
 if (cmd->lya2Kernel || cmd->lya2RpSlop > 0 || cmd->lya2RtSlop > 0) {
     if (cmd->lya2Kernel != 1)
         cBALLS_FAIL(cmd, "%s: pair slop requires lya2Kernel=1", routineName);

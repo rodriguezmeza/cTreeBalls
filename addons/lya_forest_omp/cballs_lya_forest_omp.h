@@ -1,6 +1,7 @@
 #ifndef _cballs_lya_forest_omp_h
 #define _cballs_lya_forest_omp_h
 
+case LYARPRTQUADTREE2PCFMETHOD:
 case 169:
 case 170:
 case 171:
@@ -19,8 +20,9 @@ case LYAFORESTLOSTREE2PCF3PCFMETHOD:
             bodytable[ifile] + gd->nbodyTable[ifile]) {
         Update(p) = TRUE;
     }
-    if (MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile)
-        == FAILURE)
+    /* The separation-plane engine needs no global Cartesian pixel octree. */
+    if (!lya_forest_is_rprt_method(cmd->searchMethod)
+        && MakeTree(cmd, gd, bodytable[ifile], gd->nbodyTable[ifile], ifile) == FAILURE)
         return FAILURE;
     if (searchcalc_lya_forest_omp(
             cmd, gd, bodytable, gd->nbodyTable, 1, gd->nbodyTable, ifile,
